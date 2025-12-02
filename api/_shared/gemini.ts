@@ -407,10 +407,9 @@ Return a JSON object:
 
   // Process keywords in batches with timeout protection
   const startTime = Date.now();
-  // Use conservative timeout: 55s for free plan (60s limit) or 250s for Pro plan (300s limit)
-  // If Pro plan is configured in vercel.json with 300s, we can use more time
-  // For now, use 55s to be safe for both plans
-  const MAX_EXECUTION_TIME = 55000; // 55 seconds (safe buffer for 60s limit)
+  // maxDuration is set to 500 seconds in vercel.json
+  // Use 480 seconds as safe buffer (leave 20s for cleanup and response)
+  const MAX_EXECUTION_TIME = 480000; // 480 seconds (safe buffer for 500s limit)
 
   for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
     // Check if we're approaching timeout
