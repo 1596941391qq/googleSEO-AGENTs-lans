@@ -33,7 +33,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({ keywords });
   } catch (error: any) {
     console.error('Generate keywords error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to generate keywords' });
+    console.error('Error stack:', error.stack);
+    const errorMessage = error?.message || 'Failed to generate keywords';
+    return res.status(500).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }
 

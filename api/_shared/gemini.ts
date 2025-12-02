@@ -1,5 +1,5 @@
 // Shared Gemini API service for Vercel serverless functions
-import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "../../types.js";
+import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "../../types";
 
 const PROXY_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
 const API_KEY = process.env.GEMINI_API_KEY || '';
@@ -12,8 +12,9 @@ interface GeminiConfig {
 }
 
 async function callGeminiAPI(prompt: string, systemInstruction?: string, config?: GeminiConfig) {
-  if (!API_KEY) {
-    throw new Error('GEMINI_API_KEY is not configured');
+  if (!API_KEY || API_KEY.trim() === '') {
+    console.error('GEMINI_API_KEY is not configured');
+    throw new Error('GEMINI_API_KEY is not configured. Please set it in Vercel environment variables.');
   }
 
   const url = `${PROXY_BASE_URL}/v1/v1beta/models/${config?.model || MODEL}:generateContent`;

@@ -27,7 +27,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({ translated });
   } catch (error: any) {
     console.error('Translate text error:', error);
-    return res.status(500).json({ error: error.message || 'Failed to translate text' });
+    console.error('Error stack:', error.stack);
+    const errorMessage = error?.message || 'Failed to translate text';
+    return res.status(500).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }
 
