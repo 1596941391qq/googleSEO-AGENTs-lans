@@ -14,16 +14,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
     const body = parseRequestBody(req);
-    const { keywords, systemInstruction, uiLanguage } = body;
-    
+    const { keywords, systemInstruction, uiLanguage, targetLanguage } = body;
+
     if (!keywords || !Array.isArray(keywords) || keywords.length === 0 || !systemInstruction) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
     const analyzedKeywords = await analyzeRankingProbability(
-      keywords, 
+      keywords,
       systemInstruction,
-      uiLanguage || 'en'
+      uiLanguage || 'en',
+      targetLanguage || 'en'
     );
 
     return res.json({ keywords: analyzedKeywords });

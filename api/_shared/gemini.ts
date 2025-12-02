@@ -1,5 +1,6 @@
 // Shared Gemini API service for Vercel serverless functions
 import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "./types.js";
+import { fetchSerpResults } from "./serp.js";
 
 const PROXY_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
 const API_KEY = process.env.GEMINI_API_KEY || 'sk-BMlZyFmI7p2DVrv53P0WOiigC4H6fcgYTevils2nXkW0Wv9s';
@@ -297,37 +298,72 @@ Return a JSON array with objects containing:
 export const analyzeRankingProbability = async (
   keywords: KeywordData[],
   systemInstruction: string,
-  uiLanguage: 'zh' | 'en' = 'en'
+  uiLanguage: 'zh' | 'en' = 'en',
+  targetLanguage: TargetLanguage = 'en'
 ): Promise<KeywordData[]> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
 
   const analyzeSingleKeyword = async (keywordData: KeywordData): Promise<KeywordData> => {
+    // Step 1: Fetch real Google SERP results
+    let serpData;
+    let serpResults: any[] = [];
+    let serpResultCount = -1;
+
+    try {
+      console.log(`Fetching SERP for keyword: ${keywordData.keyword}`);
+      serpData = await fetchSerpResults(keywordData.keyword, targetLanguage);
+      serpResults = serpData.results || [];
+      serpResultCount = serpData.totalResults || -1;
+      console.log(`Fetched ${serpResults.length} SERP results for ${keywordData.keyword}`);
+    } catch (error: any) {
+      console.warn(`Failed to fetch SERP for ${keywordData.keyword}:`, error.message);
+      // Continue with empty SERP data - analysis will proceed with estimation
+    }
+
+    // Step 2: Build system instruction with real SERP data
+    const serpContext = serpResults.length > 0
+      ? `\n\nREAL GOOGLE SEARCH RESULTS FOR "${keywordData.keyword}":\n${serpResults.map((r, i) => `${i + 1}. Title: ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.snippet}`).join('\n\n')}\n\nTotal Results: ${serpResultCount > 0 ? serpResultCount : 'Unknown (Many)'}`
+      : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
+
+    const topSerpSnippetsJson = serpResults.length > 0
+      ? JSON.stringify(serpResults.slice(0, 3).map(r => ({
+        title: r.title,
+        url: r.url,
+        snippet: r.snippet
+      })))
+      : '[]';
+
     const fullSystemInstruction = `
 ${systemInstruction}
 
 TASK: Analyze the Google SERP competition for the keyword: "${keywordData.keyword}".
+${serpContext}
 
-Based on your knowledge, estimate:
-1. How many competing pages exist for this keyword
-2. What type of sites typically rank for this (Big Brand, Niche Site, Forum/Social, Weak Page, Gov/Edu)
-3. The probability of ranking on page 1 (High, Medium, Low)
+Based on the REAL SERP results provided above (if available), analyze:
+1. How many competing pages exist for this keyword (use the actual count if provided, otherwise estimate)
+2. What type of sites are ranking (Big Brand, Niche Site, Forum/Social, Weak Page, Gov/Edu) - analyze the actual URLs and domains
+3. The probability of ranking on page 1 (High, Medium, Low) - based on the actual competition quality
 
 SCORING:
 - **HIGH**: Likely < 20 strong results, Top results are Weak (Forums, Reddit, Quora, PDF, Social Media) OR Irrelevant.
 - **MEDIUM**: Moderate competition, some opportunity exists.
 - **LOW**: Top results are Big Brands, Wikipedia, Gov/Edu, or Exact Match Niche Sites.
 
-IMPORTANT: Output all text fields (reasoning, topSerpSnippets titles/snippets) in ${uiLangName}. The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}.
+IMPORTANT: 
+- Use the REAL SERP results provided above for your analysis
+- Output all text fields (reasoning, topSerpSnippets titles/snippets) in ${uiLangName}
+- The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}
+- For topSerpSnippets, use the ACTUAL results from the SERP data above (first 3 results)
 
 CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, reasoning process, or markdown formatting. Return ONLY the JSON object.
 
 Return a JSON object:
 {
-  "serpResultCount": number (estimated, use -1 if unknown/many),
+  "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
-  "reasoning": "explanation string in ${uiLangName}",
-  "topSerpSnippets": [{"title": "string in ${uiLangName}", "url": "string", "snippet": "string in ${uiLangName}"}]
+  "reasoning": "explanation string in ${uiLangName} based on the real SERP results",
+  "topSerpSnippets": ${topSerpSnippetsJson}
 }`;
 
     try {
@@ -360,9 +396,22 @@ Return a JSON object:
         throw new Error("Response is not a valid JSON object");
       }
 
+      // Use real SERP data if available, otherwise use analysis results
+      if (serpResults.length > 0) {
+        // Override with real SERP data
+        analysis.topSerpSnippets = serpResults.slice(0, 3).map(r => ({
+          title: r.title,
+          url: r.url,
+          snippet: r.snippet
+        }));
+        if (serpResultCount > 0) {
+          analysis.serpResultCount = serpResultCount;
+        }
+      }
+
       // Ensure required fields exist with defaults
       if (typeof analysis.serpResultCount !== 'number') {
-        analysis.serpResultCount = -1;
+        analysis.serpResultCount = serpResultCount > 0 ? serpResultCount : -1;
       }
       if (!analysis.topDomainType) {
         analysis.topDomainType = 'Unknown';
@@ -374,7 +423,9 @@ Return a JSON object:
         analysis.reasoning = 'Analysis completed';
       }
       if (!Array.isArray(analysis.topSerpSnippets)) {
-        analysis.topSerpSnippets = [];
+        analysis.topSerpSnippets = serpResults.length > 0
+          ? serpResults.slice(0, 3).map(r => ({ title: r.title, url: r.url, snippet: r.snippet }))
+          : [];
       }
 
       if (analysis.serpResultCount === 0) {
