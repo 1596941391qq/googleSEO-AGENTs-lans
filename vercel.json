@@ -11,9 +11,6 @@
   "functions": {
     "api/**/*.ts": {
       "maxDuration": 500
-    },
-    "api/analyze-ranking.ts": {
-      "maxDuration": 500
     }
   }
 }

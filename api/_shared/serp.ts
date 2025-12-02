@@ -1,5 +1,5 @@
 // ThorData SERP (Search Engine Results Page) fetching service
-// Uses Bing search engine via ThorData API
+
 
 import { SerpSnippet } from "./types.js";
 
@@ -17,18 +17,18 @@ interface SerpResponse {
   results: SerpResult[];
 }
 
-// 语言到国家代码的映射（用于Bing本地化）
+
 const LANGUAGE_TO_COUNTRY_CODE: Record<string, string> = {
-  'ko': 'KR', // Korean - South Korea
-  'ja': 'JP', // Japanese - Japan
-  'fr': 'FR', // French - France
-  'ru': 'RU', // Russian - Russia
-  'pt': 'BR', // Portuguese - Brazil
-  'id': 'ID', // Indonesian - Indonesia
-  'es': 'ES', // Spanish - Spain
-  'ar': 'SA', // Arabic - Saudi Arabia
-  'en': 'US', // English - United States
-  'zh': 'CN', // Chinese - China
+  'ko': 'kr', // Korean - South Korea
+  'ja': 'jp', // Japanese - Japan
+  'fr': 'fr', // French - France
+  'ru': 'ru', // Russian - Russia
+  'pt': 'br', // Portuguese - Brazil
+  'id': 'id', // Indonesian - Indonesia
+  'es': 'es', // Spanish - Spain
+  'ar': 'sa', // Arabic - Saudi Arabia
+  'en': 'us', // English - United States
+  'zh': 'cn', // Chinese - China
 };
 
 /**
@@ -36,26 +36,16 @@ const LANGUAGE_TO_COUNTRY_CODE: Record<string, string> = {
  */
 async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): Promise<SerpResponse> {
   const formData = new URLSearchParams();
-  formData.append('engine', 'Google');
+  formData.append('engine', 'google');
   formData.append('q', query);
   formData.append('json', '1');
 
-  // 添加本地化参数
-  const countryCode = LANGUAGE_TO_COUNTRY_CODE[targetLanguage] || 'US';
-  formData.append('cc', countryCode);
-
-  // 根据thordata文档，token可能作为参数传递
-  if (THORDATA_API_TOKEN) {
-    formData.append('token', THORDATA_API_TOKEN);
-  }
+  // // 添加本地化参数
+  // const countryCode = LANGUAGE_TO_COUNTRY_CODE[targetLanguage] || 'US';
+  // formData.append('gl', countryCode);
 
   try {
-    console.log(`调用 ThorData API: ${query} (引擎: Bing, 国家: ${countryCode})`);
-    console.log(`API URL: ${THORDATA_API_URL}`);
-    console.log(`Token 已设置: ${THORDATA_API_TOKEN ? '是' : '否'}`);
-
-    // 尝试两种认证方式：先尝试Bearer token，如果失败再尝试参数方式
-    let response = await fetch(THORDATA_API_URL, {
+    const response = await fetch(THORDATA_API_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${THORDATA_API_TOKEN}`,
@@ -64,42 +54,30 @@ async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): 
       body: formData,
     });
 
-    // 如果Bearer token方式失败，尝试只使用参数方式
-    if (!response.ok && response.status === 401) {
-      console.log('Bearer token认证失败，尝试使用token参数方式');
-      const formDataWithoutAuth = new URLSearchParams();
-      formDataWithoutAuth.append('engine', 'bing');
-      formDataWithoutAuth.append('q', query);
-      formDataWithoutAuth.append('json', '1');
-      formDataWithoutAuth.append('cc', countryCode);
-      if (THORDATA_API_TOKEN) {
-        formDataWithoutAuth.append('token', THORDATA_API_TOKEN);
-      }
-
-      response = await fetch(THORDATA_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formDataWithoutAuth,
-      });
-    }
-
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('ThorData API 响应错误:', response.status, errorText);
       throw new Error(`ThorData API 请求失败: ${response.status} ${errorText}`);
     }
 
-    const data: any = await response.json();
+    let responseData: any = await response.json();
 
-    if (data && data.error) {
-      console.error('ThorData API 返回错误:', data.error);
-      throw new Error(`ThorData API 错误: ${data.error}`);
+    // 打印前两百个字的响应
+    const responseText = JSON.stringify(responseData, null, 2);
+    const first200Chars = responseText.substring(0, 200);
+    console.log('ThorData API 响应前两百个字:', first200Chars);
+
+    // 检查是否有错误
+    if (responseData && responseData.error) {
+      throw new Error(`ThorData API 错误: ${responseData.error}`);
+    }
+
+    // 如果响应被包装在 { code, data } 结构中，提取实际的 data
+    if (responseData && responseData.data && typeof responseData.data === 'object') {
+      responseData = responseData.data;
     }
 
     // 解析响应
-    const parsed = parseSerpResponse(data);
+    const parsed = parseSerpResponse(responseData);
 
     return {
       totalResults: parsed.resultCount > 0 ? parsed.resultCount : undefined,
@@ -203,7 +181,6 @@ export async function fetchSerpResults(
     return await fetchThorDataSerp(query, targetLanguage);
   } catch (error: any) {
     console.error(`Failed to fetch SERP from ThorData:`, error);
-    // Return empty results if API fails
     return {
       results: [],
     };
