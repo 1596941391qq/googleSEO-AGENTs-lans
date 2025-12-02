@@ -498,6 +498,7 @@ export default function App() {
   });
   
   const stopMiningRef = useRef(false);
+  const allKeywordsRef = useRef<string[]>([]);
   const t = TEXT[state.uiLanguage];
 
   // Load archives and agent configs on mount
@@ -680,6 +681,13 @@ export default function App() {
     
     stopMiningRef.current = false;
     
+    // Initialize or keep existing keywords for deduplication
+    if (continueExisting) {
+      allKeywordsRef.current = state.keywords.map(k => k.keyword);
+    } else {
+      allKeywordsRef.current = [];
+    }
+    
     setState(prev => ({
       ...prev,
       step: 'mining',
@@ -712,12 +720,11 @@ export default function App() {
       );
 
       try {
-        const existingKwStrings = state.keywords.map(k => k.keyword);
         const generatedKeywords = await generateKeywords(
           state.seedKeyword, 
           state.targetLanguage,
           state.genPrompt, 
-          existingKwStrings,
+          allKeywordsRef.current,
           currentRound
         );
 
@@ -734,6 +741,9 @@ export default function App() {
         const analyzedBatch = await analyzeRankingProbability(generatedKeywords, state.analyzePrompt);
         
         const highProbCandidate = analyzedBatch.find(k => k.probability === ProbabilityLevel.HIGH);
+        
+        // Update ref for deduplication in next round
+        allKeywordsRef.current = [...allKeywordsRef.current, ...analyzedBatch.map(k => k.keyword)];
         
         setState(prev => ({
           ...prev,
