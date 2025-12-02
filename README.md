@@ -9,7 +9,7 @@
 ## 📋 项目架构
 
 - **前端**: React + TypeScript + Vite
-- **后端**: Node.js + Express + TypeScript
+- **后端**: Vercel Serverless Functions (Node.js + TypeScript)
 - **AI**: Google Gemini API
 
 ## 🚀 快速开始
@@ -64,9 +64,26 @@ npm run dev
 - 后端健康检查：http://localhost:3001/health
 - 前端应用：http://localhost:3000
 
+## 🚀 Vercel 部署
+
+项目已配置支持 Vercel 部署。详细部署指南请查看 [VERCEL_DEPLOYMENT.md](./VERCEL_DEPLOYMENT.md)
+
+### 快速部署
+
+1. 在 Vercel 项目设置中配置环境变量：
+   - `GEMINI_API_KEY`: 你的 Gemini API 密钥
+   - `GEMINI_PROXY_URL`: （可选）API 代理地址
+   - `GEMINI_MODEL`: （可选）使用的模型
+
+2. 部署到 Vercel：
+   ```bash
+   npm i -g vercel
+   vercel
+   ```
+
 ## 📚 详细文档
 
-更多后端启动和配置说明，请查看 [SERVER_README.md](./SERVER_README.md)
+- [Vercel 部署指南](./VERCEL_DEPLOYMENT.md) - 完整的 Vercel 部署说明
 
 ## 🛠️ 开发脚本
 

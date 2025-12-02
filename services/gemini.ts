@@ -1,9 +1,26 @@
 // Frontend service - calls backend API instead of Gemini directly
 import { KeywordData, SEOStrategyReport, TargetLanguage } from "../types";
 
-// In Vercel, use relative paths. In development, use the configured API URL or default to localhost
-const API_BASE_URL = import.meta.env.VITE_API_URL || 
-  (import.meta.env.DEV ? 'http://localhost:3001' : '');
+// API Base URL configuration:
+// - In Vercel production: use relative paths (empty string) to use same domain
+// - In development: use localhost:3001 if VITE_API_URL is not set
+// - If VITE_API_URL is explicitly set, use it (useful for custom deployments)
+const getApiBaseUrl = (): string => {
+  // If explicitly set, use it
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+
+  // In development mode, default to localhost
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3001';
+  }
+
+  // In production (Vercel), use relative paths
+  return '';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 const apiCall = async (endpoint: string, body: any) => {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -33,7 +50,7 @@ export const translateText = async (text: string, targetLanguage: 'zh' | 'en'): 
 };
 
 export const generateKeywords = async (
-  seedKeyword: string, 
+  seedKeyword: string,
   targetLanguage: TargetLanguage,
   systemInstruction: string,
   existingKeywords: string[] = [],
@@ -50,7 +67,7 @@ export const generateKeywords = async (
 };
 
 export const analyzeRankingProbability = async (
-  keywords: KeywordData[], 
+  keywords: KeywordData[],
   systemInstruction: string
 ): Promise<KeywordData[]> => {
   const result = await apiCall('/api/analyze-ranking', {
@@ -61,7 +78,7 @@ export const analyzeRankingProbability = async (
 };
 
 export const generateDeepDiveStrategy = async (
-  keyword: KeywordData, 
+  keyword: KeywordData,
   uiLanguage: 'zh' | 'en',
   targetLanguage: TargetLanguage
 ): Promise<SEOStrategyReport> => {
