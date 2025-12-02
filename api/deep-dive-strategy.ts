@@ -1,14 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateDeepDiveStrategy } from './_shared/gemini';
+import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Handle CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCorsHeaders(res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return handleOptions(res);
   }
 
   if (req.method !== 'POST') {
@@ -16,7 +14,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { keyword, uiLanguage, targetLanguage } = req.body;
+    const body = parseRequestBody(req);
+    const { keyword, uiLanguage, targetLanguage } = body;
     
     if (!keyword || !uiLanguage || !targetLanguage) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -26,13 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.json({ report });
   } catch (error: any) {
-    console.error('Deep dive strategy error:', error);
-    console.error('Error stack:', error.stack);
-    const errorMessage = error?.message || 'Failed to generate strategy report';
-    return res.status(500).json({ 
-      error: errorMessage,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    return sendErrorResponse(res, error, 'Failed to generate strategy report');
   }
 }
 

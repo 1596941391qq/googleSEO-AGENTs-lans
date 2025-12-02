@@ -1,14 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { translatePromptToSystemInstruction } from './_shared/gemini';
+import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Handle CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCorsHeaders(res);
 
   if (req.method === 'OPTIONS') {
-    return res.status(204).end();
+    return handleOptions(res);
   }
 
   if (req.method !== 'POST') {
@@ -16,7 +14,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { prompt } = req.body;
+    const body = parseRequestBody(req);
+    const { prompt } = body;
     
     if (!prompt) {
       return res.status(400).json({ error: 'Missing prompt field' });
@@ -26,13 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.json({ optimized });
   } catch (error: any) {
-    console.error('Translate prompt error:', error);
-    console.error('Error stack:', error.stack);
-    const errorMessage = error?.message || 'Failed to translate prompt';
-    return res.status(500).json({ 
-      error: errorMessage,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    return sendErrorResponse(res, error, 'Failed to translate prompt');
   }
 }
 

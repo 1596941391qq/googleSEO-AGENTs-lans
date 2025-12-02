@@ -32,8 +32,17 @@ const apiCall = async (endpoint: string, body: any) => {
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `HTTP error! status: ${response.status}`);
+    let errorData;
+    try {
+      errorData = await response.json();
+    } catch (e) {
+      // If response is not JSON, try to get text
+      const text = await response.text().catch(() => 'Unknown error');
+      throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+    }
+
+    const errorMessage = errorData?.error || errorData?.message || `HTTP error! status: ${response.status}`;
+    throw new Error(errorMessage);
   }
 
   return response.json();
