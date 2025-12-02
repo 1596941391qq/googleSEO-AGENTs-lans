@@ -109,6 +109,50 @@ async function callGeminiAPI(prompt: string, systemInstruction?: string, config?
   }
 }
 
+/**
+ * Extract JSON from text that may contain thinking process or markdown
+ */
+function extractJSON(text: string): string {
+  if (!text) return '';
+
+  // Remove markdown code blocks
+  text = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+
+  // Try to find JSON object or array
+  // Look for first { or [ and last } or ]
+  const firstBrace = text.indexOf('{');
+  const firstBracket = text.indexOf('[');
+  const lastBrace = text.lastIndexOf('}');
+  const lastBracket = text.lastIndexOf(']');
+
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstBrace !== -1 && firstBracket !== -1) {
+    // Both found, use the one that comes first
+    if (firstBrace < firstBracket) {
+      startIdx = firstBrace;
+      endIdx = lastBrace;
+    } else {
+      startIdx = firstBracket;
+      endIdx = lastBracket;
+    }
+  } else if (firstBrace !== -1) {
+    startIdx = firstBrace;
+    endIdx = lastBrace;
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = lastBracket;
+  }
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    return text.substring(startIdx, endIdx + 1).trim();
+  }
+
+  // If no braces found, return cleaned text
+  return text.trim();
+}
+
 const getLanguageName = (code: TargetLanguage): string => {
   switch (code) {
     case 'en': return 'English';
@@ -153,6 +197,8 @@ export const generateKeywords = async (
   if (roundIndex === 1) {
     promptContext = `Generate 10 high-potential ${targetLangName} SEO keywords for the seed term: "${seedKeyword}". Focus on commercial and informational intent.
 
+CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
+
 Return a JSON array with objects containing:
 - keyword: The keyword in ${targetLangName}
 - translation: Meaning in English/Chinese
@@ -172,6 +218,8 @@ Example: If seed is "AI Pet Photos", think "Pet ID Cards", "Fake Dog Passport", 
 
 Generate 10 NEW, UNEXPECTED, but SEARCHABLE keywords related to "${seedKeyword}" in ${targetLangName}.
 
+CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
+
 Return a JSON array with objects containing:
 - keyword: The keyword in ${targetLangName}
 - translation: Meaning in English/Chinese
@@ -185,7 +233,7 @@ Return a JSON array with objects containing:
     });
 
     let text = response.text || "[]";
-    text = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+    text = extractJSON(text);
 
     const rawData = JSON.parse(text);
 
@@ -219,6 +267,8 @@ SCORING:
 - **MEDIUM**: Moderate competition, some opportunity exists.
 - **LOW**: Top results are Big Brands, Wikipedia, Gov/Edu, or Exact Match Niche Sites.
 
+CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, reasoning process, or markdown formatting. Return ONLY the JSON object.
+
 Return a JSON object:
 {
   "serpResultCount": number (estimated, use -1 if unknown/many),
@@ -236,13 +286,13 @@ Return a JSON object:
       );
 
       let text = response.text || "{}";
-      text = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+      text = extractJSON(text);
 
       let analysis;
       try {
         analysis = JSON.parse(text);
       } catch (e) {
-        console.error("JSON Parse Error:", text);
+        console.error("JSON Parse Error:", text.substring(0, 500));
         throw new Error("Invalid JSON response from model");
       }
 
@@ -311,6 +361,8 @@ Requirements:
 5. Long-tail Keywords: Generate 5 specific long-tail variations (${targetLangName}). Provide ${uiLangName} translations.
 6. Word Count: Recommended length.
 
+CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON object.
+
 Return a JSON object:
 {
   "targetKeyword": "string",
@@ -334,7 +386,7 @@ Return a JSON object:
     });
 
     let text = response.text || "{}";
-    text = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+    text = extractJSON(text);
 
     return JSON.parse(text);
   } catch (error) {
