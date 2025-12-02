@@ -10,10 +10,7 @@
     "server": "npx tsx watch server/index.ts",
     "server:prod": "npx tsx server/index.ts",
     "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
-    "test:network": "npx tsx server/network-test.ts",
-    "edge:dev": "npx wrangler dev",
-    "edge:deploy": "npx wrangler deploy",
-    "edge:tail": "npx wrangler tail"
+    "test:network": "npx tsx server/network-test.ts"
   },
   "dependencies": {
     "@google/genai": "^1.30.0",
@@ -33,7 +30,6 @@
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
     "tsx": "^4.7.0",
-    "concurrently": "^8.2.2",
-    "wrangler": "^3.0.0"
+    "concurrently": "^8.2.2"
   }
 }
