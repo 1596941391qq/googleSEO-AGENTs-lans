@@ -1,5 +1,5 @@
 // Shared Gemini API service for Vercel serverless functions
-import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "./types";
+import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "./types.js";
 
 const PROXY_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
 const API_KEY = process.env.GEMINI_API_KEY || 'sk-BMlZyFmI7p2DVrv53P0WOiigC4H6fcgYTevils2nXkW0Wv9s';

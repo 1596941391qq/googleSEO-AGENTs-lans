@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { translateText } from './_shared/gemini';
-import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler';
+import { translateText } from './_shared/gemini.js';
+import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
