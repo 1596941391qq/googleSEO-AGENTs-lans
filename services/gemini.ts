@@ -1,7 +1,9 @@
 // Frontend service - calls backend API instead of Gemini directly
 import { KeywordData, SEOStrategyReport, TargetLanguage } from "../types";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// In Vercel, use relative paths. In development, use the configured API URL or default to localhost
+const API_BASE_URL = import.meta.env.VITE_API_URL || 
+  (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 const apiCall = async (endpoint: string, body: any) => {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
