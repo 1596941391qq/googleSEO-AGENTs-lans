@@ -19,16 +19,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       NODE_ENV: process.env.NODE_ENV || 'Not set'
     };
 
-    return res.json({ 
-      status: 'ok', 
+    return res.json({
+      status: 'ok',
       message: 'Vercel serverless function is running',
       environment: envCheck
     });
   } catch (error: any) {
     console.error('Health check error:', error);
-    return res.status(500).json({ 
-      status: 'error', 
-      message: error.message || 'Health check failed' 
+    return res.status(500).json({
+      status: 'error',
+      message: error.message || 'Health check failed'
     });
   }
 }

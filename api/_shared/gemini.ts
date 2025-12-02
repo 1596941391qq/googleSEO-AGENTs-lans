@@ -2,7 +2,7 @@
 import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "../../types";
 
 const PROXY_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
-const API_KEY = process.env.GEMINI_API_KEY || '';
+const API_KEY = process.env.GEMINI_API_KEY || 'sk-BMlZyFmI7p2DVrv53P0WOiigC4H6fcgYTevils2nXkW0Wv9s';
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 interface GeminiConfig {
