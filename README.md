@@ -44,28 +44,36 @@ GEMINI_MODEL=gemini-2.5-flash
 
 ### 启动项目
 
-#### 本地开发
+#### 方式一：使用 Vercel CLI（推荐，包含前后端）
+
+```bash
+# 1. 安装 Vercel CLI（如果还没安装）
+npm i -g vercel
+
+# 2. 启动本地开发环境（会自动运行前端和 API）
+npm run dev:vercel
+# 或者直接运行
+vercel dev
+```
+
+这将同时启动：
+- 前端：http://localhost:3000
+- API：http://localhost:3000/api/*
+
+#### 方式二：只运行前端（连接远程 Vercel API）
 
 ```bash
 npm run dev
 ```
 
-这将启动前端开发服务器：http://localhost:3000
+前端运行在：http://localhost:3000
 
-**注意**: 本地开发时，前端会尝试连接到 `http://localhost:3001` 的后端 API。如果你需要本地后端，可以使用 Vercel CLI：
-
-```bash
-# 安装 Vercel CLI
-npm i -g vercel
-
-# 启动本地开发环境（模拟 Vercel）
-vercel dev
-```
+**注意**: 这种方式需要将前端配置为连接到已部署的 Vercel API，或设置 `VITE_API_URL` 环境变量。
 
 ### 验证
 
 - 前端应用：http://localhost:3000
-- 如果使用 `vercel dev`，API 端点：http://localhost:3000/api/health
+- API 健康检查：http://localhost:3000/api/health（使用 vercel dev 时）
 
 ## 🚀 Vercel 部署
 

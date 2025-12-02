@@ -3,7 +3,7 @@ import { KeywordData, SEOStrategyReport, TargetLanguage } from "../types";
 
 // API Base URL configuration:
 // - In Vercel production: use relative paths (empty string) to use same domain
-// - In development: use localhost:3001 if VITE_API_URL is not set
+// - In development with vercel dev: use relative paths (same as production)
 // - If VITE_API_URL is explicitly set, use it (useful for custom deployments)
 const getApiBaseUrl = (): string => {
   // If explicitly set, use it
@@ -11,12 +11,11 @@ const getApiBaseUrl = (): string => {
     return import.meta.env.VITE_API_URL;
   }
 
-  // In development mode, default to localhost
-  if (import.meta.env.DEV) {
-    return 'http://localhost:3001';
-  }
-
-  // In production (Vercel), use relative paths
+  // In both development and production, use relative paths
+  // This works for:
+  // - Vercel production: same domain
+  // - vercel dev: API runs on same port as frontend (localhost:3000/api/*)
+  // - npm run dev only: will fail, but user should use vercel dev instead
   return '';
 };
 

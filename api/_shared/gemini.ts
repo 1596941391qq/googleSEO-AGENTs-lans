@@ -1,5 +1,5 @@
 // Shared Gemini API service for Vercel serverless functions
-import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "../../types";
+import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "./types";
 
 const PROXY_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
 const API_KEY = process.env.GEMINI_API_KEY || 'sk-BMlZyFmI7p2DVrv53P0WOiigC4H6fcgYTevils2nXkW0Wv9s';
@@ -98,7 +98,14 @@ async function callGeminiAPI(prompt: string, systemInstruction?: string, config?
     };
   } catch (error: any) {
     console.error('调用 Gemini API 失败:', error);
+    console.error('Error details:', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack?.substring(0, 500)
+    });
     throw error;
+  } finally {
+    // Ensure function completes even if there's an error
   }
 }
 
