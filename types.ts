@@ -65,7 +65,18 @@ export interface ArchiveEntry {
 }
 
 export type UILanguage = 'en' | 'zh';
-export type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko';
+export type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar';
+
+// Agent配置存档
+export interface AgentConfig {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  genPrompt: string;
+  analyzePrompt: string;
+  targetLanguage: TargetLanguage;
+}
 
 export interface LogEntry {
   timestamp: string;
@@ -124,4 +135,8 @@ export interface AppState {
   showPromptTranslation: boolean;
   translatedGenPrompt: string | null;
   translatedAnalyzePrompt: string | null;
+  
+  // Agent Config Archives
+  agentConfigs: AgentConfig[];
+  currentConfigId: string | null;
 }

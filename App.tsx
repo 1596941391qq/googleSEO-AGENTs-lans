@@ -25,9 +25,11 @@ import {
   X,
   Trash2,
   ExternalLink,
-  Globe
+  Globe,
+  Save,
+  FolderOpen
 } from 'lucide-react';
-import { AppState, KeywordData, ProbabilityLevel, LogEntry, AgentThought, ArchiveEntry, SEOStrategyReport, TargetLanguage, UILanguage } from './types';
+import { AppState, KeywordData, ProbabilityLevel, LogEntry, AgentThought, ArchiveEntry, SEOStrategyReport, TargetLanguage, UILanguage, AgentConfig } from './types';
 import { 
   generateKeywords, 
   analyzeRankingProbability, 
@@ -91,7 +93,15 @@ const TEXT = {
     serpEvidenceDisclaimer: '* Data based on Google Search grounding.',
     showTransRef: 'Show Translation Reference',
     transRefLabel: 'Translated Prompt Reference (Read-only)',
-    verifyBtn: 'Google Verify'
+    verifyBtn: 'Google Verify',
+    agentConfigs: 'Agent Configurations',
+    saveConfig: 'Save Config',
+    updateConfig: 'Update',
+    loadConfig: 'Load',
+    configName: 'Config Name',
+    noConfigs: 'No saved configurations yet.',
+    configSaved: 'Configuration saved',
+    enterConfigName: 'Enter config name...'
   },
   zh: {
     title: 'Google SEO 智能 Agent',
@@ -143,7 +153,15 @@ const TEXT = {
     serpEvidenceDisclaimer: '* 数据基于 Google 搜索实时分析。',
     showTransRef: '显示翻译对照',
     transRefLabel: '提示词翻译参考 (只读)',
-    verifyBtn: 'Google 验证'
+    verifyBtn: 'Google 验证',
+    agentConfigs: 'Agent 配置存档',
+    saveConfig: '保存配置',
+    updateConfig: '更新',
+    loadConfig: '加载',
+    configName: '配置名称',
+    noConfigs: '暂无保存的配置',
+    configSaved: '配置已保存',
+    enterConfigName: '输入配置名称...'
   }
 };
 
@@ -153,6 +171,10 @@ const LANGUAGES: { code: TargetLanguage, label: string }[] = [
   { code: 'fr', label: 'French (Fr)' },
   { code: 'ja', label: 'Japanese (Jp)' },
   { code: 'ko', label: 'Korean (Kr)' },
+  { code: 'pt', label: 'Portuguese (Pt)' },
+  { code: 'id', label: 'Indonesian (Id)' },
+  { code: 'es', label: 'Spanish (Es)' },
+  { code: 'ar', label: 'Arabic (Ar)' },
 ];
 
 // --- Components ---
@@ -469,13 +491,16 @@ export default function App() {
     
     showPromptTranslation: false,
     translatedGenPrompt: null,
-    translatedAnalyzePrompt: null
+    translatedAnalyzePrompt: null,
+    
+    agentConfigs: [],
+    currentConfigId: null
   });
   
   const stopMiningRef = useRef(false);
   const t = TEXT[state.uiLanguage];
 
-  // Load archives on mount
+  // Load archives and agent configs on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem('google_seo_archives');
@@ -484,6 +509,15 @@ export default function App() {
       }
     } catch (e) {
       console.error("Failed to load archives", e);
+    }
+    
+    try {
+      const savedConfigs = localStorage.getItem('google_seo_agent_configs');
+      if (savedConfigs) {
+        setState(prev => ({ ...prev, agentConfigs: JSON.parse(savedConfigs) }));
+      }
+    } catch (e) {
+      console.error("Failed to load agent configs", e);
     }
   }, []);
 
@@ -525,6 +559,59 @@ export default function App() {
     const updated = state.archives.filter(a => a.id !== id);
     localStorage.setItem('google_seo_archives', JSON.stringify(updated));
     setState(prev => ({ ...prev, archives: updated }));
+  };
+
+  // Agent Config management
+  const saveAgentConfig = (name: string) => {
+    const newConfig: AgentConfig = {
+      id: `cfg-${Date.now()}`,
+      name: name.trim() || `Config ${state.agentConfigs.length + 1}`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      genPrompt: state.genPrompt,
+      analyzePrompt: state.analyzePrompt,
+      targetLanguage: state.targetLanguage
+    };
+    
+    const updatedConfigs = [newConfig, ...state.agentConfigs].slice(0, 20);
+    localStorage.setItem('google_seo_agent_configs', JSON.stringify(updatedConfigs));
+    setState(prev => ({ ...prev, agentConfigs: updatedConfigs, currentConfigId: newConfig.id }));
+    addLog(`Agent config "${newConfig.name}" saved.`, 'success');
+  };
+
+  const loadAgentConfig = (config: AgentConfig) => {
+    setState(prev => ({
+      ...prev,
+      genPrompt: config.genPrompt,
+      analyzePrompt: config.analyzePrompt,
+      targetLanguage: config.targetLanguage,
+      currentConfigId: config.id,
+      translatedGenPrompt: null,
+      translatedAnalyzePrompt: null
+    }));
+    addLog(`Loaded config: "${config.name}"`, 'info');
+  };
+
+  const updateAgentConfig = (id: string) => {
+    const updatedConfigs = state.agentConfigs.map(cfg => 
+      cfg.id === id 
+        ? { ...cfg, updatedAt: Date.now(), genPrompt: state.genPrompt, analyzePrompt: state.analyzePrompt, targetLanguage: state.targetLanguage }
+        : cfg
+    );
+    localStorage.setItem('google_seo_agent_configs', JSON.stringify(updatedConfigs));
+    setState(prev => ({ ...prev, agentConfigs: updatedConfigs }));
+    addLog('Config updated.', 'success');
+  };
+
+  const deleteAgentConfig = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = state.agentConfigs.filter(c => c.id !== id);
+    localStorage.setItem('google_seo_agent_configs', JSON.stringify(updated));
+    setState(prev => ({ 
+      ...prev, 
+      agentConfigs: updated, 
+      currentConfigId: prev.currentConfigId === id ? null : prev.currentConfigId 
+    }));
   };
 
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
@@ -965,6 +1052,102 @@ export default function App() {
                             </div>
                         )}
                     </div>
+                  </div>
+
+                  {/* Agent Config Archive Section */}
+                  <div className="border-t border-slate-200 pt-6">
+                    <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-purple-500" />
+                      {t.agentConfigs}
+                    </h4>
+                    
+                    {/* Save New Config */}
+                    <div className="flex gap-2 mb-4">
+                      <input
+                        type="text"
+                        id="configNameInput"
+                        placeholder={t.enterConfigName}
+                        className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const input = e.target as HTMLInputElement;
+                            saveAgentConfig(input.value);
+                            input.value = '';
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const input = document.getElementById('configNameInput') as HTMLInputElement;
+                          saveAgentConfig(input?.value || '');
+                          if (input) input.value = '';
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm font-medium"
+                      >
+                        <Save className="w-4 h-4" />
+                        {t.saveConfig}
+                      </button>
+                    </div>
+
+                    {/* Config List */}
+                    {state.agentConfigs.length > 0 ? (
+                      <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                        {state.agentConfigs.map(cfg => (
+                          <div
+                            key={cfg.id}
+                            className={`p-3 rounded-lg border flex items-center justify-between group transition-colors ${
+                              state.currentConfigId === cfg.id 
+                                ? 'bg-purple-50 border-purple-200' 
+                                : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div className="flex-1">
+                              <div className="font-medium text-slate-800 text-sm flex items-center gap-2">
+                                {cfg.name}
+                                <span className="text-[10px] bg-white text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase">
+                                  {cfg.targetLanguage}
+                                </span>
+                                {state.currentConfigId === cfg.id && (
+                                  <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-bold">
+                                    ACTIVE
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-slate-400">
+                                {new Date(cfg.updatedAt).toLocaleString()}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {state.currentConfigId === cfg.id ? (
+                                <button
+                                  onClick={() => updateAgentConfig(cfg.id)}
+                                  className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors font-medium"
+                                >
+                                  {t.updateConfig}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => loadAgentConfig(cfg)}
+                                  className="px-2 py-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors font-medium"
+                                >
+                                  {t.loadConfig}
+                                </button>
+                              )}
+                              <button
+                                onClick={(e) => deleteAgentConfig(cfg.id, e)}
+                                className="p-1 text-slate-300 hover:text-red-500 transition-colors"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-400 text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                        {t.noConfigs}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

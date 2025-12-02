@@ -14,7 +14,7 @@ interface KeywordData {
   topSerpSnippets?: Array<{ title: string; url: string; snippet: string }>;
 }
 
-type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko';
+type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar';
 
 const ProbabilityLevel = {
   HIGH: 'High',
@@ -133,6 +133,10 @@ const getLanguageName = (code: TargetLanguage): string => {
     case 'ru': return 'Russian';
     case 'ja': return 'Japanese';
     case 'ko': return 'Korean';
+    case 'pt': return 'Portuguese';
+    case 'id': return 'Indonesian';
+    case 'es': return 'Spanish';
+    case 'ar': return 'Arabic';
     default: return 'English';
   }
 };

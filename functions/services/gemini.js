@@ -117,6 +117,10 @@ const getLanguageName = (code) => {
     case 'ru': return 'Russian';
     case 'ja': return 'Japanese';
     case 'ko': return 'Korean';
+    case 'pt': return 'Portuguese';
+    case 'id': return 'Indonesian';
+    case 'es': return 'Spanish';
+    case 'ar': return 'Arabic';
     default: return 'English';
   }
 };
