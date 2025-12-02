@@ -113,7 +113,7 @@ async function callGeminiAPI(prompt: string, systemInstruction?: string, config?
  * Extract JSON from text that may contain thinking process or markdown
  */
 function extractJSON(text: string): string {
-  if (!text) return '';
+  if (!text) return '{}';
 
   // Remove markdown code blocks
   text = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
@@ -127,30 +127,43 @@ function extractJSON(text: string): string {
 
   let startIdx = -1;
   let endIdx = -1;
+  let isArray = false;
 
   if (firstBrace !== -1 && firstBracket !== -1) {
     // Both found, use the one that comes first
     if (firstBrace < firstBracket) {
       startIdx = firstBrace;
       endIdx = lastBrace;
+      isArray = false;
     } else {
       startIdx = firstBracket;
       endIdx = lastBracket;
+      isArray = true;
     }
   } else if (firstBrace !== -1) {
     startIdx = firstBrace;
     endIdx = lastBrace;
+    isArray = false;
   } else if (firstBracket !== -1) {
     startIdx = firstBracket;
     endIdx = lastBracket;
+    isArray = true;
   }
 
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
-    return text.substring(startIdx, endIdx + 1).trim();
+    const extracted = text.substring(startIdx, endIdx + 1).trim();
+    // Basic validation: check if it starts and ends correctly
+    if ((isArray && extracted.startsWith('[') && extracted.endsWith(']')) ||
+      (!isArray && extracted.startsWith('{') && extracted.endsWith('}'))) {
+      return extracted;
+    }
   }
 
-  // If no braces found, return cleaned text
-  return text.trim();
+  // If no valid JSON found, return default based on context
+  // For analyze-ranking, we expect an object, so return {}
+  // For generate-keywords, we expect an array, but we can't know context here
+  // So we'll return the cleaned text and let the caller handle it
+  return text.trim() || '{}';
 }
 
 const getLanguageName = (code: TargetLanguage): string => {
@@ -235,7 +248,26 @@ Return a JSON array with objects containing:
     let text = response.text || "[]";
     text = extractJSON(text);
 
-    const rawData = JSON.parse(text);
+    // Validate extracted JSON
+    if (!text || text.trim() === '') {
+      console.error("Empty JSON response from model");
+      return [];
+    }
+
+    let rawData;
+    try {
+      rawData = JSON.parse(text);
+    } catch (e: any) {
+      console.error("JSON Parse Error in generateKeywords:", e.message);
+      console.error("Extracted text (first 500 chars):", text.substring(0, 500));
+      return [];
+    }
+
+    // Validate it's an array
+    if (!Array.isArray(rawData)) {
+      console.error("Response is not a JSON array:", typeof rawData);
+      return [];
+    }
 
     return rawData.map((item: any, index: number) => ({
       ...item,
@@ -249,8 +281,11 @@ Return a JSON array with objects containing:
 
 export const analyzeRankingProbability = async (
   keywords: KeywordData[],
-  systemInstruction: string
+  systemInstruction: string,
+  uiLanguage: 'zh' | 'en' = 'en'
 ): Promise<KeywordData[]> => {
+  const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
+
   const analyzeSingleKeyword = async (keywordData: KeywordData): Promise<KeywordData> => {
     const fullSystemInstruction = `
 ${systemInstruction}
@@ -267,6 +302,8 @@ SCORING:
 - **MEDIUM**: Moderate competition, some opportunity exists.
 - **LOW**: Top results are Big Brands, Wikipedia, Gov/Edu, or Exact Match Niche Sites.
 
+IMPORTANT: Output all text fields (reasoning, topSerpSnippets titles/snippets) in ${uiLangName}. The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}.
+
 CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, reasoning process, or markdown formatting. Return ONLY the JSON object.
 
 Return a JSON object:
@@ -274,8 +311,8 @@ Return a JSON object:
   "serpResultCount": number (estimated, use -1 if unknown/many),
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
-  "reasoning": "explanation string",
-  "topSerpSnippets": [{"title": "string", "url": "string", "snippet": "string"}]
+  "reasoning": "explanation string in ${uiLangName}",
+  "topSerpSnippets": [{"title": "string in ${uiLangName}", "url": "string", "snippet": "string in ${uiLangName}"}]
 }`;
 
     try {
@@ -288,12 +325,41 @@ Return a JSON object:
       let text = response.text || "{}";
       text = extractJSON(text);
 
+      // Validate extracted JSON
+      if (!text || text.trim() === '') {
+        throw new Error("Empty JSON response from model");
+      }
+
       let analysis;
       try {
         analysis = JSON.parse(text);
-      } catch (e) {
-        console.error("JSON Parse Error:", text.substring(0, 500));
-        throw new Error("Invalid JSON response from model");
+      } catch (e: any) {
+        console.error("JSON Parse Error for keyword:", keywordData.keyword);
+        console.error("Extracted text (first 500 chars):", text.substring(0, 500));
+        console.error("Parse error:", e.message);
+        throw new Error(`Invalid JSON response from model: ${e.message}`);
+      }
+
+      // Validate required fields
+      if (typeof analysis !== 'object' || analysis === null) {
+        throw new Error("Response is not a valid JSON object");
+      }
+
+      // Ensure required fields exist with defaults
+      if (typeof analysis.serpResultCount !== 'number') {
+        analysis.serpResultCount = -1;
+      }
+      if (!analysis.topDomainType) {
+        analysis.topDomainType = 'Unknown';
+      }
+      if (!analysis.probability) {
+        analysis.probability = ProbabilityLevel.MEDIUM;
+      }
+      if (!analysis.reasoning) {
+        analysis.reasoning = 'Analysis completed';
+      }
+      if (!Array.isArray(analysis.topSerpSnippets)) {
+        analysis.topSerpSnippets = [];
       }
 
       if (analysis.serpResultCount === 0) {
@@ -388,10 +454,29 @@ Return a JSON object:
     let text = response.text || "{}";
     text = extractJSON(text);
 
-    return JSON.parse(text);
-  } catch (error) {
+    // Validate extracted JSON
+    if (!text || text.trim() === '') {
+      throw new Error("Empty JSON response from model");
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e: any) {
+      console.error("JSON Parse Error in generateDeepDiveStrategy:", e.message);
+      console.error("Extracted text (first 500 chars):", text.substring(0, 500));
+      throw new Error(`Invalid JSON response from model: ${e.message}`);
+    }
+
+    // Validate it's an object
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      throw new Error("Response is not a valid JSON object");
+    }
+
+    return parsed;
+  } catch (error: any) {
     console.error("Deep Dive Error:", error);
-    throw new Error("Failed to generate strategy report.");
+    throw new Error(`Failed to generate strategy report: ${error.message || error}`);
   }
 };
 

@@ -76,11 +76,13 @@ export const generateKeywords = async (
 
 export const analyzeRankingProbability = async (
   keywords: KeywordData[],
-  systemInstruction: string
+  systemInstruction: string,
+  uiLanguage: 'zh' | 'en' = 'en'
 ): Promise<KeywordData[]> => {
   const result = await apiCall('/api/analyze-ranking', {
     keywords,
     systemInstruction,
+    uiLanguage,
   });
   return result.keywords;
 };

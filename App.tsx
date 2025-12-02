@@ -738,7 +738,7 @@ export default function App() {
         addLog(`[Round ${currentRound}] Analyzing SERP probability (Google)...`, 'api');
         
         // This is now parallel individual execution with batching
-        const analyzedBatch = await analyzeRankingProbability(generatedKeywords, state.analyzePrompt);
+        const analyzedBatch = await analyzeRankingProbability(generatedKeywords, state.analyzePrompt, state.uiLanguage);
         
         const highProbCandidate = analyzedBatch.find(k => k.probability === ProbabilityLevel.HIGH);
         
