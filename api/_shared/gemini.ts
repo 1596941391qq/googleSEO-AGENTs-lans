@@ -53,14 +53,29 @@ async function callGeminiAPI(prompt: string, systemInstruction?: string, config?
   }
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': API_KEY,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    // Add timeout for fetch (25 seconds per request)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': API_KEY,
+        },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error('API request timeout (25s)');
+      }
+      throw fetchError;
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -387,15 +402,61 @@ Return a JSON object:
   };
 
   const results: KeywordData[] = [];
-  const BATCH_SIZE = 3;
+  const BATCH_SIZE = 5; // Increased batch size to reduce total processing time
+  const BATCH_DELAY = 300; // Reduced delay between batches (300ms)
+
+  // Process keywords in batches with timeout protection
+  const startTime = Date.now();
+  // Use conservative timeout: 55s for free plan (60s limit) or 250s for Pro plan (300s limit)
+  // If Pro plan is configured in vercel.json with 300s, we can use more time
+  // For now, use 55s to be safe for both plans
+  const MAX_EXECUTION_TIME = 55000; // 55 seconds (safe buffer for 60s limit)
 
   for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
-    const batch = keywords.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(batch.map(k => analyzeSingleKeyword(k)));
-    results.push(...batchResults);
+    // Check if we're approaching timeout
+    const elapsed = Date.now() - startTime;
+    if (elapsed > MAX_EXECUTION_TIME) {
+      console.warn(`Approaching timeout, processed ${i}/${keywords.length} keywords`);
+      // Return partial results with error markers for remaining keywords
+      const remaining = keywords.slice(i).map(k => ({
+        ...k,
+        probability: ProbabilityLevel.LOW,
+        reasoning: "Analysis timeout - too many keywords to process",
+        topDomainType: "Unknown" as const,
+        serpResultCount: -1
+      }));
+      results.push(...remaining);
+      break;
+    }
 
+    const batch = keywords.slice(i, i + BATCH_SIZE);
+
+    // Process batch with individual timeout protection
+    const batchResults = await Promise.allSettled(
+      batch.map(k => analyzeSingleKeyword(k))
+    );
+
+    // Extract results, handling both fulfilled and rejected promises
+    const processedResults = batchResults.map((result, idx) => {
+      if (result.status === 'fulfilled') {
+        return result.value;
+      } else {
+        console.error(`Analysis failed for keyword ${batch[idx].keyword}:`, result.reason);
+        return {
+          ...batch[idx],
+          probability: ProbabilityLevel.LOW,
+          reasoning: "Analysis failed due to timeout or error",
+          topDomainType: "Unknown" as const,
+          serpResultCount: -1
+        };
+      }
+    });
+
+    results.push(...processedResults);
+
+    // Reduced delay between batches, only if not the last batch
     if (i + BATCH_SIZE < keywords.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
     }
   }
 
