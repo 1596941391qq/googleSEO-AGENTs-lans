@@ -345,7 +345,7 @@ Based on the REAL SERP results provided above (if available), analyze:
 3. The probability of ranking on page 1 (High, Medium, Low) - based on the actual competition quality
 
 SCORING:
-- **HIGH**: Likely < 20 strong results, Top results are Weak (Forums, Reddit, Quora, PDF, Social Media) OR Irrelevant.
+- **HIGH**: Likely < 8 strong results, Top results are Weak (Forums, Reddit, Quora, PDF, Social Media) OR Irrelevant.
 - **MEDIUM**: Moderate competition, some opportunity exists.
 - **LOW**: Top results are Big Brands, Wikipedia, Gov/Edu, or Exact Match Niche Sites.
 
@@ -432,7 +432,7 @@ Return a JSON object:
         analysis.topSerpSnippets = [];
       }
 
-      if (typeof analysis.serpResultCount === 'number' && analysis.serpResultCount >= 0 && analysis.serpResultCount < 20) {
+      if (typeof analysis.serpResultCount === 'number' && analysis.serpResultCount >= 0 && analysis.serpResultCount < 8) {
         analysis.probability = ProbabilityLevel.HIGH;
         analysis.reasoning = `Blue Ocean! Only ${analysis.serpResultCount} indexed results found.`;
         analysis.topDomainType = 'Weak Page';
