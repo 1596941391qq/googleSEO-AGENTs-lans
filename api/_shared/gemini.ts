@@ -54,9 +54,9 @@ async function callGeminiAPI(prompt: string, systemInstruction?: string, config?
   }
 
   try {
-    // Add timeout for fetch (25 seconds per request)
+    // Add timeout for fetch (600 seconds per request - increased to avoid premature timeouts)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 600 seconds = 10 minutes
 
     let response;
     try {
@@ -73,7 +73,7 @@ async function callGeminiAPI(prompt: string, systemInstruction?: string, config?
     } catch (fetchError: any) {
       clearTimeout(timeoutId);
       if (fetchError.name === 'AbortError') {
-        throw new Error('API request timeout (25s)');
+        throw new Error('API request timeout (600s)');
       }
       throw fetchError;
     }
@@ -458,9 +458,9 @@ Return a JSON object:
 
   // Process keywords in batches with timeout protection
   const startTime = Date.now();
-  // maxDuration is set to 500 seconds in vercel.json
-  // Use 480 seconds as safe buffer (leave 20s for cleanup and response)
-  const MAX_EXECUTION_TIME = 480000; // 480 seconds (safe buffer for 500s limit)
+  // maxDuration is set to 900 seconds in vercel.json (Enterprise plan max)
+  // Use 880 seconds as safe buffer (leave 20s for cleanup and response)
+  const MAX_EXECUTION_TIME = 880000; // 880 seconds (safe buffer for 900s limit)
 
   for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
     // Check if we're approaching timeout
