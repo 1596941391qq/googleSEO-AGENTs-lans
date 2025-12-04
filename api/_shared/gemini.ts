@@ -344,12 +344,32 @@ Based on the REAL SERP results provided above (if available), analyze:
 2. What type of sites are ranking (Big Brand, Niche Site, Forum/Social, Weak Page, Gov/Edu) - analyze the actual URLs and domains
 3. The probability of ranking on page 1 (High, Medium, Low) - based on the actual competition quality
 
-SCORING:
-- **HIGH**: Likely < 8 strong results, Top results are Weak (Forums, Reddit, Quora, PDF, Social Media) OR Irrelevant.
-- **MEDIUM**: Moderate competition, some opportunity exists.
-- **LOW**: Top results are Big Brands, Wikipedia, Gov/Edu, or Exact Match Niche Sites.
+STRICT SCORING CRITERIA (Be conservative and strict):
+- **HIGH**: ONLY assign High probability when ALL of the following conditions are met:
+  * Top 3 results are ALL weak competitors (Forums, Reddit, Quora, Social Media, PDFs, low-quality blogs, or completely irrelevant content)
+  * NO presence of authoritative sites (Wikipedia, .gov, .edu, major brands, established niche sites)
+  * Content quality of top results is clearly poor or off-topic
+  * User intent is clearly not being well-served by existing results
+  
+- **MEDIUM**: Assign Medium when:
+  * Moderate competition exists (3-10 relevant results)
+  * Mix of weak and moderate competitors
+  * Some opportunity exists but requires quality content and SEO effort
+  * Top results include some niche sites but not dominant brands
+  
+- **LOW**: Assign Low when ANY of the following apply:
+  * Top results include Big Brands (Amazon, Wikipedia, major corporations, established market leaders)
+  * Government or educational sites (.gov, .edu) rank highly
+  * Multiple high-quality niche sites with exact match content
+  * Strong competition with 10+ relevant, well-optimized results
+  * Top results clearly satisfy user intent with quality content
 
-IMPORTANT: 
+IMPORTANT ANALYSIS RULES:
+- Be STRICT and CONSERVATIVE - only mark as High when competition is genuinely weak
+- Analyze the actual quality and relevance of top results, not just quantity
+- Consider domain authority, content quality, and user intent satisfaction
+- If in doubt between High and Medium, choose Medium
+- If in doubt between Medium and Low, choose Low
 - Use the REAL SERP results provided above for your analysis
 - Output all text fields (reasoning, topSerpSnippets titles/snippets) in ${uiLangName}
 - The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}
@@ -432,9 +452,10 @@ Return a JSON object:
         analysis.topSerpSnippets = [];
       }
 
-      if (typeof analysis.serpResultCount === 'number' && analysis.serpResultCount >= 0 && analysis.serpResultCount < 8) {
+      // Only auto-assign HIGH for truly zero results (Blue Ocean opportunity)
+      if (typeof analysis.serpResultCount === 'number' && analysis.serpResultCount === 0) {
         analysis.probability = ProbabilityLevel.HIGH;
-        analysis.reasoning = `Blue Ocean! Only ${analysis.serpResultCount} indexed results found.`;
+        analysis.reasoning = `Blue Ocean! Zero indexed results found - this is a completely untapped keyword.`;
         analysis.topDomainType = 'Weak Page';
       }
 
