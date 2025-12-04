@@ -34,7 +34,9 @@ import {
   ProbabilityLevel,
   LogEntry,
   AgentThought,
+  BatchAnalysisThought,
   ArchiveEntry,
+  BatchArchiveEntry,
   SEOStrategyReport,
   TargetLanguage,
   UILanguage,
@@ -46,6 +48,8 @@ import {
   translatePromptToSystemInstruction,
   translateText,
   generateDeepDiveStrategy,
+  batchTranslateAndAnalyze,
+  translateAndAnalyzeSingle,
   DEFAULT_GEN_PROMPT_EN,
   DEFAULT_ANALYZE_PROMPT_EN,
 } from "./services/gemini";
@@ -113,6 +117,18 @@ const TEXT = {
     noConfigs: "No saved configurations yet.",
     configSaved: "Configuration saved",
     enterConfigName: "Enter config name...",
+    batchTranslateTitle: "Batch Translate & Analyze",
+    batchTranslateDesc: "Enter multiple keywords (comma-separated) to translate and analyze for blue ocean opportunities.",
+    batchInputPlaceholder: "e.g., dog food, cat toys, bird cage",
+    btnBatchAnalyze: "Batch Analyze",
+    batchAnalyzing: "Translating and analyzing...",
+    batchResultsTitle: "Batch Analysis Results",
+    originalKeyword: "Original",
+    translatedKeyword: "Translated",
+    tabMining: "Keyword Mining",
+    tabBatch: "Batch Translation",
+    miningArchives: "Mining Archives",
+    batchArchives: "Batch Archives",
   },
   zh: {
     title: "Google SEO 智能 Agent",
@@ -174,6 +190,18 @@ const TEXT = {
     noConfigs: "暂无保存的配置",
     configSaved: "配置已保存",
     enterConfigName: "输入配置名称...",
+    batchTranslateTitle: "批量翻译并分析",
+    batchTranslateDesc: "输入多个关键词（用逗号分隔），自动翻译到目标语言并分析蓝海机会。",
+    batchInputPlaceholder: "例如：狗粮, 猫玩具, 鸟笼",
+    btnBatchAnalyze: "批量分析",
+    batchAnalyzing: "正在翻译和分析...",
+    batchResultsTitle: "批量分析结果",
+    originalKeyword: "原始词",
+    translatedKeyword: "翻译词",
+    tabMining: "关键词挖掘",
+    tabBatch: "批量翻译",
+    miningArchives: "挖掘历史",
+    batchArchives: "批量历史",
   },
 };
 
@@ -423,6 +451,118 @@ const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
   );
 };
 
+const BatchAnalysisStream = ({ thoughts, t }: { thoughts: BatchAnalysisThought[]; t: any }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [thoughts]);
+
+  return (
+    <div className="bg-white rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border border-slate-200">
+      <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-2 text-slate-500 uppercase tracking-wider text-[10px]">
+        <Languages className="w-3 h-3 text-purple-600" />
+        <span>Batch Analysis Stream</span>
+      </div>
+      <div
+        ref={scrollRef}
+        className="overflow-y-auto custom-scrollbar flex-1 space-y-4 pr-2"
+      >
+        {thoughts.map((thought) => (
+          <div key={thought.id} className="animate-fade-in">
+            <div className="flex items-center gap-2 mb-1">
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  thought.type === "translation"
+                    ? "bg-blue-100 text-blue-700"
+                    : thought.type === "serp-search"
+                    ? "bg-purple-100 text-purple-700"
+                    : thought.type === "intent-analysis"
+                    ? "bg-indigo-100 text-indigo-700"
+                    : "bg-green-100 text-green-700"
+                }`}
+              >
+                {thought.type.toUpperCase().replace("-", " ")}
+              </span>
+              <span className="text-xs text-slate-500 font-medium truncate">
+                {thought.keyword}
+              </span>
+            </div>
+            <p className="text-sm text-slate-700 mb-2">
+              {thought.content}
+            </p>
+
+            {/* Intent Analysis Display */}
+            {thought.type === "intent-analysis" && thought.intentData && (
+              <div className="mt-2 space-y-2">
+                <div className="bg-purple-50 p-2 rounded border border-purple-100">
+                  <div className="text-[10px] text-purple-600 font-bold mb-1">USER INTENT</div>
+                  <p className="text-xs text-slate-700">{thought.intentData.searchIntent}</p>
+                </div>
+                <div className="bg-blue-50 p-2 rounded border border-blue-100">
+                  <div className="text-[10px] text-blue-600 font-bold mb-1">INTENT vs SERP</div>
+                  <p className="text-xs text-slate-700">{thought.intentData.intentAnalysis}</p>
+                </div>
+              </div>
+            )}
+
+            {/* SERP Snippets */}
+            {thought.type === "serp-search" && thought.serpSnippets && thought.serpSnippets.length > 0 && (
+              <div className="mt-2 border border-slate-200 rounded-md overflow-hidden bg-slate-50">
+                <div className="space-y-2 p-2">
+                  {thought.serpSnippets.slice(0, 3).map((snippet, idx) => (
+                    <div key={idx} className="bg-white p-2 rounded border border-slate-100 text-xs">
+                      <div className="text-blue-700 font-medium truncate">
+                        {snippet.title}
+                      </div>
+                      <div className="text-green-700 text-[10px] truncate">
+                        {snippet.url}
+                      </div>
+                      <div className="text-slate-500 mt-1 line-clamp-2">
+                        {snippet.snippet}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Analysis Result */}
+            {thought.type === "analysis" && thought.analysis && (
+              <div className="mt-2 bg-slate-50 p-3 rounded border border-slate-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                      thought.analysis.probability === ProbabilityLevel.HIGH
+                        ? "bg-green-100 text-green-800"
+                        : thought.analysis.probability === ProbabilityLevel.MEDIUM
+                        ? "bg-yellow-100 text-yellow-800"
+                        : "bg-red-100 text-red-800"
+                    }`}
+                  >
+                    {thought.analysis.probability}
+                  </span>
+                  <span className="text-xs text-slate-600">
+                    {thought.analysis.topDomainType}
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    ({thought.analysis.serpResultCount === -1 ? "Many" : thought.analysis.serpResultCount} results)
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 whitespace-pre-wrap">
+                  {thought.analysis.reasoning}
+                </p>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 // Modal for Deep Dive Strategy
 const StrategyModal = ({
   report,
@@ -632,6 +772,7 @@ export default function App() {
     agentThoughts: [],
     miningSuccess: false,
     archives: [],
+    batchArchives: [],
 
     // View Config
     filterLevel: ProbabilityLevel.HIGH,
@@ -655,7 +796,19 @@ export default function App() {
 
     agentConfigs: [],
     currentConfigId: null,
+
+    // Batch Analysis
+    batchKeywords: [],
+    batchThoughts: [],
+    batchCurrentIndex: 0,
+    batchTotalCount: 0,
+    batchInputKeywords: "",
   });
+
+  // Batch translate and analyze state
+  const [batchInput, setBatchInput] = useState("");
+  const [activeTab, setActiveTab] = useState<"mining" | "batch">("mining");
+  const stopBatchRef = useRef(false);
 
   const stopMiningRef = useRef(false);
   const allKeywordsRef = useRef<string[]>([]);
@@ -670,6 +823,15 @@ export default function App() {
       }
     } catch (e) {
       console.error("Failed to load archives", e);
+    }
+
+    try {
+      const savedBatchArchives = localStorage.getItem("google_seo_batch_archives");
+      if (savedBatchArchives) {
+        setState((prev) => ({ ...prev, batchArchives: JSON.parse(savedBatchArchives) }));
+      }
+    } catch (e) {
+      console.error("Failed to load batch archives", e);
     }
 
     try {
@@ -726,6 +888,26 @@ export default function App() {
     const updated = state.archives.filter((a) => a.id !== id);
     localStorage.setItem("google_seo_archives", JSON.stringify(updated));
     setState((prev) => ({ ...prev, archives: updated }));
+  };
+
+  const loadBatchArchive = (entry: BatchArchiveEntry) => {
+    setState((prev) => ({
+      ...prev,
+      batchInputKeywords: entry.inputKeywords,
+      targetLanguage: entry.targetLanguage || "en",
+      batchKeywords: entry.keywords,
+      step: "batch-results",
+      batchThoughts: [],
+      logs: [],
+      filterLevel: ProbabilityLevel.HIGH,
+    }));
+  };
+
+  const deleteBatchArchive = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = state.batchArchives.filter((a) => a.id !== id);
+    localStorage.setItem("google_seo_batch_archives", JSON.stringify(updated));
+    setState((prev) => ({ ...prev, batchArchives: updated }));
   };
 
   // Agent Config management
@@ -821,6 +1003,27 @@ export default function App() {
           id: `t-${Date.now()}`,
           round: prev.miningRound,
           type,
+          content,
+          ...extra,
+        },
+      ],
+    }));
+  };
+
+  const addBatchThought = (
+    type: BatchAnalysisThought["type"],
+    keyword: string,
+    content: string,
+    extra?: Partial<BatchAnalysisThought>
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      batchThoughts: [
+        ...prev.batchThoughts,
+        {
+          id: `bt-${Date.now()}`,
+          type,
+          keyword,
           content,
           ...extra,
         },
@@ -1125,6 +1328,224 @@ export default function App() {
     document.body.removeChild(link);
   };
 
+  // Batch translate and analyze handler
+  const handleBatchAnalyze = async () => {
+    if (!batchInput.trim()) return;
+
+    stopBatchRef.current = false;
+
+    // Parse keywords
+    const keywordList = batchInput
+      .split(',')
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+
+    if (keywordList.length === 0) {
+      setState((prev) => ({
+        ...prev,
+        error: "No valid keywords provided",
+      }));
+      return;
+    }
+
+    // Initialize batch analysis state
+    setState((prev) => ({
+      ...prev,
+      step: "batch-analyzing",
+      batchKeywords: [],
+      batchThoughts: [],
+      batchCurrentIndex: 0,
+      batchTotalCount: keywordList.length,
+      batchInputKeywords: batchInput, // Store original input
+      logs: [],
+      error: null,
+    }));
+
+    addLog(`Starting batch analysis for ${keywordList.length} keywords...`, "info");
+
+    // Run batch analysis
+    runBatchAnalysis(keywordList);
+  };
+
+  const runBatchAnalysis = async (keywordList: string[]) => {
+    const results: KeywordData[] = [];
+
+    for (let i = 0; i < keywordList.length; i++) {
+      if (stopBatchRef.current) {
+        addLog("Batch analysis stopped by user.", "warning");
+        break;
+      }
+
+      const keyword = keywordList[i];
+
+      setState((prev) => ({ ...prev, batchCurrentIndex: i + 1 }));
+
+      addLog(`[${i + 1}/${keywordList.length}] Processing: "${keyword}"`, "info");
+
+      try {
+        // Step 1: Translation
+        addBatchThought("translation", keyword, `Translating "${keyword}" to ${state.targetLanguage}...`);
+        addLog(`Translating "${keyword}"...`, "api");
+
+        const result = await translateAndAnalyzeSingle(
+          keyword,
+          state.targetLanguage,
+          state.analyzePrompt,
+          state.uiLanguage
+        );
+
+        addBatchThought(
+          "translation",
+          keyword,
+          `Translated to: "${result.translated}"`,
+          { keyword: result.translated }
+        );
+
+        // Step 2: SERP Search
+        addBatchThought(
+          "serp-search",
+          result.translated,
+          `Searching Google SERP for "${result.translated}"...`
+        );
+        addLog(`Analyzing SERP for "${result.translated}"...`, "api");
+
+        // Add SERP snippets if available
+        if (result.keyword.topSerpSnippets && result.keyword.topSerpSnippets.length > 0) {
+          addBatchThought(
+            "serp-search",
+            result.translated,
+            `Found ${result.keyword.topSerpSnippets.length} SERP results`,
+            { serpSnippets: result.keyword.topSerpSnippets }
+          );
+        }
+
+        // Step 3: Intent Analysis
+        if (result.keyword.searchIntent && result.keyword.intentAnalysis) {
+          addBatchThought(
+            "intent-analysis",
+            result.translated,
+            `Analyzing search intent...`,
+            {
+              intentData: {
+                searchIntent: result.keyword.searchIntent,
+                intentAnalysis: result.keyword.intentAnalysis,
+              },
+            }
+          );
+        }
+
+        // Step 4: Final Analysis
+        addBatchThought(
+          "analysis",
+          result.translated,
+          `Analysis complete: ${result.keyword.probability} probability`,
+          {
+            analysis: {
+              probability: result.keyword.probability || ProbabilityLevel.LOW,
+              topDomainType: result.keyword.topDomainType || "Unknown",
+              serpResultCount: result.keyword.serpResultCount || -1,
+              reasoning: result.keyword.reasoning || "No reasoning provided",
+            },
+          }
+        );
+
+        results.push(result.keyword);
+
+        setState((prev) => ({
+          ...prev,
+          batchKeywords: [...prev.batchKeywords, result.keyword],
+        }));
+
+        addLog(`Completed: "${keyword}" → ${result.keyword.probability}`, "success");
+
+        // Small delay between requests
+        if (i < keywordList.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      } catch (error: any) {
+        console.error(`Error processing keyword "${keyword}":`, error);
+        addLog(`Error processing "${keyword}": ${error.message}`, "error");
+        addBatchThought(
+          "analysis",
+          keyword,
+          `Error: ${error.message}`,
+          {
+            analysis: {
+              probability: ProbabilityLevel.LOW,
+              topDomainType: "Unknown",
+              serpResultCount: -1,
+              reasoning: `Analysis failed: ${error.message}`,
+            },
+          }
+        );
+      }
+    }
+
+    // Analysis complete
+    addLog(`Batch analysis complete! Processed ${results.length}/${keywordList.length} keywords.`, "success");
+
+    // Save to batch archives
+    setState((prev) => {
+      const newArchive: BatchArchiveEntry = {
+        id: `batch-${Date.now()}`,
+        timestamp: Date.now(),
+        inputKeywords: prev.batchInputKeywords,
+        keywords: [...prev.batchKeywords],
+        targetLanguage: prev.targetLanguage,
+        totalCount: prev.batchKeywords.length,
+      };
+
+      return {
+        ...prev,
+        step: "batch-results",
+        batchArchives: [newArchive, ...prev.batchArchives],
+      };
+    });
+  };
+
+  const stopBatchAnalysis = () => {
+    stopBatchRef.current = true;
+    addLog("Stopping batch analysis...", "warning");
+  };
+
+  const downloadBatchCSV = () => {
+    const headers = [
+      "Original",
+      "Translated",
+      "Intent",
+      "Volume",
+      "Top Type",
+      "Probability",
+      "Result Count",
+      "Reasoning",
+    ];
+    const rows = state.batchKeywords.map((k) => [
+      k.translation, // original
+      k.keyword, // translated
+      k.intent,
+      k.volume,
+      k.topDomainType || "-",
+      k.probability || "-",
+      k.serpResultCount || "-",
+      `"${k.reasoning || ""}"`,
+    ]);
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((r) => r.join(",")),
+    ].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute(
+      "download",
+      `batch_analysis_${Date.now()}.csv`
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const getProcessedKeywords = () => {
     let filtered = state.keywords;
 
@@ -1215,7 +1636,7 @@ export default function App() {
 
         {/* STEP 1: INPUT */}
         {state.step === "input" && (
-          <div className="max-w-3xl mx-auto mt-8 flex-1 w-full">
+          <div className="max-w-6xl mx-auto mt-8 flex-1 w-full">
             <div className="text-center mb-10">
               <h2 className="text-3xl font-bold mb-4 text-slate-900">
                 {t.inputTitle}
@@ -1246,75 +1667,196 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Clean Input Design */}
-              <div className="flex w-full max-w-2xl mx-auto bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                <div className="flex items-center justify-center pl-4 text-slate-400">
-                  <Search className="w-5 h-5" />
+              {/* Tabs */}
+              <div className="flex justify-center mb-8">
+                <div className="inline-flex bg-white rounded-lg border border-slate-200 shadow-sm p-1">
+                  <button
+                    onClick={() => setActiveTab("mining")}
+                    className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
+                      activeTab === "mining"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Search className="w-4 h-4" />
+                      {t.tabMining}
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("batch")}
+                    className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
+                      activeTab === "batch"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Languages className="w-4 h-4" />
+                      {t.tabBatch}
+                    </div>
+                  </button>
                 </div>
-                <input
-                  type="text"
-                  placeholder={t.placeholder}
-                  className="flex-1 p-4 text-lg outline-none text-slate-700 placeholder:text-slate-400"
-                  value={state.seedKeyword}
-                  onChange={(e) =>
-                    setState((prev) => ({
-                      ...prev,
-                      seedKeyword: e.target.value,
-                    }))
-                  }
-                  onKeyDown={(e) => e.key === "Enter" && startMining(false)}
-                />
-                <button
-                  onClick={() => startMining(false)}
-                  disabled={!state.seedKeyword.trim()}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 font-semibold transition-colors disabled:opacity-70"
-                >
-                  {t.btnStart}
-                </button>
               </div>
             </div>
 
-            {/* Archive List */}
-            {state.archives.length > 0 && (
-              <div className="mt-12 max-w-2xl mx-auto">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <History className="w-4 h-4" /> {t.archivesTitle}
-                </h3>
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                  <div className="divide-y divide-slate-100">
-                    {state.archives.map((arch) => (
-                      <div
-                        key={arch.id}
-                        onClick={() => loadArchive(arch)}
-                        className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer group transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="bg-slate-100 p-2 rounded text-slate-500 group-hover:bg-white group-hover:text-blue-500 transition-colors">
-                            <Search className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="font-medium text-slate-800 flex items-center gap-2">
-                              {arch.seedKeyword}
-                              <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase">
-                                {arch.targetLanguage}
-                              </span>
+            {/* Mining Tab Content */}
+            {activeTab === "mining" && (
+              <div className="max-w-3xl mx-auto">
+                {/* Clean Input Design */}
+                <div className="flex w-full bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all">
+                  <div className="flex items-center justify-center pl-4 text-slate-400">
+                    <Search className="w-5 h-5" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder={t.placeholder}
+                    className="flex-1 p-4 text-lg outline-none text-slate-700 placeholder:text-slate-400"
+                    value={state.seedKeyword}
+                    onChange={(e) =>
+                      setState((prev) => ({
+                        ...prev,
+                        seedKeyword: e.target.value,
+                      }))
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && startMining(false)}
+                  />
+                  <button
+                    onClick={() => startMining(false)}
+                    disabled={!state.seedKeyword.trim()}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 font-semibold transition-colors disabled:opacity-70"
+                  >
+                    {t.btnStart}
+                  </button>
+                </div>
+
+                {/* Mining Archive List */}
+                {state.archives.length > 0 && (
+                  <div className="mt-12">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <History className="w-4 h-4" /> {t.miningArchives}
+                    </h3>
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                        {state.archives.map((arch) => (
+                          <div
+                            key={arch.id}
+                            onClick={() => loadArchive(arch)}
+                            className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer group transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="bg-slate-100 p-2 rounded text-slate-500 group-hover:bg-white group-hover:text-blue-500 transition-colors">
+                                <Search className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-slate-800 flex items-center gap-2">
+                                  {arch.seedKeyword}
+                                  <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase">
+                                    {arch.targetLanguage}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-slate-400">
+                                  {new Date(arch.timestamp).toLocaleString()} •{" "}
+                                  {arch.keywords.length} keywords
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-xs text-slate-400">
-                              {new Date(arch.timestamp).toLocaleString()} •{" "}
-                              {arch.keywords.length} keywords
-                            </div>
+                            <button
+                              onClick={(e) => deleteArchive(arch.id, e)}
+                              className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
-                        </div>
-                        <button
-                          onClick={(e) => deleteArchive(arch.id, e)}
-                          className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        ))}
                       </div>
-                    ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Batch Translation Tab Content */}
+            {activeTab === "batch" && (
+              <div className="max-w-3xl mx-auto">
+                <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 shadow-sm p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Languages className="w-5 h-5 text-purple-600" />
+                    <h3 className="text-lg font-bold text-slate-800">
+                      {t.batchTranslateTitle}
+                    </h3>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-4">
+                    {t.batchTranslateDesc}
+                  </p>
+
+                  <div className="space-y-4">
+                    {/* Batch Input */}
+                    <div>
+                      <textarea
+                        value={batchInput}
+                        onChange={(e) => setBatchInput(e.target.value)}
+                        placeholder={t.batchInputPlaceholder}
+                        className="w-full h-32 px-4 py-3 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                      />
+                    </div>
+
+                    {/* Batch Analyze Button */}
+                    <button
+                      onClick={handleBatchAnalyze}
+                      disabled={!batchInput.trim()}
+                      className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Search className="w-5 h-5" />
+                      {t.btnBatchAnalyze}
+                    </button>
                   </div>
                 </div>
+
+                {/* Batch Archive List */}
+                {state.batchArchives.length > 0 && (
+                  <div className="mt-12">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <History className="w-4 h-4" /> {t.batchArchives}
+                    </h3>
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                        {state.batchArchives.map((arch) => (
+                          <div
+                            key={arch.id}
+                            onClick={() => loadBatchArchive(arch)}
+                            className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer group transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="bg-slate-100 p-2 rounded text-slate-500 group-hover:bg-white group-hover:text-purple-500 transition-colors">
+                                <Languages className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-slate-800 flex items-center gap-2">
+                                  {arch.inputKeywords.split(',').slice(0, 3).join(', ')}
+                                  {arch.inputKeywords.split(',').length > 3 && '...'}
+                                  <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded border border-purple-200 uppercase font-bold">
+                                    {arch.targetLanguage}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-slate-400">
+                                  {new Date(arch.timestamp).toLocaleString()} •{" "}
+                                  {arch.totalCount} keywords
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => deleteBatchArchive(arch.id, e)}
+                              className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1624,6 +2166,322 @@ export default function App() {
           </div>
         )}
 
+        {/* BATCH ANALYZING PAGE */}
+        {state.step === "batch-analyzing" && (
+          <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    {t.batchAnalyzing}
+                    <span className="text-sm font-normal bg-purple-100 px-2 py-0.5 rounded-full text-purple-700">
+                      {state.batchCurrentIndex} / {state.batchTotalCount}
+                    </span>
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    Translating and analyzing keywords...
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={stopBatchAnalysis}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-md transition-colors text-sm font-medium shadow-sm"
+              >
+                <Square className="w-4 h-4 fill-current" />
+                {t.btnStop}
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
+              <div className="w-full md:w-1/3 h-full">
+                <TerminalLog logs={state.logs} />
+              </div>
+              <div className="w-full md:w-2/3 h-full">
+                <BatchAnalysisStream thoughts={state.batchThoughts} t={t} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* BATCH RESULTS PAGE */}
+        {state.step === "batch-results" && (
+          <div className="animate-fade-in flex-1">
+            <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                  <Languages className="w-6 h-6 text-purple-600" />
+                  {t.batchResultsTitle}
+                </h2>
+                <p className="text-slate-500 mt-1">
+                  {t.foundOpp} {state.batchKeywords.length} {t.opps}.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={downloadBatchCSV}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition-colors text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  {t.downloadCSV}
+                </button>
+                <button
+                  onClick={reset}
+                  className="px-4 py-2 text-sm text-slate-500 hover:text-blue-600 font-medium transition-colors border border-slate-200 rounded-md bg-white hover:bg-slate-50"
+                >
+                  {t.newAnalysis}
+                </button>
+              </div>
+            </div>
+
+            {/* Batch Results Table */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left text-sm text-slate-600">
+                  <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-4 w-10"></th>
+                      <th className="px-4 py-4">{t.originalKeyword}</th>
+                      <th className="px-4 py-4">{t.translatedKeyword}</th>
+                      <th className="px-4 py-4">{t.colType}</th>
+                      <th className="px-4 py-4 text-center">{t.colProb}</th>
+                      <th className="px-4 py-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {state.batchKeywords.map((item) => {
+                      const isExpanded = state.expandedRowId === item.id;
+
+                      return (
+                        <React.Fragment key={item.id}>
+                          <tr
+                            className={`transition-colors ${
+                              isExpanded
+                                ? "bg-blue-50/50"
+                                : "hover:bg-slate-50"
+                            }`}
+                          >
+                            <td
+                              className="px-4 py-4 text-center cursor-pointer"
+                              onClick={() =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  expandedRowId: isExpanded ? null : item.id,
+                                }))
+                              }
+                            >
+                              {isExpanded ? (
+                                <ChevronUp className="w-4 h-4 text-slate-400" />
+                              ) : (
+                                <ChevronDown className="w-4 h-4 text-slate-400" />
+                              )}
+                            </td>
+                            <td
+                              className="px-4 py-4 text-slate-600 cursor-pointer"
+                              onClick={() =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  expandedRowId: isExpanded ? null : item.id,
+                                }))
+                              }
+                            >
+                              {item.translation}
+                            </td>
+                            <td
+                              className="px-4 py-4 font-medium text-slate-900 cursor-pointer"
+                              onClick={() =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  expandedRowId: isExpanded ? null : item.id,
+                                }))
+                              }
+                            >
+                              {item.keyword}
+                            </td>
+                            <td className="px-4 py-4">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                {item.topDomainType || "-"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-center">
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                  item.probability === ProbabilityLevel.HIGH
+                                    ? "bg-green-100 text-green-800 border-green-200"
+                                    : item.probability === ProbabilityLevel.MEDIUM
+                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                    : "bg-red-100 text-red-800 border-red-200"
+                                }`}
+                              >
+                                {item.probability}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 text-right">
+                              <div className="flex items-center justify-end gap-3">
+                                <a
+                                  href={`https://www.google.com/search?q=${encodeURIComponent(
+                                    item.keyword
+                                  )}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors text-xs font-medium border border-slate-200"
+                                  title={t.verifyBtn}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <ExternalLink className="w-3 h-3" />
+                                  {t.verifyBtn}
+                                </a>
+
+                                <button
+                                  className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1"
+                                  onClick={() =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      expandedRowId: isExpanded ? null : item.id,
+                                    }))
+                                  }
+                                >
+                                  Details
+                                </button>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeepDive(item);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors text-xs font-medium"
+                                  title={t.deepDive}
+                                >
+                                  <FileText className="w-3 h-3" />
+                                  {t.deepDive}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Expanded Detail View */}
+                          {isExpanded && (
+                            <tr className="bg-slate-50/80 animate-fade-in border-b border-slate-100">
+                              <td colSpan={6} className="px-4 py-4">
+                                <div className="flex flex-col md:flex-row gap-6 px-4">
+                                  <div className="flex-1 space-y-2">
+                                    {/* Search Intent Section */}
+                                    {(item.searchIntent || item.intentAnalysis) && (
+                                      <div className="mb-3">
+                                        <h4 className="text-xs font-bold uppercase text-purple-600 mb-2 flex items-center gap-1">
+                                          <BrainCircuit className="w-3 h-3" />
+                                          Search Intent Analysis
+                                        </h4>
+                                        {item.searchIntent && (
+                                          <div className="bg-purple-50 p-3 rounded border border-purple-100 mb-2">
+                                            <div className="text-[10px] text-purple-600 font-bold mb-1">USER INTENT</div>
+                                            <p className="text-sm text-slate-700">{item.searchIntent}</p>
+                                          </div>
+                                        )}
+                                        {item.intentAnalysis && (
+                                          <div className="bg-blue-50 p-3 rounded border border-blue-100">
+                                            <div className="text-[10px] text-blue-600 font-bold mb-1">INTENT vs SERP MATCH</div>
+                                            <p className="text-sm text-slate-700">{item.intentAnalysis}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    <h4 className="text-xs font-bold uppercase text-slate-500">
+                                      Analysis Reasoning
+                                    </h4>
+                                    <p className="text-sm text-slate-700 bg-white p-3 rounded border border-slate-200 shadow-sm whitespace-pre-wrap break-words">
+                                      {item.reasoning}
+                                    </p>
+
+                                    <div className="grid grid-cols-2 gap-4 mt-2">
+                                      <div>
+                                        <span className="text-xs text-slate-400 block">
+                                          SERP Results (Est.)
+                                        </span>
+                                        <span className="text-sm font-medium">
+                                          {item.serpResultCount === -1
+                                            ? "Unknown (Many)"
+                                            : item.serpResultCount ?? "Unknown"}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-xs text-slate-400 block">
+                                          Top Competitor Type
+                                        </span>
+                                        <span className="text-sm font-medium">
+                                          {item.topDomainType ?? "-"}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* SERP EVIDENCE IN DETAILS */}
+                                    {item.serpResultCount === 0 ? (
+                                      <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded text-amber-800 text-xs font-medium flex items-center gap-2">
+                                        <Lightbulb className="w-4 h-4" />
+                                        No direct competitors found in search.
+                                      </div>
+                                    ) : (
+                                      item.topSerpSnippets &&
+                                      item.topSerpSnippets.length > 0 && (
+                                        <div className="mt-4">
+                                          <div className="flex justify-between items-center mb-2">
+                                            <h4 className="text-xs font-bold uppercase text-slate-500">
+                                              {t.serpEvidence}
+                                            </h4>
+                                            <span className="text-[10px] text-amber-600 italic">
+                                              {t.serpEvidenceDisclaimer}
+                                            </span>
+                                          </div>
+                                          <div className="space-y-2">
+                                            {item.topSerpSnippets
+                                              .slice(0, 3)
+                                              .map((snip, i) => (
+                                                <div
+                                                  key={i}
+                                                  className="bg-white p-2 rounded border border-slate-100 text-xs"
+                                                >
+                                                  <div className="text-blue-700 font-medium truncate">
+                                                    {snip.title}
+                                                  </div>
+                                                  <div className="text-green-700 text-[10px] truncate">
+                                                    {snip.url}
+                                                  </div>
+                                                  <div className="text-slate-500 mt-1 line-clamp-2">
+                                                    {snip.snippet}
+                                                  </div>
+                                                </div>
+                                              ))}
+                                          </div>
+                                        </div>
+                                      )
+                                    )}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+
+                    {state.batchKeywords.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="text-center py-12 text-slate-400"
+                        >
+                          No results yet.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* STEP 3: RESULTS */}
         {state.step === "results" && (
           <div className="animate-fade-in flex-1">
@@ -1723,10 +2581,6 @@ export default function App() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {getProcessedKeywords().map((item) => {
-                      const isBlueOcean =
-                        item.serpResultCount !== undefined &&
-                        item.serpResultCount !== -1 &&
-                        item.serpResultCount < 20;
                       const isExpanded = state.expandedRowId === item.id;
 
                       return (
@@ -1735,8 +2589,6 @@ export default function App() {
                             className={`transition-colors ${
                               isExpanded
                                 ? "bg-blue-50/50"
-                                : isBlueOcean
-                                ? "bg-amber-50 hover:bg-amber-100"
                                 : "hover:bg-slate-50"
                             }`}
                           >
@@ -1764,16 +2616,8 @@ export default function App() {
                                 }))
                               }
                             >
-                              <div className="flex items-center gap-2 cursor-pointer">
+                              <div className="cursor-pointer">
                                 {item.keyword}
-                                {isBlueOcean && (
-                                  <span
-                                    title="Very low search results found"
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-700 border border-amber-200"
-                                  >
-                                    <Lightbulb className="w-3 h-3" /> BLUE OCEAN
-                                  </span>
-                                )}
                               </div>
                             </td>
                             <td className="px-4 py-4 text-slate-500">
@@ -1852,6 +2696,28 @@ export default function App() {
                               <td colSpan={7} className="px-4 py-4">
                                 <div className="flex flex-col md:flex-row gap-6 px-4">
                                   <div className="flex-1 space-y-2">
+                                    {/* Search Intent Section */}
+                                    {(item.searchIntent || item.intentAnalysis) && (
+                                      <div className="mb-3">
+                                        <h4 className="text-xs font-bold uppercase text-purple-600 mb-2 flex items-center gap-1">
+                                          <BrainCircuit className="w-3 h-3" />
+                                          Search Intent Analysis
+                                        </h4>
+                                        {item.searchIntent && (
+                                          <div className="bg-purple-50 p-3 rounded border border-purple-100 mb-2">
+                                            <div className="text-[10px] text-purple-600 font-bold mb-1">USER INTENT</div>
+                                            <p className="text-sm text-slate-700">{item.searchIntent}</p>
+                                          </div>
+                                        )}
+                                        {item.intentAnalysis && (
+                                          <div className="bg-blue-50 p-3 rounded border border-blue-100">
+                                            <div className="text-[10px] text-blue-600 font-bold mb-1">INTENT vs SERP MATCH</div>
+                                            <p className="text-sm text-slate-700">{item.intentAnalysis}</p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
                                     <h4 className="text-xs font-bold uppercase text-slate-500">
                                       Analysis Reasoning
                                     </h4>
@@ -1884,8 +2750,7 @@ export default function App() {
                                     {item.serpResultCount === 0 ? (
                                       <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded text-amber-800 text-xs font-medium flex items-center gap-2">
                                         <Lightbulb className="w-4 h-4" />
-                                        No direct competitors found in search
-                                        (Blue Ocean).
+                                        No direct competitors found in search.
                                       </div>
                                     ) : (
                                       item.topSerpSnippets &&

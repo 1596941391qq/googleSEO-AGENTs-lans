@@ -212,6 +212,44 @@ export const translateText = async (text: string, targetLanguage: 'zh' | 'en'): 
   return response.text || text;
 };
 
+/**
+ * Translate a keyword to target market language
+ * Used for batch translation and analysis feature
+ */
+export const translateKeywordToTarget = async (
+  keyword: string,
+  targetLanguage: TargetLanguage
+): Promise<{ original: string; translated: string; translationBack: string }> => {
+  const targetLangName = getLanguageName(targetLanguage);
+
+  const prompt = `Translate the following keyword into ${targetLangName} for SEO purposes.
+Provide ONLY the translated keyword that would be commonly searched by users in that market.
+Do not explain, just provide the direct translation.
+
+Keyword: "${keyword}"
+
+Respond with ONLY the translated keyword in ${targetLangName}.`;
+
+  try {
+    const response = await callGeminiAPI(prompt);
+    const translated = response.text.trim();
+
+    return {
+      original: keyword,
+      translated: translated,
+      translationBack: keyword // We can keep the original as the "back translation" for reference
+    };
+  } catch (error: any) {
+    console.error(`Translation failed for keyword "${keyword}":`, error);
+    // Return original if translation fails
+    return {
+      original: keyword,
+      translated: keyword,
+      translationBack: keyword
+    };
+  }
+};
+
 export const generateKeywords = async (
   seedKeyword: string,
   targetLanguage: TargetLanguage,
@@ -339,6 +377,14 @@ ${systemInstruction}
 TASK: Analyze the Google SERP competition for the keyword: "${keywordData.keyword}".
 ${serpContext}
 
+**STEP 1: PREDICT SEARCH INTENT**
+First, predict what the user's search intent is when they type this keyword. Consider:
+- What problem are they trying to solve?
+- What information are they seeking?
+- Are they looking to buy, learn, compare, or find a specific resource?
+- What stage of the buyer's journey are they in?
+
+**STEP 2: ANALYZE SERP COMPETITION**
 Based on the REAL SERP results provided above (if available), analyze:
 1. How many competing pages exist for this keyword (use the actual count if provided, otherwise estimate)
 2. What type of sites are ranking (Big Brand, Niche Site, Forum/Social, Weak Page, Gov/Edu) - analyze the actual URLs and domains
@@ -350,13 +396,13 @@ STRICT SCORING CRITERIA (Be conservative and strict):
   * NO presence of authoritative sites (Wikipedia, .gov, .edu, major brands, established niche sites)
   * Content quality of top results is clearly poor or off-topic
   * User intent is clearly not being well-served by existing results
-  
+
 - **MEDIUM**: Assign Medium when:
   * Moderate competition exists (3-10 relevant results)
   * Mix of weak and moderate competitors
   * Some opportunity exists but requires quality content and SEO effort
   * Top results include some niche sites but not dominant brands
-  
+
 - **LOW**: Assign Low when ANY of the following apply:
   * Top results include Big Brands (Amazon, Wikipedia, major corporations, established market leaders)
   * Government or educational sites (.gov, .edu) rank highly
@@ -371,7 +417,7 @@ IMPORTANT ANALYSIS RULES:
 - If in doubt between High and Medium, choose Medium
 - If in doubt between Medium and Low, choose Low
 - Use the REAL SERP results provided above for your analysis
-- Output all text fields (reasoning, topSerpSnippets titles/snippets) in ${uiLangName}
+- Output all text fields (reasoning, searchIntent, intentAnalysis, topSerpSnippets titles/snippets) in ${uiLangName}
 - The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}
 - For topSerpSnippets, use the ACTUAL results from the SERP data above (first 3 results)
 
@@ -379,6 +425,8 @@ CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thou
 
 Return a JSON object:
 {
+  "searchIntent": "Brief description of predicted user search intent in ${uiLangName}",
+  "intentAnalysis": "Analysis of whether SERP results match the intent in ${uiLangName}",
   "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
@@ -441,6 +489,12 @@ Return a JSON object:
       }
       if (!analysis.reasoning) {
         analysis.reasoning = 'Analysis completed';
+      }
+      if (!analysis.searchIntent) {
+        analysis.searchIntent = 'Unknown search intent';
+      }
+      if (!analysis.intentAnalysis) {
+        analysis.intentAnalysis = 'Intent analysis not available';
       }
       if (!Array.isArray(analysis.topSerpSnippets)) {
         analysis.topSerpSnippets = serpResults.length > 0

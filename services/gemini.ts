@@ -102,6 +102,46 @@ export const generateDeepDiveStrategy = async (
   return result.report;
 };
 
+export const batchTranslateAndAnalyze = async (
+  keywords: string, // comma-separated keywords
+  targetLanguage: TargetLanguage,
+  systemInstruction: string,
+  uiLanguage: 'zh' | 'en' = 'en'
+): Promise<{
+  success: boolean;
+  total: number;
+  keywords: KeywordData[];
+  translationResults: Array<{ original: string; translated: string; translationBack: string }>;
+}> => {
+  const result = await apiCall('/api/batch-translate-analyze', {
+    keywords,
+    targetLanguage,
+    systemInstruction,
+    uiLanguage,
+  });
+  return result;
+};
+
+export const translateAndAnalyzeSingle = async (
+  keyword: string,
+  targetLanguage: TargetLanguage,
+  systemInstruction: string,
+  uiLanguage: 'zh' | 'en' = 'en'
+): Promise<{
+  success: boolean;
+  original: string;
+  translated: string;
+  keyword: KeywordData;
+}> => {
+  const result = await apiCall('/api/translate-and-analyze-single', {
+    keyword,
+    targetLanguage,
+    systemInstruction,
+    uiLanguage,
+  });
+  return result;
+};
+
 // Defaults (exported for frontend use)
 export const DEFAULT_GEN_PROMPT_EN = `
 You are a Senior SEO Specialist for Google Search.

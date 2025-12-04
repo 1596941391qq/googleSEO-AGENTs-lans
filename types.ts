@@ -24,16 +24,20 @@ export interface KeywordData {
   translation: string; // Meaning for the user
   intent: IntentType;
   volume: number; // Estimated monthly volume
-  
+
   // Analysis Metrics (Step 2)
   serpResultCount?: number; // Estimated number of results
   topDomainType?: 'Big Brand' | 'Niche Site' | 'Forum/Social' | 'Weak Page' | 'Gov/Edu' | 'Unknown';
   probability?: ProbabilityLevel;
   reasoning?: string; // Why this probability?
   topSerpSnippets?: SerpSnippet[]; // For manual verification
-  
+
+  // Search Intent Analysis
+  searchIntent?: string; // Predicted user search intent
+  intentAnalysis?: string; // Analysis of the intent
+
   // Verification (Step 3)
-  isIndexed?: boolean; 
+  isIndexed?: boolean;
 }
 
 export interface SEOStrategyReport {
@@ -62,6 +66,15 @@ export interface ArchiveEntry {
   keywords: KeywordData[];
   miningRound: number;
   targetLanguage: TargetLanguage;
+}
+
+export interface BatchArchiveEntry {
+  id: string;
+  timestamp: number;
+  inputKeywords: string; // comma-separated original keywords
+  keywords: KeywordData[];
+  targetLanguage: TargetLanguage;
+  totalCount: number;
 }
 
 export type UILanguage = 'en' | 'zh';
@@ -98,45 +111,71 @@ export interface AgentThought {
   analyzedKeywords?: KeywordData[];
 }
 
+export interface BatchAnalysisThought {
+  id: string;
+  type: 'translation' | 'serp-search' | 'intent-analysis' | 'analysis';
+  keyword: string; // Original or translated keyword
+  content: string;
+  serpSnippets?: SerpSnippet[];
+  intentData?: {
+    searchIntent: string;
+    intentAnalysis: string;
+  };
+  analysis?: {
+    probability: ProbabilityLevel;
+    topDomainType: string;
+    serpResultCount: number;
+    reasoning: string;
+  };
+}
+
 export interface AppState {
-  step: 'input' | 'mining' | 'results';
+  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results';
   seedKeyword: string;
   targetLanguage: TargetLanguage;
   keywords: KeywordData[];
   error: string | null;
-  
+
   // Mining Loop State
   isMining: boolean;
   miningRound: number;
   agentThoughts: AgentThought[];
-  miningSuccess: boolean; 
-  
+  miningSuccess: boolean;
+
   // Archives
   archives: ArchiveEntry[];
+  batchArchives: BatchArchiveEntry[];
 
   // Results View Configuration
   filterLevel: ProbabilityLevel | 'ALL';
   sortBy: 'volume' | 'probability' | 'difficulty';
-  expandedRowId: string | null; 
+  expandedRowId: string | null;
 
   // Deep Dive State
   showDeepDiveModal: boolean;
   isDeepDiving: boolean;
   currentStrategyReport: SEOStrategyReport | null;
-  
+
   // Config
   uiLanguage: UILanguage;
   genPrompt: string;
   analyzePrompt: string;
   logs: LogEntry[];
   showPrompts: boolean;
-  
+
   // Prompt Translation Reference
   showPromptTranslation: boolean;
   translatedGenPrompt: string | null;
   translatedAnalyzePrompt: string | null;
-  
+
   // Agent Config Archives
   agentConfigs: AgentConfig[];
   currentConfigId: string | null;
+
+  // Batch Analysis State
+  batchKeywords: KeywordData[];
+  batchThoughts: BatchAnalysisThought[];
+  batchCurrentIndex: number;
+  batchTotalCount: number;
+  batchInputKeywords: string; // Store original input for archiving
 }
