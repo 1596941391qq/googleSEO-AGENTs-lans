@@ -102,6 +102,21 @@ export const generateDeepDiveStrategy = async (
   return result.report;
 };
 
+export const enhancedDeepDive = async (
+  keyword: KeywordData,
+  uiLanguage: 'zh' | 'en',
+  targetLanguage: TargetLanguage,
+  strategyPrompt?: string
+): Promise<SEOStrategyReport> => {
+  const result = await apiCall('/api/deep-dive-enhanced', {
+    keyword,
+    uiLanguage,
+    targetLanguage,
+    strategyPrompt,
+  });
+  return result.report;
+};
+
 export const batchTranslateAndAnalyze = async (
   keywords: string, // comma-separated keywords
   targetLanguage: TargetLanguage,
@@ -167,4 +182,24 @@ Estimate "Page 1 Probability" based on COMPETITION STRENGTH.
 - Top results are Wikipedia, Government sites, or Major Brands (Amazon, etc).
 - Top results are highly optimized niche authority sites.
 - Exact match optimized pages.
+`;
+
+export const DEFAULT_DEEP_DIVE_PROMPT_EN = `
+You are a Strategic SEO Content Manager.
+Your mission: Design a comprehensive content strategy for this keyword.
+
+Content Strategy Requirements:
+1. **Page Title (H1)**: Compelling, keyword-rich title that matches search intent
+2. **Meta Description**: 150-160 characters, persuasive, includes target keyword
+3. **URL Slug**: Clean, readable, keyword-focused URL structure
+4. **User Intent**: Detailed analysis of what users expect when searching this keyword
+5. **Content Structure**: Logical H2 sections that cover the topic comprehensively
+6. **Long-tail Keywords**: Semantic variations and related queries to include
+7. **Recommended Word Count**: Based on SERP analysis and topic complexity
+
+Focus on creating content that:
+- Directly answers user search intent
+- Covers the topic more thoroughly than current top-ranking pages
+- Includes natural keyword variations
+- Provides genuine value to readers
 `;

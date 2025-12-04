@@ -35,12 +35,15 @@ import {
   LogEntry,
   AgentThought,
   BatchAnalysisThought,
+  DeepDiveThought,
   ArchiveEntry,
   BatchArchiveEntry,
   SEOStrategyReport,
   TargetLanguage,
   UILanguage,
   AgentConfig,
+  DeepDiveConfig,
+  WorkflowConfig,
 } from "./types";
 import {
   generateKeywords,
@@ -48,11 +51,19 @@ import {
   translatePromptToSystemInstruction,
   translateText,
   generateDeepDiveStrategy,
+  enhancedDeepDive,
   batchTranslateAndAnalyze,
   translateAndAnalyzeSingle,
   DEFAULT_GEN_PROMPT_EN,
   DEFAULT_ANALYZE_PROMPT_EN,
+  DEFAULT_DEEP_DIVE_PROMPT_EN,
 } from "./services/gemini";
+import {
+  MINING_WORKFLOW,
+  BATCH_WORKFLOW,
+  DEEP_DIVE_WORKFLOW,
+  createDefaultConfig,
+} from "./workflows";
 
 // --- Constants & Translations ---
 
@@ -118,7 +129,8 @@ const TEXT = {
     configSaved: "Configuration saved",
     enterConfigName: "Enter config name...",
     batchTranslateTitle: "Batch Translate & Analyze",
-    batchTranslateDesc: "Enter multiple keywords (comma-separated) to translate and analyze for blue ocean opportunities.",
+    batchTranslateDesc:
+      "Enter multiple keywords (comma-separated) to translate and analyze for blue ocean opportunities.",
     batchInputPlaceholder: "e.g., dog food, cat toys, bird cage",
     btnBatchAnalyze: "Batch Analyze",
     batchAnalyzing: "Translating and analyzing...",
@@ -129,6 +141,37 @@ const TEXT = {
     tabBatch: "Batch Translation",
     miningArchives: "Mining Archives",
     batchArchives: "Batch Archives",
+    deepDiveAnalyzing: "Deep Dive Analysis",
+    deepDiveResults: "Deep Dive Results",
+    exportHTML: "Export HTML",
+    backToResults: "Back to Results",
+    rankingProbability: "Ranking Probability",
+    searchIntent: "Search Intent",
+    intentMatch: "Content-Intent Match",
+    rankingAnalysis: "Analysis",
+    translationReference: "Translation Reference",
+    pageTitleTranslation: "Page Title Translation",
+    metaDescriptionTranslation: "Meta Description Translation",
+    contentStructureTranslation: "Content Structure Translation",
+    longTailKeywordsTranslation: "Long-tail Keywords Translation",
+    userIntentSummary: "User Intent Summary",
+    // Workflow Configuration
+    workflowConfig: "Workflow Configuration",
+    workflowConfigDesc: "Configure AI agents for each workflow",
+    miningWorkflow: "Mining Workflow",
+    batchWorkflow: "Batch Translation Workflow",
+    deepDiveWorkflow: "Deep Dive Workflow",
+    agentNode: "Agent",
+    toolNode: "Tool",
+    configurable: "Configurable",
+    notConfigurable: "Not Configurable",
+    editPrompt: "Edit Prompt",
+    saveWorkflowConfig: "Save Configuration",
+    loadWorkflowConfig: "Load Configuration",
+    resetToDefault: "Reset to Default",
+    configNamePlaceholder: "Enter configuration name...",
+    noSavedConfigs: "No saved configurations",
+    currentlyUsing: "Currently Using",
   },
   zh: {
     title: "Google SEO 智能 Agent",
@@ -191,7 +234,8 @@ const TEXT = {
     configSaved: "配置已保存",
     enterConfigName: "输入配置名称...",
     batchTranslateTitle: "批量翻译并分析",
-    batchTranslateDesc: "输入多个关键词（用逗号分隔），自动翻译到目标语言并分析蓝海机会。",
+    batchTranslateDesc:
+      "输入多个关键词（用逗号分隔），自动翻译到目标语言并分析蓝海机会。",
     batchInputPlaceholder: "例如：狗粮, 猫玩具, 鸟笼",
     btnBatchAnalyze: "批量分析",
     batchAnalyzing: "正在翻译和分析...",
@@ -199,9 +243,40 @@ const TEXT = {
     originalKeyword: "原始词",
     translatedKeyword: "翻译词",
     tabMining: "关键词挖掘",
-    tabBatch: "批量翻译",
+    tabBatch: "翻译分析",
     miningArchives: "挖掘历史",
     batchArchives: "批量历史",
+    deepDiveAnalyzing: "深度挖掘分析中",
+    deepDiveResults: "深度挖掘结果",
+    exportHTML: "导出 HTML",
+    backToResults: "返回结果",
+    rankingProbability: "上首页概率",
+    searchIntent: "搜索意图",
+    intentMatch: "内容匹配度",
+    rankingAnalysis: "分析结果",
+    translationReference: "翻译对照",
+    pageTitleTranslation: "页面标题翻译",
+    metaDescriptionTranslation: "描述翻译",
+    contentStructureTranslation: "内容结构翻译",
+    longTailKeywordsTranslation: "长尾词翻译",
+    userIntentSummary: "用户意图摘要",
+    // Workflow Configuration
+    workflowConfig: "工作流配置",
+    workflowConfigDesc: "为每个工作流配置AI代理",
+    miningWorkflow: "挖掘工作流",
+    batchWorkflow: "批量翻译工作流",
+    deepDiveWorkflow: "深度挖掘工作流",
+    agentNode: "代理节点",
+    toolNode: "工具节点",
+    configurable: "可配置",
+    notConfigurable: "不可配置",
+    editPrompt: "编辑提示词",
+    saveWorkflowConfig: "保存配置",
+    loadWorkflowConfig: "加载配置",
+    resetToDefault: "恢复默认",
+    configNamePlaceholder: "输入配置名称...",
+    noSavedConfigs: "暂无保存的配置",
+    currentlyUsing: "当前使用",
   },
 };
 
@@ -451,7 +526,13 @@ const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
   );
 };
 
-const BatchAnalysisStream = ({ thoughts, t }: { thoughts: BatchAnalysisThought[]; t: any }) => {
+const BatchAnalysisStream = ({
+  thoughts,
+  t,
+}: {
+  thoughts: BatchAnalysisThought[];
+  t: any;
+}) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -490,44 +571,55 @@ const BatchAnalysisStream = ({ thoughts, t }: { thoughts: BatchAnalysisThought[]
                 {thought.keyword}
               </span>
             </div>
-            <p className="text-sm text-slate-700 mb-2">
-              {thought.content}
-            </p>
+            <p className="text-sm text-slate-700 mb-2">{thought.content}</p>
 
             {/* Intent Analysis Display */}
             {thought.type === "intent-analysis" && thought.intentData && (
               <div className="mt-2 space-y-2">
                 <div className="bg-purple-50 p-2 rounded border border-purple-100">
-                  <div className="text-[10px] text-purple-600 font-bold mb-1">USER INTENT</div>
-                  <p className="text-xs text-slate-700">{thought.intentData.searchIntent}</p>
+                  <div className="text-[10px] text-purple-600 font-bold mb-1">
+                    USER INTENT
+                  </div>
+                  <p className="text-xs text-slate-700">
+                    {thought.intentData.searchIntent}
+                  </p>
                 </div>
                 <div className="bg-blue-50 p-2 rounded border border-blue-100">
-                  <div className="text-[10px] text-blue-600 font-bold mb-1">INTENT vs SERP</div>
-                  <p className="text-xs text-slate-700">{thought.intentData.intentAnalysis}</p>
+                  <div className="text-[10px] text-blue-600 font-bold mb-1">
+                    INTENT vs SERP
+                  </div>
+                  <p className="text-xs text-slate-700">
+                    {thought.intentData.intentAnalysis}
+                  </p>
                 </div>
               </div>
             )}
 
             {/* SERP Snippets */}
-            {thought.type === "serp-search" && thought.serpSnippets && thought.serpSnippets.length > 0 && (
-              <div className="mt-2 border border-slate-200 rounded-md overflow-hidden bg-slate-50">
-                <div className="space-y-2 p-2">
-                  {thought.serpSnippets.slice(0, 3).map((snippet, idx) => (
-                    <div key={idx} className="bg-white p-2 rounded border border-slate-100 text-xs">
-                      <div className="text-blue-700 font-medium truncate">
-                        {snippet.title}
+            {thought.type === "serp-search" &&
+              thought.serpSnippets &&
+              thought.serpSnippets.length > 0 && (
+                <div className="mt-2 border border-slate-200 rounded-md overflow-hidden bg-slate-50">
+                  <div className="space-y-2 p-2">
+                    {thought.serpSnippets.slice(0, 3).map((snippet, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-white p-2 rounded border border-slate-100 text-xs"
+                      >
+                        <div className="text-blue-700 font-medium truncate">
+                          {snippet.title}
+                        </div>
+                        <div className="text-green-700 text-[10px] truncate">
+                          {snippet.url}
+                        </div>
+                        <div className="text-slate-500 mt-1 line-clamp-2">
+                          {snippet.snippet}
+                        </div>
                       </div>
-                      <div className="text-green-700 text-[10px] truncate">
-                        {snippet.url}
-                      </div>
-                      <div className="text-slate-500 mt-1 line-clamp-2">
-                        {snippet.snippet}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {/* Analysis Result */}
             {thought.type === "analysis" && thought.analysis && (
@@ -537,7 +629,8 @@ const BatchAnalysisStream = ({ thoughts, t }: { thoughts: BatchAnalysisThought[]
                     className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                       thought.analysis.probability === ProbabilityLevel.HIGH
                         ? "bg-green-100 text-green-800"
-                        : thought.analysis.probability === ProbabilityLevel.MEDIUM
+                        : thought.analysis.probability ===
+                          ProbabilityLevel.MEDIUM
                         ? "bg-yellow-100 text-yellow-800"
                         : "bg-red-100 text-red-800"
                     }`}
@@ -548,7 +641,11 @@ const BatchAnalysisStream = ({ thoughts, t }: { thoughts: BatchAnalysisThought[]
                     {thought.analysis.topDomainType}
                   </span>
                   <span className="text-xs text-slate-400">
-                    ({thought.analysis.serpResultCount === -1 ? "Many" : thought.analysis.serpResultCount} results)
+                    (
+                    {thought.analysis.serpResultCount === -1
+                      ? "Many"
+                      : thought.analysis.serpResultCount}{" "}
+                    results)
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 whitespace-pre-wrap">
@@ -558,6 +655,393 @@ const BatchAnalysisStream = ({ thoughts, t }: { thoughts: BatchAnalysisThought[]
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+};
+
+const DeepDiveAnalysisStream = ({
+  thoughts,
+  t,
+}: {
+  thoughts: DeepDiveThought[];
+  t: any;
+}) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [thoughts]);
+
+  return (
+    <div className="bg-white rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border border-slate-200">
+      <div className="flex items-center gap-2 border-b border-slate-100 pb-2 mb-2 text-slate-500 uppercase tracking-wider text-[10px]">
+        <BrainCircuit className="w-3 h-3 text-blue-600" />
+        <span>Deep Dive Analysis Stream</span>
+      </div>
+      <div
+        ref={scrollRef}
+        className="overflow-y-auto custom-scrollbar flex-1 space-y-4 pr-2"
+      >
+        {thoughts.map((thought) => (
+          <div key={thought.id} className="animate-fade-in">
+            <div className="flex items-center gap-2 mb-1">
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  thought.type === "content-generation"
+                    ? "bg-blue-100 text-blue-700"
+                    : thought.type === "keyword-extraction"
+                    ? "bg-purple-100 text-purple-700"
+                    : thought.type === "serp-verification"
+                    ? "bg-indigo-100 text-indigo-700"
+                    : "bg-green-100 text-green-700"
+                }`}
+              >
+                {thought.type.toUpperCase().replace("-", " ")}
+              </span>
+            </div>
+            <p className="text-sm text-slate-700 mb-2">{thought.content}</p>
+
+            {/* Core Keywords Display */}
+            {thought.type === "keyword-extraction" &&
+              thought.data?.keywords && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {thought.data.keywords.map((kw, idx) => (
+                    <span
+                      key={idx}
+                      className="px-2 py-1 bg-purple-50 text-purple-700 rounded-md text-xs font-medium border border-purple-200"
+                    >
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+            {/* SERP Results Display */}
+            {thought.type === "serp-verification" &&
+              thought.data?.serpResults &&
+              thought.data.serpResults.length > 0 && (
+                <div className="mt-2 space-y-2">
+                  <div className="border border-slate-200 rounded-md overflow-hidden bg-slate-50">
+                    <div className="space-y-2 p-2">
+                      {thought.data.serpResults
+                        .slice(0, 3)
+                        .map((snippet, idx) => (
+                          <div
+                            key={idx}
+                            className="bg-white p-2 rounded border border-slate-100 text-xs"
+                          >
+                            <div className="text-blue-700 font-medium truncate">
+                              {snippet.title}
+                            </div>
+                            <div className="text-green-700 text-[10px] truncate">
+                              {snippet.url}
+                            </div>
+                            <div className="text-slate-500 mt-1 line-clamp-2">
+                              {snippet.snippet}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                  {thought.data.analysis && (
+                    <div className="bg-indigo-50 p-2 rounded border border-indigo-100">
+                      <div className="text-[10px] text-indigo-600 font-bold mb-1">
+                        COMPETITION ANALYSIS
+                      </div>
+                      <p className="text-xs text-slate-700 whitespace-pre-wrap">
+                        {thought.data.analysis}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            {/* Probability Analysis Display */}
+            {thought.type === "probability-analysis" &&
+              thought.data?.probability &&
+              thought.data?.analysis && (
+                <div className="mt-2 bg-slate-50 p-3 rounded border border-slate-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span
+                      className={`px-3 py-1 rounded-full text-sm font-bold ${
+                        thought.data.probability === ProbabilityLevel.HIGH
+                          ? "bg-green-100 text-green-800 border border-green-200"
+                          : thought.data.probability === ProbabilityLevel.MEDIUM
+                          ? "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                          : "bg-red-100 text-red-800 border border-red-200"
+                      }`}
+                    >
+                      {thought.data.probability} Probability
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 whitespace-pre-wrap">
+                    {thought.data.analysis}
+                  </p>
+                </div>
+              )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// Workflow Configuration Panel
+const WorkflowConfigPanel = ({
+  workflowDef,
+  currentConfig,
+  allConfigs,
+  onSave,
+  onLoad,
+  onReset,
+  t,
+}: {
+  workflowDef: any;
+  currentConfig: WorkflowConfig | null;
+  allConfigs: WorkflowConfig[];
+  onSave: (config: WorkflowConfig) => void;
+  onLoad: (configId: string) => void;
+  onReset: () => void;
+  t: any;
+}) => {
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [configName, setConfigName] = useState("");
+  const [nodes, setNodes] = useState(workflowDef.nodes);
+
+  useEffect(() => {
+    if (currentConfig) {
+      setNodes(currentConfig.nodes);
+    } else {
+      setNodes(workflowDef.nodes);
+    }
+  }, [currentConfig, workflowDef]);
+
+  const handleNodePromptChange = (nodeId: string, newPrompt: string) => {
+    setNodes((prev: any[]) =>
+      prev.map((node) =>
+        node.id === nodeId ? { ...node, prompt: newPrompt } : node
+      )
+    );
+  };
+
+  const handleSaveConfig = () => {
+    if (!configName.trim()) {
+      alert(t.configNamePlaceholder);
+      return;
+    }
+
+    const newConfig: WorkflowConfig = {
+      id: `${workflowDef.id}-${Date.now()}`,
+      workflowId: workflowDef.id,
+      name: configName,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      nodes: JSON.parse(JSON.stringify(nodes)),
+    };
+
+    onSave(newConfig);
+    setConfigName("");
+  };
+
+  const handleResetToDefault = () => {
+    if (confirm(t.resetToDefault + "?")) {
+      setNodes(workflowDef.nodes);
+      onReset();
+    }
+  };
+
+  const workflowConfigs = allConfigs.filter(
+    (c) => c.workflowId === workflowDef.id
+  );
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+      <div className="mb-4">
+        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <BrainCircuit className="w-5 h-5 text-blue-600" />
+          {workflowDef.name}
+        </h3>
+        <p className="text-sm text-slate-500 mt-1">{workflowDef.description}</p>
+      </div>
+
+      {/* Workflow Nodes Visualization */}
+      <div className="space-y-3 mb-6">
+        {nodes.map((node: any, index: number) => (
+          <div key={node.id}>
+            <div
+              className={`p-4 rounded-lg border-2 ${
+                node.type === "agent"
+                  ? "border-blue-200 bg-blue-50"
+                  : "border-slate-200 bg-slate-50"
+              } ${!node.configurable ? "opacity-60" : ""}`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-bold ${
+                        node.type === "agent"
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-400 text-white"
+                      }`}
+                    >
+                      {node.type === "agent" ? t.agentNode : t.toolNode}
+                    </span>
+                    <span className="font-bold text-sm text-slate-800">
+                      {node.name}
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded ${
+                        node.configurable
+                          ? "bg-green-100 text-green-700"
+                          : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {node.configurable ? t.configurable : t.notConfigurable}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600">{node.description}</p>
+
+                  {/* Editable Prompt Area */}
+                  {node.configurable && node.type === "agent" && (
+                    <div className="mt-3">
+                      {editingNodeId === node.id ? (
+                        <div className="space-y-2">
+                          <textarea
+                            value={node.prompt || ""}
+                            onChange={(e) =>
+                              handleNodePromptChange(node.id, e.target.value)
+                            }
+                            className="w-full h-32 p-2 text-xs font-mono border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder={t.editPrompt}
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setEditingNodeId(null)}
+                              className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                            >
+                              {t.close}
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleNodePromptChange(
+                                  node.id,
+                                  node.defaultPrompt || ""
+                                );
+                              }}
+                              className="px-3 py-1 bg-slate-200 text-slate-700 rounded text-xs hover:bg-slate-300"
+                            >
+                              {t.resetToDefault}
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          onClick={() => setEditingNodeId(node.id)}
+                          className="mt-2 p-2 bg-white border border-slate-200 rounded cursor-pointer hover:border-blue-400 transition-colors"
+                        >
+                          <div className="text-[10px] text-slate-400 mb-1">
+                            {t.editPrompt}
+                          </div>
+                          <div className="text-xs text-slate-600 line-clamp-2 font-mono">
+                            {node.prompt || "No prompt"}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Connector Arrow */}
+            {index < nodes.length - 1 && (
+              <div className="flex justify-center py-2">
+                <ArrowRight className="w-5 h-5 text-slate-400" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Configuration Management */}
+      <div className="border-t border-slate-200 pt-4 space-y-4">
+        {/* Save New Config */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={configName}
+            onChange={(e) => setConfigName(e.target.value)}
+            placeholder={t.configNamePlaceholder}
+            className="flex-1 px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            onClick={handleSaveConfig}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+          >
+            <Save className="w-4 h-4" />
+            {t.saveWorkflowConfig}
+          </button>
+          <button
+            onClick={handleResetToDefault}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 text-sm font-medium"
+          >
+            <RefreshCw className="w-4 h-4" />
+            {t.resetToDefault}
+          </button>
+        </div>
+
+        {/* Saved Configs List */}
+        {workflowConfigs.length > 0 && (
+          <div>
+            <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+              {t.loadWorkflowConfig}
+            </div>
+            <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
+              {workflowConfigs.map((config) => (
+                <div
+                  key={config.id}
+                  className={`flex items-center justify-between p-2 rounded border ${
+                    currentConfig?.id === config.id
+                      ? "border-blue-400 bg-blue-50"
+                      : "border-slate-200 bg-slate-50"
+                  }`}
+                >
+                  <div className="flex-1">
+                    <div className="text-sm font-medium text-slate-800">
+                      {config.name}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {new Date(config.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {currentConfig?.id === config.id && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                        {t.currentlyUsing}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => onLoad(config.id)}
+                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
+                    >
+                      <FolderOpen className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {workflowConfigs.length === 0 && (
+          <div className="text-center py-4 text-slate-400 text-sm">
+            {t.noSavedConfigs}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -783,6 +1267,11 @@ export default function App() {
     showDeepDiveModal: false,
     isDeepDiving: false,
     currentStrategyReport: null,
+    deepDiveThoughts: [],
+    deepDiveKeyword: null,
+    showDetailedAnalysisModal: false,
+    deepDiveProgress: 0,
+    deepDiveCurrentStep: "",
 
     uiLanguage: "zh",
     genPrompt: DEFAULT_GEN_PROMPT_EN,
@@ -796,6 +1285,15 @@ export default function App() {
 
     agentConfigs: [],
     currentConfigId: null,
+
+    // Workflow Configuration System
+    workflowConfigs: [],
+    currentWorkflowConfigIds: {},
+
+    // Deep Dive Config (deprecated)
+    deepDiveConfigs: [],
+    currentDeepDiveConfigId: null,
+    deepDivePrompt: DEFAULT_DEEP_DIVE_PROMPT_EN,
 
     // Batch Analysis
     batchKeywords: [],
@@ -826,9 +1324,14 @@ export default function App() {
     }
 
     try {
-      const savedBatchArchives = localStorage.getItem("google_seo_batch_archives");
+      const savedBatchArchives = localStorage.getItem(
+        "google_seo_batch_archives"
+      );
       if (savedBatchArchives) {
-        setState((prev) => ({ ...prev, batchArchives: JSON.parse(savedBatchArchives) }));
+        setState((prev) => ({
+          ...prev,
+          batchArchives: JSON.parse(savedBatchArchives),
+        }));
       }
     } catch (e) {
       console.error("Failed to load batch archives", e);
@@ -844,6 +1347,21 @@ export default function App() {
       }
     } catch (e) {
       console.error("Failed to load agent configs", e);
+    }
+
+    // Load workflow configs
+    try {
+      const savedWorkflowConfigs = localStorage.getItem(
+        "google_seo_workflow_configs"
+      );
+      if (savedWorkflowConfigs) {
+        setState((prev) => ({
+          ...prev,
+          workflowConfigs: JSON.parse(savedWorkflowConfigs),
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to load workflow configs", e);
     }
   }, []);
 
@@ -990,6 +1508,20 @@ export default function App() {
     }));
   };
 
+  // Play completion sound
+  const playCompletionSound = () => {
+    try {
+      const audio = new Audio("/voice/stop.mp3");
+      audio.volume = 0.5; // Set volume to 50%
+      audio.play().catch((error) => {
+        console.log("Audio playback failed:", error);
+        // Silently fail if audio can't play (e.g., autoplay restrictions)
+      });
+    } catch (error) {
+      console.log("Audio initialization failed:", error);
+    }
+  };
+
   const addThought = (
     type: AgentThought["type"],
     content: string,
@@ -1026,6 +1558,25 @@ export default function App() {
           keyword,
           content,
           ...extra,
+        },
+      ],
+    }));
+  };
+
+  const addDeepDiveThought = (
+    type: DeepDiveThought["type"],
+    content: string,
+    data?: DeepDiveThought["data"]
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      deepDiveThoughts: [
+        ...prev.deepDiveThoughts,
+        {
+          id: `ddt-${Date.now()}`,
+          type,
+          content,
+          data,
         },
       ],
     }));
@@ -1138,7 +1689,7 @@ export default function App() {
         const generatedKeywords = await generateKeywords(
           state.seedKeyword,
           state.targetLanguage,
-          state.genPrompt,
+          getWorkflowPrompt("mining", "mining-gen", state.genPrompt),
           allKeywordsRef.current,
           currentRound
         );
@@ -1166,7 +1717,7 @@ export default function App() {
         // First fetch real SERP data, then analyze based on real data
         const analyzedBatch = await analyzeRankingProbability(
           generatedKeywords,
-          state.analyzePrompt,
+          getWorkflowPrompt("mining", "mining-analyze", state.analyzePrompt),
           state.uiLanguage,
           state.targetLanguage
         );
@@ -1211,6 +1762,7 @@ export default function App() {
             saveToArchive(prev);
             return { ...prev, isMining: false, miningSuccess: true };
           });
+          playCompletionSound(); // Play sound on mining completion
           return;
         }
 
@@ -1264,30 +1816,215 @@ export default function App() {
   const handleDeepDive = async (keyword: KeywordData) => {
     setState((prev) => ({
       ...prev,
-      isDeepDiving: true,
+      step: "deep-dive-analyzing",
+      deepDiveKeyword: keyword,
+      deepDiveThoughts: [],
       currentStrategyReport: null,
-      showDeepDiveModal: true,
+      isDeepDiving: true,
+      logs: [],
     }));
+
+    // Start the enhanced deep dive workflow
+    runEnhancedDeepDive(keyword);
+  };
+
+  const runEnhancedDeepDive = async (keyword: KeywordData) => {
     try {
-      const report = await generateDeepDiveStrategy(
+      // Step 1: Initialize
+      setState((prev) => ({
+        ...prev,
+        deepDiveProgress: 10,
+        deepDiveCurrentStep:
+          state.uiLanguage === "zh"
+            ? "正在生成内容策略..."
+            : "Generating content strategy...",
+      }));
+
+      addDeepDiveThought(
+        "content-generation",
+        `Generating comprehensive SEO content strategy for "${keyword.keyword}"...`
+      );
+      addLog("Starting enhanced deep dive analysis...", "info");
+
+      setState((prev) => ({
+        ...prev,
+        deepDiveProgress: 25,
+        deepDiveCurrentStep:
+          state.uiLanguage === "zh"
+            ? "调用AI生成策略..."
+            : "Calling AI to generate strategy...",
+      }));
+
+      const report = await enhancedDeepDive(
         keyword,
         state.uiLanguage,
-        state.targetLanguage
+        state.targetLanguage,
+        getWorkflowPrompt("deepDive", "deepdive-strategy", state.deepDivePrompt)
       );
+
+      // Step 2: Core keyword extraction (done by API)
       setState((prev) => ({
         ...prev,
+        deepDiveProgress: 50,
+        deepDiveCurrentStep:
+          state.uiLanguage === "zh"
+            ? "提取核心关键词..."
+            : "Extracting core keywords...",
+      }));
+
+      if (report.coreKeywords && report.coreKeywords.length > 0) {
+        addDeepDiveThought(
+          "keyword-extraction",
+          `Extracted ${report.coreKeywords.length} core keywords from generated content`,
+          { keywords: report.coreKeywords }
+        );
+        addLog(`Core keywords: ${report.coreKeywords.join(", ")}`, "success");
+      }
+
+      // Step 3: SERP verification (done by API)
+      setState((prev) => ({
+        ...prev,
+        deepDiveProgress: 70,
+        deepDiveCurrentStep:
+          state.uiLanguage === "zh"
+            ? "验证SERP竞争情况..."
+            : "Verifying SERP competition...",
+      }));
+
+      if (report.serpCompetitionData && report.serpCompetitionData.length > 0) {
+        for (const serpData of report.serpCompetitionData) {
+          addDeepDiveThought(
+            "serp-verification",
+            `Searched SERP for "${serpData.keyword}"`,
+            {
+              keywords: [serpData.keyword],
+              serpResults: serpData.serpResults,
+              analysis: serpData.analysis,
+            }
+          );
+        }
+        addLog(
+          `Analyzed competition for ${report.serpCompetitionData.length} core keywords`,
+          "success"
+        );
+      }
+
+      // Step 4: Ranking probability analysis (done by API)
+      setState((prev) => ({
+        ...prev,
+        deepDiveProgress: 90,
+        deepDiveCurrentStep:
+          state.uiLanguage === "zh"
+            ? "分析上首页概率..."
+            : "Analyzing ranking probability...",
+      }));
+
+      if (report.rankingProbability && report.rankingAnalysis) {
+        addDeepDiveThought(
+          "probability-analysis",
+          `Estimated ranking probability: ${report.rankingProbability}`,
+          {
+            probability: report.rankingProbability,
+            analysis: report.rankingAnalysis,
+          }
+        );
+        addLog(
+          `Ranking probability: ${report.rankingProbability}`,
+          report.rankingProbability === ProbabilityLevel.HIGH
+            ? "success"
+            : report.rankingProbability === ProbabilityLevel.MEDIUM
+            ? "warning"
+            : "error"
+        );
+      }
+
+      // Complete - navigate to results
+      setState((prev) => ({
+        ...prev,
+        step: "deep-dive-results",
         isDeepDiving: false,
         currentStrategyReport: report,
+        deepDiveProgress: 100,
+        deepDiveCurrentStep:
+          state.uiLanguage === "zh" ? "分析完成！" : "Analysis complete!",
       }));
-    } catch (e) {
-      console.error(e);
+      addLog("Deep dive analysis complete!", "success");
+      playCompletionSound(); // Play sound on deep dive completion
+    } catch (e: any) {
+      console.error("Enhanced deep dive error:", e);
+      addLog(`Deep dive failed: ${e.message}`, "error");
       setState((prev) => ({
         ...prev,
         isDeepDiving: false,
-        showDeepDiveModal: false,
-        error: "Failed to generate report",
+        error: "Failed to complete deep dive analysis",
+        step: "results", // Go back to results page
+        deepDiveProgress: 0,
+        deepDiveCurrentStep: "",
       }));
     }
+  };
+
+  // === Workflow Configuration Management ===
+
+  const saveWorkflowConfig = (config: WorkflowConfig) => {
+    const updated = [config, ...state.workflowConfigs];
+    localStorage.setItem(
+      "google_seo_workflow_configs",
+      JSON.stringify(updated)
+    );
+    setState((prev) => ({
+      ...prev,
+      workflowConfigs: updated,
+      currentWorkflowConfigIds: {
+        ...prev.currentWorkflowConfigIds,
+        [config.workflowId]: config.id,
+      },
+    }));
+    addLog(`Workflow config "${config.name}" saved`, "success");
+  };
+
+  const loadWorkflowConfig = (workflowId: string, configId: string) => {
+    setState((prev) => ({
+      ...prev,
+      currentWorkflowConfigIds: {
+        ...prev.currentWorkflowConfigIds,
+        [workflowId]: configId,
+      },
+    }));
+    addLog("Workflow config loaded", "success");
+  };
+
+  const resetWorkflowToDefault = (workflowId: string) => {
+    setState((prev) => {
+      const updated = { ...prev.currentWorkflowConfigIds };
+      delete updated[workflowId];
+      return {
+        ...prev,
+        currentWorkflowConfigIds: updated,
+      };
+    });
+    addLog("Workflow reset to default", "info");
+  };
+
+  const getCurrentWorkflowConfig = (
+    workflowId: string
+  ): WorkflowConfig | null => {
+    const configId = state.currentWorkflowConfigIds[workflowId];
+    if (!configId) return null;
+    return state.workflowConfigs.find((c) => c.id === configId) || null;
+  };
+
+  // Get prompt from workflow config or use default
+  const getWorkflowPrompt = (
+    workflowId: string,
+    nodeId: string,
+    defaultPrompt: string
+  ): string => {
+    const config = getCurrentWorkflowConfig(workflowId);
+    if (!config) return defaultPrompt;
+
+    const node = config.nodes.find((n) => n.id === nodeId);
+    return node?.prompt || defaultPrompt;
   };
 
   const downloadCSV = () => {
@@ -1336,7 +2073,7 @@ export default function App() {
 
     // Parse keywords
     const keywordList = batchInput
-      .split(',')
+      .split(",")
       .map((k) => k.trim())
       .filter((k) => k.length > 0);
 
@@ -1361,7 +2098,10 @@ export default function App() {
       error: null,
     }));
 
-    addLog(`Starting batch analysis for ${keywordList.length} keywords...`, "info");
+    addLog(
+      `Starting batch analysis for ${keywordList.length} keywords...`,
+      "info"
+    );
 
     // Run batch analysis
     runBatchAnalysis(keywordList);
@@ -1380,17 +2120,24 @@ export default function App() {
 
       setState((prev) => ({ ...prev, batchCurrentIndex: i + 1 }));
 
-      addLog(`[${i + 1}/${keywordList.length}] Processing: "${keyword}"`, "info");
+      addLog(
+        `[${i + 1}/${keywordList.length}] Processing: "${keyword}"`,
+        "info"
+      );
 
       try {
         // Step 1: Translation
-        addBatchThought("translation", keyword, `Translating "${keyword}" to ${state.targetLanguage}...`);
+        addBatchThought(
+          "translation",
+          keyword,
+          `Translating "${keyword}" to ${state.targetLanguage}...`
+        );
         addLog(`Translating "${keyword}"...`, "api");
 
         const result = await translateAndAnalyzeSingle(
           keyword,
           state.targetLanguage,
-          state.analyzePrompt,
+          getWorkflowPrompt("batch", "batch-analyze", state.analyzePrompt),
           state.uiLanguage
         );
 
@@ -1410,7 +2157,10 @@ export default function App() {
         addLog(`Analyzing SERP for "${result.translated}"...`, "api");
 
         // Add SERP snippets if available
-        if (result.keyword.topSerpSnippets && result.keyword.topSerpSnippets.length > 0) {
+        if (
+          result.keyword.topSerpSnippets &&
+          result.keyword.topSerpSnippets.length > 0
+        ) {
           addBatchThought(
             "serp-search",
             result.translated,
@@ -1456,7 +2206,10 @@ export default function App() {
           batchKeywords: [...prev.batchKeywords, result.keyword],
         }));
 
-        addLog(`Completed: "${keyword}" → ${result.keyword.probability}`, "success");
+        addLog(
+          `Completed: "${keyword}" → ${result.keyword.probability}`,
+          "success"
+        );
 
         // Small delay between requests
         if (i < keywordList.length - 1) {
@@ -1465,24 +2218,23 @@ export default function App() {
       } catch (error: any) {
         console.error(`Error processing keyword "${keyword}":`, error);
         addLog(`Error processing "${keyword}": ${error.message}`, "error");
-        addBatchThought(
-          "analysis",
-          keyword,
-          `Error: ${error.message}`,
-          {
-            analysis: {
-              probability: ProbabilityLevel.LOW,
-              topDomainType: "Unknown",
-              serpResultCount: -1,
-              reasoning: `Analysis failed: ${error.message}`,
-            },
-          }
-        );
+        addBatchThought("analysis", keyword, `Error: ${error.message}`, {
+          analysis: {
+            probability: ProbabilityLevel.LOW,
+            topDomainType: "Unknown",
+            serpResultCount: -1,
+            reasoning: `Analysis failed: ${error.message}`,
+          },
+        });
       }
     }
 
     // Analysis complete
-    addLog(`Batch analysis complete! Processed ${results.length}/${keywordList.length} keywords.`, "success");
+    addLog(
+      `Batch analysis complete! Processed ${results.length}/${keywordList.length} keywords.`,
+      "success"
+    );
+    playCompletionSound(); // Play sound on batch completion
 
     // Save to batch archives
     setState((prev) => {
@@ -1537,10 +2289,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.setAttribute(
-      "download",
-      `batch_analysis_${Date.now()}.csv`
-    );
+    link.setAttribute("download", `batch_analysis_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1607,6 +2356,23 @@ export default function App() {
                 {t.step3}
               </span>
             </div>
+
+            <button
+              onClick={() =>
+                setState((prev) => ({ ...prev, step: "workflow-config" }))
+              }
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border transition-colors ${
+                state.step === "workflow-config"
+                  ? "bg-blue-50 text-blue-600 border-blue-200"
+                  : "text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50"
+              }`}
+              title={t.workflowConfig}
+            >
+              <BrainCircuit className="w-4 h-4" />
+              <span className="text-sm font-medium hidden sm:inline">
+                {t.workflowConfig}
+              </span>
+            </button>
 
             <button
               onClick={() =>
@@ -1833,8 +2599,12 @@ export default function App() {
                               </div>
                               <div>
                                 <div className="font-medium text-slate-800 flex items-center gap-2">
-                                  {arch.inputKeywords.split(',').slice(0, 3).join(', ')}
-                                  {arch.inputKeywords.split(',').length > 3 && '...'}
+                                  {arch.inputKeywords
+                                    .split(",")
+                                    .slice(0, 3)
+                                    .join(", ")}
+                                  {arch.inputKeywords.split(",").length > 3 &&
+                                    "..."}
                                   <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded border border-purple-200 uppercase font-bold">
                                     {arch.targetLanguage}
                                   </span>
@@ -2081,6 +2851,94 @@ export default function App() {
           </div>
         )}
 
+        {/* WORKFLOW CONFIGURATION PAGE */}
+        {state.step === "workflow-config" && (
+          <div className="max-w-7xl mx-auto mt-8 flex-1 w-full">
+            <div className="text-center mb-8">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="bg-blue-600 p-3 rounded-lg">
+                  <BrainCircuit className="w-8 h-8 text-white" />
+                </div>
+                <h2 className="text-3xl font-bold text-slate-900">
+                  {t.workflowConfig}
+                </h2>
+              </div>
+              <p className="text-slate-500 mb-4">{t.workflowConfigDesc}</p>
+              <button
+                onClick={() => setState((prev) => ({ ...prev, step: "input" }))}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                <ArrowRight className="w-4 h-4 rotate-180" />
+                {state.uiLanguage === "en" ? "Back to Home" : "返回首页"}
+              </button>
+            </div>
+
+            <div className="space-y-8">
+              {/* Mining Workflow */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                  <Search className="w-5 h-5 text-blue-600" />
+                  {t.miningWorkflow}
+                </h3>
+                <p className="text-sm text-slate-500 mb-6">
+                  {MINING_WORKFLOW.description}
+                </p>
+                <WorkflowConfigPanel
+                  workflowDef={MINING_WORKFLOW}
+                  currentConfig={getCurrentWorkflowConfig("mining")}
+                  allConfigs={state.workflowConfigs}
+                  onSave={saveWorkflowConfig}
+                  onLoad={(configId) => loadWorkflowConfig("mining", configId)}
+                  onReset={() => resetWorkflowToDefault("mining")}
+                  t={t}
+                />
+              </div>
+
+              {/* Batch Workflow */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                  <Languages className="w-5 h-5 text-purple-600" />
+                  {t.batchWorkflow}
+                </h3>
+                <p className="text-sm text-slate-500 mb-6">
+                  {BATCH_WORKFLOW.description}
+                </p>
+                <WorkflowConfigPanel
+                  workflowDef={BATCH_WORKFLOW}
+                  currentConfig={getCurrentWorkflowConfig("batch")}
+                  allConfigs={state.workflowConfigs}
+                  onSave={saveWorkflowConfig}
+                  onLoad={(configId) => loadWorkflowConfig("batch", configId)}
+                  onReset={() => resetWorkflowToDefault("batch")}
+                  t={t}
+                />
+              </div>
+
+              {/* Deep Dive Workflow */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+                  <Lightbulb className="w-5 h-5 text-amber-600" />
+                  {t.deepDiveWorkflow}
+                </h3>
+                <p className="text-sm text-slate-500 mb-6">
+                  {DEEP_DIVE_WORKFLOW.description}
+                </p>
+                <WorkflowConfigPanel
+                  workflowDef={DEEP_DIVE_WORKFLOW}
+                  currentConfig={getCurrentWorkflowConfig("deepDive")}
+                  allConfigs={state.workflowConfigs}
+                  onSave={saveWorkflowConfig}
+                  onLoad={(configId) =>
+                    loadWorkflowConfig("deepDive", configId)
+                  }
+                  onReset={() => resetWorkflowToDefault("deepDive")}
+                  t={t}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* STEP 2: MINING */}
         {state.step === "mining" && (
           <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
@@ -2256,9 +3114,7 @@ export default function App() {
                         <React.Fragment key={item.id}>
                           <tr
                             className={`transition-colors ${
-                              isExpanded
-                                ? "bg-blue-50/50"
-                                : "hover:bg-slate-50"
+                              isExpanded ? "bg-blue-50/50" : "hover:bg-slate-50"
                             }`}
                           >
                             <td
@@ -2308,7 +3164,8 @@ export default function App() {
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                                   item.probability === ProbabilityLevel.HIGH
                                     ? "bg-green-100 text-green-800 border-green-200"
-                                    : item.probability === ProbabilityLevel.MEDIUM
+                                    : item.probability ===
+                                      ProbabilityLevel.MEDIUM
                                     ? "bg-yellow-100 text-yellow-800 border-yellow-200"
                                     : "bg-red-100 text-red-800 border-red-200"
                                 }`}
@@ -2337,7 +3194,9 @@ export default function App() {
                                   onClick={() =>
                                     setState((prev) => ({
                                       ...prev,
-                                      expandedRowId: isExpanded ? null : item.id,
+                                      expandedRowId: isExpanded
+                                        ? null
+                                        : item.id,
                                     }))
                                   }
                                 >
@@ -2366,7 +3225,8 @@ export default function App() {
                                 <div className="flex flex-col md:flex-row gap-6 px-4">
                                   <div className="flex-1 space-y-2">
                                     {/* Search Intent Section */}
-                                    {(item.searchIntent || item.intentAnalysis) && (
+                                    {(item.searchIntent ||
+                                      item.intentAnalysis) && (
                                       <div className="mb-3">
                                         <h4 className="text-xs font-bold uppercase text-purple-600 mb-2 flex items-center gap-1">
                                           <BrainCircuit className="w-3 h-3" />
@@ -2374,14 +3234,22 @@ export default function App() {
                                         </h4>
                                         {item.searchIntent && (
                                           <div className="bg-purple-50 p-3 rounded border border-purple-100 mb-2">
-                                            <div className="text-[10px] text-purple-600 font-bold mb-1">USER INTENT</div>
-                                            <p className="text-sm text-slate-700">{item.searchIntent}</p>
+                                            <div className="text-[10px] text-purple-600 font-bold mb-1">
+                                              USER INTENT
+                                            </div>
+                                            <p className="text-sm text-slate-700">
+                                              {item.searchIntent}
+                                            </p>
                                           </div>
                                         )}
                                         {item.intentAnalysis && (
                                           <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                            <div className="text-[10px] text-blue-600 font-bold mb-1">INTENT vs SERP MATCH</div>
-                                            <p className="text-sm text-slate-700">{item.intentAnalysis}</p>
+                                            <div className="text-[10px] text-blue-600 font-bold mb-1">
+                                              INTENT vs SERP MATCH
+                                            </div>
+                                            <p className="text-sm text-slate-700">
+                                              {item.intentAnalysis}
+                                            </p>
                                           </div>
                                         )}
                                       </div>
@@ -2479,6 +3347,607 @@ export default function App() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* DEEP DIVE ANALYZING PAGE */}
+        {state.step === "deep-dive-analyzing" && (
+          <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    {t.deepDiveAnalyzing || "Deep Dive Analysis"}
+                  </h3>
+                  <p className="text-sm text-slate-500">
+                    {state.deepDiveKeyword?.keyword || "Analyzing keyword..."}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setState((prev) => ({
+                    ...prev,
+                    step: "results",
+                    isDeepDiving: false,
+                  }));
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-md transition-colors text-sm font-medium shadow-sm"
+              >
+                <X className="w-4 h-4" />
+                Cancel
+              </button>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mb-6 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-sm font-bold text-slate-700">
+                  {state.deepDiveCurrentStep ||
+                    (state.uiLanguage === "zh"
+                      ? "初始化..."
+                      : "Initializing...")}
+                </div>
+                <div className="text-sm font-bold text-blue-600">
+                  {Math.round(state.deepDiveProgress)}%
+                </div>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
+                  style={{ width: `${state.deepDiveProgress}%` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
+              <div className="w-full md:w-1/3 h-full">
+                <TerminalLog logs={state.logs} />
+              </div>
+              <div className="w-full md:w-2/3 h-full">
+                <DeepDiveAnalysisStream
+                  thoughts={state.deepDiveThoughts}
+                  t={t}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* DEEP DIVE RESULTS PAGE */}
+        {state.step === "deep-dive-results" && state.currentStrategyReport && (
+          <div className="animate-fade-in flex-1">
+            <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-blue-600" />
+                  {t.deepDiveResults || "Deep Dive Results"}
+                </h2>
+                <p className="text-slate-500 mt-1">
+                  {state.currentStrategyReport.targetKeyword}
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const report = state.currentStrategyReport;
+                    if (report?.htmlContent) {
+                      const blob = new Blob([report.htmlContent], {
+                        type: "text/html;charset=utf-8;",
+                      });
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement("a");
+                      link.href = url;
+                      link.setAttribute(
+                        "download",
+                        `${report.urlSlug || "seo-content"}.html`
+                      );
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                      URL.revokeObjectURL(url);
+                    }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  {t.exportHTML || "Export HTML"}
+                </button>
+                <button
+                  onClick={() =>
+                    setState((prev) => ({ ...prev, step: "results" }))
+                  }
+                  className="px-4 py-2 text-sm text-slate-500 hover:text-blue-600 font-medium transition-colors border border-slate-200 rounded-md bg-white hover:bg-slate-50"
+                >
+                  {t.backToResults || "Back to Results"}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left: Content Strategy (Target Language) */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-slate-200 bg-slate-50">
+                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-blue-600" />
+                    {t.contentStrategy || "Content Strategy"} (
+                    {state.targetLanguage.toUpperCase()})
+                  </h3>
+                </div>
+                <div className="flex-1 overflow-auto custom-scrollbar p-6 space-y-4">
+                  {/* Page Title */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                      Page Title (H1)
+                    </div>
+                    <div className="text-lg font-bold text-slate-900">
+                      {state.currentStrategyReport.pageTitleH1}
+                    </div>
+                  </div>
+
+                  {/* Meta Description */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                      Meta Description
+                    </div>
+                    <div className="text-sm text-slate-700">
+                      {state.currentStrategyReport.metaDescription}
+                    </div>
+                  </div>
+
+                  {/* URL Slug */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                      URL Slug
+                    </div>
+                    <div className="font-mono text-sm text-blue-600">
+                      {state.currentStrategyReport.urlSlug}
+                    </div>
+                  </div>
+
+                  {/* Content Structure */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="text-xs text-slate-500 uppercase font-bold mb-3">
+                      Content Structure
+                    </div>
+                    <div className="space-y-3">
+                      {state.currentStrategyReport.contentStructure.map(
+                        (section, idx) => (
+                          <div
+                            key={idx}
+                            className="p-3 bg-white rounded border border-slate-100"
+                          >
+                            <div className="font-bold text-sm text-slate-900 mb-1">
+                              {section.header}
+                            </div>
+                            <div className="text-xs text-slate-600">
+                              {section.description}
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Long-tail Keywords with Analysis Button */}
+                  {state.currentStrategyReport.longTailKeywords &&
+                    state.currentStrategyReport.longTailKeywords.length > 0 && (
+                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-xs text-slate-500 uppercase font-bold">
+                            Long-tail Keywords
+                          </div>
+                          <button
+                            onClick={() =>
+                              setState((prev) => ({
+                                ...prev,
+                                showDetailedAnalysisModal: true,
+                              }))
+                            }
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all text-xs font-medium shadow-sm hover:shadow-md"
+                          >
+                            <Search className="w-3.5 h-3.5" />
+                            {state.uiLanguage === "zh"
+                              ? "详细分析"
+                              : "Detailed Analysis"}
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {state.currentStrategyReport.longTailKeywords.map(
+                            (kw, idx) => (
+                              <span
+                                key={idx}
+                                className="px-3 py-1 bg-white text-blue-700 rounded-md text-xs font-medium border border-blue-200"
+                              >
+                                {kw}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* User Intent Summary */}
+                  {state.currentStrategyReport.userIntentSummary && (
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                        User Intent Summary
+                      </div>
+                      <div className="text-sm text-slate-700">
+                        {state.currentStrategyReport.userIntentSummary}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recommended Word Count */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                      Recommended Word Count
+                    </div>
+                    <div className="text-2xl font-bold text-slate-900">
+                      {state.currentStrategyReport.recommendedWordCount}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right: Translation Reference (UI Language) */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-slate-200 bg-slate-50">
+                  <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <Languages className="w-5 h-5 text-purple-600" />
+                    {t.translationReference || "Translation Reference"} (
+                    {state.uiLanguage.toUpperCase()})
+                  </h3>
+                </div>
+                <div className="flex-1 overflow-auto custom-scrollbar p-6 space-y-4">
+                  {/* Page Title Translation */}
+                  {state.currentStrategyReport.pageTitleH1_trans && (
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                        {t.pageTitleTranslation || "Page Title Translation"}
+                      </div>
+                      <div className="text-lg font-bold text-slate-900">
+                        {state.currentStrategyReport.pageTitleH1_trans}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Meta Description Translation */}
+                  {state.currentStrategyReport.metaDescription_trans && (
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                        {t.metaDescriptionTranslation ||
+                          "Meta Description Translation"}
+                      </div>
+                      <div className="text-sm text-slate-700">
+                        {state.currentStrategyReport.metaDescription_trans}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* URL Slug (Same) */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                      URL Slug
+                    </div>
+                    <div className="font-mono text-sm text-purple-600">
+                      {state.currentStrategyReport.urlSlug}
+                    </div>
+                  </div>
+
+                  {/* Content Structure Translations */}
+                  {state.currentStrategyReport.contentStructure.some(
+                    (s) => s.header_trans || s.description_trans
+                  ) && (
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="text-xs text-slate-500 uppercase font-bold mb-3">
+                        {t.contentStructureTranslation ||
+                          "Content Structure Translation"}
+                      </div>
+                      <div className="space-y-3">
+                        {state.currentStrategyReport.contentStructure.map(
+                          (section, idx) => (
+                            <div
+                              key={idx}
+                              className="p-3 bg-white rounded border border-slate-100"
+                            >
+                              {section.header_trans && (
+                                <div className="font-bold text-sm text-slate-900 mb-1">
+                                  {section.header_trans}
+                                </div>
+                              )}
+                              {section.description_trans && (
+                                <div className="text-xs text-slate-600">
+                                  {section.description_trans}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Long-tail Keywords Translation */}
+                  {state.currentStrategyReport.longTailKeywords_trans &&
+                    state.currentStrategyReport.longTailKeywords_trans.length >
+                      0 && (
+                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                          {t.longTailKeywordsTranslation ||
+                            "Long-tail Keywords Translation"}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {state.currentStrategyReport.longTailKeywords_trans.map(
+                            (kw, idx) => (
+                              <span
+                                key={idx}
+                                className="px-3 py-1 bg-white text-purple-700 rounded-md text-xs font-medium border border-purple-200"
+                              >
+                                {kw}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* User Intent Summary (Same if no translation) */}
+                  {state.currentStrategyReport.userIntentSummary && (
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                        {t.userIntentSummary || "User Intent Summary"}
+                      </div>
+                      <div className="text-sm text-slate-700">
+                        {state.currentStrategyReport.userIntentSummary}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recommended Word Count (Same) */}
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                      {state.uiLanguage === "zh"
+                        ? "建议字数"
+                        : "Recommended Word Count"}
+                    </div>
+                    <div className="text-2xl font-bold text-slate-900">
+                      {state.currentStrategyReport.recommendedWordCount}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed Analysis Modal */}
+            {state.showDetailedAnalysisModal && (
+              <div
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+                onClick={() =>
+                  setState((prev) => ({
+                    ...prev,
+                    showDetailedAnalysisModal: false,
+                  }))
+                }
+              >
+                <div
+                  className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Modal Header */}
+                  <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-white/20 p-2 rounded-lg">
+                          <Search className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-bold">
+                            {state.uiLanguage === "zh"
+                              ? "上首页概率验证结果"
+                              : "Ranking Probability Analysis"}
+                          </h3>
+                          <p className="text-sm text-white/80 mt-1">
+                            {state.currentStrategyReport?.targetKeyword}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() =>
+                          setState((prev) => ({
+                            ...prev,
+                            showDetailedAnalysisModal: false,
+                          }))
+                        }
+                        className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Modal Body */}
+                  <div className="flex-1 overflow-auto p-6 space-y-6">
+                    {/* Ranking Probability Badge */}
+                    {state.currentStrategyReport?.rankingProbability && (
+                      <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
+                        <div className="text-sm text-slate-500 uppercase font-bold mb-3">
+                          {state.uiLanguage === "zh"
+                            ? "上首页概率"
+                            : "Ranking Probability"}
+                        </div>
+                        <div className="flex items-center gap-4 mb-4">
+                          <span
+                            className={`px-6 py-3 rounded-xl text-xl font-bold shadow-lg ${
+                              state.currentStrategyReport.rankingProbability ===
+                              ProbabilityLevel.HIGH
+                                ? "bg-green-100 text-green-800 border-2 border-green-300"
+                                : state.currentStrategyReport
+                                    .rankingProbability ===
+                                  ProbabilityLevel.MEDIUM
+                                ? "bg-yellow-100 text-yellow-800 border-2 border-yellow-300"
+                                : "bg-red-100 text-red-800 border-2 border-red-300"
+                            }`}
+                          >
+                            {state.currentStrategyReport.rankingProbability}
+                          </span>
+                        </div>
+
+                        {/* Core Keywords */}
+                        {state.currentStrategyReport.coreKeywords &&
+                          state.currentStrategyReport.coreKeywords.length >
+                            0 && (
+                            <div className="mb-4 p-4 bg-white rounded-lg border border-slate-200">
+                              <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                {state.uiLanguage === "zh"
+                                  ? "核心关键词"
+                                  : "Core Keywords"}
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {state.currentStrategyReport.coreKeywords.map(
+                                  (kw, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="px-3 py-1 bg-purple-50 text-purple-700 rounded-md text-sm font-medium border border-purple-200"
+                                    >
+                                      {kw}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                        {/* Search Intent */}
+                        {state.currentStrategyReport.searchIntent && (
+                          <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-2">
+                              <Lightbulb className="w-4 h-4" />
+                              {state.uiLanguage === "zh"
+                                ? "搜索意图"
+                                : "Search Intent"}
+                            </div>
+                            <div className="text-sm text-slate-700">
+                              {state.currentStrategyReport.searchIntent}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Intent Match */}
+                        {state.currentStrategyReport.intentMatch && (
+                          <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                            <div className="text-xs text-purple-600 uppercase font-bold mb-2 flex items-center gap-2">
+                              <CheckCircle className="w-4 h-4" />
+                              {state.uiLanguage === "zh"
+                                ? "内容匹配度"
+                                : "Content-Intent Match"}
+                            </div>
+                            <div className="text-sm text-slate-700">
+                              {state.currentStrategyReport.intentMatch}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Ranking Analysis */}
+                        {state.currentStrategyReport.rankingAnalysis && (
+                          <div className="p-4 bg-white rounded-lg border border-slate-200">
+                            <div className="text-xs text-slate-600 uppercase font-bold mb-2">
+                              {state.uiLanguage === "zh"
+                                ? "详细分析"
+                                : "Detailed Analysis"}
+                            </div>
+                            <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+                              {state.currentStrategyReport.rankingAnalysis}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* SERP Competition Data */}
+                    {state.currentStrategyReport?.serpCompetitionData &&
+                      state.currentStrategyReport.serpCompetitionData.length >
+                        0 && (
+                        <div>
+                          <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <Search className="w-5 h-5 text-indigo-600" />
+                            {state.uiLanguage === "zh"
+                              ? "SERP竞争分析"
+                              : "SERP Competition Analysis"}
+                          </h4>
+                          <div className="space-y-4">
+                            {state.currentStrategyReport.serpCompetitionData.map(
+                              (data, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-4 bg-slate-50 rounded-lg border border-slate-200"
+                                >
+                                  <div className="font-bold text-sm text-slate-900 mb-2 flex items-center gap-2">
+                                    <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
+                                      #{idx + 1}
+                                    </span>
+                                    {data.keyword}
+                                  </div>
+                                  <div className="text-sm text-slate-700 mb-3 whitespace-pre-wrap">
+                                    {data.analysis}
+                                  </div>
+                                  {data.serpResults &&
+                                    data.serpResults.length > 0 && (
+                                      <div className="space-y-2">
+                                        <div className="text-xs text-slate-500 uppercase font-bold">
+                                          {state.uiLanguage === "zh"
+                                            ? "前三名SERP结果"
+                                            : "Top 3 SERP Results"}
+                                        </div>
+                                        {data.serpResults
+                                          .slice(0, 3)
+                                          .map((result, ridx) => (
+                                            <div
+                                              key={ridx}
+                                              className="bg-white p-3 rounded border border-slate-200 text-xs hover:border-blue-300 transition-colors"
+                                            >
+                                              <div className="text-blue-700 font-medium truncate">
+                                                {result.title}
+                                              </div>
+                                              <div className="text-green-700 text-[10px] truncate mt-1">
+                                                {result.url}
+                                              </div>
+                                              <div className="text-slate-500 mt-2 line-clamp-2">
+                                                {result.snippet}
+                                              </div>
+                                            </div>
+                                          ))}
+                                      </div>
+                                    )}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      )}
+                  </div>
+
+                  {/* Modal Footer */}
+                  <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+                    <button
+                      onClick={() =>
+                        setState((prev) => ({
+                          ...prev,
+                          showDetailedAnalysisModal: false,
+                        }))
+                      }
+                      className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium"
+                    >
+                      {state.uiLanguage === "zh" ? "关闭" : "Close"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -2587,9 +4056,7 @@ export default function App() {
                         <React.Fragment key={item.id}>
                           <tr
                             className={`transition-colors ${
-                              isExpanded
-                                ? "bg-blue-50/50"
-                                : "hover:bg-slate-50"
+                              isExpanded ? "bg-blue-50/50" : "hover:bg-slate-50"
                             }`}
                           >
                             <td
@@ -2697,7 +4164,8 @@ export default function App() {
                                 <div className="flex flex-col md:flex-row gap-6 px-4">
                                   <div className="flex-1 space-y-2">
                                     {/* Search Intent Section */}
-                                    {(item.searchIntent || item.intentAnalysis) && (
+                                    {(item.searchIntent ||
+                                      item.intentAnalysis) && (
                                       <div className="mb-3">
                                         <h4 className="text-xs font-bold uppercase text-purple-600 mb-2 flex items-center gap-1">
                                           <BrainCircuit className="w-3 h-3" />
@@ -2705,14 +4173,22 @@ export default function App() {
                                         </h4>
                                         {item.searchIntent && (
                                           <div className="bg-purple-50 p-3 rounded border border-purple-100 mb-2">
-                                            <div className="text-[10px] text-purple-600 font-bold mb-1">USER INTENT</div>
-                                            <p className="text-sm text-slate-700">{item.searchIntent}</p>
+                                            <div className="text-[10px] text-purple-600 font-bold mb-1">
+                                              USER INTENT
+                                            </div>
+                                            <p className="text-sm text-slate-700">
+                                              {item.searchIntent}
+                                            </p>
                                           </div>
                                         )}
                                         {item.intentAnalysis && (
                                           <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                            <div className="text-[10px] text-blue-600 font-bold mb-1">INTENT vs SERP MATCH</div>
-                                            <p className="text-sm text-slate-700">{item.intentAnalysis}</p>
+                                            <div className="text-[10px] text-blue-600 font-bold mb-1">
+                                              INTENT vs SERP MATCH
+                                            </div>
+                                            <p className="text-sm text-slate-700">
+                                              {item.intentAnalysis}
+                                            </p>
                                           </div>
                                         )}
                                       </div>

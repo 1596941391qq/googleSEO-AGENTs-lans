@@ -43,7 +43,7 @@ export interface KeywordData {
 export interface SEOStrategyReport {
   targetKeyword: string;
   pageTitleH1: string;
-  pageTitleH1_trans?: string; 
+  pageTitleH1_trans?: string;
   metaDescription: string;
   metaDescription_trans?: string;
   urlSlug: string;
@@ -57,6 +57,19 @@ export interface SEOStrategyReport {
   longTailKeywords: string[];
   longTailKeywords_trans?: string[];
   recommendedWordCount: number;
+
+  // New fields for deep dive analysis
+  coreKeywords?: string[]; // Extracted core keywords for verification
+  htmlContent?: string; // Generated HTML content
+  rankingProbability?: ProbabilityLevel; // Probability of ranking on page 1
+  rankingAnalysis?: string; // Analysis of ranking probability
+  searchIntent?: string; // User search intent analysis
+  intentMatch?: string; // Whether content matches intent
+  serpCompetitionData?: {
+    keyword: string;
+    serpResults: SerpSnippet[];
+    analysis: string;
+  }[];
 }
 
 export interface ArchiveEntry {
@@ -81,6 +94,49 @@ export type UILanguage = 'en' | 'zh';
 export type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar';
 
 // Agent配置存档
+export interface DeepDiveThought {
+  id: string;
+  type: 'content-generation' | 'keyword-extraction' | 'serp-verification' | 'probability-analysis';
+  content: string;
+  data?: {
+    keywords?: string[];
+    serpResults?: SerpSnippet[];
+    analysis?: string;
+    probability?: ProbabilityLevel;
+  };
+}
+
+// === Workflow Configuration System ===
+
+export type NodeType = 'agent' | 'tool';
+
+export interface WorkflowNode {
+  id: string;
+  type: NodeType;
+  name: string; // Display name
+  description: string;
+  configurable: boolean; // Whether user can edit this node
+  prompt?: string; // Agent prompt (only for agent nodes)
+  defaultPrompt?: string; // Default prompt for reset
+}
+
+export interface WorkflowDefinition {
+  id: string;
+  name: string; // e.g., "Mining Workflow", "Batch Translation Workflow"
+  description: string;
+  nodes: WorkflowNode[];
+}
+
+export interface WorkflowConfig {
+  id: string; // Unique config ID
+  workflowId: string; // Which workflow this config is for
+  name: string; // User-defined config name
+  createdAt: number;
+  updatedAt: number;
+  nodes: WorkflowNode[]; // Customized nodes
+}
+
+// Old AgentConfig - keeping for backward compatibility
 export interface AgentConfig {
   id: string;
   name: string;
@@ -88,6 +144,15 @@ export interface AgentConfig {
   updatedAt: number;
   genPrompt: string;
   analyzePrompt: string;
+  targetLanguage: TargetLanguage;
+}
+
+export interface DeepDiveConfig {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  strategyPrompt: string;
   targetLanguage: TargetLanguage;
 }
 
@@ -129,8 +194,20 @@ export interface BatchAnalysisThought {
   };
 }
 
+export interface DeepDiveThought {
+  id: string;
+  type: 'content-generation' | 'keyword-extraction' | 'serp-verification' | 'probability-analysis';
+  content: string;
+  data?: {
+    keywords?: string[];
+    serpResults?: SerpSnippet[];
+    analysis?: string;
+    probability?: ProbabilityLevel;
+  };
+}
+
 export interface AppState {
-  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results';
+  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config';
   seedKeyword: string;
   targetLanguage: TargetLanguage;
   keywords: KeywordData[];
@@ -155,6 +232,11 @@ export interface AppState {
   showDeepDiveModal: boolean;
   isDeepDiving: boolean;
   currentStrategyReport: SEOStrategyReport | null;
+  deepDiveThoughts: DeepDiveThought[];
+  deepDiveKeyword: KeywordData | null;
+  showDetailedAnalysisModal: boolean;
+  deepDiveProgress: number; // 0-100
+  deepDiveCurrentStep: string;
 
   // Config
   uiLanguage: UILanguage;
@@ -168,9 +250,22 @@ export interface AppState {
   translatedGenPrompt: string | null;
   translatedAnalyzePrompt: string | null;
 
-  // Agent Config Archives
+  // Agent Config Archives (deprecated - use workflowConfigs instead)
   agentConfigs: AgentConfig[];
   currentConfigId: string | null;
+
+  // Workflow Configuration System
+  workflowConfigs: WorkflowConfig[]; // All saved workflow configs
+  currentWorkflowConfigIds: {
+    mining?: string;
+    batch?: string;
+    deepDive?: string;
+  };
+
+  // Deep Dive Config (deprecated - use workflowConfigs instead)
+  deepDiveConfigs: DeepDiveConfig[];
+  currentDeepDiveConfigId: string | null;
+  deepDivePrompt: string;
 
   // Batch Analysis State
   batchKeywords: KeywordData[];

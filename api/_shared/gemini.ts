@@ -1,5 +1,5 @@
 // Shared Gemini API service for Vercel serverless functions
-import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage } from "./types.js";
+import { KeywordData, ProbabilityLevel, SEOStrategyReport, TargetLanguage, SerpSnippet } from "./types.js";
 import { fetchSerpResults } from "./serp.js";
 
 const PROXY_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
@@ -12,7 +12,7 @@ interface GeminiConfig {
   responseSchema?: any;
 }
 
-async function callGeminiAPI(prompt: string, systemInstruction?: string, config?: GeminiConfig) {
+export async function callGeminiAPI(prompt: string, systemInstruction?: string, config?: GeminiConfig) {
   if (!API_KEY || API_KEY.trim() === '') {
     console.error('GEMINI_API_KEY is not configured');
     throw new Error('GEMINI_API_KEY is not configured. Please set it in Vercel environment variables.');
@@ -588,30 +588,99 @@ Return a JSON object:
   return results;
 };
 
+/**
+ * Extract core keywords from SEO strategy report for SERP verification
+ */
+export const extractCoreKeywords = async (
+  report: any,
+  targetLanguage: TargetLanguage,
+  uiLanguage: 'zh' | 'en'
+): Promise<string[]> => {
+  const targetLangName = getLanguageName(targetLanguage);
+
+  const prompt = `Extract 5-8 core keywords from this SEO content strategy that are most important for ranking verification.
+
+Target Keyword: ${report.targetKeyword}
+Page Title: ${report.pageTitleH1}
+Content Structure Headers:
+${report.contentStructure.map((s: any) => `- ${s.header}`).join('\n')}
+Long-tail Keywords: ${report.longTailKeywords?.join(', ')}
+
+Return ONLY a JSON array of keywords, like: ["keyword1", "keyword2", "keyword3"]
+These should be in ${targetLangName} language.
+Focus on:
+1. The main target keyword
+2. Important keywords from H2 headers
+3. High-value long-tail keywords
+
+CRITICAL: Return ONLY the JSON array, nothing else. No explanations.`;
+
+  try {
+    const response = await callGeminiAPI(prompt);
+    const text = response.text.trim();
+
+    // Try to parse JSON
+    const jsonMatch = text.match(/\[.*?\]/s);
+    if (jsonMatch) {
+      const keywords = JSON.parse(jsonMatch[0]);
+      return keywords.filter((k: string) => k && k.trim().length > 0).slice(0, 8);
+    }
+
+    // Fallback: extract from text
+    const extracted = text.split('\n')
+      .map(line => line.replace(/^[-•*]\s*/, '').replace(/["\[\],]/g, '').trim())
+      .filter(line => line.length > 0 && line.length < 50)
+      .slice(0, 8);
+
+    if (extracted.length > 0) {
+      return extracted;
+    }
+
+    // Ultimate fallback
+    return [report.targetKeyword];
+  } catch (error: any) {
+    console.error('Failed to extract core keywords:', error);
+    // Return target keyword as fallback
+    return [report.targetKeyword];
+  }
+};
+
 export const generateDeepDiveStrategy = async (
   keyword: KeywordData,
   uiLanguage: 'zh' | 'en',
-  targetLanguage: TargetLanguage
+  targetLanguage: TargetLanguage,
+  customPrompt?: string
 ): Promise<SEOStrategyReport> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const targetLangName = getLanguageName(targetLanguage);
 
+  // Use custom prompt if provided, otherwise use default
+  const systemInstruction = customPrompt || `
+You are a Strategic SEO Content Manager for Google ${targetLangName}.
+Your mission: Design a comprehensive content strategy for this keyword.
+
+Content Strategy Requirements:
+1. **Page Title (H1)**: Compelling, keyword-rich title that matches search intent
+2. **Meta Description**: 150-160 characters, persuasive, includes target keyword
+3. **URL Slug**: Clean, readable, keyword-focused URL structure
+4. **User Intent**: Detailed analysis of what users expect when searching this keyword
+5. **Content Structure**: Logical H2 sections that cover the topic comprehensively
+6. **Long-tail Keywords**: Semantic variations and related queries to include
+7. **Recommended Word Count**: Based on SERP analysis and topic complexity
+
+Focus on creating content that:
+- Directly answers user search intent
+- Covers the topic more thoroughly than current top-ranking pages
+- Includes natural keyword variations
+- Provides genuine value to readers`;
+
   const prompt = `
-You are a Strategic SEO Content Manager for Google ${targetLangName}. 
 Create a detailed Content Strategy Report for the keyword: "${keyword.keyword}".
 
 Target Language: ${targetLangName}
 User Interface Language: ${uiLangName}
 
 Your goal is to outline a page that WILL rank #1 on Google.
-
-Requirements:
-1. Page Title (H1): Optimized for CTR and SEO in ${targetLangName}. Provide ${uiLangName} translation.
-2. URL Slug: SEO friendly (English characters preferred).
-3. User Intent Summary: What is the user looking for? (Write in ${uiLangName})
-4. Content Structure: List 3-5 H2 headers (${targetLangName}). Provide ${uiLangName} translations.
-5. Long-tail Keywords: Generate 5 specific long-tail variations (${targetLangName}). Provide ${uiLangName} translations.
-6. Word Count: Recommended length.
 
 CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON object.
 
@@ -633,7 +702,7 @@ Return a JSON object:
 }`;
 
   try {
-    const response = await callGeminiAPI(prompt, undefined, {
+    const response = await callGeminiAPI(prompt, systemInstruction, {
       responseMimeType: "application/json"
     });
 
@@ -663,6 +732,27 @@ Return a JSON object:
   } catch (error: any) {
     console.error("Deep Dive Error:", error);
     throw new Error(`Failed to generate strategy report: ${error.message || error}`);
+  }
+};
+
+/**
+ * Search Google SERP for a keyword (wrapper for fetchSerpResults)
+ * Returns SERP snippets in a simple array format
+ */
+export const searchGoogleSerp = async (
+  keyword: string,
+  targetLanguage: TargetLanguage
+): Promise<SerpSnippet[]> => {
+  try {
+    const serpData = await fetchSerpResults(keyword, targetLanguage);
+    return serpData.results.map(r => ({
+      title: r.title,
+      url: r.url,
+      snippet: r.snippet
+    }));
+  } catch (error: any) {
+    console.error(`SERP search failed for "${keyword}":`, error.message);
+    return []; // Return empty array on failure
   }
 };
 
