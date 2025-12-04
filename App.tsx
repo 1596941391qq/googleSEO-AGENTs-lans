@@ -172,6 +172,15 @@ const TEXT = {
     configNamePlaceholder: "Enter configuration name...",
     noSavedConfigs: "No saved configurations",
     currentlyUsing: "Currently Using",
+    // Mining Configuration
+    miningSettings: "Mining Settings",
+    wordsPerRound: "Words per Round",
+    miningStrategy: "Mining Strategy",
+    horizontal: "Horizontal (Broad Topics)",
+    vertical: "Vertical (Deep Dive)",
+    userSuggestion: "Your Suggestions",
+    suggestionPlaceholder: "Enter suggestions for next round (e.g., focus on low competition niches)...",
+    applyNextRound: "Will apply in next round",
   },
   zh: {
     title: "Google SEO 智能 Agent",
@@ -277,6 +286,15 @@ const TEXT = {
     configNamePlaceholder: "输入配置名称...",
     noSavedConfigs: "暂无保存的配置",
     currentlyUsing: "当前使用",
+    // Mining Configuration
+    miningSettings: "挖掘设置",
+    wordsPerRound: "每轮词数",
+    miningStrategy: "挖掘策略",
+    horizontal: "横向挖掘（广泛主题）",
+    vertical: "纵向挖掘（深度挖掘）",
+    userSuggestion: "您的建议",
+    suggestionPlaceholder: "输入下一轮的建议（例如：关注低竞争细分市场）...",
+    applyNextRound: "将在下一轮生效",
   },
 };
 
@@ -1255,6 +1273,9 @@ export default function App() {
     miningRound: 0,
     agentThoughts: [],
     miningSuccess: false,
+    wordsPerRound: 10,
+    miningStrategy: 'horizontal',
+    userSuggestion: '',
     archives: [],
     batchArchives: [],
 
@@ -1363,6 +1384,40 @@ export default function App() {
     } catch (e) {
       console.error("Failed to load workflow configs", e);
     }
+
+    // Migrate old agentConfigs to new workflowConfigs system (one-time migration)
+    try {
+      const oldConfigs = localStorage.getItem("google_seo_agent_configs");
+      const existingWorkflowConfigs = localStorage.getItem("google_seo_workflow_configs");
+
+      if (oldConfigs && !existingWorkflowConfigs) {
+        console.log("Migrating old agent configs to new workflow configs...");
+        const oldAgentConfigs: AgentConfig[] = JSON.parse(oldConfigs);
+
+        const migratedConfigs: WorkflowConfig[] = oldAgentConfigs.map((oldCfg) => ({
+          id: oldCfg.id,
+          workflowId: 'mining',
+          name: oldCfg.name,
+          createdAt: oldCfg.createdAt,
+          updatedAt: oldCfg.updatedAt,
+          nodes: MINING_WORKFLOW.nodes.map(node => ({
+            ...node,
+            prompt: node.id === 'mining-gen' ? oldCfg.genPrompt :
+                    node.id === 'mining-analyze' ? oldCfg.analyzePrompt :
+                    node.prompt
+          }))
+        }));
+
+        localStorage.setItem("google_seo_workflow_configs", JSON.stringify(migratedConfigs));
+        setState((prev) => ({
+          ...prev,
+          workflowConfigs: migratedConfigs,
+        }));
+        console.log(`Migrated ${migratedConfigs.length} configs to new system`);
+      }
+    } catch (e) {
+      console.error("Failed to migrate old configs", e);
+    }
   }, []);
 
   // Save archive helper
@@ -1430,71 +1485,111 @@ export default function App() {
 
   // Agent Config management
   const saveAgentConfig = (name: string) => {
-    const newConfig: AgentConfig = {
+    // New unified system: save as Mining Workflow Config
+    const miningWorkflow = MINING_WORKFLOW;
+
+    const newConfig: WorkflowConfig = {
       id: `cfg-${Date.now()}`,
-      name: name.trim() || `Config ${state.agentConfigs.length + 1}`,
+      workflowId: 'mining',
+      name: name.trim() || `Mining Config ${state.workflowConfigs.filter(c => c.workflowId === 'mining').length + 1}`,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      genPrompt: state.genPrompt,
-      analyzePrompt: state.analyzePrompt,
-      targetLanguage: state.targetLanguage,
+      nodes: miningWorkflow.nodes.map(node => ({
+        ...node,
+        prompt: node.id === 'mining-gen' ? state.genPrompt :
+                node.id === 'mining-analyze' ? state.analyzePrompt :
+                node.prompt
+      }))
     };
 
-    const updatedConfigs = [newConfig, ...state.agentConfigs].slice(0, 20);
+    const updatedConfigs = [newConfig, ...state.workflowConfigs].slice(0, 50);
     localStorage.setItem(
-      "google_seo_agent_configs",
+      "google_seo_workflow_configs",
       JSON.stringify(updatedConfigs)
     );
     setState((prev) => ({
       ...prev,
-      agentConfigs: updatedConfigs,
-      currentConfigId: newConfig.id,
+      workflowConfigs: updatedConfigs,
+      currentWorkflowConfigIds: {
+        ...prev.currentWorkflowConfigIds,
+        mining: newConfig.id
+      },
+      currentConfigId: newConfig.id, // Keep for backward compatibility
     }));
-    addLog(`Agent config "${newConfig.name}" saved.`, "success");
+    addLog(`Mining config "${newConfig.name}" saved.`, "success");
   };
 
-  const loadAgentConfig = (config: AgentConfig) => {
-    setState((prev) => ({
-      ...prev,
-      genPrompt: config.genPrompt,
-      analyzePrompt: config.analyzePrompt,
-      targetLanguage: config.targetLanguage,
-      currentConfigId: config.id,
-      translatedGenPrompt: null,
-      translatedAnalyzePrompt: null,
-    }));
+  const loadAgentConfig = (config: AgentConfig | WorkflowConfig) => {
+    // Support both old AgentConfig and new WorkflowConfig
+    if ('workflowId' in config) {
+      // New WorkflowConfig
+      const genNode = config.nodes.find(n => n.id === 'mining-gen');
+      const analyzeNode = config.nodes.find(n => n.id === 'mining-analyze');
+
+      setState((prev) => ({
+        ...prev,
+        genPrompt: genNode?.prompt || DEFAULT_GEN_PROMPT_EN,
+        analyzePrompt: analyzeNode?.prompt || DEFAULT_ANALYZE_PROMPT_EN,
+        currentWorkflowConfigIds: {
+          ...prev.currentWorkflowConfigIds,
+          mining: config.id
+        },
+        currentConfigId: config.id,
+        translatedGenPrompt: null,
+        translatedAnalyzePrompt: null,
+      }));
+    } else {
+      // Old AgentConfig - backward compatibility
+      setState((prev) => ({
+        ...prev,
+        genPrompt: config.genPrompt,
+        analyzePrompt: config.analyzePrompt,
+        targetLanguage: config.targetLanguage,
+        currentConfigId: config.id,
+        translatedGenPrompt: null,
+        translatedAnalyzePrompt: null,
+      }));
+    }
     addLog(`Loaded config: "${config.name}"`, "info");
   };
 
   const updateAgentConfig = (id: string) => {
-    const updatedConfigs = state.agentConfigs.map((cfg) =>
-      cfg.id === id
+    // Update in WorkflowConfig
+    const updatedConfigs = state.workflowConfigs.map((cfg) =>
+      cfg.id === id && cfg.workflowId === 'mining'
         ? {
             ...cfg,
             updatedAt: Date.now(),
-            genPrompt: state.genPrompt,
-            analyzePrompt: state.analyzePrompt,
-            targetLanguage: state.targetLanguage,
+            nodes: cfg.nodes.map(node => ({
+              ...node,
+              prompt: node.id === 'mining-gen' ? state.genPrompt :
+                      node.id === 'mining-analyze' ? state.analyzePrompt :
+                      node.prompt
+            }))
           }
         : cfg
     );
     localStorage.setItem(
-      "google_seo_agent_configs",
+      "google_seo_workflow_configs",
       JSON.stringify(updatedConfigs)
     );
-    setState((prev) => ({ ...prev, agentConfigs: updatedConfigs }));
-    addLog("Config updated.", "success");
+    setState((prev) => ({ ...prev, workflowConfigs: updatedConfigs }));
+    addLog("Mining config updated.", "success");
   };
 
   const deleteAgentConfig = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = state.agentConfigs.filter((c) => c.id !== id);
-    localStorage.setItem("google_seo_agent_configs", JSON.stringify(updated));
+    const updated = state.workflowConfigs.filter((c) => c.id !== id);
+    localStorage.setItem("google_seo_workflow_configs", JSON.stringify(updated));
     setState((prev) => ({
       ...prev,
-      agentConfigs: updated,
+      workflowConfigs: updated,
       currentConfigId:
         prev.currentConfigId === id ? null : prev.currentConfigId,
+      currentWorkflowConfigIds: {
+        ...prev.currentWorkflowConfigIds,
+        mining: prev.currentWorkflowConfigIds.mining === id ? undefined : prev.currentWorkflowConfigIds.mining
+      }
     }));
   };
 
@@ -1676,14 +1771,20 @@ export default function App() {
       setState((prev) => ({ ...prev, miningRound: currentRound }));
 
       addLog(`[Round ${currentRound}] Generating candidates...`, "info");
-      addThought(
-        "generation",
-        currentRound === 1
-          ? `Initial expansion of "${
-              state.seedKeyword
-            }" in ${state.targetLanguage.toUpperCase()}.`
-          : `Round ${currentRound}: Lateral thinking mode. Exploring semantically distant concepts.`
-      );
+
+      // Dynamic thought message based on mining strategy
+      let thoughtMessage = '';
+      if (currentRound === 1) {
+        thoughtMessage = `Initial expansion of "${state.seedKeyword}" in ${state.targetLanguage.toUpperCase()}.`;
+      } else {
+        if (state.miningStrategy === 'horizontal') {
+          thoughtMessage = `Round ${currentRound}: Lateral thinking mode. Exploring semantically distant concepts.`;
+        } else {
+          thoughtMessage = `Round ${currentRound}: Vertical deep dive mode. Exploring long-tail variations and specific use cases.`;
+        }
+      }
+
+      addThought("generation", thoughtMessage);
 
       try {
         const generatedKeywords = await generateKeywords(
@@ -1691,7 +1792,10 @@ export default function App() {
           state.targetLanguage,
           getWorkflowPrompt("mining", "mining-gen", state.genPrompt),
           allKeywordsRef.current,
-          currentRound
+          currentRound,
+          state.wordsPerRound,
+          state.miningStrategy,
+          state.userSuggestion
         );
 
         if (generatedKeywords.length === 0) {
@@ -1763,6 +1867,9 @@ export default function App() {
             return { ...prev, isMining: false, miningSuccess: true };
           });
           playCompletionSound(); // Play sound on mining completion
+
+          // Scroll to top to show success window
+          window.scrollTo({ top: 0, behavior: 'smooth' });
           return;
         }
 
@@ -1787,7 +1894,15 @@ export default function App() {
   const handleStop = () => {
     stopMiningRef.current = true;
     addLog("User requested stop.", "warning");
-    setState((prev) => ({ ...prev, isMining: false }));
+
+    // Show success window even when manually stopped, so user can view results
+    setState((prev) => {
+      saveToArchive(prev);
+      return { ...prev, isMining: false, miningSuccess: true };
+    });
+
+    // Scroll to top to show success window
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const goToResults = () => {
@@ -2496,6 +2611,70 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Mining Settings Panel */}
+                <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Settings className="w-4 h-4 text-blue-600" />
+                    <h4 className="text-sm font-bold text-slate-700">
+                      {state.uiLanguage === 'zh' ? '挖词设置' : 'Mining Settings'}
+                    </h4>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Words Per Round */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-2">
+                        {state.uiLanguage === 'zh' ? '每轮词语数' : 'Words Per Round'}
+                      </label>
+                      <input
+                        type="number"
+                        min="5"
+                        max="20"
+                        value={state.wordsPerRound}
+                        onChange={(e) =>
+                          setState((prev) => ({
+                            ...prev,
+                            wordsPerRound: Math.max(5, Math.min(20, parseInt(e.target.value) || 10)),
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                      />
+                      <p className="text-xs text-slate-400 mt-1">
+                        {state.uiLanguage === 'zh' ? '范围: 5-20' : 'Range: 5-20'}
+                      </p>
+                    </div>
+
+                    {/* Mining Strategy */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-2">
+                        {state.uiLanguage === 'zh' ? '挖词策略' : 'Mining Strategy'}
+                      </label>
+                      <select
+                        value={state.miningStrategy}
+                        onChange={(e) =>
+                          setState((prev) => ({
+                            ...prev,
+                            miningStrategy: e.target.value as 'horizontal' | 'vertical',
+                          }))
+                        }
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                      >
+                        <option value="horizontal">
+                          {state.uiLanguage === 'zh' ? '🌐 横向挖词 (广泛主题)' : '🌐 Horizontal (Broad Topics)'}
+                        </option>
+                        <option value="vertical">
+                          {state.uiLanguage === 'zh' ? '🎯 纵向挖词 (深度挖掘)' : '🎯 Vertical (Deep Dive)'}
+                        </option>
+                      </select>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {state.miningStrategy === 'horizontal'
+                          ? (state.uiLanguage === 'zh' ? '探索不同的平行主题' : 'Explore different parallel topics')
+                          : (state.uiLanguage === 'zh' ? '深入挖掘同一主题' : 'Deep dive into same topic')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Mining Archive List */}
                 {state.archives.length > 0 && (
                   <div className="mt-12">
@@ -2750,10 +2929,24 @@ export default function App() {
 
                   {/* Agent Config Archive Section */}
                   <div className="border-t border-slate-200 pt-6">
-                    <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
-                      <FolderOpen className="w-4 h-4 text-purple-500" />
-                      {t.agentConfigs}
-                    </h4>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <FolderOpen className="w-4 h-4 text-purple-500" />
+                        {t.agentConfigs}
+                      </h4>
+                      <button
+                        onClick={() => setState((prev) => ({ ...prev, step: 'workflow-config' }))}
+                        className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium"
+                      >
+                        <Settings className="w-3 h-3" />
+                        {state.uiLanguage === 'zh' ? '高级配置' : 'Advanced'}
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-4 bg-blue-50 border border-blue-100 rounded p-2">
+                      {state.uiLanguage === 'zh'
+                        ? '💡 这些配置同时保存在 Workflow 配置页面中，两者共通。'
+                        : '💡 These configs are shared with the Workflow Configuration page.'}
+                    </p>
 
                     {/* Save New Config */}
                     <div className="flex gap-2 mb-4">
@@ -2786,9 +2979,9 @@ export default function App() {
                     </div>
 
                     {/* Config List */}
-                    {state.agentConfigs.length > 0 ? (
+                    {state.workflowConfigs.filter(c => c.workflowId === 'mining').length > 0 ? (
                       <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                        {state.agentConfigs.map((cfg) => (
+                        {state.workflowConfigs.filter(c => c.workflowId === 'mining').map((cfg) => (
                           <div
                             key={cfg.id}
                             className={`p-3 rounded-lg border flex items-center justify-between group transition-colors ${
@@ -2801,7 +2994,7 @@ export default function App() {
                               <div className="font-medium text-slate-800 text-sm flex items-center gap-2">
                                 {cfg.name}
                                 <span className="text-[10px] bg-white text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase">
-                                  {cfg.targetLanguage}
+                                  MINING
                                 </span>
                                 {state.currentConfigId === cfg.id && (
                                   <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-bold">
@@ -2944,7 +3137,7 @@ export default function App() {
           <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
             {/* SUCCESS OVERLAY */}
             {state.miningSuccess && (
-              <div className="absolute inset-0 z-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-center justify-center p-4 animate-fade-in">
+              <div className="absolute inset-0 z-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-start justify-center p-4 pt-8 animate-fade-in overflow-y-auto">
                 <div className="bg-white rounded-xl shadow-2xl border border-green-200 p-8 max-w-md w-full text-center">
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <CheckCircle className="w-8 h-8 text-green-600" />
@@ -3012,6 +3205,65 @@ export default function App() {
                 </button>
               )}
             </div>
+
+            {/* Mining Control Panel */}
+            {!state.miningSuccess && (
+              <div className="mb-4 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Settings className="w-4 h-4 text-blue-600" />
+                  <h4 className="text-sm font-bold text-slate-700">{t.miningSettings}</h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Words Per Round */}
+                  <div>
+                    <label className="block text-xs text-slate-500 font-medium mb-2">
+                      {t.wordsPerRound}
+                    </label>
+                    <input
+                      type="number"
+                      min="5"
+                      max="20"
+                      value={state.wordsPerRound}
+                      onChange={(e) => setState((prev) => ({ ...prev, wordsPerRound: Math.max(5, Math.min(20, parseInt(e.target.value) || 10)) }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">{t.applyNextRound}</p>
+                  </div>
+
+                  {/* Mining Strategy */}
+                  <div>
+                    <label className="block text-xs text-slate-500 font-medium mb-2">
+                      {t.miningStrategy}
+                    </label>
+                    <select
+                      value={state.miningStrategy}
+                      onChange={(e) => setState((prev) => ({ ...prev, miningStrategy: e.target.value as 'horizontal' | 'vertical' }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="horizontal">{t.horizontal}</option>
+                      <option value="vertical">{t.vertical}</option>
+                    </select>
+                    <p className="text-xs text-slate-400 mt-1">{t.applyNextRound}</p>
+                  </div>
+
+                  {/* User Suggestion */}
+                  <div className="md:col-span-1">
+                    <label className="block text-xs text-slate-500 font-medium mb-2">
+                      {t.userSuggestion}
+                    </label>
+                    <input
+                      type="text"
+                      value={state.userSuggestion}
+                      onChange={(e) => setState((prev) => ({ ...prev, userSuggestion: e.target.value }))}
+                      placeholder={t.suggestionPlaceholder}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-xs text-slate-400 mt-1">{t.applyNextRound}</p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
               <div className="w-full md:w-1/3 h-full">

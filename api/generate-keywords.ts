@@ -15,8 +15,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const body = parseRequestBody(req);
-    const { seedKeyword, targetLanguage, systemInstruction, existingKeywords, roundIndex } = body;
-    
+    const {
+      seedKeyword,
+      targetLanguage,
+      systemInstruction,
+      existingKeywords,
+      roundIndex,
+      wordsPerRound,
+      miningStrategy,
+      userSuggestion
+    } = body;
+
     if (!seedKeyword || !targetLanguage || !systemInstruction) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
@@ -26,7 +35,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetLanguage,
       systemInstruction,
       existingKeywords || [],
-      roundIndex || 1
+      roundIndex || 1,
+      wordsPerRound || 10,
+      miningStrategy || 'horizontal',
+      userSuggestion || ''
     );
 
     return res.json({ keywords });

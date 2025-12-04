@@ -218,6 +218,9 @@ export interface AppState {
   miningRound: number;
   agentThoughts: AgentThought[];
   miningSuccess: boolean;
+  wordsPerRound: number; // 5-20
+  miningStrategy: 'horizontal' | 'vertical'; // horizontal: broad topics, vertical: deep dive into specific
+  userSuggestion: string; // Real-time user suggestions during mining
 
   // Archives
   archives: ArchiveEntry[];

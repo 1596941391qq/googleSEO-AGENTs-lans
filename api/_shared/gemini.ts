@@ -255,14 +255,47 @@ export const generateKeywords = async (
   targetLanguage: TargetLanguage,
   systemInstruction: string,
   existingKeywords: string[] = [],
-  roundIndex: number = 1
+  roundIndex: number = 1,
+  wordsPerRound: number = 10,
+  miningStrategy: 'horizontal' | 'vertical' = 'horizontal',
+  userSuggestion: string = ''
 ): Promise<KeywordData[]> => {
   const targetLangName = getLanguageName(targetLanguage);
+
+  // Build strategy-specific guidance
+  let strategyGuidance = '';
+  if (miningStrategy === 'horizontal') {
+    strategyGuidance = `
+HORIZONTAL MINING STRATEGY (Broad Topics):
+- Explore DIFFERENT topics related to the seed keyword
+- Think about PARALLEL markets, adjacent industries, complementary products
+- Find RELATED but DISTINCT niches
+- Example: If seed is "dog food", explore "pet accessories", "pet training", "pet health"`;
+  } else {
+    strategyGuidance = `
+VERTICAL MINING STRATEGY (Deep Dive):
+- Go DEEPER into the SAME topic as the seed keyword
+- Find long-tail variations, specific use cases, detailed sub-categories
+- Target more specific audience segments within the same niche
+- Example: If seed is "dog food", explore "grain-free dog food", "senior dog nutrition", "large breed puppy food"`;
+  }
+
+  // Add user suggestion if provided
+  let userGuidance = '';
+  if (userSuggestion && userSuggestion.trim()) {
+    userGuidance = `
+
+USER GUIDANCE FOR THIS ROUND:
+${userSuggestion}
+
+Please incorporate the user's guidance into your keyword generation.`;
+  }
 
   let promptContext = "";
 
   if (roundIndex === 1) {
-    promptContext = `Generate 10 high-potential ${targetLangName} SEO keywords for the seed term: "${seedKeyword}". Focus on commercial and informational intent.
+    promptContext = `Generate ${wordsPerRound} high-potential ${targetLangName} SEO keywords for the seed term: "${seedKeyword}". Focus on commercial and informational intent.
+${strategyGuidance}${userGuidance}
 
 CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
 
@@ -276,14 +309,15 @@ Example format:
 [{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]`;
   } else {
     promptContext = `
-The user is looking for "Blue Ocean" opportunities in the ${targetLangName} market. 
+The user is looking for "Blue Ocean" opportunities in the ${targetLangName} market.
 We have already generated these: ${existingKeywords.slice(-20).join(', ')}.
 
 CRITICAL: Do NOT generate similar words.
 Think LATERALLY. Use the "SCAMPER" method.
 Example: If seed is "AI Pet Photos", think "Pet ID Cards", "Fake Dog Passport", "Cat Genealogy".
+${strategyGuidance}${userGuidance}
 
-Generate 10 NEW, UNEXPECTED, but SEARCHABLE keywords related to "${seedKeyword}" in ${targetLangName}.
+Generate ${wordsPerRound} NEW, UNEXPECTED, but SEARCHABLE keywords related to "${seedKeyword}" in ${targetLangName}.
 
 CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
 
