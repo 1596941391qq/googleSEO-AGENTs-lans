@@ -18,12 +18,24 @@ export interface SerpSnippet {
   snippet: string;
 }
 
+export interface SErankingData {
+  is_data_found: boolean;
+  volume?: number;
+  cpc?: number;
+  competition?: number;
+  difficulty?: number; // Keyword Difficulty (KD)
+  history_trend?: { [date: string]: number };
+}
+
 export interface KeywordData {
   id: string;
   keyword: string; // The keyword in target language
   translation: string; // Meaning for the user
   intent: IntentType;
   volume: number; // Estimated monthly volume
+
+  // SE Ranking API Data (before SERP analysis)
+  serankingData?: SErankingData;
 
   // Analysis Metrics (Step 2)
   serpResultCount?: number; // Estimated number of results
@@ -118,6 +130,7 @@ export interface WorkflowNode {
   configurable: boolean; // Whether user can edit this node
   prompt?: string; // Agent prompt (only for agent nodes)
   defaultPrompt?: string; // Default prompt for reset
+  isSystem?: boolean; // Whether this is a system tool (non-configurable, special styling)
 }
 
 export interface WorkflowDefinition {
@@ -178,10 +191,18 @@ export interface AgentThought {
 
 export interface BatchAnalysisThought {
   id: string;
-  type: 'translation' | 'serp-search' | 'intent-analysis' | 'analysis';
+  type: 'translation' | 'seranking' | 'serp-search' | 'intent-analysis' | 'analysis';
   keyword: string; // Original or translated keyword
   content: string;
   serpSnippets?: SerpSnippet[];
+  serankingData?: {
+    is_data_found: boolean;
+    volume?: number;
+    difficulty?: number;
+    cpc?: number;
+    competition?: number;
+    history_trend?: Record<string, number>;
+  };
   intentData?: {
     searchIntent: string;
     intentAnalysis: string;

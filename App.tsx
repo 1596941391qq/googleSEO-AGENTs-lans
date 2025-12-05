@@ -27,6 +27,7 @@ import {
   Globe,
   Save,
   FolderOpen,
+  TrendingUp,
 } from "lucide-react";
 import {
   AppState,
@@ -115,8 +116,8 @@ const TEXT = {
     miningSuccessTitle: "Mining Complete",
     miningSuccessDesc: "HIGH probability keywords found!",
     foundCount: "High Probability Keywords",
-    serpEvidence: "Google Search Evidence",
-    serpEvidenceDisclaimer: "* Data based on Google Search grounding.",
+    serpEvidence: "Top 3 Google Search Results",
+    serpEvidenceDisclaimer: "* Showing top 3 results analyzed for competition.",
     showTransRef: "Show Translation Reference",
     transRefLabel: "Translated Prompt Reference (Read-only)",
     verifyBtn: "Google Verify",
@@ -229,8 +230,8 @@ const TEXT = {
     miningSuccessTitle: "挖掘完成",
     miningSuccessDesc: "已发现 HIGH (高概率) 关键词！",
     foundCount: "个高概率机会",
-    serpEvidence: "Google 搜索证据",
-    serpEvidenceDisclaimer: "* 数据基于 Google 搜索实时分析。",
+    serpEvidence: "前3个 Google 搜索结果",
+    serpEvidenceDisclaimer: "* 显示分析的前3个搜索结果。",
     showTransRef: "显示翻译对照",
     transRefLabel: "提示词翻译参考 (只读)",
     verifyBtn: "Google 验证",
@@ -576,6 +577,8 @@ const BatchAnalysisStream = ({
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   thought.type === "translation"
                     ? "bg-blue-100 text-blue-700"
+                    : thought.type === "seranking"
+                    ? "bg-orange-100 text-orange-700"
                     : thought.type === "serp-search"
                     ? "bg-purple-100 text-purple-700"
                     : thought.type === "intent-analysis"
@@ -583,13 +586,70 @@ const BatchAnalysisStream = ({
                     : "bg-green-100 text-green-700"
                 }`}
               >
-                {thought.type.toUpperCase().replace("-", " ")}
+                {thought.type === "seranking" ? "SEO RESEARCH" : thought.type.toUpperCase().replace("-", " ")}
               </span>
               <span className="text-xs text-slate-500 font-medium truncate">
                 {thought.keyword}
               </span>
             </div>
             <p className="text-sm text-slate-700 mb-2">{thought.content}</p>
+
+            {/* SE Ranking Data Display */}
+            {thought.type === "seranking" && thought.serankingData && (
+              <div className="mt-2">
+                {thought.serankingData.is_data_found ? (
+                  <div className="bg-white p-3 rounded border border-orange-200">
+                    <div className="text-[10px] text-orange-600 font-bold mb-2 flex items-center gap-1">
+                      <TrendingUp className="w-3 h-3" />
+                      SE RANKING DATA
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                        <div className="text-[9px] text-slate-500 font-bold mb-1">VOLUME</div>
+                        <div className="text-sm font-bold text-blue-600">
+                          {thought.serankingData.volume?.toLocaleString() || "N/A"}
+                        </div>
+                      </div>
+                      <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                        <div className="text-[9px] text-slate-500 font-bold mb-1">KD</div>
+                        <div className={`text-sm font-bold ${
+                          (thought.serankingData.difficulty || 0) <= 40
+                            ? "text-green-600"
+                            : (thought.serankingData.difficulty || 0) <= 60
+                            ? "text-yellow-600"
+                            : "text-red-600"
+                        }`}>
+                          {thought.serankingData.difficulty || "N/A"}
+                        </div>
+                      </div>
+                      <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                        <div className="text-[9px] text-slate-500 font-bold mb-1">CPC</div>
+                        <div className="text-sm font-bold text-green-600">
+                          ${thought.serankingData.cpc?.toFixed(2) || "N/A"}
+                        </div>
+                      </div>
+                      <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                        <div className="text-[9px] text-slate-500 font-bold mb-1">COMP</div>
+                        <div className="text-sm font-bold text-purple-600">
+                          {thought.serankingData.competition
+                            ? typeof thought.serankingData.competition === 'number'
+                              ? (thought.serankingData.competition * 100).toFixed(1) + "%"
+                              : thought.serankingData.competition
+                            : "N/A"}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-green-50 p-3 rounded border border-green-200">
+                    <div className="text-xs text-green-700 font-medium flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4" />
+                      Blue Ocean Signal - No competition data found!
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Intent Analysis Display */}
             {thought.type === "intent-analysis" && thought.intentData && (
@@ -2223,151 +2283,154 @@ export default function App() {
   };
 
   const runBatchAnalysis = async (keywordList: string[]) => {
-    const results: KeywordData[] = [];
+    try {
+      // Call batch API (translates all keywords and gets SE Ranking data in ONE request)
+      addLog(`Calling batch translation and SE Ranking API for ${keywordList.length} keywords...`, "api");
 
-    for (let i = 0; i < keywordList.length; i++) {
-      if (stopBatchRef.current) {
-        addLog("Batch analysis stopped by user.", "warning");
-        break;
-      }
-
-      const keyword = keywordList[i];
-
-      setState((prev) => ({ ...prev, batchCurrentIndex: i + 1 }));
-
-      addLog(
-        `[${i + 1}/${keywordList.length}] Processing: "${keyword}"`,
-        "info"
+      const batchResult = await batchTranslateAndAnalyze(
+        keywordList.join(", "),
+        state.targetLanguage,
+        getWorkflowPrompt("batch", "batch-analyze", state.analyzePrompt),
+        state.uiLanguage
       );
 
-      try {
-        // Step 1: Translation
+      if (!batchResult.success) {
+        throw new Error("Batch analysis failed");
+      }
+
+      addLog(`Batch API completed: ${batchResult.total} keywords processed`, "success");
+
+      // Display results one by one (for UI streaming effect)
+      for (let i = 0; i < batchResult.keywords.length; i++) {
+        if (stopBatchRef.current) {
+          addLog("Batch analysis stopped by user.", "warning");
+          break;
+        }
+
+        const result = batchResult.keywords[i];
+        const original = batchResult.translationResults[i]?.original || `Keyword ${i + 1}`;
+
+        setState((prev) => ({ ...prev, batchCurrentIndex: i + 1 }));
+
+        addLog(`[${i + 1}/${batchResult.total}] Processing: "${original}"`, "info");
+
+        // Show translation thought
         addBatchThought(
           "translation",
-          keyword,
-          `Translating "${keyword}" to ${state.targetLanguage}...`
-        );
-        addLog(`Translating "${keyword}"...`, "api");
-
-        const result = await translateAndAnalyzeSingle(
-          keyword,
-          state.targetLanguage,
-          getWorkflowPrompt("batch", "batch-analyze", state.analyzePrompt),
-          state.uiLanguage
+          original,
+          `Translated to: "${result.keyword}"`,
+          { keyword: result.keyword }
         );
 
-        addBatchThought(
-          "translation",
-          keyword,
-          `Translated to: "${result.translated}"`,
-          { keyword: result.translated }
-        );
+        // Show SE Ranking thought
+        if (result.serankingData) {
+          if (result.serankingData.is_data_found) {
+            addBatchThought(
+              "seranking",
+              result.keyword,
+              `SE Ranking: Volume=${result.serankingData.volume}, KD=${result.serankingData.difficulty}, CPC=$${result.serankingData.cpc}`,
+              { serankingData: result.serankingData }
+            );
+          } else {
+            addBatchThought(
+              "seranking",
+              result.keyword,
+              `SE Ranking: No data found (Blue Ocean Signal!)`,
+              { serankingData: { is_data_found: false } }
+            );
+          }
+        }
 
-        // Step 2: SERP Search
-        addBatchThought(
-          "serp-search",
-          result.translated,
-          `Searching Google SERP for "${result.translated}"...`
-        );
-        addLog(`Analyzing SERP for "${result.translated}"...`, "api");
-
-        // Add SERP snippets if available
-        if (
-          result.keyword.topSerpSnippets &&
-          result.keyword.topSerpSnippets.length > 0
-        ) {
+        // Show SERP search thought
+        if (result.topSerpSnippets && result.topSerpSnippets.length > 0) {
           addBatchThought(
             "serp-search",
-            result.translated,
-            `Found ${result.keyword.topSerpSnippets.length} SERP results`,
-            { serpSnippets: result.keyword.topSerpSnippets }
+            result.keyword,
+            `Analyzed top ${result.topSerpSnippets.length} search results from Google`,
+            { serpSnippets: result.topSerpSnippets }
           );
         }
 
-        // Step 3: Intent Analysis
-        if (result.keyword.searchIntent && result.keyword.intentAnalysis) {
+        // Show intent analysis thought
+        if (result.searchIntent && result.intentAnalysis) {
           addBatchThought(
             "intent-analysis",
-            result.translated,
-            `Analyzing search intent...`,
+            result.keyword,
+            `Search intent analyzed`,
             {
               intentData: {
-                searchIntent: result.keyword.searchIntent,
-                intentAnalysis: result.keyword.intentAnalysis,
+                searchIntent: result.searchIntent,
+                intentAnalysis: result.intentAnalysis,
               },
             }
           );
         }
 
-        // Step 4: Final Analysis
+        // Show final analysis thought
         addBatchThought(
           "analysis",
-          result.translated,
-          `Analysis complete: ${result.keyword.probability} probability`,
+          result.keyword,
+          `Analysis complete: ${result.probability} probability`,
           {
             analysis: {
-              probability: result.keyword.probability || ProbabilityLevel.LOW,
-              topDomainType: result.keyword.topDomainType || "Unknown",
-              serpResultCount: result.keyword.serpResultCount || -1,
-              reasoning: result.keyword.reasoning || "No reasoning provided",
+              probability: result.probability || ProbabilityLevel.LOW,
+              topDomainType: result.topDomainType || "Unknown",
+              serpResultCount: result.serpResultCount || -1,
+              reasoning: result.reasoning || "No reasoning provided",
             },
           }
         );
 
-        results.push(result.keyword);
-
+        // Add to state
         setState((prev) => ({
           ...prev,
-          batchKeywords: [...prev.batchKeywords, result.keyword],
+          batchKeywords: [...prev.batchKeywords, result],
         }));
 
-        addLog(
-          `Completed: "${keyword}" → ${result.keyword.probability}`,
-          "success"
-        );
+        addLog(`Completed: "${original}" → ${result.probability}`, "success");
 
-        // Small delay between requests
-        if (i < keywordList.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
+        // Small delay for UI streaming effect
+        if (i < batchResult.keywords.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 300));
         }
-      } catch (error: any) {
-        console.error(`Error processing keyword "${keyword}":`, error);
-        addLog(`Error processing "${keyword}": ${error.message}`, "error");
-        addBatchThought("analysis", keyword, `Error: ${error.message}`, {
-          analysis: {
-            probability: ProbabilityLevel.LOW,
-            topDomainType: "Unknown",
-            serpResultCount: -1,
-            reasoning: `Analysis failed: ${error.message}`,
-          },
-        });
       }
-    }
 
-    // Analysis complete
-    addLog(
-      `Batch analysis complete! Processed ${results.length}/${keywordList.length} keywords.`,
-      "success"
-    );
-    playCompletionSound(); // Play sound on batch completion
+      // Analysis complete
+      addLog(
+        `Batch analysis complete! Processed ${batchResult.keywords.length}/${batchResult.total} keywords.`,
+        "success"
+      );
+      playCompletionSound();
 
-    // Save to batch archives
-    setState((prev) => {
-      const newArchive: BatchArchiveEntry = {
-        id: `batch-${Date.now()}`,
-        timestamp: Date.now(),
-        inputKeywords: prev.batchInputKeywords,
-        keywords: [...prev.batchKeywords],
-        targetLanguage: prev.targetLanguage,
-        totalCount: prev.batchKeywords.length,
-      };
+      // Save to batch archives
+      setState((prev) => {
+        const newArchive: BatchArchiveEntry = {
+          id: `batch-${Date.now()}`,
+          timestamp: Date.now(),
+          inputKeywords: prev.batchInputKeywords,
+          keywords: [...prev.batchKeywords],
+          targetLanguage: prev.targetLanguage,
+          totalCount: prev.batchKeywords.length,
+        };
 
-      return {
+        const updatedArchives = [newArchive, ...prev.batchArchives].slice(0, 50);
+        localStorage.setItem("google_seo_batch_archives", JSON.stringify(updatedArchives));
+
+        return {
+          ...prev,
+          step: "batch-results",
+          batchArchives: updatedArchives,
+        };
+      });
+    } catch (error: any) {
+      console.error("Batch analysis error:", error);
+      addLog(`Batch analysis failed: ${error.message}`, "error");
+      setState((prev) => ({
         ...prev,
-        step: "batch-results",
-        batchArchives: [newArchive, ...prev.batchArchives],
-      };
-    });
+        error: `Batch analysis failed: ${error.message}`,
+        step: "input",
+      }));
+    }
   };
 
   const stopBatchAnalysis = () => {
@@ -3476,6 +3539,129 @@ export default function App() {
                               <td colSpan={6} className="px-4 py-4">
                                 <div className="flex flex-col md:flex-row gap-6 px-4">
                                   <div className="flex-1 space-y-2">
+                                    {/* SE Ranking Data Section */}
+                                    {item.serankingData &&
+                                      item.serankingData.is_data_found && (
+                                        <div className="mb-3">
+                                          <h4 className="text-xs font-bold uppercase text-blue-600 mb-2 flex items-center gap-1">
+                                            <TrendingUp className="w-3 h-3" />
+                                            SEO词研究工具 (SE Ranking Data)
+                                          </h4>
+                                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            {/* Search Volume */}
+                                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                              <div className="text-[10px] text-slate-500 font-bold mb-1">
+                                                SEARCH VOLUME
+                                              </div>
+                                              <div className="text-lg font-bold text-blue-600">
+                                                {item.serankingData.volume?.toLocaleString() ||
+                                                  "N/A"}
+                                              </div>
+                                              <div className="text-[9px] text-slate-400">
+                                                monthly searches
+                                              </div>
+                                            </div>
+
+                                            {/* Keyword Difficulty */}
+                                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                              <div className="text-[10px] text-slate-500 font-bold mb-1">
+                                                KEYWORD DIFFICULTY
+                                              </div>
+                                              <div
+                                                className={`text-lg font-bold ${
+                                                  (item.serankingData
+                                                    .difficulty || 0) <= 40
+                                                    ? "text-green-600"
+                                                    : (item.serankingData
+                                                        .difficulty || 0) <= 60
+                                                    ? "text-yellow-600"
+                                                    : "text-red-600"
+                                                }`}
+                                              >
+                                                {item.serankingData.difficulty ||
+                                                  "N/A"}
+                                              </div>
+                                              <div className="text-[9px] text-slate-400">
+                                                {(item.serankingData
+                                                  .difficulty || 0) <= 40
+                                                  ? "Low competition"
+                                                  : (item.serankingData
+                                                      .difficulty || 0) <= 60
+                                                  ? "Medium competition"
+                                                  : "High competition"}
+                                              </div>
+                                            </div>
+
+                                            {/* CPC */}
+                                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                              <div className="text-[10px] text-slate-500 font-bold mb-1">
+                                                CPC
+                                              </div>
+                                              <div className="text-lg font-bold text-green-600">
+                                                $
+                                                {item.serankingData.cpc?.toFixed(
+                                                  2
+                                                ) || "N/A"}
+                                              </div>
+                                              <div className="text-[9px] text-slate-400">
+                                                cost per click
+                                              </div>
+                                            </div>
+
+                                            {/* Competition */}
+                                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                              <div className="text-[10px] text-slate-500 font-bold mb-1">
+                                                COMPETITION
+                                              </div>
+                                              <div className="text-lg font-bold text-purple-600">
+                                                {item.serankingData.competition
+                                                  ? typeof item.serankingData.competition === 'number'
+                                                    ? (item.serankingData.competition * 100).toFixed(1) + "%"
+                                                    : item.serankingData.competition
+                                                  : "N/A"}
+                                              </div>
+                                              <div className="text-[9px] text-slate-400">
+                                                advertiser competition
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* History Trend - Full Width Below */}
+                                          {item.serankingData.history_trend &&
+                                            Object.keys(item.serankingData.history_trend).length > 0 && (
+                                              <div className="mt-4 bg-white p-4 rounded border border-slate-200 shadow-sm">
+                                                <div className="text-[10px] text-slate-500 font-bold mb-3 flex items-center gap-1">
+                                                  <TrendingUp className="w-3 h-3" />
+                                                  SEARCH VOLUME TREND (Last 12 Months)
+                                                </div>
+                                                <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                                                  {Object.entries(item.serankingData.history_trend)
+                                                    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+                                                    .map(([date, volume]) => {
+                                                      const monthYear = new Date(date).toLocaleDateString('en-US', {
+                                                        month: 'short',
+                                                        year: '2-digit'
+                                                      });
+                                                      return (
+                                                        <div
+                                                          key={date}
+                                                          className="text-center p-2 bg-slate-50 rounded border border-slate-100"
+                                                        >
+                                                          <div className="text-[9px] text-slate-400 font-medium mb-1">
+                                                            {monthYear}
+                                                          </div>
+                                                          <div className="text-sm font-bold text-blue-600">
+                                                            {typeof volume === 'number' ? volume.toLocaleString() : volume}
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                </div>
+                                              </div>
+                                            )}
+                                        </div>
+                                      )}
+
                                     {/* Search Intent Section */}
                                     {(item.searchIntent ||
                                       item.intentAnalysis) && (
@@ -3514,17 +3700,56 @@ export default function App() {
                                       {item.reasoning}
                                     </p>
 
-                                    <div className="grid grid-cols-2 gap-4 mt-2">
-                                      <div>
-                                        <span className="text-xs text-slate-400 block">
-                                          SERP Results (Est.)
-                                        </span>
-                                        <span className="text-sm font-medium">
-                                          {item.serpResultCount === -1
-                                            ? "Unknown (Many)"
-                                            : item.serpResultCount ?? "Unknown"}
-                                        </span>
-                                      </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
+                                      {/* SE Ranking Volume (replaces SERP estimate) */}
+                                      {item.serankingData &&
+                                      item.serankingData.is_data_found ? (
+                                        <div>
+                                          <span className="text-xs text-slate-400 block">
+                                            Search Volume (SE Ranking)
+                                          </span>
+                                          <span className="text-sm font-medium text-blue-600">
+                                            {item.serankingData.volume?.toLocaleString() ||
+                                              "N/A"}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div>
+                                          <span className="text-xs text-slate-400 block">
+                                            Reference SERP Count
+                                          </span>
+                                          <span className="text-sm font-medium">
+                                            {item.serpResultCount === -1
+                                              ? "Unknown (Many)"
+                                              : item.serpResultCount ?? "Unknown"}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {/* Keyword Difficulty (if SE Ranking data available) */}
+                                      {item.serankingData &&
+                                        item.serankingData.is_data_found && (
+                                          <div>
+                                            <span className="text-xs text-slate-400 block">
+                                              Keyword Difficulty
+                                            </span>
+                                            <span
+                                              className={`text-sm font-bold ${
+                                                (item.serankingData.difficulty ||
+                                                  0) <= 40
+                                                  ? "text-green-600"
+                                                  : (item.serankingData
+                                                      .difficulty || 0) <= 60
+                                                  ? "text-yellow-600"
+                                                  : "text-red-600"
+                                              }`}
+                                            >
+                                              {item.serankingData.difficulty ||
+                                                "N/A"}
+                                            </span>
+                                          </div>
+                                        )}
+
                                       <div>
                                         <span className="text-xs text-slate-400 block">
                                           Top Competitor Type
@@ -4147,6 +4372,61 @@ export default function App() {
                                   <div className="text-sm text-slate-700 mb-3 whitespace-pre-wrap">
                                     {data.analysis}
                                   </div>
+
+                                  {/* SE Ranking Data for this keyword */}
+                                  {data.serankingData && (
+                                    <div className="mb-3 p-3 bg-white rounded border border-blue-200">
+                                      <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-1">
+                                        <TrendingUp className="w-3 h-3" />
+                                        SEO词研究工具 (SE Ranking Data)
+                                      </div>
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                          <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                            VOLUME
+                                          </div>
+                                          <div className="text-sm font-bold text-blue-600">
+                                            {data.serankingData.volume?.toLocaleString() || "N/A"}
+                                          </div>
+                                        </div>
+                                        <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                          <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                            KD
+                                          </div>
+                                          <div className={`text-sm font-bold ${
+                                            (data.serankingData.difficulty || 0) <= 40
+                                              ? "text-green-600"
+                                              : (data.serankingData.difficulty || 0) <= 60
+                                              ? "text-yellow-600"
+                                              : "text-red-600"
+                                          }`}>
+                                            {data.serankingData.difficulty || "N/A"}
+                                          </div>
+                                        </div>
+                                        <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                          <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                            CPC
+                                          </div>
+                                          <div className="text-sm font-bold text-green-600">
+                                            ${data.serankingData.cpc?.toFixed(2) || "N/A"}
+                                          </div>
+                                        </div>
+                                        <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                          <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                            COMP
+                                          </div>
+                                          <div className="text-sm font-bold text-purple-600">
+                                            {data.serankingData.competition
+                                              ? typeof data.serankingData.competition === 'number'
+                                                ? (data.serankingData.competition * 100).toFixed(1) + "%"
+                                                : data.serankingData.competition
+                                              : "N/A"}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
                                   {data.serpResults &&
                                     data.serpResults.length > 0 && (
                                       <div className="space-y-2">
@@ -4446,6 +4726,129 @@ export default function App() {
                                       </div>
                                     )}
 
+                                    {/* SE Ranking Data Section */}
+                                    {item.serankingData &&
+                                      item.serankingData.is_data_found && (
+                                        <div className="mb-3">
+                                          <h4 className="text-xs font-bold uppercase text-blue-600 mb-2 flex items-center gap-1">
+                                            <TrendingUp className="w-3 h-3" />
+                                            SEO词研究工具 (SE Ranking Data)
+                                          </h4>
+                                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            {/* Search Volume */}
+                                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                              <div className="text-[10px] text-slate-500 font-bold mb-1">
+                                                SEARCH VOLUME
+                                              </div>
+                                              <div className="text-lg font-bold text-blue-600">
+                                                {item.serankingData.volume?.toLocaleString() ||
+                                                  "N/A"}
+                                              </div>
+                                              <div className="text-[9px] text-slate-400">
+                                                monthly searches
+                                              </div>
+                                            </div>
+
+                                            {/* Keyword Difficulty */}
+                                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                              <div className="text-[10px] text-slate-500 font-bold mb-1">
+                                                KEYWORD DIFFICULTY
+                                              </div>
+                                              <div
+                                                className={`text-lg font-bold ${
+                                                  (item.serankingData
+                                                    .difficulty || 0) <= 40
+                                                    ? "text-green-600"
+                                                    : (item.serankingData
+                                                        .difficulty || 0) <= 60
+                                                    ? "text-yellow-600"
+                                                    : "text-red-600"
+                                                }`}
+                                              >
+                                                {item.serankingData.difficulty ||
+                                                  "N/A"}
+                                              </div>
+                                              <div className="text-[9px] text-slate-400">
+                                                {(item.serankingData
+                                                  .difficulty || 0) <= 40
+                                                  ? "Low competition"
+                                                  : (item.serankingData
+                                                      .difficulty || 0) <= 60
+                                                  ? "Medium competition"
+                                                  : "High competition"}
+                                              </div>
+                                            </div>
+
+                                            {/* CPC */}
+                                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                              <div className="text-[10px] text-slate-500 font-bold mb-1">
+                                                CPC
+                                              </div>
+                                              <div className="text-lg font-bold text-green-600">
+                                                $
+                                                {item.serankingData.cpc?.toFixed(
+                                                  2
+                                                ) || "N/A"}
+                                              </div>
+                                              <div className="text-[9px] text-slate-400">
+                                                cost per click
+                                              </div>
+                                            </div>
+
+                                            {/* Competition */}
+                                            <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                              <div className="text-[10px] text-slate-500 font-bold mb-1">
+                                                COMPETITION
+                                              </div>
+                                              <div className="text-lg font-bold text-purple-600">
+                                                {item.serankingData.competition
+                                                  ? typeof item.serankingData.competition === 'number'
+                                                    ? (item.serankingData.competition * 100).toFixed(1) + "%"
+                                                    : item.serankingData.competition
+                                                  : "N/A"}
+                                              </div>
+                                              <div className="text-[9px] text-slate-400">
+                                                advertiser competition
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* History Trend - Full Width Below */}
+                                          {item.serankingData.history_trend &&
+                                            Object.keys(item.serankingData.history_trend).length > 0 && (
+                                              <div className="mt-4 bg-white p-4 rounded border border-slate-200 shadow-sm">
+                                                <div className="text-[10px] text-slate-500 font-bold mb-3 flex items-center gap-1">
+                                                  <TrendingUp className="w-3 h-3" />
+                                                  SEARCH VOLUME TREND (Last 12 Months)
+                                                </div>
+                                                <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                                                  {Object.entries(item.serankingData.history_trend)
+                                                    .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+                                                    .map(([date, volume]) => {
+                                                      const monthYear = new Date(date).toLocaleDateString('en-US', {
+                                                        month: 'short',
+                                                        year: '2-digit'
+                                                      });
+                                                      return (
+                                                        <div
+                                                          key={date}
+                                                          className="text-center p-2 bg-slate-50 rounded border border-slate-100"
+                                                        >
+                                                          <div className="text-[9px] text-slate-400 font-medium mb-1">
+                                                            {monthYear}
+                                                          </div>
+                                                          <div className="text-sm font-bold text-blue-600">
+                                                            {typeof volume === 'number' ? volume.toLocaleString() : volume}
+                                                          </div>
+                                                        </div>
+                                                      );
+                                                    })}
+                                                </div>
+                                              </div>
+                                            )}
+                                        </div>
+                                      )}
+
                                     <h4 className="text-xs font-bold uppercase text-slate-500">
                                       Analysis Reasoning
                                     </h4>
@@ -4456,7 +4859,7 @@ export default function App() {
                                     <div className="grid grid-cols-2 gap-4 mt-2">
                                       <div>
                                         <span className="text-xs text-slate-400 block">
-                                          SERP Results (Est.)
+                                          Reference SERP Count
                                         </span>
                                         <span className="text-sm font-medium">
                                           {item.serpResultCount === -1

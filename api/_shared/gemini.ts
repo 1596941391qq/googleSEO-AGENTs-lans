@@ -386,7 +386,7 @@ export const analyzeRankingProbability = async (
       serpData = await fetchSerpResults(keywordData.keyword, targetLanguage);
       serpResults = serpData.results || [];
       serpResultCount = serpData.totalResults || -1;
-      console.log(`Fetched ${serpResults.length} SERP results for ${keywordData.keyword}`);
+      console.log(`Fetched ${serpResults.length} search results for "${keywordData.keyword}" (analyzing all for competition)`);
     } catch (error: any) {
       console.warn(`Failed to fetch SERP for ${keywordData.keyword}:`, error.message);
       // Continue with empty SERP data - analysis will proceed with estimation
@@ -394,8 +394,37 @@ export const analyzeRankingProbability = async (
 
     // Step 2: Build system instruction with real SERP data
     const serpContext = serpResults.length > 0
-      ? `\n\nREAL GOOGLE SEARCH RESULTS FOR "${keywordData.keyword}":\n${serpResults.map((r, i) => `${i + 1}. Title: ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.snippet}`).join('\n\n')}\n\nTotal Results: ${serpResultCount > 0 ? serpResultCount : 'Unknown (Many)'}`
+      ? `\n\nTOP GOOGLE SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\nNote: These are the TOP ranking results provided to you for competition analysis, NOT all search results.\n\n${serpResults.map((r, i) => `${i + 1}. Title: ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.snippet}`).join('\n\n')}\n\nEstimated Total Results on Google: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: The results shown above are only the TOP-RANKING pages from Google's first page. There may be thousands of other lower-ranking results not shown here. Use these top results to assess the QUALITY of competition you need to beat.`
       : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
+
+    // Add SE Ranking data context if available
+    const serankingContext = keywordData.serankingData && keywordData.serankingData.is_data_found
+      ? `\n\nSE RANKING KEYWORD DATA FOR "${keywordData.keyword}":
+- Search Volume: ${keywordData.serankingData.volume || 'N/A'} monthly searches
+- Keyword Difficulty (KD): ${keywordData.serankingData.difficulty || 'N/A'} (0-100 scale, higher = more competitive)
+- CPC: $${keywordData.serankingData.cpc || 'N/A'}
+- Competition: ${keywordData.serankingData.competition ? (keywordData.serankingData.competition * 100).toFixed(1) + '%' : 'N/A'}
+
+IMPORTANT: Consider the SE Ranking Keyword Difficulty (KD) score in your analysis:
+- KD 0-20: Very low competition (favors HIGH probability)
+- KD 21-40: Low to moderate competition (consider MEDIUM to HIGH)
+- KD 41-60: Moderate to high competition (likely MEDIUM to LOW)
+- KD 61-80: High competition (likely LOW)
+- KD 81-100: Very high competition (definitely LOW)
+
+Combine the KD score with your SERP analysis to make a final judgment.`
+      : keywordData.serankingData
+      ? `\n\nSE RANKING KEYWORD DATA FOR "${keywordData.keyword}":
+⚠️ NO DATA FOUND - This is a BLUE OCEAN SIGNAL!
+
+When SE Ranking has no data for a keyword, it typically means:
+1. Very low or zero search volume in their database
+2. New, emerging, or highly niche keyword
+3. Little to no advertising competition
+4. **This is a POSITIVE indicator for ranking probability**
+
+ACTION: Give this keyword a BONUS toward HIGH probability, as it indicates low competition and untapped opportunity.`
+      : `\n\nNote: SE Ranking keyword data not available for this keyword.`;
 
     const topSerpSnippetsJson = serpResults.length > 0
       ? JSON.stringify(serpResults.slice(0, 3).map(r => ({
@@ -410,6 +439,7 @@ ${systemInstruction}
 
 TASK: Analyze the Google SERP competition for the keyword: "${keywordData.keyword}".
 ${serpContext}
+${serankingContext}
 
 **STEP 1: PREDICT SEARCH INTENT**
 First, predict what the user's search intent is when they type this keyword. Consider:
@@ -422,35 +452,49 @@ First, predict what the user's search intent is when they type this keyword. Con
 Based on the REAL SERP results provided above (if available), analyze:
 1. How many competing pages exist for this keyword (use the actual count if provided, otherwise estimate)
 2. What type of sites are ranking (Big Brand, Niche Site, Forum/Social, Weak Page, Gov/Edu) - analyze the actual URLs and domains
-3. The probability of ranking on page 1 (High, Medium, Low) - based on the actual competition quality
+3. **CRITICAL: Evaluate RELEVANCE of each result** - Does the page content match the keyword topic?
+4. The probability of ranking on page 1 (High, Medium, Low) - based on BOTH competition quality AND relevance
 
 STRICT SCORING CRITERIA (Be conservative and strict):
-- **HIGH**: ONLY assign High probability when ALL of the following conditions are met:
-  * Top 3 results are ALL weak competitors (Forums, Reddit, Quora, Social Media, PDFs, low-quality blogs, or completely irrelevant content)
-  * NO presence of authoritative sites (Wikipedia, .gov, .edu, major brands, established niche sites)
-  * Content quality of top results is clearly poor or off-topic
-  * User intent is clearly not being well-served by existing results
 
-- **MEDIUM**: Assign Medium when:
+🟢 **HIGH PROBABILITY** - Assign when ALL of the following are met:
+  * Top 3 results are ALL weak competitors (Forums like Reddit/Quora, Social Media, PDFs, low-quality blogs, OR off-topic/irrelevant content)
+  * NO highly relevant authoritative sites in top 5
+  * Content quality of top results is clearly poor, outdated, or doesn't match user intent
+  * **BONUS**: SE Ranking shows NO DATA (blue ocean signal)
+
+  **RELEVANCE CHECK**: If you see Wikipedia/.gov/.edu in top results:
+    ├─ Are they HIGHLY RELEVANT to the keyword topic? → Competition is strong → NOT HIGH
+    └─ Are they OFF-TOPIC or weakly related? → They're just filling space → Still consider HIGH
+
+🟡 **MEDIUM PROBABILITY** - Assign when:
   * Moderate competition exists (3-10 relevant results)
   * Mix of weak and moderate competitors
-  * Some opportunity exists but requires quality content and SEO effort
-  * Top results include some niche sites but not dominant brands
+  * Some authoritative sites present BUT not all are highly relevant
+  * Top results partially satisfy user intent but have gaps
+  * Niche sites rank but aren't dominant market leaders
 
-- **LOW**: Assign Low when ANY of the following apply:
-  * Top results include Big Brands (Amazon, Wikipedia, major corporations, established market leaders)
-  * Government or educational sites (.gov, .edu) rank highly
-  * Multiple high-quality niche sites with exact match content
+🔴 **LOW PROBABILITY** - Assign when ANY of the following apply:
+  * Top 3 results include HIGHLY RELEVANT Big Brands (Amazon, major corporations for product keywords)
+  * HIGHLY RELEVANT Government/Educational sites (.gov, .edu) with exact topic match
+  * Multiple HIGHLY RELEVANT, high-quality niche authority sites with exact match content
   * Strong competition with 10+ relevant, well-optimized results
-  * Top results clearly satisfy user intent with quality content
+  * Top results clearly and comprehensively satisfy user intent
+
+**CRITICAL RELEVANCE PRINCIPLE**:
+- **Authority WITHOUT Relevance = Opportunity (not threat)**
+- **Authority WITH High Relevance = Strong Competition (threat)**
+- Example 1: Wikipedia page about "general topic" for keyword "specific product" → WEAK competitor
+- Example 2: Wikipedia page with exact match for keyword → STRONG competitor
+- Example 3: .gov site about unrelated topic → IGNORE, doesn't affect ranking
+- Example 4: .gov site with exact topic match → STRONG competitor
 
 IMPORTANT ANALYSIS RULES:
-- Be STRICT and CONSERVATIVE - only mark as High when competition is genuinely weak
-- Analyze the actual quality and relevance of top results, not just quantity
-- Consider domain authority, content quality, and user intent satisfaction
-- If in doubt between High and Medium, choose Medium
-- If in doubt between Medium and Low, choose Low
+- **Prioritize RELEVANCE over AUTHORITY** - A highly relevant blog beats an irrelevant Wikipedia page
+- If authoritative sites are present but OFF-TOPIC, treat it as a blue ocean opportunity
+- Analyze the actual quality and relevance of top results, not just domain names
 - Use the REAL SERP results provided above for your analysis
+- Consider SE Ranking's "no data" as a strong positive signal
 - Output all text fields (reasoning, searchIntent, intentAnalysis, topSerpSnippets titles/snippets) in ${uiLangName}
 - The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}
 - For topSerpSnippets, use the ACTUAL results from the SERP data above (first 3 results)
@@ -789,4 +833,75 @@ export const searchGoogleSerp = async (
     return []; // Return empty array on failure
   }
 };
+
+/**
+ * Call SE Ranking API to get keyword research data
+ * Returns keyword difficulty, volume, CPC, competition, and trends
+ */
+const SERANKING_API_KEY = '2535d24f-ea67-7aac-dd0b-2936531dda93';
+const SERANKING_ENDPOINT = 'https://api.seranking.com/v1/keywords/export';
+
+interface SErankingResponse {
+  is_data_found: boolean;
+  keyword: string;
+  volume?: number;
+  cpc?: number;
+  competition?: number;
+  difficulty?: number;
+  history_trend?: { [date: string]: number };
+}
+
+export const fetchSErankingData = async (
+  keywords: string[],
+  source: string = 'us'
+): Promise<SErankingResponse[]> => {
+  try {
+    console.log(`[SE Ranking] Fetching data for ${keywords.length} keywords: ${keywords.join(', ')}`);
+
+    // Build multipart/form-data body manually
+    // SE Ranking API requires keywords to be quoted: keywords[]="keyword"
+    const boundary = `----FormBoundary${Math.random().toString(36).substr(2)}`;
+    const formParts: string[] = [];
+
+    // Add each keyword with quotes
+    keywords.forEach(keyword => {
+      formParts.push(`--${boundary}\r\n`);
+      formParts.push(`Content-Disposition: form-data; name="keywords[]"\r\n\r\n`);
+      formParts.push(`"${keyword}"\r\n`);
+    });
+
+    // Add cols field with quotes
+    formParts.push(`--${boundary}\r\n`);
+    formParts.push(`Content-Disposition: form-data; name="cols"\r\n\r\n`);
+    formParts.push(`"keyword,volume,cpc,competition,difficulty,history_trend"\r\n`);
+
+    // End boundary
+    formParts.push(`--${boundary}--\r\n`);
+
+    const body = formParts.join('');
+
+    const response = await fetch(`${SERANKING_ENDPOINT}?source=${source}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${SERANKING_API_KEY}`,
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      },
+      body: body,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[SE Ranking] API error:', response.status, errorText);
+      throw new Error(`SE Ranking API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log(`[SE Ranking] Successfully retrieved data for ${data.length} keywords`);
+    return data;
+  } catch (error: any) {
+    console.error('[SE Ranking] API call failed:', error);
+    throw error;
+  }
+};
+
 

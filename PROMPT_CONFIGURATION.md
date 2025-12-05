@@ -265,12 +265,36 @@ The best validation is real-world results:
 
 You've successfully updated the `DEFAULT_ANALYZE_PROMPT_EN` with enhanced criteria:
 
-✅ **Added**: Detailed 4-point framework for both High and Low probability
-✅ **Improved**: Specific examples (Reddit, Quora, .gov, .edu)
-✅ **Enhanced**: Clear evaluation criteria (domain authority, on-page optimization)
-✅ **Better**: Analysis framework with systematic evaluation
+### ✅ Latest Optimizations (Relevance-First Analysis)
 
-**Result**: The AI now has much clearer guidance for identifying blue ocean opportunities vs high competition keywords.
+**v2.0 - Relevance & SE Ranking Integration**:
+1. **Relevance-First Principle**: Authority WITHOUT relevance = opportunity (not threat)
+   - Wikipedia/gov/edu sites are now evaluated based on topic relevance
+   - Off-topic authority sites are treated as weak competitors
+   - Example: Wikipedia page about "general topic" for "specific product" → WEAK competitor
+
+2. **SE Ranking No Data = Blue Ocean Signal**:
+   - When SE Ranking returns `is_data_found: false`, it's treated as a POSITIVE indicator
+   - Indicates low competition, niche keyword, untapped opportunity
+   - Gives bonus toward HIGH probability
+
+3. **Enhanced Evaluation Framework**:
+   - 🟢 HIGH: Weak competitors OR off-topic authority sites + SE Ranking no data
+   - 🟡 MEDIUM: Mixed competition with partially relevant authority sites
+   - 🔴 LOW: HIGHLY RELEVANT authority sites with exact topic match
+
+4. **Specific Examples Added**:
+   - ✅ Wikipedia about "general cars" for keyword "Tesla Model Y accessories" → WEAK
+   - ❌ Wikipedia about "Tesla Model Y" for keyword "Tesla Model Y" → STRONG
+   - ✅ .gov site about unrelated topic → IGNORE
+   - ❌ .gov site with exact topic match → STRONG
+
+### 📊 Impact
+
+**Before**: AI would mark any keyword as LOW just by seeing Wikipedia/.gov/.edu, regardless of relevance
+**After**: AI evaluates relevance first, then authority. Off-topic authority sites are treated as opportunities.
+
+**Result**: More accurate identification of true blue ocean keywords that have low competition despite authority sites appearing in results.
 
 ---
 
@@ -320,4 +344,4 @@ You've successfully updated the `DEFAULT_ANALYZE_PROMPT_EN` with enhanced criter
 
 ---
 
-**Last Updated**: Based on your optimization requirements (High/Low Probability Indicators)
+**Last Updated**: v2.0 - Relevance-First Analysis with SE Ranking Integration (December 2025)

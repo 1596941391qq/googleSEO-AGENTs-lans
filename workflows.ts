@@ -6,7 +6,7 @@ import { DEFAULT_GEN_PROMPT_EN, DEFAULT_ANALYZE_PROMPT_EN, DEFAULT_DEEP_DIVE_PRO
 export const MINING_WORKFLOW: WorkflowDefinition = {
   id: 'mining',
   name: 'Keyword Mining Workflow',
-  description: 'Generate keywords, search SERP, and analyze ranking probability',
+  description: 'Generate keywords, research with SEO tools, search SERP, and analyze ranking probability',
   nodes: [
     {
       id: 'mining-gen',
@@ -16,6 +16,14 @@ export const MINING_WORKFLOW: WorkflowDefinition = {
       configurable: true,
       prompt: DEFAULT_GEN_PROMPT_EN,
       defaultPrompt: DEFAULT_GEN_PROMPT_EN,
+    },
+    {
+      id: 'mining-seranking',
+      type: 'tool',
+      name: 'SEO词研究工具',
+      description: 'SE Ranking API - Gets keyword difficulty, volume, CPC, and competition data',
+      configurable: false,
+      isSystem: true,
     },
     {
       id: 'mining-serp',
@@ -40,7 +48,7 @@ export const MINING_WORKFLOW: WorkflowDefinition = {
 export const BATCH_WORKFLOW: WorkflowDefinition = {
   id: 'batch',
   name: 'Batch Translation Workflow',
-  description: 'Translate keywords, search SERP, and analyze opportunities',
+  description: 'Translate keywords, research with SEO tools, search SERP, and analyze opportunities',
   nodes: [
     {
       id: 'batch-translate',
@@ -54,6 +62,14 @@ Ensure the translation is natural and commonly used by native speakers.`,
       defaultPrompt: `You are a professional translator specializing in SEO keywords.
 Translate the given keyword to the target language while preserving search intent.
 Ensure the translation is natural and commonly used by native speakers.`,
+    },
+    {
+      id: 'batch-seranking',
+      type: 'tool',
+      name: 'SEO词研究工具',
+      description: 'SE Ranking API - Gets keyword difficulty, volume, CPC, and competition data',
+      configurable: false,
+      isSystem: true, // Special flag to indicate this is a non-configurable system tool
     },
     {
       id: 'batch-serp',
@@ -91,7 +107,7 @@ Evaluate whether the SERP results match the predicted intent.`,
 export const DEEP_DIVE_WORKFLOW: WorkflowDefinition = {
   id: 'deepDive',
   name: 'Deep Dive Strategy Workflow',
-  description: 'Generate content strategy, extract core keywords, verify SERP, analyze ranking probability',
+  description: 'Generate content strategy, extract core keywords, research with SEO tools, verify SERP, analyze ranking probability',
   nodes: [
     {
       id: 'deepdive-strategy',
@@ -116,6 +132,14 @@ Return ONLY a JSON array of keywords.`,
 Extract the 5-8 most important keywords from the given content strategy.
 Focus on keywords that are critical for ranking and content optimization.
 Return ONLY a JSON array of keywords.`,
+    },
+    {
+      id: 'deepdive-seranking',
+      type: 'tool',
+      name: 'SEO词研究工具',
+      description: 'SE Ranking API - Gets keyword difficulty, volume, CPC, and competition data',
+      configurable: false,
+      isSystem: true,
     },
     {
       id: 'deepdive-serp',

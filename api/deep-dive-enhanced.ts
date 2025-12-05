@@ -3,7 +3,8 @@ import {
   generateDeepDiveStrategy,
   extractCoreKeywords,
   callGeminiAPI,
-  searchGoogleSerp
+  searchGoogleSerp,
+  fetchSErankingData
 } from './_shared/gemini.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { ProbabilityLevel } from './_shared/types.js';
@@ -41,11 +42,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const coreKeywords = await extractCoreKeywords(report, targetLanguage, uiLanguage);
     console.log(`Extracted ${coreKeywords.length} core keywords:`, coreKeywords);
 
+    // Step 2.5: Call SE Ranking API for core keywords
+    console.log(`[SEO词研究工具] Fetching SE Ranking data for ${coreKeywords.length} keywords (Deep Dive mode)`);
+
+    const serankingDataMap = new Map();
+    try {
+      const serankingResults = await fetchSErankingData(coreKeywords, 'us');
+
+      serankingResults.forEach(data => {
+        if (data.keyword) {
+          serankingDataMap.set(data.keyword.toLowerCase(), data);
+        }
+      });
+
+      console.log(`[SE Ranking] Successfully fetched data for ${serankingResults.length}/${coreKeywords.length} keywords`);
+
+      // Log SE Ranking data for each keyword
+      serankingResults.forEach(data => {
+        if (data.is_data_found) {
+          console.log(`[SE Ranking] "${data.keyword}": Volume=${data.volume}, KD=${data.difficulty}, CPC=$${data.cpc}, Competition=${data.competition}`);
+        } else {
+          console.log(`[SE Ranking] "${data.keyword}": No data found (blue ocean signal)`);
+        }
+      });
+    } catch (serankingError) {
+      console.warn(`[SE Ranking] API call failed: ${serankingError.message}. Proceeding with SERP analysis.`);
+    }
+
     // Step 3: Search SERP for each core keyword
     const serpCompetitionData = [];
     for (const coreKeyword of coreKeywords.slice(0, 5)) { // Limit to top 5 to avoid rate limits
       try {
         const serpResults = await searchGoogleSerp(coreKeyword, targetLanguage);
+
+        // Get SE Ranking data for this keyword
+        const serankingData = serankingDataMap.get(coreKeyword.toLowerCase());
 
         // Analyze competition for this keyword (in UI language)
         const analysisPrompt = `Analyze the SERP competition for the keyword "${coreKeyword}".
@@ -62,17 +93,35 @@ Provide a brief analysis of the competition strength for this keyword.`;
         serpCompetitionData.push({
           keyword: coreKeyword,
           serpResults: serpResults.slice(0, 3),
-          analysis: analysisResponse.text || 'Analysis unavailable'
+          analysis: analysisResponse.text || 'Analysis unavailable',
+          serankingData: serankingData && serankingData.is_data_found ? {
+            volume: serankingData.volume,
+            difficulty: serankingData.difficulty,
+            cpc: serankingData.cpc,
+            competition: serankingData.competition,
+            history_trend: serankingData.history_trend
+          } : undefined
         });
 
         // Small delay between searches
         await new Promise(resolve => setTimeout(resolve, 300));
       } catch (error) {
         console.error(`Error searching for keyword "${coreKeyword}":`, error);
+
+        // Get SE Ranking data for this keyword even if SERP fails
+        const serankingData = serankingDataMap.get(coreKeyword.toLowerCase());
+
         serpCompetitionData.push({
           keyword: coreKeyword,
           serpResults: [],
-          analysis: 'SERP search failed'
+          analysis: 'SERP search failed',
+          serankingData: serankingData && serankingData.is_data_found ? {
+            volume: serankingData.volume,
+            difficulty: serankingData.difficulty,
+            cpc: serankingData.cpc,
+            competition: serankingData.competition,
+            history_trend: serankingData.history_trend
+          } : undefined
         });
       }
     }
