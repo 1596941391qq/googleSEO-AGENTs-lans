@@ -838,7 +838,7 @@ export const searchGoogleSerp = async (
  * Call SE Ranking API to get keyword research data
  * Returns keyword difficulty, volume, CPC, competition, and trends
  */
-const SERANKING_API_KEY = '2535d24f-ea67-7aac-dd0b-2936531dda93';
+const SERANKING_API_KEY = '6b45bdef-7426-aacd-e59f-1a5d25d01e0b';
 const SERANKING_ENDPOINT = 'https://api.seranking.com/v1/keywords/export';
 
 interface SErankingResponse {

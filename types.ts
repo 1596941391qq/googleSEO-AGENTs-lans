@@ -102,6 +102,14 @@ export interface BatchArchiveEntry {
   totalCount: number;
 }
 
+export interface DeepDiveArchiveEntry {
+  id: string;
+  timestamp: number;
+  keyword: string; // The core keyword analyzed
+  strategyReport: SEOStrategyReport;
+  targetLanguage: TargetLanguage;
+}
+
 export type UILanguage = 'en' | 'zh';
 export type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar';
 
@@ -115,6 +123,12 @@ export interface DeepDiveThought {
     serpResults?: SerpSnippet[];
     analysis?: string;
     probability?: ProbabilityLevel;
+    serankingData?: {
+      volume?: number;
+      difficulty?: number;
+      cpc?: number;
+      competition?: number;
+    };
   };
 }
 
@@ -224,6 +238,12 @@ export interface DeepDiveThought {
     serpResults?: SerpSnippet[];
     analysis?: string;
     probability?: ProbabilityLevel;
+    serankingData?: {
+      volume?: number;
+      difficulty?: number;
+      cpc?: number;
+      competition?: number;
+    };
   };
 }
 
@@ -246,6 +266,7 @@ export interface AppState {
   // Archives
   archives: ArchiveEntry[];
   batchArchives: BatchArchiveEntry[];
+  deepDiveArchives: DeepDiveArchiveEntry[];
 
   // Results View Configuration
   filterLevel: ProbabilityLevel | 'ALL';

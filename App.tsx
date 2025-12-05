@@ -33,12 +33,14 @@ import {
   AppState,
   KeywordData,
   ProbabilityLevel,
+  IntentType,
   LogEntry,
   AgentThought,
   BatchAnalysisThought,
   DeepDiveThought,
   ArchiveEntry,
   BatchArchiveEntry,
+  DeepDiveArchiveEntry,
   SEOStrategyReport,
   TargetLanguage,
   UILanguage,
@@ -65,6 +67,55 @@ import {
   DEEP_DIVE_WORKFLOW,
   createDefaultConfig,
 } from "./workflows";
+
+// --- Markdown Parser ---
+const parseMarkdown = (text: string): string => {
+  if (!text) return '';
+
+  let html = text;
+
+  // Headers (### ## #)
+  html = html.replace(/^### (.*$)/gim, '<h3 class="text-sm font-bold text-slate-900 mt-2 mb-1">$1</h3>');
+  html = html.replace(/^## (.*$)/gim, '<h2 class="text-base font-bold text-slate-900 mt-2 mb-1">$1</h2>');
+  html = html.replace(/^# (.*$)/gim, '<h1 class="text-lg font-bold text-slate-900 mt-3 mb-1">$1</h1>');
+
+  // Bold (**text** or __text__)
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-slate-900">$1</strong>');
+  html = html.replace(/__(.+?)__/g, '<strong class="font-semibold text-slate-900">$1</strong>');
+
+  // Italic (*text* or _text_)
+  html = html.replace(/\*(.+?)\*/g, '<em class="italic text-slate-700">$1</em>');
+  html = html.replace(/_(.+?)_/g, '<em class="italic text-slate-700">$1</em>');
+
+  // Lists (- item or * item or 1. item)
+  html = html.replace(/^\s*[-*]\s+(.+)$/gim, '<li class="ml-4 mb-0.5 list-disc list-inside text-slate-700">$1</li>');
+  html = html.replace(/^\s*\d+\.\s+(.+)$/gim, '<li class="ml-4 mb-0.5 list-decimal list-inside text-slate-700">$1</li>');
+
+  // Wrap consecutive <li> tags in <ul>
+  html = html.replace(/(<li class="ml-4 mb-0.5 list-disc[^>]*>.*?<\/li>\s*)+/gs, '<ul class="my-1">$&</ul>');
+  html = html.replace(/(<li class="ml-4 mb-0.5 list-decimal[^>]*>.*?<\/li>\s*)+/gs, '<ol class="my-1">$&</ol>');
+
+  // Links [text](url)
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">$1</a>');
+
+  // Inline code `code`
+  html = html.replace(/`([^`]+)`/g, '<code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-xs font-mono">$1</code>');
+
+  // Line breaks
+  html = html.replace(/\n/g, '<br/>');
+
+  return html;
+};
+
+// Markdown display component
+const MarkdownContent: React.FC<{ content: string }> = ({ content }) => {
+  return (
+    <div
+      className="markdown-content text-sm text-slate-700 leading-relaxed"
+      dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
+    />
+  );
+};
 
 // --- Constants & Translations ---
 
@@ -140,6 +191,12 @@ const TEXT = {
     translatedKeyword: "Translated",
     tabMining: "Keyword Mining",
     tabBatch: "Batch Translation",
+    tabDeepDive: "Deep Dive Strategy",
+    deepDiveTitle: "Deep Dive SEO Strategy",
+    deepDiveDesc: "Build comprehensive SEO strategy for a core keyword and predict ranking probability for it and derived long-tail keywords.",
+    deepDiveInputPlaceholder: "Enter core keyword (e.g., electric bike)",
+    btnDeepDive: "Start Deep Dive",
+    deepDiveArchives: "Deep Dive Archives",
     miningArchives: "Mining Archives",
     batchArchives: "Batch Archives",
     deepDiveAnalyzing: "Deep Dive Analysis",
@@ -254,6 +311,12 @@ const TEXT = {
     translatedKeyword: "翻译词",
     tabMining: "关键词挖掘",
     tabBatch: "翻译分析",
+    tabDeepDive: "深度策略",
+    deepDiveTitle: "深度SEO策略",
+    deepDiveDesc: "为一个核心keyword构建SEO策略及预测其与衍生长尾词的上首页概率。",
+    deepDiveInputPlaceholder: "输入核心关键词 (例如：电动自行车)",
+    btnDeepDive: "开始深度分析",
+    deepDiveArchives: "深度挖掘历史",
     miningArchives: "挖掘历史",
     batchArchives: "批量历史",
     deepDiveAnalyzing: "深度挖掘分析中",
@@ -794,6 +857,59 @@ const DeepDiveAnalysisStream = ({
                       {kw}
                     </span>
                   ))}
+                </div>
+              )}
+
+            {/* SE Ranking Data Display */}
+            {thought.type === "serp-verification" &&
+              thought.data?.serankingData && (
+                <div className="mt-2 mb-2 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 rounded-md border border-blue-200">
+                  <div className="text-[10px] text-blue-700 font-bold mb-2 flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" />
+                    SE RANKING DATA
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    {thought.data.serankingData.volume !== undefined && (
+                      <div className="bg-white px-2 py-1 rounded border border-blue-100">
+                        <div className="text-[9px] text-slate-500 uppercase">Volume</div>
+                        <div className="font-bold text-blue-700">
+                          {thought.data.serankingData.volume.toLocaleString()}
+                        </div>
+                      </div>
+                    )}
+                    {thought.data.serankingData.difficulty !== undefined && (
+                      <div className="bg-white px-2 py-1 rounded border border-blue-100">
+                        <div className="text-[9px] text-slate-500 uppercase">KD</div>
+                        <div
+                          className={`font-bold ${
+                            thought.data.serankingData.difficulty > 40
+                              ? "text-red-600"
+                              : thought.data.serankingData.difficulty > 20
+                              ? "text-yellow-600"
+                              : "text-green-600"
+                          }`}
+                        >
+                          {thought.data.serankingData.difficulty}
+                        </div>
+                      </div>
+                    )}
+                    {thought.data.serankingData.cpc !== undefined && (
+                      <div className="bg-white px-2 py-1 rounded border border-blue-100">
+                        <div className="text-[9px] text-slate-500 uppercase">CPC</div>
+                        <div className="font-bold text-blue-700">
+                          ${thought.data.serankingData.cpc.toFixed(2)}
+                        </div>
+                      </div>
+                    )}
+                    {thought.data.serankingData.competition !== undefined && (
+                      <div className="bg-white px-2 py-1 rounded border border-blue-100">
+                        <div className="text-[9px] text-slate-500 uppercase">Competition</div>
+                        <div className="font-bold text-blue-700">
+                          {thought.data.serankingData.competition.toFixed(2)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1338,6 +1454,7 @@ export default function App() {
     userSuggestion: '',
     archives: [],
     batchArchives: [],
+    deepDiveArchives: [],
 
     // View Config
     filterLevel: ProbabilityLevel.HIGH,
@@ -1386,7 +1503,8 @@ export default function App() {
 
   // Batch translate and analyze state
   const [batchInput, setBatchInput] = useState("");
-  const [activeTab, setActiveTab] = useState<"mining" | "batch">("mining");
+  const [deepDiveInput, setDeepDiveInput] = useState("");
+  const [activeTab, setActiveTab] = useState<"mining" | "batch" | "deepDive">("mining");
   const stopBatchRef = useRef(false);
 
   const stopMiningRef = useRef(false);
@@ -1416,6 +1534,20 @@ export default function App() {
       }
     } catch (e) {
       console.error("Failed to load batch archives", e);
+    }
+
+    try {
+      const savedDeepDiveArchives = localStorage.getItem(
+        "google_seo_deepdive_archives"
+      );
+      if (savedDeepDiveArchives) {
+        setState((prev) => ({
+          ...prev,
+          deepDiveArchives: JSON.parse(savedDeepDiveArchives),
+        }));
+      }
+    } catch (e) {
+      console.error("Failed to load deep dive archives", e);
     }
 
     try {
@@ -1541,6 +1673,32 @@ export default function App() {
     const updated = state.batchArchives.filter((a) => a.id !== id);
     localStorage.setItem("google_seo_batch_archives", JSON.stringify(updated));
     setState((prev) => ({ ...prev, batchArchives: updated }));
+  };
+
+  const loadDeepDiveArchive = (entry: DeepDiveArchiveEntry) => {
+    setState((prev) => ({
+      ...prev,
+      targetLanguage: entry.targetLanguage || "en",
+      currentStrategyReport: entry.strategyReport,
+      deepDiveKeyword: {
+        id: `dd-${Date.now()}`,
+        keyword: entry.keyword,
+        translation: entry.keyword,
+        intent: IntentType.INFORMATIONAL,
+        volume: 0,
+      },
+      step: "deep-dive-results",
+      deepDiveThoughts: [],
+      logs: [],
+      showDetailedAnalysisModal: true,
+    }));
+  };
+
+  const deleteDeepDiveArchive = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const updated = state.deepDiveArchives.filter((a) => a.id !== id);
+    localStorage.setItem("google_seo_deepdive_archives", JSON.stringify(updated));
+    setState((prev) => ({ ...prev, deepDiveArchives: updated }));
   };
 
   // Agent Config management
@@ -2075,6 +2233,7 @@ export default function App() {
               keywords: [serpData.keyword],
               serpResults: serpData.serpResults,
               analysis: serpData.analysis,
+              serankingData: serpData.serankingData,
             }
           );
         }
@@ -2124,6 +2283,25 @@ export default function App() {
           state.uiLanguage === "zh" ? "分析完成！" : "Analysis complete!",
       }));
       addLog("Deep dive analysis complete!", "success");
+
+      // Save to Deep Dive archives
+      const newDeepDiveEntry: DeepDiveArchiveEntry = {
+        id: `dd-arc-${Date.now()}`,
+        timestamp: Date.now(),
+        keyword: keyword.keyword,
+        strategyReport: report,
+        targetLanguage: state.targetLanguage,
+      };
+
+      setState((prev) => {
+        const updatedArchives = [newDeepDiveEntry, ...prev.deepDiveArchives].slice(0, 20);
+        localStorage.setItem(
+          "google_seo_deepdive_archives",
+          JSON.stringify(updatedArchives)
+        );
+        return { ...prev, deepDiveArchives: updatedArchives };
+      });
+
       playCompletionSound(); // Play sound on deep dive completion
     } catch (e: any) {
       console.error("Enhanced deep dive error:", e);
@@ -2640,6 +2818,19 @@ export default function App() {
                       {t.tabBatch}
                     </div>
                   </button>
+                  <button
+                    onClick={() => setActiveTab("deepDive")}
+                    className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
+                      activeTab === "deepDive"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      {t.tabDeepDive}
+                    </div>
+                  </button>
                 </div>
               </div>
             </div>
@@ -2859,6 +3050,107 @@ export default function App() {
                             </div>
                             <button
                               onClick={(e) => deleteBatchArchive(arch.id, e)}
+                              className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Deep Dive Tab Content */}
+            {activeTab === "deepDive" && (
+              <div className="max-w-3xl mx-auto">
+                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 shadow-sm p-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-lg font-bold text-slate-800">
+                      {t.deepDiveTitle}
+                    </h3>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-4">
+                    {t.deepDiveDesc}
+                  </p>
+
+                  <div className="space-y-4">
+                    {/* Deep Dive Input */}
+                    <div>
+                      <input
+                        type="text"
+                        value={deepDiveInput}
+                        onChange={(e) => setDeepDiveInput(e.target.value)}
+                        placeholder={t.deepDiveInputPlaceholder}
+                        className="w-full px-4 py-3 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && deepDiveInput.trim()) {
+                            const keywordData: KeywordData = {
+                              id: `dd-${Date.now()}`,
+                              keyword: deepDiveInput.trim(),
+                              intent: IntentType.INFORMATIONAL,
+                              volume: 0,
+                            };
+                            handleDeepDive(keywordData);
+                          }
+                        }}
+                      />
+                    </div>
+
+                    {/* Deep Dive Button */}
+                    <button
+                      onClick={() => {
+                        if (deepDiveInput.trim()) {
+                          const keywordData: KeywordData = {
+                            id: `dd-${Date.now()}`,
+                            keyword: deepDiveInput.trim(),
+                            intent: IntentType.INFORMATIONAL,
+                            volume: 0,
+                          };
+                          handleDeepDive(keywordData);
+                        }
+                      }}
+                      disabled={!deepDiveInput.trim()}
+                      className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <FileText className="w-5 h-5" />
+                      {t.btnDeepDive}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Deep Dive Archive List */}
+                {state.deepDiveArchives && state.deepDiveArchives.length > 0 && (
+                  <div className="mt-12">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                      <History className="w-4 h-4" /> {t.deepDiveArchives}
+                    </h3>
+                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                        {state.deepDiveArchives.map((arch) => (
+                          <div
+                            key={arch.id}
+                            onClick={() => loadDeepDiveArchive(arch)}
+                            className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer group transition-colors"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="bg-slate-100 p-2 rounded text-slate-500 group-hover:bg-white group-hover:text-indigo-500 transition-colors">
+                                <FileText className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-slate-800">
+                                  {arch.keyword}
+                                </div>
+                                <div className="text-xs text-slate-400">
+                                  {new Date(arch.timestamp).toLocaleString()}
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => deleteDeepDiveArchive(arch.id, e)}
                               className="p-2 text-slate-300 hover:text-red-500 transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -3696,9 +3988,9 @@ export default function App() {
                                     <h4 className="text-xs font-bold uppercase text-slate-500">
                                       Analysis Reasoning
                                     </h4>
-                                    <p className="text-sm text-slate-700 bg-white p-3 rounded border border-slate-200 shadow-sm whitespace-pre-wrap break-words">
-                                      {item.reasoning}
-                                    </p>
+                                    <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                      <MarkdownContent content={item.reasoning || 'No reasoning provided'} />
+                                    </div>
 
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
                                       {/* SE Ranking Volume (replaces SERP estimate) */}
@@ -4308,9 +4600,7 @@ export default function App() {
                                 ? "搜索意图"
                                 : "Search Intent"}
                             </div>
-                            <div className="text-sm text-slate-700">
-                              {state.currentStrategyReport.searchIntent}
-                            </div>
+                            <MarkdownContent content={state.currentStrategyReport.searchIntent} />
                           </div>
                         )}
 
@@ -4323,9 +4613,7 @@ export default function App() {
                                 ? "内容匹配度"
                                 : "Content-Intent Match"}
                             </div>
-                            <div className="text-sm text-slate-700">
-                              {state.currentStrategyReport.intentMatch}
-                            </div>
+                            <MarkdownContent content={state.currentStrategyReport.intentMatch} />
                           </div>
                         )}
 
@@ -4337,9 +4625,7 @@ export default function App() {
                                 ? "详细分析"
                                 : "Detailed Analysis"}
                             </div>
-                            <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-                              {state.currentStrategyReport.rankingAnalysis}
-                            </div>
+                            <MarkdownContent content={state.currentStrategyReport.rankingAnalysis} />
                           </div>
                         )}
                       </div>
@@ -4369,8 +4655,8 @@ export default function App() {
                                     </span>
                                     {data.keyword}
                                   </div>
-                                  <div className="text-sm text-slate-700 mb-3 whitespace-pre-wrap">
-                                    {data.analysis}
+                                  <div className="mb-3">
+                                    <MarkdownContent content={data.analysis} />
                                   </div>
 
                                   {/* SE Ranking Data for this keyword */}
@@ -4852,9 +5138,9 @@ export default function App() {
                                     <h4 className="text-xs font-bold uppercase text-slate-500">
                                       Analysis Reasoning
                                     </h4>
-                                    <p className="text-sm text-slate-700 bg-white p-3 rounded border border-slate-200 shadow-sm whitespace-pre-wrap break-words">
-                                      {item.reasoning}
-                                    </p>
+                                    <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
+                                      <MarkdownContent content={item.reasoning || 'No reasoning provided'} />
+                                    </div>
 
                                     <div className="grid grid-cols-2 gap-4 mt-2">
                                       <div>
