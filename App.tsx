@@ -1052,13 +1052,13 @@ const WorkflowConfigPanel = ({
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+    <div className="bg-black/20 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6 mb-6">
       <div className="mb-4">
-        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-          <BrainCircuit className="w-5 h-5 text-blue-600" />
+        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+          <BrainCircuit className="w-5 h-5 text-green-400" />
           {workflowDef.name}
         </h3>
-        <p className="text-sm text-slate-500 mt-1">{workflowDef.description}</p>
+        <p className="text-sm text-slate-400 mt-1">{workflowDef.description}</p>
       </div>
 
       {/* Workflow Nodes Visualization */}
@@ -1068,8 +1068,8 @@ const WorkflowConfigPanel = ({
             <div
               className={`p-4 rounded-lg border-2 ${
                 node.type === "agent"
-                  ? "border-blue-200 bg-blue-50"
-                  : "border-slate-200 bg-slate-50"
+                  ? "border-green-500/30 bg-green-500/10"
+                  : "border-green-500/20 bg-black/40"
               } ${!node.configurable ? "opacity-60" : ""}`}
             >
               <div className="flex items-start justify-between">
@@ -1078,26 +1078,26 @@ const WorkflowConfigPanel = ({
                     <span
                       className={`px-2 py-0.5 rounded text-xs font-bold ${
                         node.type === "agent"
-                          ? "bg-blue-600 text-white"
-                          : "bg-slate-400 text-white"
+                          ? "bg-green-500 text-black"
+                          : "bg-slate-600 text-white"
                       }`}
                     >
                       {node.type === "agent" ? t.agentNode : t.toolNode}
                     </span>
-                    <span className="font-bold text-sm text-slate-800">
+                    <span className="font-bold text-sm text-white">
                       {node.name}
                     </span>
                     <span
                       className={`text-xs px-2 py-0.5 rounded ${
                         node.configurable
-                          ? "bg-green-100 text-green-700"
-                          : "bg-slate-100 text-slate-500"
+                          ? "bg-green-500/20 text-green-400"
+                          : "bg-slate-500/20 text-slate-400"
                       }`}
                     >
                       {node.configurable ? t.configurable : t.notConfigurable}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-600">{node.description}</p>
+                  <p className="text-xs text-slate-400">{node.description}</p>
 
                   {/* Editable Prompt Area */}
                   {node.configurable && node.type === "agent" && (
@@ -1109,13 +1109,13 @@ const WorkflowConfigPanel = ({
                             onChange={(e) =>
                               handleNodePromptChange(node.id, e.target.value)
                             }
-                            className="w-full h-32 p-2 text-xs font-mono border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full h-32 p-2 text-xs font-mono border border-green-500/30 bg-black/60 rounded focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white placeholder:text-slate-500"
                             placeholder={t.editPrompt}
                           />
                           <div className="flex gap-2">
                             <button
                               onClick={() => setEditingNodeId(null)}
-                              className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                              className="px-3 py-1 bg-green-500 text-black rounded text-xs hover:bg-green-600"
                             >
                               {t.close}
                             </button>
@@ -1126,7 +1126,7 @@ const WorkflowConfigPanel = ({
                                   node.defaultPrompt || ""
                                 );
                               }}
-                              className="px-3 py-1 bg-slate-200 text-slate-700 rounded text-xs hover:bg-slate-300"
+                              className="px-3 py-1 bg-slate-600 text-white rounded text-xs hover:bg-slate-500"
                             >
                               {t.resetToDefault}
                             </button>
@@ -1135,12 +1135,12 @@ const WorkflowConfigPanel = ({
                       ) : (
                         <div
                           onClick={() => setEditingNodeId(node.id)}
-                          className="mt-2 p-2 bg-white border border-slate-200 rounded cursor-pointer hover:border-blue-400 transition-colors"
+                          className="mt-2 p-2 bg-black/60 border border-green-500/30 rounded cursor-pointer hover:border-green-400 transition-colors"
                         >
-                          <div className="text-[10px] text-slate-400 mb-1">
+                          <div className="text-[10px] text-slate-500 mb-1">
                             {t.editPrompt}
                           </div>
-                          <div className="text-xs text-slate-600 line-clamp-2 font-mono">
+                          <div className="text-xs text-slate-300 line-clamp-2 font-mono">
                             {node.prompt || "No prompt"}
                           </div>
                         </div>
@@ -1154,7 +1154,7 @@ const WorkflowConfigPanel = ({
             {/* Connector Arrow */}
             {index < nodes.length - 1 && (
               <div className="flex justify-center py-2">
-                <ArrowRight className="w-5 h-5 text-slate-400" />
+                <ArrowRight className="w-5 h-5 text-green-500/30" />
               </div>
             )}
           </div>
@@ -1162,7 +1162,7 @@ const WorkflowConfigPanel = ({
       </div>
 
       {/* Configuration Management */}
-      <div className="border-t border-slate-200 pt-4 space-y-4">
+      <div className="border-t border-green-500/20 pt-4 space-y-4">
         {/* Save New Config */}
         <div className="flex gap-2">
           <input
@@ -1170,18 +1170,18 @@ const WorkflowConfigPanel = ({
             value={configName}
             onChange={(e) => setConfigName(e.target.value)}
             placeholder={t.configNamePlaceholder}
-            className="flex-1 px-3 py-2 border border-slate-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="flex-1 px-3 py-2 border border-green-500/30 bg-black/60 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white placeholder:text-slate-500"
           />
           <button
             onClick={handleSaveConfig}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-green-500 text-black rounded hover:bg-green-600 text-sm font-medium"
           >
             <Save className="w-4 h-4" />
             {t.saveWorkflowConfig}
           </button>
           <button
             onClick={handleResetToDefault}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 text-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded hover:bg-slate-500 text-sm font-medium"
           >
             <RefreshCw className="w-4 h-4" />
             {t.resetToDefault}
@@ -1191,7 +1191,7 @@ const WorkflowConfigPanel = ({
         {/* Saved Configs List */}
         {workflowConfigs.length > 0 && (
           <div>
-            <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+            <div className="text-xs text-slate-400 uppercase font-bold mb-2">
               {t.loadWorkflowConfig}
             </div>
             <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
@@ -1200,12 +1200,12 @@ const WorkflowConfigPanel = ({
                   key={config.id}
                   className={`flex items-center justify-between p-2 rounded border ${
                     currentConfig?.id === config.id
-                      ? "border-blue-400 bg-blue-50"
-                      : "border-slate-200 bg-slate-50"
+                      ? "border-green-500/50 bg-green-500/20"
+                      : "border-green-500/20 bg-black/40"
                   }`}
                 >
                   <div className="flex-1">
-                    <div className="text-sm font-medium text-slate-800">
+                    <div className="text-sm font-medium text-white">
                       {config.name}
                     </div>
                     <div className="text-xs text-slate-500">
@@ -1214,13 +1214,13 @@ const WorkflowConfigPanel = ({
                   </div>
                   <div className="flex gap-2">
                     {currentConfig?.id === config.id && (
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                      <span className="text-xs bg-green-500/30 text-green-400 px-2 py-1 rounded">
                         {t.currentlyUsing}
                       </span>
                     )}
                     <button
                       onClick={() => onLoad(config.id)}
-                      className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs hover:bg-blue-200"
+                      className="px-3 py-1 bg-green-500/20 text-green-400 rounded text-xs hover:bg-green-500/30"
                     >
                       <FolderOpen className="w-3 h-3" />
                     </button>
@@ -1232,7 +1232,7 @@ const WorkflowConfigPanel = ({
         )}
 
         {workflowConfigs.length === 0 && (
-          <div className="text-center py-4 text-slate-400 text-sm">
+          <div className="text-center py-4 text-slate-500 text-sm">
             {t.noSavedConfigs}
           </div>
         )}
@@ -2675,40 +2675,43 @@ export default function App() {
     });
   };
 
+  // Determine if we should use dark theme (all pages now use dark theme)
+  const isDarkTheme = true;
+  
   return (
-    <div className={`min-h-screen font-sans flex flex-col ${state.step === "input" ? "bg-black text-white grid-overlay" : "bg-slate-50 text-slate-900"}`}>
+    <div className={`min-h-screen font-sans flex flex-col ${isDarkTheme ? "bg-black text-white grid-overlay" : "bg-slate-50 text-slate-900"}`}>
       {/* Header */}
-      <header className={`${state.step === "input" ? "bg-black/80 backdrop-blur-sm border-b border-green-500/20" : "bg-white border-b border-slate-200"} sticky top-0 z-20 shadow-sm flex-none`}>
+      <header className={`${isDarkTheme ? "bg-black/80 backdrop-blur-sm border-b border-green-500/20" : "bg-white border-b border-slate-200"} sticky top-0 z-20 shadow-sm flex-none`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div
             className="flex items-center space-x-3 cursor-pointer"
             onClick={reset}
           >
-            <div className={`${state.step === "input" ? "bg-green-500" : "bg-blue-600"} p-2 rounded-lg`}>
+            <div className={`${isDarkTheme ? "bg-green-500" : "bg-blue-600"} p-2 rounded-lg`}>
               <span className="text-white font-bold text-xl leading-none">
                 G
               </span>
             </div>
-            <h1 className={`text-xl font-bold tracking-tight hidden sm:block ${state.step === "input" ? "text-white" : "text-slate-800"}`}>
-              Google SEO <span className={state.step === "input" ? "text-green-400" : "text-blue-600"}>Agent</span>
+            <h1 className={`text-xl font-bold tracking-tight hidden sm:block ${isDarkTheme ? "text-white" : "text-slate-800"}`}>
+              Google SEO <span className={isDarkTheme ? "text-green-400" : "text-blue-600"}>Agent</span>
             </h1>
           </div>
 
           <div className="flex items-center space-x-6">
-            <div className={`hidden md:flex items-center space-x-4 text-sm font-medium ${state.step === "input" ? "text-slate-400" : "text-slate-500"}`}>
-              <span className={state.step === "input" ? (state.step === "input" ? "text-green-400" : "") : (state.step === "input" ? "text-blue-600" : "")}>
+            <div className={`hidden md:flex items-center space-x-4 text-sm font-medium ${isDarkTheme ? "text-slate-400" : "text-slate-500"}`}>
+              <span className={state.step === "input" ? (isDarkTheme ? "text-green-400" : "text-blue-600") : ""}>
                 {t.step1}
               </span>
-              <ArrowRight className={`w-4 h-4 ${state.step === "input" ? "text-green-500/30" : ""}`} />
+              <ArrowRight className={`w-4 h-4 ${isDarkTheme ? "text-green-500/30" : ""}`} />
               <span
                 className={
-                  state.step === "mining" ? (state.step === "input" ? "text-green-400 animate-pulse" : "text-blue-600 animate-pulse") : ""
+                  state.step === "mining" ? (isDarkTheme ? "text-green-400 animate-pulse" : "text-blue-600 animate-pulse") : ""
                 }
               >
                 {t.step2}
               </span>
-              <ArrowRight className={`w-4 h-4 ${state.step === "input" ? "text-green-500/30" : ""}`} />
-              <span className={state.step === "results" ? (state.step === "input" ? "text-green-400" : "text-blue-600") : ""}>
+              <ArrowRight className={`w-4 h-4 ${isDarkTheme ? "text-green-500/30" : ""}`} />
+              <span className={state.step === "results" ? (isDarkTheme ? "text-green-400" : "text-blue-600") : ""}>
                 {t.step3}
               </span>
             </div>
@@ -2719,10 +2722,10 @@ export default function App() {
               }
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border transition-colors ${
                 state.step === "workflow-config"
-                  ? state.step === "input" 
+                  ? isDarkTheme 
                     ? "bg-green-500/20 text-green-400 border-green-500/30"
                     : "bg-blue-50 text-blue-600 border-blue-200"
-                  : state.step === "input"
+                  : isDarkTheme
                     ? "text-slate-400 hover:text-green-400 border-green-500/20 hover:bg-green-500/10"
                     : "text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50"
               }`}
@@ -2742,7 +2745,7 @@ export default function App() {
                 }))
               }
               className={`flex items-center gap-1 px-3 py-1 rounded-md border transition-colors ${
-                state.step === "input"
+                isDarkTheme
                   ? "text-slate-400 hover:text-green-400 border-green-500/20 hover:bg-green-500/10"
                   : "text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50"
               }`}
@@ -2756,10 +2759,10 @@ export default function App() {
         </div>
       </header>
 
-      <main className={`flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex flex-col ${state.step === "input" ? "" : ""}`}>
+      <main className={`flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex flex-col`}>
         {state.error && (
           <div className={`mb-6 p-4 rounded-lg flex items-center ${
-            state.step === "input" 
+            isDarkTheme 
               ? "bg-red-950/50 border border-red-500/30 text-red-400" 
               : "bg-red-50 border border-red-200 text-red-700"
           }`}>
@@ -3416,17 +3419,17 @@ export default function App() {
           <div className="max-w-7xl mx-auto mt-8 flex-1 w-full">
             <div className="text-center mb-8">
               <div className="flex items-center justify-center gap-3 mb-4">
-                <div className="bg-blue-600 p-3 rounded-lg">
-                  <BrainCircuit className="w-8 h-8 text-white" />
+                <div className="bg-green-500 p-3 rounded-lg">
+                  <BrainCircuit className="w-8 h-8 text-black" />
                 </div>
-                <h2 className="text-3xl font-bold text-slate-900">
+                <h2 className="text-3xl font-bold text-white">
                   {t.workflowConfig}
                 </h2>
               </div>
-              <p className="text-slate-500 mb-4">{t.workflowConfigDesc}</p>
+              <p className="text-slate-400 mb-4">{t.workflowConfigDesc}</p>
               <button
                 onClick={() => setState((prev) => ({ ...prev, step: "input" }))}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:text-slate-900 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-green-400 transition-colors"
               >
                 <ArrowRight className="w-4 h-4 rotate-180" />
                 {state.uiLanguage === "en" ? "Back to Home" : "返回首页"}
@@ -3435,12 +3438,12 @@ export default function App() {
 
             <div className="space-y-8">
               {/* Mining Workflow */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
-                  <Search className="w-5 h-5 text-blue-600" />
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6">
+                <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                  <Search className="w-5 h-5 text-green-400" />
                   {t.miningWorkflow}
                 </h3>
-                <p className="text-sm text-slate-500 mb-6">
+                <p className="text-sm text-slate-400 mb-6">
                   {MINING_WORKFLOW.description}
                 </p>
                 <WorkflowConfigPanel
@@ -3455,12 +3458,12 @@ export default function App() {
               </div>
 
               {/* Batch Workflow */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
-                  <Languages className="w-5 h-5 text-purple-600" />
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6">
+                <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                  <Languages className="w-5 h-5 text-green-400" />
                   {t.batchWorkflow}
                 </h3>
-                <p className="text-sm text-slate-500 mb-6">
+                <p className="text-sm text-slate-400 mb-6">
                   {BATCH_WORKFLOW.description}
                 </p>
                 <WorkflowConfigPanel
@@ -3475,12 +3478,12 @@ export default function App() {
               </div>
 
               {/* Deep Dive Workflow */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
-                  <Lightbulb className="w-5 h-5 text-amber-600" />
+              <div className="bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6">
+                <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+                  <Lightbulb className="w-5 h-5 text-green-400" />
                   {t.deepDiveWorkflow}
                 </h3>
-                <p className="text-sm text-slate-500 mb-6">
+                <p className="text-sm text-slate-400 mb-6">
                   {DEEP_DIVE_WORKFLOW.description}
                 </p>
                 <WorkflowConfigPanel
@@ -3504,18 +3507,18 @@ export default function App() {
           <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
             {/* SUCCESS OVERLAY */}
             {state.miningSuccess && (
-              <div className="absolute inset-0 z-10 bg-white/90 backdrop-blur-sm rounded-xl flex items-start justify-center p-4 pt-8 animate-fade-in overflow-y-auto">
-                <div className="bg-white rounded-xl shadow-2xl border border-green-200 p-8 max-w-md w-full text-center">
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <CheckCircle className="w-8 h-8 text-green-600" />
+              <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm rounded-xl flex items-start justify-center p-4 pt-8 animate-fade-in overflow-y-auto">
+                <div className="bg-black/80 backdrop-blur-sm rounded-xl shadow-2xl border border-green-500/30 p-8 max-w-md w-full text-center">
+                  <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle className="w-8 h-8 text-green-400" />
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-2">
+                  <h3 className="text-2xl font-bold text-white mb-2">
                     {t.miningSuccessTitle}
                   </h3>
-                  <p className="text-slate-500 mb-6">{t.miningSuccessDesc}</p>
+                  <p className="text-slate-400 mb-6">{t.miningSuccessDesc}</p>
 
-                  <div className="bg-slate-50 rounded-lg p-4 mb-6 border border-slate-100">
-                    <div className="text-3xl font-bold text-slate-800">
+                  <div className="bg-black/60 rounded-lg p-4 mb-6 border border-green-500/20">
+                    <div className="text-3xl font-bold text-white">
                       {
                         state.keywords.filter(
                           (k) => k.probability === ProbabilityLevel.HIGH
@@ -3530,13 +3533,13 @@ export default function App() {
                   <div className="flex flex-col gap-3">
                     <button
                       onClick={goToResults}
-                      className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-bold shadow-lg shadow-blue-200"
+                      className="w-full py-3 bg-green-500 text-black rounded-lg hover:bg-green-600 transition-colors font-bold shadow-lg shadow-green-500/20"
                     >
                       {t.viewResults}
                     </button>
                     <button
                       onClick={continueMining}
-                      className="w-full py-3 bg-white text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors font-medium"
+                      className="w-full py-3 bg-black/60 text-white border border-green-500/30 rounded-lg hover:bg-green-500/10 transition-colors font-medium"
                     >
                       {t.btnExpand}
                     </button>
@@ -3548,24 +3551,24 @@ export default function App() {
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-3">
                 <Loader2
-                  className={`w-6 h-6 text-blue-600 ${
+                  className={`w-6 h-6 text-green-400 ${
                     !state.miningSuccess && "animate-spin"
                   }`}
                 />
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
                     {t.generating}
-                    <span className="text-sm font-normal bg-slate-100 px-2 py-0.5 rounded-full text-slate-500">
+                    <span className="text-sm font-normal bg-green-500/20 px-2 py-0.5 rounded-full text-green-400">
                       Round {state.miningRound}
                     </span>
                   </h3>
-                  <p className="text-sm text-slate-500">{t.analyzing}</p>
+                  <p className="text-sm text-slate-400">{t.analyzing}</p>
                 </div>
               </div>
               {!state.miningSuccess && (
                 <button
                   onClick={handleStop}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-md transition-colors text-sm font-medium shadow-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-sm font-medium shadow-sm"
                 >
                   <Square className="w-4 h-4 fill-current" />
                   {t.btnStop}
@@ -3575,16 +3578,16 @@ export default function App() {
 
             {/* Mining Control Panel */}
             {!state.miningSuccess && (
-              <div className="mb-4 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+              <div className="mb-4 bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Settings className="w-4 h-4 text-blue-600" />
-                  <h4 className="text-sm font-bold text-slate-700">{t.miningSettings}</h4>
+                  <Settings className="w-4 h-4 text-green-400" />
+                  <h4 className="text-sm font-bold text-white">{t.miningSettings}</h4>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Words Per Round */}
                   <div>
-                    <label className="block text-xs text-slate-500 font-medium mb-2">
+                    <label className="block text-xs text-slate-400 font-medium mb-2">
                       {t.wordsPerRound}
                     </label>
                     <input
@@ -3593,30 +3596,30 @@ export default function App() {
                       max="20"
                       value={state.wordsPerRound}
                       onChange={(e) => setState((prev) => ({ ...prev, wordsPerRound: Math.max(5, Math.min(20, parseInt(e.target.value) || 10)) }))}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white"
                     />
-                    <p className="text-xs text-slate-400 mt-1">{t.applyNextRound}</p>
+                    <p className="text-xs text-slate-500 mt-1">{t.applyNextRound}</p>
                   </div>
 
                   {/* Mining Strategy */}
                   <div>
-                    <label className="block text-xs text-slate-500 font-medium mb-2">
+                    <label className="block text-xs text-slate-400 font-medium mb-2">
                       {t.miningStrategy}
                     </label>
                     <select
                       value={state.miningStrategy}
                       onChange={(e) => setState((prev) => ({ ...prev, miningStrategy: e.target.value as 'horizontal' | 'vertical' }))}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white"
                     >
-                      <option value="horizontal">{t.horizontal}</option>
-                      <option value="vertical">{t.vertical}</option>
+                      <option value="horizontal" className="bg-black">{t.horizontal}</option>
+                      <option value="vertical" className="bg-black">{t.vertical}</option>
                     </select>
-                    <p className="text-xs text-slate-400 mt-1">{t.applyNextRound}</p>
+                    <p className="text-xs text-slate-500 mt-1">{t.applyNextRound}</p>
                   </div>
 
                   {/* User Suggestion */}
                   <div className="md:col-span-1">
-                    <label className="block text-xs text-slate-500 font-medium mb-2">
+                    <label className="block text-xs text-slate-400 font-medium mb-2">
                       {t.userSuggestion}
                     </label>
                     <input
@@ -3624,9 +3627,9 @@ export default function App() {
                       value={state.userSuggestion}
                       onChange={(e) => setState((prev) => ({ ...prev, userSuggestion: e.target.value }))}
                       placeholder={t.suggestionPlaceholder}
-                      className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white placeholder:text-slate-500"
                     />
-                    <p className="text-xs text-slate-400 mt-1">{t.applyNextRound}</p>
+                    <p className="text-xs text-slate-500 mt-1">{t.applyNextRound}</p>
                   </div>
                 </div>
               </div>
@@ -3648,22 +3651,22 @@ export default function App() {
           <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-3">
-                <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
+                <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
                     {t.batchAnalyzing}
-                    <span className="text-sm font-normal bg-purple-100 px-2 py-0.5 rounded-full text-purple-700">
+                    <span className="text-sm font-normal bg-green-500/20 px-2 py-0.5 rounded-full text-green-400">
                       {state.batchCurrentIndex} / {state.batchTotalCount}
                     </span>
                   </h3>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-400">
                     Translating and analyzing keywords...
                   </p>
                 </div>
               </div>
               <button
                 onClick={stopBatchAnalysis}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-red-200 text-red-600 hover:bg-red-50 rounded-md transition-colors text-sm font-medium shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-sm font-medium shadow-sm"
               >
                 <Square className="w-4 h-4 fill-current" />
                 {t.btnStop}
@@ -3686,25 +3689,25 @@ export default function App() {
           <div className="animate-fade-in flex-1">
             <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                  <Languages className="w-6 h-6 text-purple-600" />
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <Languages className="w-6 h-6 text-green-400" />
                   {t.batchResultsTitle}
                 </h2>
-                <p className="text-slate-500 mt-1">
+                <p className="text-slate-400 mt-1">
                   {t.foundOpp} {state.batchKeywords.length} {t.opps}.
                 </p>
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={downloadBatchCSV}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-green-500 text-black rounded-md hover:bg-green-600 transition-colors text-sm font-medium"
                 >
                   <Download className="w-4 h-4" />
                   {t.downloadCSV}
                 </button>
                 <button
                   onClick={reset}
-                  className="px-4 py-2 text-sm text-slate-500 hover:text-blue-600 font-medium transition-colors border border-slate-200 rounded-md bg-white hover:bg-slate-50"
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-green-400 font-medium transition-colors border border-green-500/30 rounded-md bg-black/60 hover:bg-green-500/10"
                 >
                   {t.newAnalysis}
                 </button>
@@ -3712,10 +3715,10 @@ export default function App() {
             </div>
 
             {/* Batch Results Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
+            <div className="bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 overflow-hidden min-h-[400px]">
               <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left text-sm text-slate-600">
-                  <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                <table className="w-full text-left text-sm text-slate-300">
+                  <thead className="bg-black/60 text-xs uppercase font-semibold text-slate-400 border-b border-green-500/20">
                     <tr>
                       <th className="px-4 py-4 w-10"></th>
                       <th className="px-4 py-4">{t.originalKeyword}</th>
@@ -3725,7 +3728,7 @@ export default function App() {
                       <th className="px-4 py-4 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-green-500/10">
                     {state.batchKeywords.map((item) => {
                       const isExpanded = state.expandedRowId === item.id;
 
@@ -3733,7 +3736,7 @@ export default function App() {
                         <React.Fragment key={item.id}>
                           <tr
                             className={`transition-colors ${
-                              isExpanded ? "bg-blue-50/50" : "hover:bg-slate-50"
+                              isExpanded ? "bg-green-500/10" : "hover:bg-green-500/5"
                             }`}
                           >
                             <td
@@ -3746,13 +3749,13 @@ export default function App() {
                               }
                             >
                               {isExpanded ? (
-                                <ChevronUp className="w-4 h-4 text-slate-400" />
+                                <ChevronUp className="w-4 h-4 text-green-400" />
                               ) : (
-                                <ChevronDown className="w-4 h-4 text-slate-400" />
+                                <ChevronDown className="w-4 h-4 text-green-400" />
                               )}
                             </td>
                             <td
-                              className="px-4 py-4 text-slate-600 cursor-pointer"
+                              className="px-4 py-4 text-slate-300 cursor-pointer"
                               onClick={() =>
                                 setState((prev) => ({
                                   ...prev,
@@ -3763,7 +3766,7 @@ export default function App() {
                               {item.translation}
                             </td>
                             <td
-                              className="px-4 py-4 font-medium text-slate-900 cursor-pointer"
+                              className="px-4 py-4 font-medium text-white cursor-pointer"
                               onClick={() =>
                                 setState((prev) => ({
                                   ...prev,
@@ -3774,7 +3777,7 @@ export default function App() {
                               {item.keyword}
                             </td>
                             <td className="px-4 py-4">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
                                 {item.topDomainType || "-"}
                               </span>
                             </td>
@@ -3782,11 +3785,11 @@ export default function App() {
                               <span
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                                   item.probability === ProbabilityLevel.HIGH
-                                    ? "bg-green-100 text-green-800 border-green-200"
+                                    ? "bg-green-500/30 text-green-400 border-green-500/50"
                                     : item.probability ===
                                       ProbabilityLevel.MEDIUM
-                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                                    : "bg-red-100 text-red-800 border-red-200"
+                                    ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
+                                    : "bg-red-500/30 text-red-400 border-red-500/50"
                                 }`}
                               >
                                 {item.probability}
@@ -3800,7 +3803,7 @@ export default function App() {
                                   )}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors text-xs font-medium border border-slate-200"
+                                  className="flex items-center gap-1 px-2 py-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-xs font-medium border border-green-500/30"
                                   title={t.verifyBtn}
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -3809,7 +3812,7 @@ export default function App() {
                                 </a>
 
                                 <button
-                                  className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1"
+                                  className="text-slate-400 hover:text-green-400 text-xs flex items-center gap-1"
                                   onClick={() =>
                                     setState((prev) => ({
                                       ...prev,
@@ -3827,7 +3830,7 @@ export default function App() {
                                     e.stopPropagation();
                                     handleDeepDive(item);
                                   }}
-                                  className="flex items-center gap-1 px-2 py-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors text-xs font-medium"
+                                  className="flex items-center gap-1 px-2 py-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-xs font-medium"
                                   title={t.deepDive}
                                 >
                                   <FileText className="w-3 h-3" />
@@ -4136,12 +4139,12 @@ export default function App() {
           <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-3">
-                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
                 <div>
-                  <h3 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                  <h3 className="text-xl font-bold text-white flex items-center gap-2">
                     {t.deepDiveAnalyzing || "Deep Dive Analysis"}
                   </h3>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-slate-400">
                     {state.deepDiveKeyword?.keyword || "Analyzing keyword..."}
                   </p>
                 </div>
@@ -4154,7 +4157,7 @@ export default function App() {
                     isDeepDiving: false,
                   }));
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-md transition-colors text-sm font-medium shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-sm font-medium shadow-sm"
               >
                 <X className="w-4 h-4" />
                 Cancel
@@ -4162,21 +4165,21 @@ export default function App() {
             </div>
 
             {/* Progress Bar */}
-            <div className="mb-6 bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="mb-6 bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-sm font-bold text-slate-700">
+                <div className="text-sm font-bold text-white">
                   {state.deepDiveCurrentStep ||
                     (state.uiLanguage === "zh"
                       ? "初始化..."
                       : "Initializing...")}
                 </div>
-                <div className="text-sm font-bold text-blue-600">
+                <div className="text-sm font-bold text-green-400">
                   {Math.round(state.deepDiveProgress)}%
                 </div>
               </div>
-              <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+              <div className="w-full bg-black/60 rounded-full h-3 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
+                  className="h-full bg-gradient-to-r from-green-500 to-green-600 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
                   style={{ width: `${state.deepDiveProgress}%` }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
@@ -4203,11 +4206,11 @@ export default function App() {
           <div className="animate-fade-in flex-1">
             <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                  <FileText className="w-6 h-6 text-blue-600" />
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <FileText className="w-6 h-6 text-green-400" />
                   {t.deepDiveResults || "Deep Dive Results"}
                 </h2>
-                <p className="text-slate-500 mt-1">
+                <p className="text-slate-400 mt-1">
                   {state.currentStrategyReport.targetKeyword}
                 </p>
               </div>
@@ -4786,27 +4789,27 @@ export default function App() {
           <div className="animate-fade-in flex-1">
             <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-                  <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded text-base">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-base border border-green-500/30">
                     {state.seedKeyword}
                   </span>
                   {t.resultsTitle}
                 </h2>
-                <p className="text-slate-500 mt-1">
+                <p className="text-slate-400 mt-1">
                   {t.foundOpp} {state.keywords.length} {t.opps}.
                 </p>
               </div>
               <div className="flex gap-3">
                 <button
                   onClick={() => startMining(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2 bg-green-500 text-black rounded-md hover:bg-green-600 transition-colors text-sm font-medium"
                 >
                   <Plus className="w-4 h-4" />
                   {t.btnExpand}
                 </button>
                 <button
                   onClick={reset}
-                  className="px-4 py-2 text-sm text-slate-500 hover:text-blue-600 font-medium transition-colors border border-slate-200 rounded-md bg-white hover:bg-slate-50"
+                  className="px-4 py-2 text-sm text-slate-400 hover:text-green-400 font-medium transition-colors border border-green-500/30 rounded-md bg-black/60 hover:bg-green-500/10"
                 >
                   {t.newAnalysis}
                 </button>
@@ -4814,10 +4817,10 @@ export default function App() {
             </div>
 
             {/* Toolbar */}
-            <div className="bg-white p-3 rounded-t-xl border border-b-0 border-slate-200 flex flex-wrap gap-4 items-center justify-between">
+            <div className="bg-black/40 backdrop-blur-sm p-3 rounded-t-xl border border-b-0 border-green-500/20 flex flex-wrap gap-4 items-center justify-between">
               <div className="flex items-center gap-4">
                 {/* Filter */}
-                <div className="flex items-center gap-2 text-sm text-slate-600">
+                <div className="flex items-center gap-2 text-sm text-slate-300">
                   <Filter className="w-4 h-4" />
                   <select
                     value={state.filterLevel}
@@ -4827,17 +4830,17 @@ export default function App() {
                         filterLevel: e.target.value as any,
                       }))
                     }
-                    className="bg-slate-50 border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+                    className="bg-black/60 border border-green-500/30 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-green-500/50 text-white"
                   >
-                    <option value={ProbabilityLevel.HIGH}>
+                    <option value={ProbabilityLevel.HIGH} className="bg-black">
                       {t.filterHigh}
                     </option>
-                    <option value="ALL">{t.filterAll}</option>
+                    <option value="ALL" className="bg-black">{t.filterAll}</option>
                   </select>
                 </div>
 
                 {/* Sort */}
-                <div className="flex items-center gap-2 text-sm text-slate-600">
+                <div className="flex items-center gap-2 text-sm text-slate-300">
                   <ArrowUpDown className="w-4 h-4" />
                   <select
                     value={state.sortBy}
@@ -4847,27 +4850,27 @@ export default function App() {
                         sortBy: e.target.value as any,
                       }))
                     }
-                    className="bg-slate-50 border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-blue-500"
+                    className="bg-black/60 border border-green-500/30 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-green-500/50 text-white"
                   >
-                    <option value="probability">Sort: Probability</option>
-                    <option value="volume">Sort: Volume</option>
+                    <option value="probability" className="bg-black">Sort: Probability</option>
+                    <option value="volume" className="bg-black">Sort: Volume</option>
                   </select>
                 </div>
               </div>
 
               <button
                 onClick={downloadCSV}
-                className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-900 px-3 py-1 rounded hover:bg-slate-50 transition-colors"
+                className="flex items-center gap-2 text-sm text-slate-300 hover:text-green-400 px-3 py-1 rounded hover:bg-green-500/10 transition-colors"
               >
                 <Download className="w-4 h-4" /> {t.downloadCSV}
               </button>
             </div>
 
             {/* Table */}
-            <div className="bg-white rounded-b-xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
+            <div className="bg-black/40 backdrop-blur-sm rounded-b-xl shadow-sm border border-green-500/20 overflow-hidden min-h-[400px]">
               <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left text-sm text-slate-600">
-                  <thead className="bg-slate-50 text-xs uppercase font-semibold text-slate-500 border-b border-slate-200">
+                <table className="w-full text-left text-sm text-slate-300">
+                  <thead className="bg-black/60 text-xs uppercase font-semibold text-slate-400 border-b border-green-500/20">
                     <tr>
                       <th className="px-4 py-4 w-10"></th>
                       <th className="px-4 py-4">{t.colKw}</th>
@@ -4878,7 +4881,7 @@ export default function App() {
                       <th className="px-4 py-4 text-right">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-green-500/10">
                     {getProcessedKeywords().map((item) => {
                       const isExpanded = state.expandedRowId === item.id;
 
@@ -4886,7 +4889,7 @@ export default function App() {
                         <React.Fragment key={item.id}>
                           <tr
                             className={`transition-colors ${
-                              isExpanded ? "bg-blue-50/50" : "hover:bg-slate-50"
+                              isExpanded ? "bg-green-500/10" : "hover:bg-green-500/5"
                             }`}
                           >
                             <td
@@ -4899,13 +4902,13 @@ export default function App() {
                               }
                             >
                               {isExpanded ? (
-                                <ChevronUp className="w-4 h-4 text-slate-400" />
+                                <ChevronUp className="w-4 h-4 text-green-400" />
                               ) : (
-                                <ChevronDown className="w-4 h-4 text-slate-400" />
+                                <ChevronDown className="w-4 h-4 text-green-400" />
                               )}
                             </td>
                             <td
-                              className="px-4 py-4 font-medium text-slate-900"
+                              className="px-4 py-4 font-medium text-white"
                               onClick={() =>
                                 setState((prev) => ({
                                   ...prev,
@@ -4917,14 +4920,14 @@ export default function App() {
                                 {item.keyword}
                               </div>
                             </td>
-                            <td className="px-4 py-4 text-slate-500">
+                            <td className="px-4 py-4 text-slate-400">
                               {item.translation}
                             </td>
-                            <td className="px-4 py-4 font-mono">
+                            <td className="px-4 py-4 font-mono text-white">
                               {item.volume.toLocaleString()}
                             </td>
                             <td className="px-4 py-4">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
                                 {item.topDomainType || "-"}
                               </span>
                             </td>
@@ -4932,11 +4935,11 @@ export default function App() {
                               <span
                                 className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                                   item.probability === ProbabilityLevel.HIGH
-                                    ? "bg-green-100 text-green-800 border-green-200"
+                                    ? "bg-green-500/30 text-green-400 border-green-500/50"
                                     : item.probability ===
                                       ProbabilityLevel.MEDIUM
-                                    ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                                    : "bg-red-100 text-red-800 border-red-200"
+                                    ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
+                                    : "bg-red-500/30 text-red-400 border-red-500/50"
                                 }`}
                               >
                                 {item.probability}
@@ -4951,7 +4954,7 @@ export default function App() {
                                   )}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center gap-1 px-2 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-blue-50 hover:text-blue-600 transition-colors text-xs font-medium border border-slate-200"
+                                  className="flex items-center gap-1 px-2 py-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-xs font-medium border border-green-500/30"
                                   title={t.verifyBtn}
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -4960,7 +4963,7 @@ export default function App() {
                                 </a>
 
                                 <button
-                                  className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1"
+                                  className="text-slate-400 hover:text-green-400 text-xs flex items-center gap-1"
                                   onClick={() =>
                                     setState((prev) => ({
                                       ...prev,
@@ -4977,7 +4980,7 @@ export default function App() {
                                     e.stopPropagation();
                                     handleDeepDive(item);
                                   }}
-                                  className="flex items-center gap-1 px-2 py-1.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors text-xs font-medium"
+                                  className="flex items-center gap-1 px-2 py-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-xs font-medium"
                                   title={t.deepDive}
                                 >
                                   <FileText className="w-3 h-3" />
