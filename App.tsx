@@ -2676,39 +2676,39 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
+    <div className={`min-h-screen font-sans flex flex-col ${state.step === "input" ? "bg-black text-white grid-overlay" : "bg-slate-50 text-slate-900"}`}>
       {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-sm flex-none">
+      <header className={`${state.step === "input" ? "bg-black/80 backdrop-blur-sm border-b border-green-500/20" : "bg-white border-b border-slate-200"} sticky top-0 z-20 shadow-sm flex-none`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div
             className="flex items-center space-x-3 cursor-pointer"
             onClick={reset}
           >
-            <div className="bg-blue-600 p-2 rounded-lg">
+            <div className={`${state.step === "input" ? "bg-green-500" : "bg-blue-600"} p-2 rounded-lg`}>
               <span className="text-white font-bold text-xl leading-none">
                 G
               </span>
             </div>
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight hidden sm:block">
-              Google SEO <span className="text-blue-600">Agent</span>
+            <h1 className={`text-xl font-bold tracking-tight hidden sm:block ${state.step === "input" ? "text-white" : "text-slate-800"}`}>
+              Google SEO <span className={state.step === "input" ? "text-green-400" : "text-blue-600"}>Agent</span>
             </h1>
           </div>
 
           <div className="flex items-center space-x-6">
-            <div className="hidden md:flex items-center space-x-4 text-sm font-medium text-slate-500">
-              <span className={state.step === "input" ? "text-blue-600" : ""}>
+            <div className={`hidden md:flex items-center space-x-4 text-sm font-medium ${state.step === "input" ? "text-slate-400" : "text-slate-500"}`}>
+              <span className={state.step === "input" ? (state.step === "input" ? "text-green-400" : "") : (state.step === "input" ? "text-blue-600" : "")}>
                 {t.step1}
               </span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className={`w-4 h-4 ${state.step === "input" ? "text-green-500/30" : ""}`} />
               <span
                 className={
-                  state.step === "mining" ? "text-blue-600 animate-pulse" : ""
+                  state.step === "mining" ? (state.step === "input" ? "text-green-400 animate-pulse" : "text-blue-600 animate-pulse") : ""
                 }
               >
                 {t.step2}
               </span>
-              <ArrowRight className="w-4 h-4" />
-              <span className={state.step === "results" ? "text-blue-600" : ""}>
+              <ArrowRight className={`w-4 h-4 ${state.step === "input" ? "text-green-500/30" : ""}`} />
+              <span className={state.step === "results" ? (state.step === "input" ? "text-green-400" : "text-blue-600") : ""}>
                 {t.step3}
               </span>
             </div>
@@ -2719,8 +2719,12 @@ export default function App() {
               }
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border transition-colors ${
                 state.step === "workflow-config"
-                  ? "bg-blue-50 text-blue-600 border-blue-200"
-                  : "text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50"
+                  ? state.step === "input" 
+                    ? "bg-green-500/20 text-green-400 border-green-500/30"
+                    : "bg-blue-50 text-blue-600 border-blue-200"
+                  : state.step === "input"
+                    ? "text-slate-400 hover:text-green-400 border-green-500/20 hover:bg-green-500/10"
+                    : "text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50"
               }`}
               title={t.workflowConfig}
             >
@@ -2737,7 +2741,11 @@ export default function App() {
                   uiLanguage: prev.uiLanguage === "en" ? "zh" : "en",
                 }))
               }
-              className="flex items-center gap-1 text-slate-600 hover:text-slate-900 px-3 py-1 rounded-md border border-slate-200 hover:bg-slate-50 transition-colors"
+              className={`flex items-center gap-1 px-3 py-1 rounded-md border transition-colors ${
+                state.step === "input"
+                  ? "text-slate-400 hover:text-green-400 border-green-500/20 hover:bg-green-500/10"
+                  : "text-slate-600 hover:text-slate-900 border-slate-200 hover:bg-slate-50"
+              }`}
             >
               <Languages className="w-4 h-4" />
               <span className="text-sm font-medium">
@@ -2748,9 +2756,13 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex flex-col">
+      <main className={`flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex flex-col ${state.step === "input" ? "" : ""}`}>
         {state.error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center text-red-700">
+          <div className={`mb-6 p-4 rounded-lg flex items-center ${
+            state.step === "input" 
+              ? "bg-red-950/50 border border-red-500/30 text-red-400" 
+              : "bg-red-50 border border-red-200 text-red-700"
+          }`}>
             <AlertCircle className="w-5 h-5 mr-2" />
             {state.error}
           </div>
@@ -2760,15 +2772,15 @@ export default function App() {
         {state.step === "input" && (
           <div className="max-w-6xl mx-auto mt-8 flex-1 w-full">
             <div className="text-center mb-10">
-              <h2 className="text-3xl font-bold mb-4 text-slate-900">
+              <h2 className="text-3xl font-bold mb-4 text-white">
                 {t.inputTitle}
               </h2>
-              <p className="text-slate-500 mb-8">{t.inputDesc}</p>
+              <p className="text-slate-400 mb-8">{t.inputDesc}</p>
 
               {/* Target Language Selector */}
               <div className="mb-6 flex justify-center">
-                <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-slate-200 shadow-sm text-sm font-medium text-slate-700">
-                  <Globe className="w-4 h-4 text-blue-500" />
+                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full border border-green-500/30 shadow-sm text-sm font-medium text-slate-300">
+                  <Globe className="w-4 h-4 text-green-400" />
                   <span>{t.targetMarket}:</span>
                   <select
                     value={state.targetLanguage}
@@ -2778,10 +2790,10 @@ export default function App() {
                         targetLanguage: e.target.value as TargetLanguage,
                       }))
                     }
-                    className="bg-transparent outline-none text-blue-600 font-bold cursor-pointer"
+                    className="bg-black/60 outline-none text-green-400 font-bold cursor-pointer border-none"
                   >
                     {LANGUAGES.map((l) => (
-                      <option key={l.code} value={l.code}>
+                      <option key={l.code} value={l.code} className="bg-black">
                         {l.label}
                       </option>
                     ))}
@@ -2791,13 +2803,13 @@ export default function App() {
 
               {/* Tabs */}
               <div className="flex justify-center mb-8">
-                <div className="inline-flex bg-white rounded-lg border border-slate-200 shadow-sm p-1">
+                <div className="inline-flex bg-black/40 backdrop-blur-sm rounded-lg border border-green-500/20 shadow-sm p-1">
                   <button
                     onClick={() => setActiveTab("mining")}
                     className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
                       activeTab === "mining"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "bg-green-500 text-black shadow-sm"
+                        : "text-slate-400 hover:text-green-400"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -2809,8 +2821,8 @@ export default function App() {
                     onClick={() => setActiveTab("batch")}
                     className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
                       activeTab === "batch"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "bg-green-500 text-black shadow-sm"
+                        : "text-slate-400 hover:text-green-400"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -2822,8 +2834,8 @@ export default function App() {
                     onClick={() => setActiveTab("deepDive")}
                     className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
                       activeTab === "deepDive"
-                        ? "bg-indigo-600 text-white shadow-sm"
-                        : "text-slate-600 hover:text-slate-900"
+                        ? "bg-green-500 text-black shadow-sm"
+                        : "text-slate-400 hover:text-green-400"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -2839,14 +2851,14 @@ export default function App() {
             {activeTab === "mining" && (
               <div className="max-w-3xl mx-auto">
                 {/* Clean Input Design */}
-                <div className="flex w-full bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                  <div className="flex items-center justify-center pl-4 text-slate-400">
+                <div className="flex w-full bg-black/40 backdrop-blur-sm rounded-lg shadow-lg border border-green-500/30 overflow-hidden focus-within:ring-2 focus-within:ring-green-500/50 transition-all">
+                  <div className="flex items-center justify-center pl-4 text-green-400/60">
                     <Search className="w-5 h-5" />
                   </div>
                   <input
                     type="text"
                     placeholder={t.placeholder}
-                    className="flex-1 p-4 text-lg outline-none text-slate-700 placeholder:text-slate-400"
+                    className="flex-1 p-4 text-lg outline-none bg-transparent text-white placeholder:text-slate-500"
                     value={state.seedKeyword}
                     onChange={(e) =>
                       setState((prev) => ({
@@ -2859,17 +2871,17 @@ export default function App() {
                   <button
                     onClick={() => startMining(false)}
                     disabled={!state.seedKeyword.trim()}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-8 font-semibold transition-colors disabled:opacity-70"
+                    className="bg-green-500 hover:bg-green-600 text-black px-8 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {t.btnStart}
                   </button>
                 </div>
 
                 {/* Mining Settings Panel */}
-                <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                <div className="mt-6 bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm p-6">
                   <div className="flex items-center gap-2 mb-4">
-                    <Settings className="w-4 h-4 text-blue-600" />
-                    <h4 className="text-sm font-bold text-slate-700">
+                    <Settings className="w-4 h-4 text-green-400" />
+                    <h4 className="text-sm font-bold text-white">
                       {state.uiLanguage === 'zh' ? '挖词设置' : 'Mining Settings'}
                     </h4>
                   </div>
@@ -2877,7 +2889,7 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Words Per Round */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-2">
+                      <label className="block text-xs font-semibold text-slate-400 mb-2">
                         {state.uiLanguage === 'zh' ? '每轮词语数' : 'Words Per Round'}
                       </label>
                       <input
@@ -2891,16 +2903,16 @@ export default function App() {
                             wordsPerRound: Math.max(5, Math.min(20, parseInt(e.target.value) || 10)),
                           }))
                         }
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-lg text-sm font-semibold text-white focus:ring-2 focus:ring-green-500/50 outline-none"
                       />
-                      <p className="text-xs text-slate-400 mt-1">
+                      <p className="text-xs text-slate-500 mt-1">
                         {state.uiLanguage === 'zh' ? '范围: 5-20' : 'Range: 5-20'}
                       </p>
                     </div>
 
                     {/* Mining Strategy */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-2">
+                      <label className="block text-xs font-semibold text-slate-400 mb-2">
                         {state.uiLanguage === 'zh' ? '挖词策略' : 'Mining Strategy'}
                       </label>
                       <select
@@ -2911,16 +2923,16 @@ export default function App() {
                             miningStrategy: e.target.value as 'horizontal' | 'vertical',
                           }))
                         }
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+                        className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-lg text-sm font-semibold text-white focus:ring-2 focus:ring-green-500/50 outline-none cursor-pointer"
                       >
-                        <option value="horizontal">
+                        <option value="horizontal" className="bg-black">
                           {state.uiLanguage === 'zh' ? '🌐 横向挖词 (广泛主题)' : '🌐 Horizontal (Broad Topics)'}
                         </option>
-                        <option value="vertical">
+                        <option value="vertical" className="bg-black">
                           {state.uiLanguage === 'zh' ? '🎯 纵向挖词 (深度挖掘)' : '🎯 Vertical (Deep Dive)'}
                         </option>
                       </select>
-                      <p className="text-xs text-slate-400 mt-1">
+                      <p className="text-xs text-slate-500 mt-1">
                         {state.miningStrategy === 'horizontal'
                           ? (state.uiLanguage === 'zh' ? '探索不同的平行主题' : 'Explore different parallel topics')
                           : (state.uiLanguage === 'zh' ? '深入挖掘同一主题' : 'Deep dive into same topic')}
@@ -2932,29 +2944,29 @@ export default function App() {
                 {/* Mining Archive List */}
                 {state.archives.length > 0 && (
                   <div className="mt-12">
-                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                       <History className="w-4 h-4" /> {t.miningArchives}
                     </h3>
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                    <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm overflow-hidden">
+                      <div className="divide-y divide-green-500/10 max-h-96 overflow-y-auto custom-scrollbar">
                         {state.archives.map((arch) => (
                           <div
                             key={arch.id}
                             onClick={() => loadArchive(arch)}
-                            className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer group transition-colors"
+                            className="p-4 flex items-center justify-between hover:bg-green-500/10 cursor-pointer group transition-colors"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="bg-slate-100 p-2 rounded text-slate-500 group-hover:bg-white group-hover:text-blue-500 transition-colors">
+                              <div className="bg-green-500/20 p-2 rounded text-green-400 group-hover:bg-green-500/30 transition-colors">
                                 <Search className="w-4 h-4" />
                               </div>
                               <div>
-                                <div className="font-medium text-slate-800 flex items-center gap-2">
+                                <div className="font-medium text-white flex items-center gap-2">
                                   {arch.seedKeyword}
-                                  <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase">
+                                  <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 uppercase">
                                     {arch.targetLanguage}
                                   </span>
                                 </div>
-                                <div className="text-xs text-slate-400">
+                                <div className="text-xs text-slate-500">
                                   {new Date(arch.timestamp).toLocaleString()} •{" "}
                                   {arch.keywords.length} keywords
                                 </div>
@@ -2962,7 +2974,7 @@ export default function App() {
                             </div>
                             <button
                               onClick={(e) => deleteArchive(arch.id, e)}
-                              className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                              className="p-2 text-slate-600 hover:text-red-400 transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -2978,14 +2990,14 @@ export default function App() {
             {/* Batch Translation Tab Content */}
             {activeTab === "batch" && (
               <div className="max-w-3xl mx-auto">
-                <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl border border-purple-200 shadow-sm p-6">
+                <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm p-6">
                   <div className="flex items-center gap-2 mb-3">
-                    <Languages className="w-5 h-5 text-purple-600" />
-                    <h3 className="text-lg font-bold text-slate-800">
+                    <Languages className="w-5 h-5 text-green-400" />
+                    <h3 className="text-lg font-bold text-white">
                       {t.batchTranslateTitle}
                     </h3>
                   </div>
-                  <p className="text-sm text-slate-600 mb-4">
+                  <p className="text-sm text-slate-400 mb-4">
                     {t.batchTranslateDesc}
                   </p>
 
@@ -2996,7 +3008,7 @@ export default function App() {
                         value={batchInput}
                         onChange={(e) => setBatchInput(e.target.value)}
                         placeholder={t.batchInputPlaceholder}
-                        className="w-full h-32 px-4 py-3 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                        className="w-full h-32 px-4 py-3 border border-green-500/30 bg-black/60 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500/50 resize-none text-white placeholder:text-slate-500"
                       />
                     </div>
 
@@ -3004,7 +3016,7 @@ export default function App() {
                     <button
                       onClick={handleBatchAnalyze}
                       disabled={!batchInput.trim()}
-                      className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-black px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Search className="w-5 h-5" />
                       {t.btnBatchAnalyze}
@@ -3015,34 +3027,34 @@ export default function App() {
                 {/* Batch Archive List */}
                 {state.batchArchives.length > 0 && (
                   <div className="mt-12">
-                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                       <History className="w-4 h-4" /> {t.batchArchives}
                     </h3>
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                    <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm overflow-hidden">
+                      <div className="divide-y divide-green-500/10 max-h-96 overflow-y-auto custom-scrollbar">
                         {state.batchArchives.map((arch) => (
                           <div
                             key={arch.id}
                             onClick={() => loadBatchArchive(arch)}
-                            className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer group transition-colors"
+                            className="p-4 flex items-center justify-between hover:bg-green-500/10 cursor-pointer group transition-colors"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="bg-slate-100 p-2 rounded text-slate-500 group-hover:bg-white group-hover:text-purple-500 transition-colors">
+                              <div className="bg-green-500/20 p-2 rounded text-green-400 group-hover:bg-green-500/30 transition-colors">
                                 <Languages className="w-4 h-4" />
                               </div>
                               <div>
-                                <div className="font-medium text-slate-800 flex items-center gap-2">
+                                <div className="font-medium text-white flex items-center gap-2">
                                   {arch.inputKeywords
                                     .split(",")
                                     .slice(0, 3)
                                     .join(", ")}
                                   {arch.inputKeywords.split(",").length > 3 &&
                                     "..."}
-                                  <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded border border-purple-200 uppercase font-bold">
+                                  <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 uppercase font-bold">
                                     {arch.targetLanguage}
                                   </span>
                                 </div>
-                                <div className="text-xs text-slate-400">
+                                <div className="text-xs text-slate-500">
                                   {new Date(arch.timestamp).toLocaleString()} •{" "}
                                   {arch.totalCount} keywords
                                 </div>
@@ -3050,7 +3062,7 @@ export default function App() {
                             </div>
                             <button
                               onClick={(e) => deleteBatchArchive(arch.id, e)}
-                              className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                              className="p-2 text-slate-600 hover:text-red-400 transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -3066,14 +3078,14 @@ export default function App() {
             {/* Deep Dive Tab Content */}
             {activeTab === "deepDive" && (
               <div className="max-w-3xl mx-auto">
-                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200 shadow-sm p-6">
+                <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm p-6">
                   <div className="flex items-center gap-2 mb-3">
-                    <FileText className="w-5 h-5 text-indigo-600" />
-                    <h3 className="text-lg font-bold text-slate-800">
+                    <FileText className="w-5 h-5 text-green-400" />
+                    <h3 className="text-lg font-bold text-white">
                       {t.deepDiveTitle}
                     </h3>
                   </div>
-                  <p className="text-sm text-slate-600 mb-4">
+                  <p className="text-sm text-slate-400 mb-4">
                     {t.deepDiveDesc}
                   </p>
 
@@ -3085,7 +3097,7 @@ export default function App() {
                         value={deepDiveInput}
                         onChange={(e) => setDeepDiveInput(e.target.value)}
                         placeholder={t.deepDiveInputPlaceholder}
-                        className="w-full px-4 py-3 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-4 py-3 border border-green-500/30 bg-black/60 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500/50 text-white placeholder:text-slate-500"
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && deepDiveInput.trim()) {
                             const keywordData: KeywordData = {
@@ -3114,7 +3126,7 @@ export default function App() {
                         }
                       }}
                       disabled={!deepDiveInput.trim()}
-                      className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-black px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <FileText className="w-5 h-5" />
                       {t.btnDeepDive}
@@ -3125,33 +3137,33 @@ export default function App() {
                 {/* Deep Dive Archive List */}
                 {state.deepDiveArchives && state.deepDiveArchives.length > 0 && (
                   <div className="mt-12">
-                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                       <History className="w-4 h-4" /> {t.deepDiveArchives}
                     </h3>
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                    <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm overflow-hidden">
+                      <div className="divide-y divide-green-500/10 max-h-96 overflow-y-auto custom-scrollbar">
                         {state.deepDiveArchives.map((arch) => (
                           <div
                             key={arch.id}
                             onClick={() => loadDeepDiveArchive(arch)}
-                            className="p-4 flex items-center justify-between hover:bg-slate-50 cursor-pointer group transition-colors"
+                            className="p-4 flex items-center justify-between hover:bg-green-500/10 cursor-pointer group transition-colors"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="bg-slate-100 p-2 rounded text-slate-500 group-hover:bg-white group-hover:text-indigo-500 transition-colors">
+                              <div className="bg-green-500/20 p-2 rounded text-green-400 group-hover:bg-green-500/30 transition-colors">
                                 <FileText className="w-4 h-4" />
                               </div>
                               <div>
-                                <div className="font-medium text-slate-800">
+                                <div className="font-medium text-white">
                                   {arch.keyword}
                                 </div>
-                                <div className="text-xs text-slate-400">
+                                <div className="text-xs text-slate-500">
                                   {new Date(arch.timestamp).toLocaleString()}
                                 </div>
                               </div>
                             </div>
                             <button
                               onClick={(e) => deleteDeepDiveArchive(arch.id, e)}
-                              className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                              className="p-2 text-slate-600 hover:text-red-400 transition-colors"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -3165,7 +3177,7 @@ export default function App() {
             )}
 
             {/* Prompt Config (Collapsible) */}
-            <div className="mt-12 border border-slate-200 rounded-xl bg-white shadow-sm overflow-hidden max-w-2xl mx-auto">
+            <div className="mt-12 border border-green-500/20 rounded-xl bg-black/40 backdrop-blur-sm shadow-sm overflow-hidden max-w-2xl mx-auto">
               <button
                 onClick={() =>
                   setState((prev) => ({
@@ -3173,10 +3185,10 @@ export default function App() {
                     showPrompts: !prev.showPrompts,
                   }))
                 }
-                className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors text-slate-700 font-medium"
+                className="w-full flex items-center justify-between p-4 bg-green-500/10 hover:bg-green-500/20 transition-colors text-white font-medium"
               >
                 <div className="flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-slate-500" />
+                  <Settings className="w-4 h-4 text-green-400" />
                   {t.configPrompts}
                 </div>
                 <div
@@ -3184,7 +3196,7 @@ export default function App() {
                     state.showPrompts ? "rotate-180" : ""
                   }`}
                 >
-                  <ChevronDown className="w-4 h-4" />
+                  <ChevronDown className="w-4 h-4 text-green-400" />
                 </div>
               </button>
 
@@ -3196,8 +3208,8 @@ export default function App() {
                       onClick={togglePromptTranslation}
                       className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${
                         state.showPromptTranslation
-                          ? "bg-blue-50 text-blue-600 border-blue-200"
-                          : "bg-white text-slate-500 border-slate-200"
+                          ? "bg-green-500/20 text-green-400 border-green-500/30"
+                          : "bg-black/60 text-slate-400 border-green-500/20"
                       }`}
                     >
                       <Languages className="w-3 h-3" />
@@ -3207,12 +3219,12 @@ export default function App() {
 
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-semibold text-slate-700">
+                      <label className="text-sm font-semibold text-white">
                         {t.promptGenLabel}
                       </label>
                       <button
                         onClick={() => handleTranslatePrompt("gen")}
-                        className="text-xs flex items-center gap-1 text-blue-600 hover:underline"
+                        className="text-xs flex items-center gap-1 text-green-400 hover:text-green-300 hover:underline"
                       >
                         <RefreshCw className="w-3 h-3" /> {t.btnTranslatePrompt}
                       </button>
@@ -3220,7 +3232,7 @@ export default function App() {
 
                     <div className="grid grid-cols-1 gap-4">
                       <textarea
-                        className="w-full h-32 p-3 border border-slate-300 rounded-md text-sm font-mono text-slate-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full h-32 p-3 border border-green-500/30 bg-black/60 rounded-md text-sm font-mono text-white focus:ring-2 focus:ring-green-500/50 outline-none placeholder:text-slate-500"
                         value={state.genPrompt}
                         onChange={(e) =>
                           setState((prev) => ({
@@ -3230,14 +3242,14 @@ export default function App() {
                         }
                       />
                       {state.showPromptTranslation && (
-                        <div className="w-full h-32 p-3 bg-slate-50 border border-blue-200 rounded-md text-sm text-slate-600 overflow-y-auto">
-                          <div className="text-[10px] uppercase font-bold text-blue-500 mb-1">
+                        <div className="w-full h-32 p-3 bg-black/60 border border-green-500/30 rounded-md text-sm text-slate-300 overflow-y-auto">
+                          <div className="text-[10px] uppercase font-bold text-green-400 mb-1">
                             {t.transRefLabel}
                           </div>
                           {state.translatedGenPrompt ? (
                             state.translatedGenPrompt
                           ) : (
-                            <div className="animate-pulse">Translating...</div>
+                            <div className="animate-pulse text-slate-500">Translating...</div>
                           )}
                         </div>
                       )}
@@ -3246,19 +3258,19 @@ export default function App() {
 
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-semibold text-slate-700">
+                      <label className="text-sm font-semibold text-white">
                         {t.promptAnlzLabel}
                       </label>
                       <button
                         onClick={() => handleTranslatePrompt("analyze")}
-                        className="text-xs flex items-center gap-1 text-blue-600 hover:underline"
+                        className="text-xs flex items-center gap-1 text-green-400 hover:text-green-300 hover:underline"
                       >
                         <RefreshCw className="w-3 h-3" /> {t.btnTranslatePrompt}
                       </button>
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                       <textarea
-                        className="w-full h-32 p-3 border border-slate-300 rounded-md text-sm font-mono text-slate-600 focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full h-32 p-3 border border-green-500/30 bg-black/60 rounded-md text-sm font-mono text-white focus:ring-2 focus:ring-green-500/50 outline-none placeholder:text-slate-500"
                         value={state.analyzePrompt}
                         onChange={(e) =>
                           setState((prev) => ({
@@ -3268,14 +3280,14 @@ export default function App() {
                         }
                       />
                       {state.showPromptTranslation && (
-                        <div className="w-full h-32 p-3 bg-slate-50 border border-blue-200 rounded-md text-sm text-slate-600 overflow-y-auto">
-                          <div className="text-[10px] uppercase font-bold text-blue-500 mb-1">
+                        <div className="w-full h-32 p-3 bg-black/60 border border-green-500/30 rounded-md text-sm text-slate-300 overflow-y-auto">
+                          <div className="text-[10px] uppercase font-bold text-green-400 mb-1">
                             {t.transRefLabel}
                           </div>
                           {state.translatedAnalyzePrompt ? (
                             state.translatedAnalyzePrompt
                           ) : (
-                            <div className="animate-pulse">Translating...</div>
+                            <div className="animate-pulse text-slate-500">Translating...</div>
                           )}
                         </div>
                       )}
