@@ -20,17 +20,37 @@ export interface SerpSnippet {
   snippet: string;
 }
 
+export interface SErankingData {
+  is_data_found: boolean;
+  volume?: number;
+  cpc?: number;
+  competition?: number;
+  difficulty?: number;
+  history_trend?: { [date: string]: number };
+}
+
 export interface KeywordData {
   id: string;
   keyword: string;
   translation: string;
   intent: IntentType;
   volume: number;
+
+  // SE Ranking API Data
+  serankingData?: SErankingData;
+
+  // Analysis Metrics
   serpResultCount?: number;
   topDomainType?: 'Big Brand' | 'Niche Site' | 'Forum/Social' | 'Weak Page' | 'Gov/Edu' | 'Unknown';
   probability?: ProbabilityLevel;
   reasoning?: string;
   topSerpSnippets?: SerpSnippet[];
+
+  // Search Intent Analysis
+  searchIntent?: string;
+  intentAnalysis?: string;
+
+  // Verification
   isIndexed?: boolean;
 }
 
