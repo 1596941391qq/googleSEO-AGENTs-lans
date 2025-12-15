@@ -29,6 +29,7 @@ import {
   FolderOpen,
   TrendingUp,
 } from "lucide-react";
+import { AuthStatusBar } from "./AuthStatusBar";
 import {
   AppState,
   KeywordData,
@@ -2677,9 +2678,12 @@ export default function App() {
 
   // Determine if we should use dark theme (all pages now use dark theme)
   const isDarkTheme = true;
-  
+
   return (
     <div className={`min-h-screen font-sans flex flex-col ${isDarkTheme ? "bg-black text-white grid-overlay" : "bg-slate-50 text-slate-900"}`}>
+      {/* Auth Status Bar */}
+      <AuthStatusBar />
+
       {/* Header */}
       <header className={`${isDarkTheme ? "bg-black/80 backdrop-blur-sm border-b border-green-500/20" : "bg-white border-b border-slate-200"} sticky top-0 z-20 shadow-sm flex-none`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
