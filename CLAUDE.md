@@ -151,3 +151,6 @@ All AI functions use the shared `callGeminiAPI` wrapper in `api/_shared/gemini.t
 - All API responses include CORS headers for frontend integration
 - Environment variables are automatically injected by Vercel in production
 - The project uses path alias `@/` mapped to project root in TypeScript and Vite configs
+- **Authentication**: Uses `pg` library for database (not `@vercel/postgres`), development mode enabled by default
+- **First-time setup**: Run `http://localhost:3002/api/init-db` to create database tables
+- **Auth setup guide**: See `AUTH_SETUP_SIMPLE.md` for quick configuration (5 minutes)

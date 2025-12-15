@@ -4,6 +4,10 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/signin",
+      "destination": "/signin.html"
+    },
+    {
       "source": "/health",
       "destination": "/api/health"
     }
