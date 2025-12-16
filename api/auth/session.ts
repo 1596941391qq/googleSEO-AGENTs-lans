@@ -20,11 +20,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    // 从数据库获取最新用户信息
+    // 从数据库获取最新用户信息 (使用 Prisma 的 camelCase 字段名)
     const result = await sql`
-      SELECT user_id, email, name, picture
+      SELECT id, email, name, picture
       FROM users
-      WHERE user_id = ${payload.userId}
+      WHERE id = ${payload.userId}
     `;
 
     if (result.rowCount === 0) {
@@ -35,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       user: {
-        userId: user.user_id,
+        userId: user.id,
         email: user.email,
         name: user.name,
         picture: user.picture,

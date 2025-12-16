@@ -53,13 +53,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log('[verify-transfer] Token hash:', tokenHash.substring(0, 20) + '...');
 
-    // 2. 在共享数据库中查询 session
+    // 2. 在共享数据库中查询 session (使用 Prisma 的 camelCase 字段名)
     console.log('[verify-transfer] Querying sessions table...');
     const sessionResult = await sql`
-      SELECT id, user_id, created_at, expires_at, last_used_at
+      SELECT id, "userId", "createdAt", "expiresAt", "lastUsedAt"
       FROM sessions
-      WHERE token_hash = ${tokenHash}
-        AND expires_at > NOW()
+      WHERE "tokenHash" = ${tokenHash}
+        AND "expiresAt" > NOW()
     `;
 
     console.log('[verify-transfer] Session query result, rowCount:', sessionResult.rowCount);
@@ -69,19 +69,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const session = sessionResult.rows[0];
-    console.log('[verify-transfer] Found session for user_id:', session.user_id);
+    console.log('[verify-transfer] Found session for userId:', session.userId);
 
-    // 3. 验证一次性使用 (created_at === last_used_at)
-    if (session.created_at.getTime() !== session.last_used_at.getTime()) {
+    // 3. 验证一次性使用 (createdAt === lastUsedAt)
+    if (session.createdAt.getTime() !== session.lastUsedAt.getTime()) {
       return res.status(401).json({ error: 'Transfer token already used' });
     }
 
     // 4. 获取用户信息
     console.log('[verify-transfer] Querying users table...');
     const userResult = await sql`
-      SELECT user_id, email, name, picture
+      SELECT id, email, name, picture
       FROM users
-      WHERE user_id = ${session.user_id}
+      WHERE id = ${session.userId}
     `;
 
     console.log('[verify-transfer] User query result, rowCount:', userResult.rowCount);
@@ -99,7 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 6. 生成长期 JWT token (24小时)
     console.log('[verify-transfer] Generating JWT...');
-    const jwtToken = await generateToken(user.user_id, user.email);
+    const jwtToken = await generateToken(user.id, user.email);
 
     // 7. 返回用户数据和 JWT
     console.log('[verify-transfer] Success! Returning user data');
@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       token: jwtToken,
       user: {
-        userId: user.user_id,
+        userId: user.id,
         email: user.email,
         name: user.name,
         picture: user.picture,
