@@ -46,18 +46,20 @@
         const callbackUrl = params.get('callbackUrl');
 
         if (callbackUrl) {
-          // 从 callbackUrl 中提取 transfer token
+          // 从 callbackUrl 中提取 transfer token (支持 tt 或 token 参数)
           const url = new URL(callbackUrl);
-          const tt = url.searchParams.get('tt');
+          const tt = url.searchParams.get('tt') || url.searchParams.get('token');
 
           if (tt) {
-            // 重定向到首页并传递 tt 参数
-            window.location.replace('/?tt=' + tt);
+            // 重定向到首页并传递 token 参数
+            console.log('[signin] Redirecting with token');
+            window.location.replace('/?token=' + tt);
             return;
           }
         }
 
         // 如果没有有效的参数，直接跳转首页
+        console.log('[signin] No token found, redirecting to home');
         window.location.replace('/');
       } catch (error) {
         console.error('Redirect error:', error);

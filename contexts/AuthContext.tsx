@@ -33,11 +33,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const initAuth = async () => {
     try {
-      // 1. 检查 URL 中是否有 Transfer Token
+      // 1. 检查 URL 中是否有 Transfer Token (支持 tt 或 token 参数)
       const urlParams = new URLSearchParams(window.location.search);
-      const transferToken = urlParams.get('tt');
+      const transferToken = urlParams.get('tt') || urlParams.get('token');
 
       if (transferToken) {
+        console.log('[AuthContext] Found transfer token, verifying...');
+
         // 立即清除 URL 参数（防止被记录）
         window.history.replaceState({}, '', window.location.pathname);
 
@@ -48,14 +50,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           body: JSON.stringify({ transferToken }),
         });
 
+        console.log('[AuthContext] Verify response status:', response.status);
+
         if (response.ok) {
           const data = await response.json();
+          console.log('[AuthContext] Login successful:', data.user?.email);
 
           // 保存长期 JWT 到 localStorage
           localStorage.setItem('auth_token', data.token);
           setUser(data.user);
           setLoading(false);
           return;
+        } else {
+          const error = await response.json();
+          console.error('[AuthContext] Verify failed:', error);
         }
       }
 
