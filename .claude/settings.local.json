@@ -3,7 +3,9 @@
     "allow": [
       "Bash(cat:*)",
       "Bash(npm run build:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
