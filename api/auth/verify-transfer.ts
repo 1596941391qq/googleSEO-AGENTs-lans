@@ -53,13 +53,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log('[verify-transfer] Token hash:', tokenHash.substring(0, 20) + '...');
 
-    // 2. 在共享数据库中查询 session (使用 Prisma 的 camelCase 字段名)
+    // 2. 在共享数据库中查询 session (Prisma 在 PostgreSQL 中使用 snake_case)
     console.log('[verify-transfer] Querying sessions table...');
     const sessionResult = await sql`
-      SELECT id, "userId", "createdAt", "expiresAt", "lastUsedAt"
+      SELECT id, user_id, token_hash, created_at, expires_at, last_used_at
       FROM sessions
-      WHERE "tokenHash" = ${tokenHash}
-        AND "expiresAt" > NOW()
+      WHERE token_hash = ${tokenHash}
+        AND expires_at > NOW()
     `;
 
     console.log('[verify-transfer] Session query result, rowCount:', sessionResult.rowCount);
@@ -69,10 +69,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const session = sessionResult.rows[0];
-    console.log('[verify-transfer] Found session for userId:', session.userId);
+    console.log('[verify-transfer] Found session for user_id:', session.user_id);
 
-    // 3. 验证一次性使用 (createdAt === lastUsedAt)
-    if (session.createdAt.getTime() !== session.lastUsedAt.getTime()) {
+    // 3. 验证一次性使用 (created_at === last_used_at)
+    if (session.created_at.getTime() !== session.last_used_at.getTime()) {
       return res.status(401).json({ error: 'Transfer token already used' });
     }
 
@@ -81,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userResult = await sql`
       SELECT id, email, name, picture
       FROM users
-      WHERE id = ${session.userId}
+      WHERE id = ${session.user_id}
     `;
 
     console.log('[verify-transfer] User query result, rowCount:', userResult.rowCount);
