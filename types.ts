@@ -247,7 +247,88 @@ export interface DeepDiveThought {
   };
 }
 
+// === Task Management System ===
+
+export type TaskType = 'mining' | 'batch' | 'deep-dive';
+
+export interface TaskState {
+  // Common fields
+  type: TaskType;
+  id: string;
+  name: string; // User-editable name
+  createdAt: number;
+  updatedAt: number;
+  isActive: boolean; // Currently selected tab
+
+  // Mining-specific state
+  miningState?: {
+    seedKeyword: string;
+    keywords: KeywordData[];
+    miningRound: number;
+    agentThoughts: AgentThought[];
+    isMining: boolean;
+    miningSuccess: boolean;
+    wordsPerRound: number;
+    miningStrategy: 'horizontal' | 'vertical';
+    userSuggestion: string;
+    logs: LogEntry[];
+  };
+
+  // Batch-specific state
+  batchState?: {
+    batchInputKeywords: string;
+    batchKeywords: KeywordData[];
+    batchThoughts: BatchAnalysisThought[];
+    batchCurrentIndex: number;
+    batchTotalCount: number;
+    logs: LogEntry[];
+  };
+
+  // DeepDive-specific state
+  deepDiveState?: {
+    deepDiveKeyword: KeywordData | null;
+    currentStrategyReport: SEOStrategyReport | null;
+    deepDiveThoughts: DeepDiveThought[];
+    isDeepDiving: boolean;
+    deepDiveProgress: number;
+    deepDiveCurrentStep: string;
+    logs: LogEntry[];
+  };
+
+  // Shared state
+  targetLanguage: TargetLanguage;
+  filterLevel: ProbabilityLevel | 'ALL';
+  sortBy: 'volume' | 'probability' | 'difficulty';
+  expandedRowId: string | null;
+}
+
+export interface TaskManagerState {
+  tasks: TaskState[];
+  activeTaskId: string | null;
+  maxTasks: number; // = 5
+}
+
+export interface CreateTaskParams {
+  type: TaskType;
+  name?: string; // Auto-generated if not provided
+  targetLanguage?: TargetLanguage;
+  seedKeyword?: string; // For mining tasks
+  inputKeywords?: string; // For batch tasks
+  keyword?: KeywordData; // For deep-dive tasks
+}
+
+export const STORAGE_KEYS = {
+  TASKS: 'google_seo_tasks',
+  ARCHIVES: 'google_seo_archives',
+  BATCH_ARCHIVES: 'google_seo_batch_archives',
+  DEEPDIVE_ARCHIVES: 'google_seo_deepdive_archives',
+  WORKFLOW_CONFIGS: 'google_seo_workflow_configs',
+} as const;
+
 export interface AppState {
+  // Task Management
+  taskManager: TaskManagerState;
+
   step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config';
   seedKeyword: string;
   targetLanguage: TargetLanguage;

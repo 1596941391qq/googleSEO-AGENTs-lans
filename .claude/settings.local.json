@@ -5,7 +5,9 @@
       "Bash(npm run build:*)",
       "Bash(ls:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)"
     ]
   }
 }

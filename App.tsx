@@ -48,6 +48,11 @@ import {
   AgentConfig,
   DeepDiveConfig,
   WorkflowConfig,
+  TaskType,
+  TaskState,
+  TaskManagerState,
+  CreateTaskParams,
+  STORAGE_KEYS,
 } from "./types";
 import {
   generateKeywords,
@@ -1439,8 +1444,196 @@ const StrategyModal = ({
   );
 };
 
+// Task Tab Component
+interface TaskTabProps {
+  task: TaskState;
+  isActive: boolean;
+  onSwitch: () => void;
+  onClose: (e: React.MouseEvent) => void;
+  onRename: (name: string) => void;
+  uiLanguage: UILanguage;
+}
+
+const TaskTab: React.FC<TaskTabProps> = ({ task, isActive, onSwitch, onClose, onRename, uiLanguage }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(task.name);
+
+  // Update editName when task name changes
+  useEffect(() => {
+    setEditName(task.name);
+  }, [task.name]);
+
+  const handleDoubleClick = () => {
+    if (isActive) {
+      setIsEditing(true);
+    }
+  };
+
+  const handleSaveName = () => {
+    if (editName.trim()) {
+      onRename(editName.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveName();
+    } else if (e.key === 'Escape') {
+      setEditName(task.name);
+      setIsEditing(false);
+    }
+  };
+
+  // Task status indicator - read from task object itself
+  const isRunning = task.miningState?.isMining || task.deepDiveState?.isDeepDiving;
+  const hasResults = (task.miningState?.keywords && task.miningState.keywords.length > 0) ||
+                     (task.batchState?.batchKeywords && task.batchState.batchKeywords.length > 0) ||
+                     (task.deepDiveState?.currentStrategyReport !== null && task.deepDiveState?.currentStrategyReport !== undefined);
+
+  // Task icon
+  const TaskIcon = task.type === 'mining' ? Search :
+                   task.type === 'batch' ? Languages : FileText;
+
+  return (
+    <div
+      onClick={onSwitch}
+      onDoubleClick={handleDoubleClick}
+      className={`
+        flex items-center gap-2 px-3 py-2 rounded-t-md border-t border-x cursor-pointer
+        transition-all flex-shrink-0 max-w-[200px] group
+        ${isActive
+          ? 'bg-black/80 border-green-500/30 text-white'
+          : 'bg-black/40 border-green-500/10 text-slate-400 hover:bg-black/60 hover:text-green-400'
+        }
+      `}
+    >
+      {/* Task Icon */}
+      <TaskIcon className={`w-3.5 h-3.5 flex-shrink-0 ${isRunning ? 'animate-pulse text-green-400' : ''}`} />
+
+      {/* Task Name (editable) */}
+      {isEditing ? (
+        <input
+          type="text"
+          value={editName}
+          onChange={(e) => setEditName(e.target.value)}
+          onBlur={handleSaveName}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          className="flex-1 bg-transparent outline-none text-xs font-medium border-b border-green-500/50 text-white"
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="flex-1 text-xs font-medium truncate">
+          {task.name}
+        </span>
+      )}
+
+      {/* Status Indicator */}
+      {isRunning && (
+        <Loader2 className="w-3 h-3 animate-spin text-green-400 flex-shrink-0" />
+      )}
+      {!isRunning && hasResults && (
+        <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
+      )}
+
+      {/* Close Button */}
+      <button
+        onClick={onClose}
+        className={`
+          p-0.5 rounded hover:bg-red-500/20 transition-colors flex-shrink-0
+          ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}
+        `}
+      >
+        <X className="w-3 h-3 text-slate-400 hover:text-red-400" />
+      </button>
+    </div>
+  );
+};
+
+// Task Menu Modal Component
+interface TaskMenuModalProps {
+  show: boolean;
+  onClose: () => void;
+  onCreate: (type: TaskType) => void;
+  uiLanguage: UILanguage;
+}
+
+const TaskMenuModal: React.FC<TaskMenuModalProps> = ({ show, onClose, onCreate, uiLanguage }) => {
+  if (!show) return null;
+
+  const t = TEXT[uiLanguage];
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center" onClick={onClose}>
+      <div className="bg-black/90 border border-green-500/30 rounded-xl p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-lg font-bold text-white mb-4">
+          {uiLanguage === 'zh' ? '创建新任务' : 'Create New Task'}
+        </h3>
+
+        <div className="space-y-3">
+          <button
+            onClick={() => {
+              onCreate('mining');
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 p-4 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-lg transition-colors"
+          >
+            <Search className="w-5 h-5 text-green-400" />
+            <div className="text-left">
+              <div className="font-semibold text-white">{t.tabMining}</div>
+              <div className="text-xs text-slate-400">
+                {uiLanguage === 'zh' ? '基于种子关键词挖掘相关关键词' : 'Mine keywords from seed keyword'}
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              onCreate('batch');
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 p-4 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg transition-colors"
+          >
+            <Languages className="w-5 h-5 text-blue-400" />
+            <div className="text-left">
+              <div className="font-semibold text-white">{t.tabBatch}</div>
+              <div className="text-xs text-slate-400">
+                {uiLanguage === 'zh' ? '批量翻译和分析关键词' : 'Batch translate and analyze keywords'}
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => {
+              onCreate('deep-dive');
+              onClose();
+            }}
+            className="w-full flex items-center gap-3 p-4 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg transition-colors"
+          >
+            <FileText className="w-5 h-5 text-purple-400" />
+            <div className="text-left">
+              <div className="font-semibold text-white">{t.tabDeepDive}</div>
+              <div className="text-xs text-slate-400">
+                {uiLanguage === 'zh' ? '为关键词生成详细内容策略' : 'Generate detailed content strategy'}
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [state, setState] = useState<AppState>({
+    // Task Management
+    taskManager: {
+      tasks: [],
+      activeTaskId: null,
+      maxTasks: 5,
+    },
+
     step: "input",
     seedKeyword: "",
     targetLanguage: "en",
@@ -1506,6 +1699,7 @@ export default function App() {
   const [batchInput, setBatchInput] = useState("");
   const [deepDiveInput, setDeepDiveInput] = useState("");
   const [activeTab, setActiveTab] = useState<"mining" | "batch" | "deepDive">("mining");
+  const [showTaskMenu, setShowTaskMenu] = useState(false);
   const stopBatchRef = useRef(false);
 
   const stopMiningRef = useRef(false);
@@ -1612,6 +1806,59 @@ export default function App() {
       console.error("Failed to migrate old configs", e);
     }
   }, []);
+
+  // Load tasks from localStorage on mount
+  useEffect(() => {
+    loadTasksFromLocalStorage();
+  }, []);
+
+  // Auto-save tasks to localStorage (debounced only)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (state.taskManager.tasks.length > 0 && state.taskManager.activeTaskId) {
+        // Before saving, sync current task state
+        setState(prev => {
+          const activeTask = prev.taskManager.tasks.find(t => t.id === prev.taskManager.activeTaskId);
+          if (!activeTask) return prev;
+
+          const updatedTask = snapshotCurrentTask(prev, activeTask);
+          const updatedTasks = prev.taskManager.tasks.map(t =>
+            t.id === prev.taskManager.activeTaskId ? updatedTask : t
+          );
+
+          // Save to localStorage
+          try {
+            localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(updatedTasks));
+          } catch (e) {
+            console.error('Failed to save tasks', e);
+          }
+
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        });
+      }
+    }, 1000); // Debounce 1 second
+
+    return () => clearTimeout(timer);
+  }, [
+    state.keywords,
+    state.batchKeywords,
+    state.currentStrategyReport,
+    state.miningRound,
+    state.agentThoughts.length,
+    state.batchThoughts.length,
+    state.deepDiveThoughts.length,
+    state.logs.length,
+    state.isMining,
+    state.isDeepDiving,
+    state.miningSuccess,
+    state.step,
+  ]);
 
   // Save archive helper
   const saveToArchive = (currentState: AppState) => {
@@ -1812,15 +2059,670 @@ export default function App() {
     }));
   };
 
-  const addLog = (message: string, type: LogEntry["type"] = "info") => {
-    setState((prev) => ({
-      ...prev,
-      logs: [
-        ...prev.logs,
-        { timestamp: new Date().toLocaleTimeString(), message, type },
-      ],
-    }));
+  const addLog = (message: string, type: LogEntry["type"] = "info", taskId?: string) => {
+    const logEntry = { timestamp: new Date().toLocaleTimeString(), message, type };
+
+    setState((prev) => {
+      // If no taskId provided, use current active task (backward compatibility)
+      const targetTaskId = taskId || prev.taskManager.activeTaskId;
+
+      if (!targetTaskId) {
+        // No task context, just add to global logs
+        return {
+          ...prev,
+          logs: [...prev.logs, logEntry],
+        };
+      }
+
+      // Check if this log belongs to the currently active task
+      if (targetTaskId === prev.taskManager.activeTaskId) {
+        // Update both global logs (for UI) and task logs
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === targetTaskId) {
+            const taskCopy = { ...task };
+            if (taskCopy.miningState) {
+              taskCopy.miningState = { ...taskCopy.miningState, logs: [...taskCopy.miningState.logs, logEntry] };
+            } else if (taskCopy.batchState) {
+              taskCopy.batchState = { ...taskCopy.batchState, logs: [...taskCopy.batchState.logs, logEntry] };
+            } else if (taskCopy.deepDiveState) {
+              taskCopy.deepDiveState = { ...taskCopy.deepDiveState, logs: [...taskCopy.deepDiveState.logs, logEntry] };
+            }
+            return taskCopy;
+          }
+          return task;
+        });
+
+        return {
+          ...prev,
+          logs: [...prev.logs, logEntry],
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      } else {
+        // Background task - only update task object, not global state
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === targetTaskId) {
+            const taskCopy = { ...task };
+            if (taskCopy.miningState) {
+              taskCopy.miningState = { ...taskCopy.miningState, logs: [...taskCopy.miningState.logs, logEntry] };
+            } else if (taskCopy.batchState) {
+              taskCopy.batchState = { ...taskCopy.batchState, logs: [...taskCopy.batchState.logs, logEntry] };
+            } else if (taskCopy.deepDiveState) {
+              taskCopy.deepDiveState = { ...taskCopy.deepDiveState, logs: [...taskCopy.deepDiveState.logs, logEntry] };
+            }
+            return taskCopy;
+          }
+          return task;
+        });
+
+        return {
+          ...prev,
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      }
+    });
   };
+
+  // ========== Task Management Functions ==========
+
+  // Generate default task name based on type
+  const generateTaskName = (type: TaskType, index: number): string => {
+    const names = {
+      'mining': state.uiLanguage === 'zh' ? '挖掘' : 'Mining',
+      'batch': state.uiLanguage === 'zh' ? '批量' : 'Batch',
+      'deep-dive': state.uiLanguage === 'zh' ? '深度' : 'Deep Dive',
+    };
+    return `${names[type]} #${index + 1}`;
+  };
+
+  // Create a new task
+  const createTask = (params: CreateTaskParams): TaskState => {
+    const taskId = `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const name = params.name || generateTaskName(params.type, state.taskManager.tasks.length);
+
+    const baseTask: TaskState = {
+      type: params.type,
+      id: taskId,
+      name,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      isActive: false,
+      targetLanguage: params.targetLanguage || state.targetLanguage || 'en',
+      filterLevel: ProbabilityLevel.HIGH,
+      sortBy: 'probability',
+      expandedRowId: null,
+    };
+
+    // Initialize type-specific state
+    switch (params.type) {
+      case 'mining':
+        baseTask.miningState = {
+          seedKeyword: params.seedKeyword || '',
+          keywords: [],
+          miningRound: 0,
+          agentThoughts: [],
+          isMining: false,
+          miningSuccess: false,
+          wordsPerRound: 10,
+          miningStrategy: 'horizontal',
+          userSuggestion: '',
+          logs: [],
+        };
+        break;
+      case 'batch':
+        baseTask.batchState = {
+          batchInputKeywords: params.inputKeywords || '',
+          batchKeywords: [],
+          batchThoughts: [],
+          batchCurrentIndex: 0,
+          batchTotalCount: 0,
+          logs: [],
+        };
+        break;
+      case 'deep-dive':
+        baseTask.deepDiveState = {
+          deepDiveKeyword: params.keyword || null,
+          currentStrategyReport: null,
+          deepDiveThoughts: [],
+          isDeepDiving: false,
+          deepDiveProgress: 0,
+          deepDiveCurrentStep: '',
+          logs: [],
+        };
+        break;
+    }
+
+    return baseTask;
+  };
+
+  // Save current task state to task object (snapshot)
+  const snapshotCurrentTask = (currentState: AppState, task: TaskState): TaskState => {
+    const updated = { ...task, updatedAt: Date.now() };
+
+    switch (task.type) {
+      case 'mining':
+        if (updated.miningState) {
+          updated.miningState = {
+            ...updated.miningState,
+            seedKeyword: currentState.seedKeyword,
+            keywords: currentState.keywords,
+            miningRound: currentState.miningRound,
+            agentThoughts: currentState.agentThoughts,
+            isMining: currentState.isMining,
+            miningSuccess: currentState.miningSuccess,
+            wordsPerRound: currentState.wordsPerRound,
+            miningStrategy: currentState.miningStrategy,
+            userSuggestion: currentState.userSuggestion,
+            logs: currentState.logs,
+          };
+        }
+        break;
+      case 'batch':
+        if (updated.batchState) {
+          updated.batchState = {
+            ...updated.batchState,
+            batchInputKeywords: currentState.batchInputKeywords,
+            batchKeywords: currentState.batchKeywords,
+            batchThoughts: currentState.batchThoughts,
+            batchCurrentIndex: currentState.batchCurrentIndex,
+            batchTotalCount: currentState.batchTotalCount,
+            logs: currentState.logs,
+          };
+        }
+        break;
+      case 'deep-dive':
+        if (updated.deepDiveState) {
+          updated.deepDiveState = {
+            ...updated.deepDiveState,
+            deepDiveKeyword: currentState.deepDiveKeyword,
+            currentStrategyReport: currentState.currentStrategyReport,
+            deepDiveThoughts: currentState.deepDiveThoughts,
+            isDeepDiving: currentState.isDeepDiving,
+            deepDiveProgress: currentState.deepDiveProgress,
+            deepDiveCurrentStep: currentState.deepDiveCurrentStep,
+            logs: currentState.logs,
+          };
+        }
+        break;
+    }
+
+    return updated;
+  };
+
+  // Hydrate task state into current AppState
+  const hydrateTask = (taskId: string) => {
+    setState(prev => {
+      const task = prev.taskManager.tasks.find(t => t.id === taskId);
+      if (!task) return prev;
+
+      const baseState: Partial<AppState> = {
+        targetLanguage: task.targetLanguage,
+        filterLevel: task.filterLevel,
+        sortBy: task.sortBy,
+        expandedRowId: task.expandedRowId,
+        error: null,
+      };
+
+      switch (task.type) {
+        case 'mining':
+          // Step logic: if mining -> 'mining', else if has results -> 'results', else -> 'input'
+          let miningStep: AppState['step'] = 'input';
+          if (task.miningState?.isMining) {
+            miningStep = 'mining';
+          } else if (task.miningState?.keywords && task.miningState.keywords.length > 0) {
+            miningStep = 'results';
+          }
+
+          return {
+            ...prev,
+            ...baseState,
+            step: miningStep,
+            seedKeyword: task.miningState?.seedKeyword || '',
+            keywords: task.miningState?.keywords || [],
+            miningRound: task.miningState?.miningRound || 0,
+            agentThoughts: task.miningState?.agentThoughts || [],
+            isMining: task.miningState?.isMining || false,
+            miningSuccess: task.miningState?.miningSuccess || false,
+            wordsPerRound: task.miningState?.wordsPerRound || 10,
+            miningStrategy: task.miningState?.miningStrategy || 'horizontal',
+            userSuggestion: task.miningState?.userSuggestion || '',
+            logs: task.miningState?.logs || [],
+            // Clear other task types' state
+            batchKeywords: [],
+            batchThoughts: [],
+            batchInputKeywords: '',
+            batchCurrentIndex: 0,
+            batchTotalCount: 0,
+            deepDiveKeyword: null,
+            currentStrategyReport: null,
+            deepDiveThoughts: [],
+            isDeepDiving: false,
+            deepDiveProgress: 0,
+            deepDiveCurrentStep: '',
+          };
+        case 'batch':
+          let batchStep: AppState['step'] = 'input';
+          if (task.batchState?.batchKeywords && task.batchState.batchKeywords.length > 0) {
+            batchStep = 'batch-results';
+          }
+
+          return {
+            ...prev,
+            ...baseState,
+            step: batchStep,
+            batchInputKeywords: task.batchState?.batchInputKeywords || '',
+            batchKeywords: task.batchState?.batchKeywords || [],
+            batchThoughts: task.batchState?.batchThoughts || [],
+            batchCurrentIndex: task.batchState?.batchCurrentIndex || 0,
+            batchTotalCount: task.batchState?.batchTotalCount || 0,
+            logs: task.batchState?.logs || [],
+            // Clear other task types' state
+            seedKeyword: '',
+            keywords: [],
+            miningRound: 0,
+            agentThoughts: [],
+            isMining: false,
+            miningSuccess: false,
+            wordsPerRound: 10,
+            miningStrategy: 'horizontal',
+            userSuggestion: '',
+            deepDiveKeyword: null,
+            currentStrategyReport: null,
+            deepDiveThoughts: [],
+            isDeepDiving: false,
+            deepDiveProgress: 0,
+            deepDiveCurrentStep: '',
+          };
+        case 'deep-dive':
+          let deepDiveStep: AppState['step'] = 'input';
+          if (task.deepDiveState?.isDeepDiving) {
+            deepDiveStep = 'deep-dive-analyzing';
+          } else if (task.deepDiveState?.currentStrategyReport) {
+            deepDiveStep = 'deep-dive-results';
+          }
+
+          return {
+            ...prev,
+            ...baseState,
+            step: deepDiveStep,
+            deepDiveKeyword: task.deepDiveState?.deepDiveKeyword || null,
+            currentStrategyReport: task.deepDiveState?.currentStrategyReport || null,
+            deepDiveThoughts: task.deepDiveState?.deepDiveThoughts || [],
+            isDeepDiving: task.deepDiveState?.isDeepDiving || false,
+            deepDiveProgress: task.deepDiveState?.deepDiveProgress || 0,
+            deepDiveCurrentStep: task.deepDiveState?.deepDiveCurrentStep || '',
+            logs: task.deepDiveState?.logs || [],
+            // Clear other task types' state
+            seedKeyword: '',
+            keywords: [],
+            miningRound: 0,
+            agentThoughts: [],
+            isMining: false,
+            miningSuccess: false,
+            wordsPerRound: 10,
+            miningStrategy: 'horizontal',
+            userSuggestion: '',
+            batchKeywords: [],
+            batchThoughts: [],
+            batchInputKeywords: '',
+            batchCurrentIndex: 0,
+            batchTotalCount: 0,
+          };
+        default:
+          return prev;
+      }
+    });
+  };
+
+  // Save tasks to localStorage
+  const saveTasksToLocalStorage = () => {
+    try {
+      const tasksToSave = state.taskManager.tasks.map(task => {
+        if (task.id === state.taskManager.activeTaskId) {
+          return snapshotCurrentTask(state, task);
+        }
+        return task;
+      });
+
+      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasksToSave));
+    } catch (e) {
+      console.error('Failed to save tasks', e);
+    }
+  };
+
+  // Load tasks from localStorage
+  const loadTasksFromLocalStorage = () => {
+    try {
+      const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
+      if (savedTasks) {
+        const tasks: TaskState[] = JSON.parse(savedTasks);
+        const activeTask = tasks.find(t => t.isActive) || tasks[0];
+
+        setState(prev => ({
+          ...prev,
+          taskManager: {
+            ...prev.taskManager,
+            tasks,
+            activeTaskId: activeTask?.id || null,
+          },
+        }));
+
+        // Hydrate active task
+        if (activeTask) {
+          setTimeout(() => hydrateTask(activeTask.id), 0);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load tasks', e);
+    }
+  };
+
+  // Add a new task
+  const addTask = (params: CreateTaskParams) => {
+    if (state.taskManager.tasks.length >= state.taskManager.maxTasks) {
+      setState(prev => ({
+        ...prev,
+        error: state.uiLanguage === 'zh'
+          ? '最多只能同时开启5个任务，请先关闭一个任务。'
+          : 'Maximum 5 tasks allowed. Please close a task first.',
+      }));
+      return;
+    }
+
+    const newTask = createTask(params);
+
+    setState(prev => {
+      // Save current task state before switching
+      const updatedTasks = prev.taskManager.activeTaskId
+        ? prev.taskManager.tasks.map(task =>
+            task.id === prev.taskManager.activeTaskId
+              ? snapshotCurrentTask(prev, task)
+              : task
+          )
+        : prev.taskManager.tasks;
+
+      return {
+        ...prev,
+        taskManager: {
+          ...prev.taskManager,
+          tasks: [...updatedTasks, { ...newTask, isActive: true }].map(t => ({
+            ...t,
+            isActive: t.id === newTask.id,
+          })),
+          activeTaskId: newTask.id,
+        },
+      };
+    });
+
+    // Hydrate new task into current state
+    setTimeout(() => {
+      hydrateTask(newTask.id);
+      saveTasksToLocalStorage();
+    }, 0);
+  };
+
+  // Switch to a different task
+  const switchTask = (taskId: string) => {
+    if (state.taskManager.activeTaskId === taskId) return;
+
+    // First save current task state
+    setState(prev => {
+      const currentTask = prev.taskManager.tasks.find(t => t.id === prev.taskManager.activeTaskId);
+      const targetTask = prev.taskManager.tasks.find(t => t.id === taskId);
+
+      if (!targetTask) return prev;
+
+      // Save current task's snapshot
+      const updatedTasks = prev.taskManager.tasks.map(task => {
+        if (task.id === prev.taskManager.activeTaskId && currentTask) {
+          return { ...snapshotCurrentTask(prev, currentTask), isActive: false };
+        }
+        if (task.id === taskId) {
+          return { ...task, isActive: true, updatedAt: Date.now() };
+        }
+        return { ...task, isActive: false };
+      });
+
+      // Prepare new state by loading target task
+      const baseState: Partial<AppState> = {
+        targetLanguage: targetTask.targetLanguage,
+        filterLevel: targetTask.filterLevel,
+        sortBy: targetTask.sortBy,
+        expandedRowId: targetTask.expandedRowId,
+        error: null,
+      };
+
+      let newState: AppState;
+
+      switch (targetTask.type) {
+        case 'mining':
+          let miningStep: AppState['step'] = 'input';
+          if (targetTask.miningState?.isMining) {
+            miningStep = 'mining';
+          } else if (targetTask.miningState?.keywords && targetTask.miningState.keywords.length > 0) {
+            miningStep = 'results';
+          }
+
+          newState = {
+            ...prev,
+            ...baseState,
+            step: miningStep,
+            seedKeyword: targetTask.miningState?.seedKeyword || '',
+            keywords: targetTask.miningState?.keywords || [],
+            miningRound: targetTask.miningState?.miningRound || 0,
+            agentThoughts: targetTask.miningState?.agentThoughts || [],
+            isMining: targetTask.miningState?.isMining || false,
+            miningSuccess: targetTask.miningState?.miningSuccess || false,
+            wordsPerRound: targetTask.miningState?.wordsPerRound || 10,
+            miningStrategy: targetTask.miningState?.miningStrategy || 'horizontal',
+            userSuggestion: targetTask.miningState?.userSuggestion || '',
+            logs: targetTask.miningState?.logs || [],
+            // Clear other task types
+            batchKeywords: [],
+            batchThoughts: [],
+            batchInputKeywords: '',
+            batchCurrentIndex: 0,
+            batchTotalCount: 0,
+            deepDiveKeyword: null,
+            currentStrategyReport: null,
+            deepDiveThoughts: [],
+            isDeepDiving: false,
+            deepDiveProgress: 0,
+            deepDiveCurrentStep: '',
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+              activeTaskId: taskId,
+            },
+          };
+          break;
+
+        case 'batch':
+          let batchStep: AppState['step'] = 'input';
+          if (targetTask.batchState?.batchKeywords && targetTask.batchState.batchKeywords.length > 0) {
+            batchStep = 'batch-results';
+          }
+
+          newState = {
+            ...prev,
+            ...baseState,
+            step: batchStep,
+            batchInputKeywords: targetTask.batchState?.batchInputKeywords || '',
+            batchKeywords: targetTask.batchState?.batchKeywords || [],
+            batchThoughts: targetTask.batchState?.batchThoughts || [],
+            batchCurrentIndex: targetTask.batchState?.batchCurrentIndex || 0,
+            batchTotalCount: targetTask.batchState?.batchTotalCount || 0,
+            logs: targetTask.batchState?.logs || [],
+            // Clear other task types
+            seedKeyword: '',
+            keywords: [],
+            miningRound: 0,
+            agentThoughts: [],
+            isMining: false,
+            miningSuccess: false,
+            wordsPerRound: 10,
+            miningStrategy: 'horizontal',
+            userSuggestion: '',
+            deepDiveKeyword: null,
+            currentStrategyReport: null,
+            deepDiveThoughts: [],
+            isDeepDiving: false,
+            deepDiveProgress: 0,
+            deepDiveCurrentStep: '',
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+              activeTaskId: taskId,
+            },
+          };
+          break;
+
+        case 'deep-dive':
+          let deepDiveStep: AppState['step'] = 'input';
+          if (targetTask.deepDiveState?.isDeepDiving) {
+            deepDiveStep = 'deep-dive-analyzing';
+          } else if (targetTask.deepDiveState?.currentStrategyReport) {
+            deepDiveStep = 'deep-dive-results';
+          }
+
+          newState = {
+            ...prev,
+            ...baseState,
+            step: deepDiveStep,
+            deepDiveKeyword: targetTask.deepDiveState?.deepDiveKeyword || null,
+            currentStrategyReport: targetTask.deepDiveState?.currentStrategyReport || null,
+            deepDiveThoughts: targetTask.deepDiveState?.deepDiveThoughts || [],
+            isDeepDiving: targetTask.deepDiveState?.isDeepDiving || false,
+            deepDiveProgress: targetTask.deepDiveState?.deepDiveProgress || 0,
+            deepDiveCurrentStep: targetTask.deepDiveState?.deepDiveCurrentStep || '',
+            logs: targetTask.deepDiveState?.logs || [],
+            // Clear other task types
+            seedKeyword: '',
+            keywords: [],
+            miningRound: 0,
+            agentThoughts: [],
+            isMining: false,
+            miningSuccess: false,
+            wordsPerRound: 10,
+            miningStrategy: 'horizontal',
+            userSuggestion: '',
+            batchKeywords: [],
+            batchThoughts: [],
+            batchInputKeywords: '',
+            batchCurrentIndex: 0,
+            batchTotalCount: 0,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+              activeTaskId: taskId,
+            },
+          };
+          break;
+
+        default:
+          newState = {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+              activeTaskId: taskId,
+            },
+          };
+      }
+
+      return newState;
+    });
+
+    // Save to localStorage after switch
+    setTimeout(() => saveTasksToLocalStorage(), 100);
+  };
+
+  // Delete a task
+  const deleteTask = (taskId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+
+    const taskToDelete = state.taskManager.tasks.find(t => t.id === taskId);
+    if (!taskToDelete) return;
+
+    // Prevent deletion of running tasks
+    if (taskToDelete.miningState?.isMining || taskToDelete.deepDiveState?.isDeepDiving) {
+      setState(prev => ({
+        ...prev,
+        error: state.uiLanguage === 'zh'
+          ? '无法删除正在运行的任务，请先停止它。'
+          : 'Cannot delete a running task. Please stop it first.',
+      }));
+      return;
+    }
+
+    setState(prev => {
+      const remainingTasks = prev.taskManager.tasks.filter(t => t.id !== taskId);
+      const wasActive = prev.taskManager.activeTaskId === taskId;
+
+      // If deleting active task, switch to most recent task
+      let newActiveId = prev.taskManager.activeTaskId;
+      if (wasActive && remainingTasks.length > 0) {
+        const sortedTasks = remainingTasks.sort((a, b) => b.updatedAt - a.updatedAt);
+        newActiveId = sortedTasks[0].id;
+      } else if (wasActive) {
+        newActiveId = null;
+      }
+
+      return {
+        ...prev,
+        taskManager: {
+          ...prev.taskManager,
+          tasks: remainingTasks.map(t => ({ ...t, isActive: t.id === newActiveId })),
+          activeTaskId: newActiveId,
+        },
+      };
+    });
+
+    const wasActive = state.taskManager.activeTaskId === taskId;
+    const remainingTasks = state.taskManager.tasks.filter(t => t.id !== taskId);
+
+    if (wasActive && remainingTasks.length > 0) {
+      const sortedTasks = remainingTasks.sort((a, b) => b.updatedAt - a.updatedAt);
+      setTimeout(() => {
+        hydrateTask(sortedTasks[0].id);
+        saveTasksToLocalStorage();
+      }, 0);
+    } else if (remainingTasks.length === 0) {
+      // No tasks left, reset to input screen
+      setTimeout(() => {
+        setState(prev => ({ ...prev, step: 'input' }));
+        saveTasksToLocalStorage();
+      }, 0);
+    } else {
+      setTimeout(() => saveTasksToLocalStorage(), 0);
+    }
+  };
+
+  // Rename a task
+  const renameTask = (taskId: string, newName: string) => {
+    if (!newName.trim()) return;
+
+    setState(prev => ({
+      ...prev,
+      taskManager: {
+        ...prev.taskManager,
+        tasks: prev.taskManager.tasks.map(task =>
+          task.id === taskId
+            ? { ...task, name: newName.trim(), updatedAt: Date.now() }
+            : task
+        ),
+      },
+    }));
+
+    setTimeout(() => saveTasksToLocalStorage(), 0);
+  };
+
+  // ========== End Task Management Functions ==========
 
   // Play completion sound
   const playCompletionSound = () => {
@@ -1839,61 +2741,229 @@ export default function App() {
   const addThought = (
     type: AgentThought["type"],
     content: string,
-    extra?: Partial<AgentThought>
+    extra?: Partial<AgentThought>,
+    taskId?: string
   ) => {
-    setState((prev) => ({
-      ...prev,
-      agentThoughts: [
-        ...prev.agentThoughts,
-        {
-          id: `t-${Date.now()}`,
-          round: prev.miningRound,
-          type,
-          content,
-          ...extra,
-        },
-      ],
-    }));
+    setState((prev) => {
+      // If no taskId provided, use current active task (backward compatibility)
+      const targetTaskId = taskId || prev.taskManager.activeTaskId;
+
+      const thoughtEntry = {
+        id: `t-${Date.now()}`,
+        round: prev.miningRound,
+        type,
+        content,
+        ...extra,
+      };
+
+      if (!targetTaskId) {
+        // No task context, just add to global thoughts
+        return {
+          ...prev,
+          agentThoughts: [...prev.agentThoughts, thoughtEntry],
+        };
+      }
+
+      // Check if this thought belongs to the currently active task
+      if (targetTaskId === prev.taskManager.activeTaskId) {
+        // Update both global thoughts (for UI) and task thoughts
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === targetTaskId && task.miningState) {
+            return {
+              ...task,
+              miningState: {
+                ...task.miningState,
+                agentThoughts: [...task.miningState.agentThoughts, thoughtEntry],
+              },
+            };
+          }
+          return task;
+        });
+
+        return {
+          ...prev,
+          agentThoughts: [...prev.agentThoughts, thoughtEntry],
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      } else {
+        // Background task - only update task object, not global state
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === targetTaskId && task.miningState) {
+            return {
+              ...task,
+              miningState: {
+                ...task.miningState,
+                agentThoughts: [...task.miningState.agentThoughts, thoughtEntry],
+              },
+            };
+          }
+          return task;
+        });
+
+        return {
+          ...prev,
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      }
+    });
   };
 
   const addBatchThought = (
     type: BatchAnalysisThought["type"],
     keyword: string,
     content: string,
-    extra?: Partial<BatchAnalysisThought>
+    extra?: Partial<BatchAnalysisThought>,
+    taskId?: string
   ) => {
-    setState((prev) => ({
-      ...prev,
-      batchThoughts: [
-        ...prev.batchThoughts,
-        {
-          id: `bt-${Date.now()}`,
-          type,
-          keyword,
-          content,
-          ...extra,
-        },
-      ],
-    }));
+    setState((prev) => {
+      // If no taskId provided, use current active task (backward compatibility)
+      const targetTaskId = taskId || prev.taskManager.activeTaskId;
+
+      const thoughtEntry = {
+        id: `bt-${Date.now()}`,
+        type,
+        keyword,
+        content,
+        ...extra,
+      };
+
+      if (!targetTaskId) {
+        // No task context, just add to global thoughts
+        return {
+          ...prev,
+          batchThoughts: [...prev.batchThoughts, thoughtEntry],
+        };
+      }
+
+      // Check if this thought belongs to the currently active task
+      if (targetTaskId === prev.taskManager.activeTaskId) {
+        // Update both global thoughts (for UI) and task thoughts
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === targetTaskId && task.batchState) {
+            return {
+              ...task,
+              batchState: {
+                ...task.batchState,
+                batchThoughts: [...task.batchState.batchThoughts, thoughtEntry],
+              },
+            };
+          }
+          return task;
+        });
+
+        return {
+          ...prev,
+          batchThoughts: [...prev.batchThoughts, thoughtEntry],
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      } else {
+        // Background task - only update task object, not global state
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === targetTaskId && task.batchState) {
+            return {
+              ...task,
+              batchState: {
+                ...task.batchState,
+                batchThoughts: [...task.batchState.batchThoughts, thoughtEntry],
+              },
+            };
+          }
+          return task;
+        });
+
+        return {
+          ...prev,
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      }
+    });
   };
 
   const addDeepDiveThought = (
     type: DeepDiveThought["type"],
     content: string,
-    data?: DeepDiveThought["data"]
+    data?: DeepDiveThought["data"],
+    taskId?: string
   ) => {
-    setState((prev) => ({
-      ...prev,
-      deepDiveThoughts: [
-        ...prev.deepDiveThoughts,
-        {
-          id: `ddt-${Date.now()}`,
-          type,
-          content,
-          data,
-        },
-      ],
-    }));
+    setState((prev) => {
+      // If no taskId provided, use current active task (backward compatibility)
+      const targetTaskId = taskId || prev.taskManager.activeTaskId;
+
+      const thoughtEntry = {
+        id: `ddt-${Date.now()}`,
+        type,
+        content,
+        data,
+      };
+
+      if (!targetTaskId) {
+        // No task context, just add to global thoughts
+        return {
+          ...prev,
+          deepDiveThoughts: [...prev.deepDiveThoughts, thoughtEntry],
+        };
+      }
+
+      // Check if this thought belongs to the currently active task
+      if (targetTaskId === prev.taskManager.activeTaskId) {
+        // Update both global thoughts (for UI) and task thoughts
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === targetTaskId && task.deepDiveState) {
+            return {
+              ...task,
+              deepDiveState: {
+                ...task.deepDiveState,
+                deepDiveThoughts: [...task.deepDiveState.deepDiveThoughts, thoughtEntry],
+              },
+            };
+          }
+          return task;
+        });
+
+        return {
+          ...prev,
+          deepDiveThoughts: [...prev.deepDiveThoughts, thoughtEntry],
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      } else {
+        // Background task - only update task object, not global state
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === targetTaskId && task.deepDiveState) {
+            return {
+              ...task,
+              deepDiveState: {
+                ...task.deepDiveState,
+                deepDiveThoughts: [...task.deepDiveState.deepDiveThoughts, thoughtEntry],
+              },
+            };
+          }
+          return task;
+        });
+
+        return {
+          ...prev,
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      }
+    });
   };
 
   const handleTranslatePrompt = async (promptType: "gen" | "analyze") => {
@@ -1948,6 +3018,21 @@ export default function App() {
   const startMining = async (continueExisting = false) => {
     if (!state.seedKeyword.trim()) return;
 
+    // Auto-create task if no active task exists
+    if (!state.taskManager.activeTaskId) {
+      addTask({
+        type: 'mining',
+        seedKeyword: state.seedKeyword,
+        targetLanguage: state.targetLanguage
+      });
+      // Wait for task creation to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return; // Exit and let user start mining in the new task
+    }
+
+    // Capture taskId at the start for isolation
+    const currentTaskId = state.taskManager.activeTaskId;
+
     stopMiningRef.current = false;
 
     // Initialize or keep existing keywords for deduplication
@@ -1975,21 +3060,57 @@ export default function App() {
         : `Starting mining loop for: "${
             state.seedKeyword
           }" (${state.targetLanguage.toUpperCase()})...`,
-      "info"
+      "info",
+      currentTaskId
     );
 
-    runMiningLoop(continueExisting ? state.miningRound : 0);
+    runMiningLoop(continueExisting ? state.miningRound : 0, currentTaskId);
   };
 
-  const runMiningLoop = async (startRound: number) => {
+  const runMiningLoop = async (startRound: number, taskId: string) => {
     let currentRound = startRound;
 
     while (!stopMiningRef.current) {
       currentRound++;
 
-      setState((prev) => ({ ...prev, miningRound: currentRound }));
+      // Update miningRound with task isolation
+      setState((prev) => {
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === taskId && task.miningState) {
+            return {
+              ...task,
+              miningState: {
+                ...task.miningState,
+                miningRound: currentRound,
+              },
+            };
+          }
+          return task;
+        });
 
-      addLog(`[Round ${currentRound}] Generating candidates...`, "info");
+        // Only update global state if this is the active task
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            miningRound: currentRound,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        } else {
+          // Background task - only update task object
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
+      });
+
+      addLog(`[Round ${currentRound}] Generating candidates...`, "info", taskId);
 
       // Dynamic thought message based on mining strategy
       let thoughtMessage = '';
@@ -2003,7 +3124,7 @@ export default function App() {
         }
       }
 
-      addThought("generation", thoughtMessage);
+      addThought("generation", thoughtMessage, undefined, taskId);
 
       try {
         const generatedKeywords = await generateKeywords(
@@ -2020,7 +3141,8 @@ export default function App() {
         if (generatedKeywords.length === 0) {
           addLog(
             `[Round ${currentRound}] No keywords generated. Retrying...`,
-            "warning"
+            "warning",
+            taskId
           );
           continue;
         }
@@ -2028,12 +3150,14 @@ export default function App() {
         addThought(
           "generation",
           `Generated ${generatedKeywords.length} candidates.`,
-          { keywords: generatedKeywords.map((k) => k.keyword) }
+          { keywords: generatedKeywords.map((k) => k.keyword) },
+          taskId
         );
 
         addLog(
           `[Round ${currentRound}] Analyzing SERP probability (Google)...`,
-          "api"
+          "api",
+          taskId
         );
 
         // This is now parallel individual execution with batching
@@ -2055,10 +3179,42 @@ export default function App() {
           ...analyzedBatch.map((k) => k.keyword),
         ];
 
-        setState((prev) => ({
-          ...prev,
-          keywords: [...prev.keywords, ...analyzedBatch],
-        }));
+        // Update keywords with task isolation
+        setState((prev) => {
+          const updatedTasks = prev.taskManager.tasks.map(task => {
+            if (task.id === taskId && task.miningState) {
+              return {
+                ...task,
+                miningState: {
+                  ...task.miningState,
+                  keywords: [...task.miningState.keywords, ...analyzedBatch],
+                },
+              };
+            }
+            return task;
+          });
+
+          // Only update global state if this is the active task
+          if (taskId === prev.taskManager.activeTaskId) {
+            return {
+              ...prev,
+              keywords: [...prev.keywords, ...analyzedBatch],
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          } else {
+            // Background task - only update task object
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          }
+        });
 
         const high = analyzedBatch.filter(
           (k) => k.probability === ProbabilityLevel.HIGH
@@ -2073,51 +3229,129 @@ export default function App() {
         addThought("analysis", `Analysis Complete.`, {
           stats: { high, medium, low },
           analyzedKeywords: analyzedBatch,
-        });
+        }, taskId);
 
         if (highProbCandidate) {
           addThought(
             "decision",
-            `Found HIGH probability opportunity: "${highProbCandidate.keyword}". Stopping.`
+            `Found HIGH probability opportunity: "${highProbCandidate.keyword}". Stopping.`,
+            undefined,
+            taskId
           );
-          addLog(`Success! Opportunity found.`, "success");
+          addLog(`Success! Opportunity found.`, "success", taskId);
+
           setState((prev) => {
+            // Update task object
+            const updatedTasks = prev.taskManager.tasks.map(task => {
+              if (task.id === taskId && task.miningState) {
+                return {
+                  ...task,
+                  miningState: {
+                    ...task.miningState,
+                    isMining: false,
+                    miningSuccess: true,
+                  },
+                };
+              }
+              return task;
+            });
+
+            // Save archive before updating state
             saveToArchive(prev);
-            return { ...prev, isMining: false, miningSuccess: true };
+
+            // Only update global state if this is the active task
+            if (taskId === prev.taskManager.activeTaskId) {
+              return {
+                ...prev,
+                isMining: false,
+                miningSuccess: true,
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            } else {
+              // Background task - only update task object
+              return {
+                ...prev,
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            }
           });
+
           playCompletionSound(); // Play sound on mining completion
 
-          // Scroll to top to show success window
-          window.scrollTo({ top: 0, behavior: 'smooth' });
+          // Only scroll if this is the active task
+          if (taskId === state.taskManager.activeTaskId) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
           return;
         }
 
         addThought(
           "decision",
-          `No HIGH probability keywords found in Round ${currentRound}. Continuing loop...`
+          `No HIGH probability keywords found in Round ${currentRound}. Continuing loop...`,
+          undefined,
+          taskId
         );
         addLog(
           `Round ${currentRound} complete. No HIGH opportunities. Continuing...`,
-          "warning"
+          "warning",
+          taskId
         );
 
         await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch (err) {
         console.error(err);
-        addLog(`Error in Round ${currentRound}: ${err}`, "error");
+        addLog(`Error in Round ${currentRound}: ${err}`, "error", taskId);
         stopMiningRef.current = true;
       }
     }
   };
 
   const handleStop = () => {
+    const currentTaskId = state.taskManager.activeTaskId;
+
     stopMiningRef.current = true;
-    addLog("User requested stop.", "warning");
+    addLog("User requested stop.", "warning", currentTaskId || undefined);
 
     // Show success window even when manually stopped, so user can view results
     setState((prev) => {
+      if (!currentTaskId) {
+        saveToArchive(prev);
+        return { ...prev, isMining: false, miningSuccess: true };
+      }
+
+      // Update task object
+      const updatedTasks = prev.taskManager.tasks.map(task => {
+        if (task.id === currentTaskId && task.miningState) {
+          return {
+            ...task,
+            miningState: {
+              ...task.miningState,
+              isMining: false,
+              miningSuccess: true,
+            },
+          };
+        }
+        return task;
+      });
+
       saveToArchive(prev);
-      return { ...prev, isMining: false, miningSuccess: true };
+
+      // Update global state
+      return {
+        ...prev,
+        isMining: false,
+        miningSuccess: true,
+        taskManager: {
+          ...prev.taskManager,
+          tasks: updatedTasks,
+        },
+      };
     });
 
     // Scroll to top to show success window
@@ -2148,6 +3382,20 @@ export default function App() {
   };
 
   const handleDeepDive = async (keyword: KeywordData) => {
+    // Auto-create task if no active task exists
+    if (!state.taskManager.activeTaskId) {
+      addTask({
+        type: 'deep-dive',
+        keyword: keyword,
+        targetLanguage: state.targetLanguage
+      });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return; // Exit and let user start deep dive in the new task
+    }
+
+    // Capture taskId at the start for isolation
+    const currentTaskId = state.taskManager.activeTaskId;
+
     setState((prev) => ({
       ...prev,
       step: "deep-dive-analyzing",
@@ -2159,35 +3407,105 @@ export default function App() {
     }));
 
     // Start the enhanced deep dive workflow
-    runEnhancedDeepDive(keyword);
+    runEnhancedDeepDive(keyword, currentTaskId);
   };
 
-  const runEnhancedDeepDive = async (keyword: KeywordData) => {
+  const runEnhancedDeepDive = async (keyword: KeywordData, taskId: string) => {
     try {
       // Step 1: Initialize
-      setState((prev) => ({
-        ...prev,
-        deepDiveProgress: 10,
-        deepDiveCurrentStep:
-          state.uiLanguage === "zh"
-            ? "正在生成内容策略..."
-            : "Generating content strategy...",
-      }));
+      setState((prev) => {
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === taskId && task.deepDiveState) {
+            return {
+              ...task,
+              deepDiveState: {
+                ...task.deepDiveState,
+                deepDiveProgress: 10,
+                deepDiveCurrentStep:
+                  state.uiLanguage === "zh"
+                    ? "正在生成内容策略..."
+                    : "Generating content strategy...",
+              },
+            };
+          }
+          return task;
+        });
+
+        // Only update global state if this is the active task
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            deepDiveProgress: 10,
+            deepDiveCurrentStep:
+              state.uiLanguage === "zh"
+                ? "正在生成内容策略..."
+                : "Generating content strategy...",
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        } else {
+          // Background task - only update task object
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
+      });
 
       addDeepDiveThought(
         "content-generation",
-        `Generating comprehensive SEO content strategy for "${keyword.keyword}"...`
+        `Generating comprehensive SEO content strategy for "${keyword.keyword}"...`,
+        undefined,
+        taskId
       );
-      addLog("Starting enhanced deep dive analysis...", "info");
+      addLog("Starting enhanced deep dive analysis...", "info", taskId);
 
-      setState((prev) => ({
-        ...prev,
-        deepDiveProgress: 25,
-        deepDiveCurrentStep:
-          state.uiLanguage === "zh"
-            ? "调用AI生成策略..."
-            : "Calling AI to generate strategy...",
-      }));
+      setState((prev) => {
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === taskId && task.deepDiveState) {
+            return {
+              ...task,
+              deepDiveState: {
+                ...task.deepDiveState,
+                deepDiveProgress: 25,
+                deepDiveCurrentStep:
+                  state.uiLanguage === "zh"
+                    ? "调用AI生成策略..."
+                    : "Calling AI to generate strategy...",
+              },
+            };
+          }
+          return task;
+        });
+
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            deepDiveProgress: 25,
+            deepDiveCurrentStep:
+              state.uiLanguage === "zh"
+                ? "调用AI生成策略..."
+                : "Calling AI to generate strategy...",
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        } else {
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
+      });
 
       const report = await enhancedDeepDive(
         keyword,
@@ -2197,33 +3515,100 @@ export default function App() {
       );
 
       // Step 2: Core keyword extraction (done by API)
-      setState((prev) => ({
-        ...prev,
-        deepDiveProgress: 50,
-        deepDiveCurrentStep:
-          state.uiLanguage === "zh"
-            ? "提取核心关键词..."
-            : "Extracting core keywords...",
-      }));
+      setState((prev) => {
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === taskId && task.deepDiveState) {
+            return {
+              ...task,
+              deepDiveState: {
+                ...task.deepDiveState,
+                deepDiveProgress: 50,
+                deepDiveCurrentStep:
+                  state.uiLanguage === "zh"
+                    ? "提取核心关键词..."
+                    : "Extracting core keywords...",
+              },
+            };
+          }
+          return task;
+        });
+
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            deepDiveProgress: 50,
+            deepDiveCurrentStep:
+              state.uiLanguage === "zh"
+                ? "提取核心关键词..."
+                : "Extracting core keywords...",
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        } else {
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
+      });
 
       if (report.coreKeywords && report.coreKeywords.length > 0) {
         addDeepDiveThought(
           "keyword-extraction",
           `Extracted ${report.coreKeywords.length} core keywords from generated content`,
-          { keywords: report.coreKeywords }
+          { keywords: report.coreKeywords },
+          taskId
         );
-        addLog(`Core keywords: ${report.coreKeywords.join(", ")}`, "success");
+        addLog(`Core keywords: ${report.coreKeywords.join(", ")}`, "success", taskId);
       }
 
       // Step 3: SERP verification (done by API)
-      setState((prev) => ({
-        ...prev,
-        deepDiveProgress: 70,
-        deepDiveCurrentStep:
-          state.uiLanguage === "zh"
-            ? "验证SERP竞争情况..."
-            : "Verifying SERP competition...",
-      }));
+      setState((prev) => {
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === taskId && task.deepDiveState) {
+            return {
+              ...task,
+              deepDiveState: {
+                ...task.deepDiveState,
+                deepDiveProgress: 70,
+                deepDiveCurrentStep:
+                  state.uiLanguage === "zh"
+                    ? "验证SERP竞争情况..."
+                    : "Verifying SERP competition...",
+              },
+            };
+          }
+          return task;
+        });
+
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            deepDiveProgress: 70,
+            deepDiveCurrentStep:
+              state.uiLanguage === "zh"
+                ? "验证SERP竞争情况..."
+                : "Verifying SERP competition...",
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        } else {
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
+      });
 
       if (report.serpCompetitionData && report.serpCompetitionData.length > 0) {
         for (const serpData of report.serpCompetitionData) {
@@ -2235,24 +3620,59 @@ export default function App() {
               serpResults: serpData.serpResults,
               analysis: serpData.analysis,
               serankingData: serpData.serankingData,
-            }
+            },
+            taskId
           );
         }
         addLog(
           `Analyzed competition for ${report.serpCompetitionData.length} core keywords`,
-          "success"
+          "success",
+          taskId
         );
       }
 
       // Step 4: Ranking probability analysis (done by API)
-      setState((prev) => ({
-        ...prev,
-        deepDiveProgress: 90,
-        deepDiveCurrentStep:
-          state.uiLanguage === "zh"
-            ? "分析上首页概率..."
-            : "Analyzing ranking probability...",
-      }));
+      setState((prev) => {
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === taskId && task.deepDiveState) {
+            return {
+              ...task,
+              deepDiveState: {
+                ...task.deepDiveState,
+                deepDiveProgress: 90,
+                deepDiveCurrentStep:
+                  state.uiLanguage === "zh"
+                    ? "分析上首页概率..."
+                    : "Analyzing ranking probability...",
+              },
+            };
+          }
+          return task;
+        });
+
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            deepDiveProgress: 90,
+            deepDiveCurrentStep:
+              state.uiLanguage === "zh"
+                ? "分析上首页概率..."
+                : "Analyzing ranking probability...",
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        } else {
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
+      });
 
       if (report.rankingProbability && report.rankingAnalysis) {
         addDeepDiveThought(
@@ -2261,7 +3681,8 @@ export default function App() {
           {
             probability: report.rankingProbability,
             analysis: report.rankingAnalysis,
-          }
+          },
+          taskId
         );
         addLog(
           `Ranking probability: ${report.rankingProbability}`,
@@ -2269,23 +3690,12 @@ export default function App() {
             ? "success"
             : report.rankingProbability === ProbabilityLevel.MEDIUM
             ? "warning"
-            : "error"
+            : "error",
+          taskId
         );
       }
 
-      // Complete - navigate to results
-      setState((prev) => ({
-        ...prev,
-        step: "deep-dive-results",
-        isDeepDiving: false,
-        currentStrategyReport: report,
-        deepDiveProgress: 100,
-        deepDiveCurrentStep:
-          state.uiLanguage === "zh" ? "分析完成！" : "Analysis complete!",
-      }));
-      addLog("Deep dive analysis complete!", "success");
-
-      // Save to Deep Dive archives
+      // Complete - navigate to results with task isolation
       const newDeepDiveEntry: DeepDiveArchiveEntry = {
         id: `dd-arc-${Date.now()}`,
         timestamp: Date.now(),
@@ -2300,13 +3710,57 @@ export default function App() {
           "google_seo_deepdive_archives",
           JSON.stringify(updatedArchives)
         );
-        return { ...prev, deepDiveArchives: updatedArchives };
+
+        // Update task object
+        const updatedTasks = prev.taskManager.tasks.map(task => {
+          if (task.id === taskId && task.deepDiveState) {
+            return {
+              ...task,
+              deepDiveState: {
+                ...task.deepDiveState,
+                isDeepDiving: false,
+                currentStrategyReport: report,
+                deepDiveProgress: 100,
+                deepDiveCurrentStep: state.uiLanguage === "zh" ? "分析完成！" : "Analysis complete!",
+              },
+            };
+          }
+          return task;
+        });
+
+        // Only update global state if this is the active task
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            step: "deep-dive-results",
+            isDeepDiving: false,
+            currentStrategyReport: report,
+            deepDiveProgress: 100,
+            deepDiveCurrentStep: state.uiLanguage === "zh" ? "分析完成！" : "Analysis complete!",
+            deepDiveArchives: updatedArchives,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        } else {
+          // Background task - only update archives and task object
+          return {
+            ...prev,
+            deepDiveArchives: updatedArchives,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
       });
 
+      addLog("Deep dive analysis complete!", "success", taskId);
       playCompletionSound(); // Play sound on deep dive completion
     } catch (e: any) {
       console.error("Enhanced deep dive error:", e);
-      addLog(`Deep dive failed: ${e.message}`, "error");
+      addLog(`Deep dive failed: ${e.message}`, "error", taskId);
       setState((prev) => ({
         ...prev,
         isDeepDiving: false,
@@ -2423,6 +3877,20 @@ export default function App() {
   const handleBatchAnalyze = async () => {
     if (!batchInput.trim()) return;
 
+    // Auto-create task if no active task exists
+    if (!state.taskManager.activeTaskId) {
+      addTask({
+        type: 'batch',
+        inputKeywords: batchInput,
+        targetLanguage: state.targetLanguage
+      });
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return; // Exit and let user start batch analysis in the new task
+    }
+
+    // Capture taskId at the start for isolation
+    const currentTaskId = state.taskManager.activeTaskId;
+
     stopBatchRef.current = false;
 
     // Parse keywords
@@ -2454,17 +3922,18 @@ export default function App() {
 
     addLog(
       `Starting batch analysis for ${keywordList.length} keywords...`,
-      "info"
+      "info",
+      currentTaskId
     );
 
     // Run batch analysis
-    runBatchAnalysis(keywordList);
+    runBatchAnalysis(keywordList, currentTaskId);
   };
 
-  const runBatchAnalysis = async (keywordList: string[]) => {
+  const runBatchAnalysis = async (keywordList: string[], taskId: string) => {
     try {
       // Call batch API (translates all keywords and gets SE Ranking data in ONE request)
-      addLog(`Calling batch translation and SE Ranking API for ${keywordList.length} keywords...`, "api");
+      addLog(`Calling batch translation and SE Ranking API for ${keywordList.length} keywords...`, "api", taskId);
 
       const batchResult = await batchTranslateAndAnalyze(
         keywordList.join(", "),
@@ -2477,28 +3946,64 @@ export default function App() {
         throw new Error("Batch analysis failed");
       }
 
-      addLog(`Batch API completed: ${batchResult.total} keywords processed`, "success");
+      addLog(`Batch API completed: ${batchResult.total} keywords processed`, "success", taskId);
 
       // Display results one by one (for UI streaming effect)
       for (let i = 0; i < batchResult.keywords.length; i++) {
         if (stopBatchRef.current) {
-          addLog("Batch analysis stopped by user.", "warning");
+          addLog("Batch analysis stopped by user.", "warning", taskId);
           break;
         }
 
         const result = batchResult.keywords[i];
         const original = batchResult.translationResults[i]?.original || `Keyword ${i + 1}`;
 
-        setState((prev) => ({ ...prev, batchCurrentIndex: i + 1 }));
+        // Update batchCurrentIndex with task isolation
+        setState((prev) => {
+          const updatedTasks = prev.taskManager.tasks.map(task => {
+            if (task.id === taskId && task.batchState) {
+              return {
+                ...task,
+                batchState: {
+                  ...task.batchState,
+                  batchCurrentIndex: i + 1,
+                },
+              };
+            }
+            return task;
+          });
 
-        addLog(`[${i + 1}/${batchResult.total}] Processing: "${original}"`, "info");
+          // Only update global state if this is the active task
+          if (taskId === prev.taskManager.activeTaskId) {
+            return {
+              ...prev,
+              batchCurrentIndex: i + 1,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          } else {
+            // Background task - only update task object
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          }
+        });
+
+        addLog(`[${i + 1}/${batchResult.total}] Processing: "${original}"`, "info", taskId);
 
         // Show translation thought
         addBatchThought(
           "translation",
           original,
           `Translated to: "${result.keyword}"`,
-          { keyword: result.keyword }
+          { keyword: result.keyword },
+          taskId
         );
 
         // Show SE Ranking thought
@@ -2508,14 +4013,16 @@ export default function App() {
               "seranking",
               result.keyword,
               `SE Ranking: Volume=${result.serankingData.volume}, KD=${result.serankingData.difficulty}, CPC=$${result.serankingData.cpc}`,
-              { serankingData: result.serankingData }
+              { serankingData: result.serankingData },
+              taskId
             );
           } else {
             addBatchThought(
               "seranking",
               result.keyword,
               `SE Ranking: No data found (Blue Ocean Signal!)`,
-              { serankingData: { is_data_found: false } }
+              { serankingData: { is_data_found: false } },
+              taskId
             );
           }
         }
@@ -2526,7 +4033,8 @@ export default function App() {
             "serp-search",
             result.keyword,
             `Analyzed top ${result.topSerpSnippets.length} search results from Google`,
-            { serpSnippets: result.topSerpSnippets }
+            { serpSnippets: result.topSerpSnippets },
+            taskId
           );
         }
 
@@ -2541,7 +4049,8 @@ export default function App() {
                 searchIntent: result.searchIntent,
                 intentAnalysis: result.intentAnalysis,
               },
-            }
+            },
+            taskId
           );
         }
 
@@ -2557,16 +4066,48 @@ export default function App() {
               serpResultCount: result.serpResultCount || -1,
               reasoning: result.reasoning || "No reasoning provided",
             },
-          }
+          },
+          taskId
         );
 
-        // Add to state
-        setState((prev) => ({
-          ...prev,
-          batchKeywords: [...prev.batchKeywords, result],
-        }));
+        // Add to state with task isolation
+        setState((prev) => {
+          const updatedTasks = prev.taskManager.tasks.map(task => {
+            if (task.id === taskId && task.batchState) {
+              return {
+                ...task,
+                batchState: {
+                  ...task.batchState,
+                  batchKeywords: [...task.batchState.batchKeywords, result],
+                },
+              };
+            }
+            return task;
+          });
 
-        addLog(`Completed: "${original}" → ${result.probability}`, "success");
+          // Only update global state if this is the active task
+          if (taskId === prev.taskManager.activeTaskId) {
+            return {
+              ...prev,
+              batchKeywords: [...prev.batchKeywords, result],
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          } else {
+            // Background task - only update task object
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          }
+        });
+
+        addLog(`Completed: "${original}" → ${result.probability}`, "success", taskId);
 
         // Small delay for UI streaming effect
         if (i < batchResult.keywords.length - 1) {
@@ -2577,33 +4118,46 @@ export default function App() {
       // Analysis complete
       addLog(
         `Batch analysis complete! Processed ${batchResult.keywords.length}/${batchResult.total} keywords.`,
-        "success"
+        "success",
+        taskId
       );
       playCompletionSound();
 
-      // Save to batch archives
+      // Save to batch archives and update state with task isolation
       setState((prev) => {
+        const task = prev.taskManager.tasks.find(t => t.id === taskId);
+        if (!task || !task.batchState) return prev;
+
         const newArchive: BatchArchiveEntry = {
           id: `batch-${Date.now()}`,
           timestamp: Date.now(),
-          inputKeywords: prev.batchInputKeywords,
-          keywords: [...prev.batchKeywords],
+          inputKeywords: task.batchState.batchInputKeywords,
+          keywords: [...task.batchState.batchKeywords],
           targetLanguage: prev.targetLanguage,
-          totalCount: prev.batchKeywords.length,
+          totalCount: task.batchState.batchKeywords.length,
         };
 
         const updatedArchives = [newArchive, ...prev.batchArchives].slice(0, 50);
         localStorage.setItem("google_seo_batch_archives", JSON.stringify(updatedArchives));
 
-        return {
-          ...prev,
-          step: "batch-results",
-          batchArchives: updatedArchives,
-        };
+        // Only update global step if this is the active task
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            step: "batch-results",
+            batchArchives: updatedArchives,
+          };
+        } else {
+          // Background task - just update archives
+          return {
+            ...prev,
+            batchArchives: updatedArchives,
+          };
+        }
       });
     } catch (error: any) {
       console.error("Batch analysis error:", error);
-      addLog(`Batch analysis failed: ${error.message}`, "error");
+      addLog(`Batch analysis failed: ${error.message}`, "error", taskId);
       setState((prev) => ({
         ...prev,
         error: `Batch analysis failed: ${error.message}`,
@@ -2762,6 +4316,54 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Task Tab Bar */}
+      <div className="bg-black/60 backdrop-blur-sm border-b border-green-500/10 sticky top-16 z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-2 py-2 overflow-x-auto custom-scrollbar">
+            {/* Task Tabs */}
+            {state.taskManager.tasks.map(task => (
+              <TaskTab
+                key={task.id}
+                task={task}
+                isActive={task.id === state.taskManager.activeTaskId}
+                onSwitch={() => switchTask(task.id)}
+                onClose={(e) => deleteTask(task.id, e)}
+                onRename={(name) => renameTask(task.id, name)}
+                uiLanguage={state.uiLanguage}
+              />
+            ))}
+
+            {/* Add Task Button */}
+            {state.taskManager.tasks.length < state.taskManager.maxTasks && (
+              <button
+                onClick={() => setShowTaskMenu(true)}
+                className="flex-shrink-0 px-3 py-2 rounded-md border border-green-500/30 bg-black/40 hover:bg-green-500/10 text-green-400 transition-colors flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-xs font-medium">
+                  {state.uiLanguage === 'zh' ? '新建任务' : 'New Task'}
+                </span>
+              </button>
+            )}
+
+            {/* Info text when no tasks */}
+            {state.taskManager.tasks.length === 0 && (
+              <div className="text-slate-400 text-xs">
+                {state.uiLanguage === 'zh' ? '点击"新建任务"开始' : 'Click "New Task" to start'}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Task Menu Modal */}
+      <TaskMenuModal
+        show={showTaskMenu}
+        onClose={() => setShowTaskMenu(false)}
+        onCreate={(type) => addTask({ type })}
+        uiLanguage={state.uiLanguage}
+      />
 
       <main className={`flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex flex-col`}>
         {state.error && (
