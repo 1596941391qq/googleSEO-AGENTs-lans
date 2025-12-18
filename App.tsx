@@ -1492,6 +1492,7 @@ interface SidebarProps {
   maxTasks: number;
   onTaskSwitch: (taskId: string) => void;
   onTaskAdd: () => void;
+  onTaskDelete: (taskId: string, e: React.MouseEvent) => void;
   onWorkflowConfig: () => void;
   onLanguageToggle: () => void;
   onThemeToggle: () => void;
@@ -1506,6 +1507,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   maxTasks,
   onTaskSwitch,
   onTaskAdd,
+  onTaskDelete,
   onWorkflowConfig,
   onLanguageToggle,
   onThemeToggle,
@@ -1578,10 +1580,9 @@ const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div className="space-y-1">
             {tasks.map((task) => (
-              <button
+              <div
                 key={task.id}
-                onClick={() => onTaskSwitch(task.id)}
-                className={`w-full group flex items-center justify-between p-3 rounded transition-all border ${
+                className={`group flex items-center justify-between p-3 rounded transition-all border ${
                   activeTaskId === task.id
                     ? isDarkTheme
                       ? 'bg-white/5 border-white/10'
@@ -1591,7 +1592,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                     : 'border-transparent hover:bg-gray-50'
                 }`}
               >
-                <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => onTaskSwitch(task.id)}
+                  className="flex items-center space-x-3 flex-1"
+                >
                   {getTaskIcon(task)}
                   <span className={`text-xs font-bold ${
                     activeTaskId === task.id
@@ -1600,11 +1604,24 @@ const Sidebar: React.FC<SidebarProps> = ({
                   }`}>
                     {task.name}
                   </span>
+                </button>
+                <div className="flex items-center space-x-2">
+                  {activeTaskId === task.id && (
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                  )}
+                  <button
+                    onClick={(e) => onTaskDelete(task.id, e)}
+                    className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${
+                      isDarkTheme
+                        ? 'text-neutral-500 hover:text-red-400 hover:bg-red-500/10'
+                        : 'text-gray-400 hover:text-red-500 hover:bg-red-50'
+                    }`}
+                    title={uiLanguage === 'zh' ? '关闭任务' : 'Close task'}
+                  >
+                    <X size={12} />
+                  </button>
                 </div>
-                {activeTaskId === task.id && (
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-                )}
-              </button>
+              </div>
             ))}
             {tasks.length === 0 && (
               <div className={`text-center py-4 text-xs ${isDarkTheme ? 'text-neutral-600' : 'text-gray-500'}`}>
@@ -1931,7 +1948,7 @@ export default function App() {
     const token = localStorage.getItem('auth_token');
 
     console.log('[Credits] Getting credits, token exists:', !!token);
-    console.log('[Credits] API URL:', `${MAIN_APP_URL}/api/user/credits`);
+    console.log('[Credits] API URL:', `${MAIN_APP_URL}/api/user/dashboard`);
 
     if (!token) {
       console.error('[Credits] No auth token found');
@@ -1939,7 +1956,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch(`${MAIN_APP_URL}/api/user/credits`, {
+      const response = await fetch(`${MAIN_APP_URL}/api/user/dashboard`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1963,6 +1980,97 @@ export default function App() {
       console.error('[Credits] Error fetching credits:', error);
       return null;
     }
+  };
+
+  // Consume credits
+  const consumeCredits = async (modeId: string, description: string, keywordCount?: number) => {
+    const token = localStorage.getItem('auth_token');
+
+    console.log('[Credits] Consuming credits for mode:', modeId, 'keyword count:', keywordCount);
+
+    // Credit costs for each mode (per 10 keywords)
+    const creditsMap: { [key: string]: number } = {
+      keyword_mining: 20,
+      batch_translation: 20,
+      deep_mining: 30,
+    };
+
+    const baseAmount = creditsMap[modeId];
+    if (!baseAmount) {
+      throw new Error(`Invalid mode ID: ${modeId}`);
+    }
+
+    // Calculate actual amount based on keyword count (per 10 keywords)
+    // For mining/batch: every 10 keywords = baseAmount credits
+    // For deep-dive: fixed baseAmount (not based on keyword count)
+    let amount = baseAmount;
+    if (keywordCount && (modeId === 'keyword_mining' || modeId === 'batch_translation')) {
+      // Round up: 1-10 keywords = 1x, 11-20 = 2x, 21-30 = 3x, etc.
+      const multiplier = Math.ceil(keywordCount / 10);
+      amount = baseAmount * multiplier;
+      console.log(`[Credits] Calculated amount: ${amount} (${keywordCount} keywords, ${multiplier}x multiplier)`);
+    }
+
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    try {
+      const response = await fetch(`${MAIN_APP_URL}/api/credits/consume`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          credits: amount,
+          description,
+          relatedEntity: 'seo_agent',
+          modeId,
+        }),
+      });
+
+      console.log('[Credits] Consume response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[Credits] Consume error:', errorData);
+
+        // Handle specific errors
+        if (errorData.error === 'Insufficient credits') {
+          throw new Error('INSUFFICIENT_CREDITS');
+        }
+
+        throw new Error(errorData.error || 'Failed to consume credits');
+      }
+
+      const result = await response.json();
+      console.log('[Credits] Consume success:', result);
+
+      // Update local credits state
+      setCredits(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          remaining: result.remaining,
+          used: result.used,
+        };
+      });
+
+      return result;
+    } catch (error) {
+      console.error('[Credits] Error consuming credits:', error);
+      throw error;
+    }
+  };
+
+  // Check if user has enough credits
+  const checkCreditsBalance = (requiredCredits: number): boolean => {
+    if (!credits) {
+      return false;
+    }
+
+    return credits.remaining >= requiredCredits;
   };
 
   // Fetch credits when authenticated
@@ -3456,6 +3564,23 @@ export default function App() {
           state.targetLanguage
         );
 
+        // Consume credits on first successful round (after getting keywords)
+        if (currentRound === 1 && analyzedBatch.length > 0) {
+          try {
+            addLog('Consuming credits based on keywords generated...', 'info', taskId);
+            await consumeCredits(
+              'keyword_mining',
+              `Keyword Mining - "${state.seedKeyword}" (${state.targetLanguage.toUpperCase()})`,
+              analyzedBatch.length
+            );
+            addLog(`✅ Credits consumed: ${Math.ceil(analyzedBatch.length / 10) * 20} credits. Remaining: ${credits?.remaining || 0}`, 'success', taskId);
+          } catch (error: any) {
+            console.error('[Credits] Failed to consume credits:', error);
+            addLog(`⚠️ Warning: Credits consumption failed - ${error.message}`, 'warning', taskId);
+            // Continue mining even if credits fail (already got the keywords)
+          }
+        }
+
         const highProbCandidate = analyzedBatch.find(
           (k) => k.probability === ProbabilityLevel.HIGH
         );
@@ -3800,6 +3925,20 @@ export default function App() {
         state.targetLanguage,
         getWorkflowPrompt("deepDive", "deepdive-strategy", state.deepDivePrompt)
       );
+
+      // Consume credits after successfully generating strategy (fixed 30 credits for deep dive)
+      try {
+        addLog('Consuming credits for deep dive analysis...', 'info', taskId);
+        await consumeCredits(
+          'deep_mining',
+          `Deep Dive Strategy - "${keyword.keyword}" (${state.targetLanguage.toUpperCase()})`
+        );
+        addLog(`✅ Credits consumed: 30 credits. Remaining: ${credits?.remaining || 0}`, 'success', taskId);
+      } catch (error: any) {
+        console.error('[Credits] Failed to consume credits:', error);
+        addLog(`⚠️ Warning: Credits consumption failed - ${error.message}`, 'warning', taskId);
+        // Continue showing results even if credits fail
+      }
 
       // Step 2: Core keyword extraction (done by API)
       setState((prev) => {
@@ -4164,6 +4303,69 @@ export default function App() {
   const handleBatchAnalyze = async () => {
     if (!batchInput.trim()) return;
 
+    // Check credits balance before starting
+    const requiredCredits = 20; // batch_translation costs 20 credits
+
+    // Check if user has enough credits
+    if (!checkCreditsBalance(requiredCredits)) {
+      const confirmRecharge = window.confirm(
+        state.uiLanguage === 'zh'
+          ? `余额不足！此操作需要 ${requiredCredits} Credits，您当前剩余 ${credits?.remaining || 0} Credits。\n\n是否前往主应用充值？`
+          : `Insufficient credits! This operation requires ${requiredCredits} Credits, you have ${credits?.remaining || 0} Credits.\n\nGo to main app to recharge?`
+      );
+
+      if (confirmRecharge) {
+        window.open(MAIN_APP_URL, '_blank');
+      }
+      return;
+    }
+
+    // Parse keywords for confirmation count
+    const keywordList = batchInput
+      .split(",")
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+
+    if (keywordList.length === 0) {
+      setState((prev) => ({
+        ...prev,
+        error: "No valid keywords provided",
+      }));
+      return;
+    }
+
+    // Consume credits before starting
+    try {
+      addLog('Consuming credits...', 'info');
+      await consumeCredits(
+        'batch_translation',
+        `Batch Translation - ${keywordList.length} keywords (${state.targetLanguage.toUpperCase()})`
+      );
+      addLog(`✅ Credits consumed successfully. Remaining: ${credits?.remaining || 0}`, 'success');
+    } catch (error: any) {
+      console.error('[Credits] Failed to consume credits:', error);
+
+      if (error.message === 'INSUFFICIENT_CREDITS') {
+        const confirmRecharge = window.confirm(
+          state.uiLanguage === 'zh'
+            ? 'Credits余额不足，是否��往主应用充值？'
+            : 'Insufficient credits. Go to main app to recharge?'
+        );
+
+        if (confirmRecharge) {
+          window.open(MAIN_APP_URL, '_blank');
+        }
+      } else {
+        setState((prev) => ({
+          ...prev,
+          error: state.uiLanguage === 'zh'
+            ? `Credits扣费失败: ${error.message}`
+            : `Failed to consume credits: ${error.message}`,
+        }));
+      }
+      return;
+    }
+
     // Auto-create task if no active task exists
     if (!state.taskManager.activeTaskId) {
       addTask({
@@ -4179,20 +4381,6 @@ export default function App() {
     const currentTaskId = state.taskManager.activeTaskId;
 
     stopBatchRef.current = false;
-
-    // Parse keywords
-    const keywordList = batchInput
-      .split(",")
-      .map((k) => k.trim())
-      .filter((k) => k.length > 0);
-
-    if (keywordList.length === 0) {
-      setState((prev) => ({
-        ...prev,
-        error: "No valid keywords provided",
-      }));
-      return;
-    }
 
     // Initialize batch analysis state
     setState((prev) => ({
@@ -4234,6 +4422,21 @@ export default function App() {
       }
 
       addLog(`Batch API completed: ${batchResult.total} keywords processed`, "success", taskId);
+
+      // Consume credits based on number of keywords processed
+      try {
+        addLog('Consuming credits based on keywords processed...', 'info', taskId);
+        await consumeCredits(
+          'batch_translation',
+          `Batch Translation - ${batchResult.total} keywords (${state.targetLanguage.toUpperCase()})`,
+          batchResult.total
+        );
+        addLog(`✅ Credits consumed: ${Math.ceil(batchResult.total / 10) * 20} credits. Remaining: ${credits?.remaining || 0}`, 'success', taskId);
+      } catch (error: any) {
+        console.error('[Credits] Failed to consume credits:', error);
+        addLog(`⚠️ Warning: Credits consumption failed - ${error.message}`, 'warning', taskId);
+        // Continue showing results even if credits fail
+      }
 
       // Display results one by one (for UI streaming effect)
       for (let i = 0; i < batchResult.keywords.length; i++) {
@@ -4538,6 +4741,7 @@ export default function App() {
         maxTasks={state.taskManager.maxTasks}
         onTaskSwitch={switchTask}
         onTaskAdd={() => setShowTaskMenu(true)}
+        onTaskDelete={deleteTask}
         onWorkflowConfig={() => setState((prev) => ({ ...prev, step: "workflow-config" }))}
         onLanguageToggle={() => setState((prev) => ({ ...prev, uiLanguage: prev.uiLanguage === "en" ? "zh" : "en" }))}
         onThemeToggle={handleThemeToggle}
@@ -4566,7 +4770,7 @@ export default function App() {
           {/* Right: Credits + User Info */}
           <div className="flex items-center space-x-6">
             {/* Credits */}
-            {authenticated && (
+            {(authenticated || (import.meta.env.DEV && credits)) && (
               <div className="flex items-center space-x-3 bg-emerald-500/5 border border-emerald-500/10 px-4 py-2 rounded">
                 {creditsLoading ? (
                   <>
@@ -4674,14 +4878,18 @@ export default function App() {
           {state.step === "input" && (
           <div className="max-w-6xl mx-auto mt-8 flex-1 w-full">
             <div className="text-center mb-10">
-              <h2 className="text-3xl font-bold mb-4 text-white">
+              <h2 className={`text-3xl font-bold mb-4 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
                 {t.inputTitle}
               </h2>
-              <p className="text-slate-400 mb-8">{t.inputDesc}</p>
+              <p className={`mb-8 ${isDarkTheme ? 'text-slate-400' : 'text-gray-600'}`}>{t.inputDesc}</p>
 
               {/* Target Language Selector */}
               <div className="mb-6 flex justify-center">
-                <div className="flex items-center gap-2 bg-black/40 backdrop-blur-sm px-4 py-2 rounded-full border border-green-500/30 shadow-sm text-sm font-medium text-slate-300">
+                <div className={`flex items-center gap-2 backdrop-blur-sm px-4 py-2 rounded-full border shadow-sm text-sm font-medium ${
+                  isDarkTheme
+                    ? 'bg-black/40 border-green-500/30 text-slate-300'
+                    : 'bg-white border-green-500/30 text-gray-700'
+                }`}>
                   <Globe className="w-4 h-4 text-green-400" />
                   <span>{t.targetMarket}:</span>
                   <select
@@ -4692,10 +4900,12 @@ export default function App() {
                         targetLanguage: e.target.value as TargetLanguage,
                       }))
                     }
-                    className="bg-black/60 outline-none text-green-400 font-bold cursor-pointer border-none"
+                    className={`outline-none text-green-400 font-bold cursor-pointer border-none ${
+                      isDarkTheme ? 'bg-black/60' : 'bg-white'
+                    }`}
                   >
                     {LANGUAGES.map((l) => (
-                      <option key={l.code} value={l.code} className="bg-black">
+                      <option key={l.code} value={l.code} className={isDarkTheme ? 'bg-black' : 'bg-white'}>
                         {l.label}
                       </option>
                     ))}
@@ -4705,13 +4915,19 @@ export default function App() {
 
               {/* Tabs */}
               <div className="flex justify-center mb-8">
-                <div className="inline-flex bg-black/40 backdrop-blur-sm rounded-lg border border-green-500/20 shadow-sm p-1">
+                <div className={`inline-flex backdrop-blur-sm rounded-lg border shadow-sm p-1 ${
+                  isDarkTheme
+                    ? 'bg-black/40 border-green-500/20'
+                    : 'bg-white border-green-500/30'
+                }`}>
                   <button
                     onClick={() => setActiveTab("mining")}
                     className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
                       activeTab === "mining"
                         ? "bg-green-500 text-black shadow-sm"
-                        : "text-slate-400 hover:text-green-400"
+                        : isDarkTheme
+                        ? "text-slate-400 hover:text-green-400"
+                        : "text-gray-600 hover:text-green-600"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -4724,7 +4940,9 @@ export default function App() {
                     className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
                       activeTab === "batch"
                         ? "bg-green-500 text-black shadow-sm"
-                        : "text-slate-400 hover:text-green-400"
+                        : isDarkTheme
+                        ? "text-slate-400 hover:text-green-400"
+                        : "text-gray-600 hover:text-green-600"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -4737,7 +4955,9 @@ export default function App() {
                     className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
                       activeTab === "deepDive"
                         ? "bg-green-500 text-black shadow-sm"
-                        : "text-slate-400 hover:text-green-400"
+                        : isDarkTheme
+                        ? "text-slate-400 hover:text-green-400"
+                        : "text-gray-600 hover:text-green-600"
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -4753,14 +4973,20 @@ export default function App() {
             {activeTab === "mining" && (
               <div className="max-w-3xl mx-auto">
                 {/* Clean Input Design */}
-                <div className="flex w-full bg-black/40 backdrop-blur-sm rounded-lg shadow-lg border border-green-500/30 overflow-hidden focus-within:ring-2 focus-within:ring-green-500/50 transition-all">
+                <div className={`flex w-full backdrop-blur-sm rounded-lg shadow-lg border overflow-hidden focus-within:ring-2 focus-within:ring-green-500/50 transition-all ${
+                  isDarkTheme
+                    ? 'bg-black/40 border-green-500/30'
+                    : 'bg-white border-green-500/30'
+                }`}>
                   <div className="flex items-center justify-center pl-4 text-green-400/60">
                     <Search className="w-5 h-5" />
                   </div>
                   <input
                     type="text"
                     placeholder={t.placeholder}
-                    className="flex-1 p-4 text-lg outline-none bg-transparent text-white placeholder:text-slate-500"
+                    className={`flex-1 p-4 text-lg outline-none bg-transparent placeholder:text-slate-500 ${
+                      isDarkTheme ? 'text-white' : 'text-gray-900'
+                    }`}
                     value={state.seedKeyword}
                     onChange={(e) =>
                       setState((prev) => ({
@@ -4780,10 +5006,14 @@ export default function App() {
                 </div>
 
                 {/* Mining Settings Panel */}
-                <div className="mt-6 bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm p-6">
+                <div className={`mt-6 backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
+                  isDarkTheme
+                    ? 'bg-black/40 border-green-500/20'
+                    : 'bg-white border-green-500/30'
+                }`}>
                   <div className="flex items-center gap-2 mb-4">
                     <Settings className="w-4 h-4 text-green-400" />
-                    <h4 className="text-sm font-bold text-white">
+                    <h4 className={`text-sm font-bold ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
                       {state.uiLanguage === 'zh' ? '挖词设置' : 'Mining Settings'}
                     </h4>
                   </div>
@@ -4791,7 +5021,7 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Words Per Round */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-2">
+                      <label className={`block text-xs font-semibold mb-2 ${isDarkTheme ? 'text-slate-400' : 'text-gray-600'}`}>
                         {state.uiLanguage === 'zh' ? '每轮词语数' : 'Words Per Round'}
                       </label>
                       <input
@@ -4805,16 +5035,20 @@ export default function App() {
                             wordsPerRound: Math.max(5, Math.min(20, parseInt(e.target.value) || 10)),
                           }))
                         }
-                        className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-lg text-sm font-semibold text-white focus:ring-2 focus:ring-green-500/50 outline-none"
+                        className={`w-full px-3 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-green-500/50 outline-none ${
+                          isDarkTheme
+                            ? 'border-green-500/30 bg-black/60 text-white'
+                            : 'border-green-500/30 bg-white text-gray-900'
+                        }`}
                       />
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className={`text-xs mt-1 ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>
                         {state.uiLanguage === 'zh' ? '范围: 5-20' : 'Range: 5-20'}
                       </p>
                     </div>
 
                     {/* Mining Strategy */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-400 mb-2">
+                      <label className={`block text-xs font-semibold mb-2 ${isDarkTheme ? 'text-slate-400' : 'text-gray-600'}`}>
                         {state.uiLanguage === 'zh' ? '挖词策略' : 'Mining Strategy'}
                       </label>
                       <select
@@ -4825,16 +5059,20 @@ export default function App() {
                             miningStrategy: e.target.value as 'horizontal' | 'vertical',
                           }))
                         }
-                        className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-lg text-sm font-semibold text-white focus:ring-2 focus:ring-green-500/50 outline-none cursor-pointer"
+                        className={`w-full px-3 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-green-500/50 outline-none cursor-pointer ${
+                          isDarkTheme
+                            ? 'border-green-500/30 bg-black/60 text-white'
+                            : 'border-green-500/30 bg-white text-gray-900'
+                        }`}
                       >
-                        <option value="horizontal" className="bg-black">
+                        <option value="horizontal" className={isDarkTheme ? 'bg-black' : 'bg-white'}>
                           {state.uiLanguage === 'zh' ? '🌐 横向挖词 (广泛主题)' : '🌐 Horizontal (Broad Topics)'}
                         </option>
-                        <option value="vertical" className="bg-black">
+                        <option value="vertical" className={isDarkTheme ? 'bg-black' : 'bg-white'}>
                           {state.uiLanguage === 'zh' ? '🎯 纵向挖词 (深度挖掘)' : '🎯 Vertical (Deep Dive)'}
                         </option>
                       </select>
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className={`text-xs mt-1 ${isDarkTheme ? 'text-slate-500' : 'text-gray-500'}`}>
                         {state.miningStrategy === 'horizontal'
                           ? (state.uiLanguage === 'zh' ? '探索不同的平行主题' : 'Explore different parallel topics')
                           : (state.uiLanguage === 'zh' ? '深入挖掘同一主题' : 'Deep dive into same topic')}
@@ -4846,7 +5084,9 @@ export default function App() {
                 {/* Mining Archive List */}
                 {state.archives.length > 0 && (
                   <div className="mt-12">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <h3 className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${
+                      isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                    }`}>
                       <History className="w-4 h-4" /> {t.miningArchives}
                     </h3>
                     <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm overflow-hidden">
