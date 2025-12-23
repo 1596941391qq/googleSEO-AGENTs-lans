@@ -329,7 +329,7 @@ export interface AppState {
   // Task Management
   taskManager: TaskManagerState;
 
-  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config';
+  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'website-builder';
   seedKeyword: string;
   targetLanguage: TargetLanguage;
   keywords: KeywordData[];
@@ -399,4 +399,40 @@ export interface AppState {
   batchCurrentIndex: number;
   batchTotalCount: number;
   batchInputKeywords: string; // Store original input for archiving
+
+  // Website Generator State
+  generatedWebsite: WebsiteData | null;
+  isGeneratingWebsite: boolean;
+  showWebsitePreview: boolean;
+  websiteMessages: WebsiteMessage[];
+  isOptimizing: boolean;
+  websiteGenerationProgress: {
+    current: number;
+    total: number;
+    currentFile: string;
+  } | null;
+}
+
+// Website Data Structure (v0 style)
+export interface WebsiteData {
+  theme: 'blue' | 'green' | 'purple' | 'orange' | 'red';
+  sections: WebsiteSection[];
+}
+
+export interface WebsiteSection {
+  type: 'hero' | 'features' | 'content' | 'testimonials' | 'faq' | 'cta';
+  props: any; // Section-specific props
+}
+
+// Website Builder Chat Message
+export interface WebsiteMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+  code?: {
+    html: string;
+    css: string;
+    js: string;
+  };
 }

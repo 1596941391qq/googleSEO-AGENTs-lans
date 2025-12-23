@@ -37,6 +37,7 @@ import {
   User,
   Coins,
 } from "lucide-react";
+import { WebsiteRenderer } from './components/website/WebsiteRenderer';
 import { useAuth } from "./contexts/AuthContext";
 import {
   AppState,
@@ -61,6 +62,7 @@ import {
   TaskManagerState,
   CreateTaskParams,
   STORAGE_KEYS,
+  WebsiteMessage,
 } from "./types";
 import {
   generateKeywords,
@@ -1501,6 +1503,447 @@ interface SidebarProps {
   isDarkTheme: boolean;
 }
 
+// === Website Preview Modal ===
+
+interface WebsitePreviewModalProps {
+  code: { html: string; css: string; js: string };
+  onClose: () => void;
+  strategyReport: SEOStrategyReport;
+  isDarkTheme: boolean;
+}
+
+const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
+  code,
+  onClose,
+  strategyReport,
+  isDarkTheme,
+}) => {
+  const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
+
+  // Combine code into single HTML file
+  const combinedHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${strategyReport.pageTitleH1}</title>
+  <meta name="description" content="${strategyReport.metaDescription}">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>${code.css}</style>
+</head>
+<body>
+  ${code.html}
+  <script>${code.js}</script>
+</body>
+</html>`;
+
+  const downloadHTML = () => {
+    const blob = new Blob([combinedHTML], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${strategyReport.urlSlug}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      <div className={`w-full h-full max-w-7xl max-h-[90vh] m-4 rounded-lg overflow-hidden ${
+        isDarkTheme ? 'bg-neutral-900' : 'bg-white'
+      }`}>
+        {/* Header */}
+        <div className={`flex items-center justify-between px-6 py-4 border-b ${
+          isDarkTheme ? 'border-neutral-700 bg-neutral-800' : 'border-gray-200 bg-gray-50'
+        }`}>
+          <h2 className={`text-xl font-bold ${
+            isDarkTheme ? 'text-white' : 'text-gray-900'
+          }`}>
+            网站预览 - {strategyReport.targetKeyword}
+          </h2>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={downloadHTML}
+              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+            >
+              <Download size={16} />
+              下载HTML
+            </button>
+            <button
+              onClick={onClose}
+              className={`p-2 rounded-lg transition-colors ${
+                isDarkTheme
+                  ? 'hover:bg-neutral-700 text-neutral-400'
+                  : 'hover:bg-gray-200 text-gray-600'
+              }`}
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Bar */}
+        <div className={`flex border-b ${
+          isDarkTheme ? 'border-neutral-700 bg-neutral-800' : 'border-gray-200 bg-gray-50'
+        }`}>
+          <button
+            onClick={() => setActiveTab('preview')}
+            className={`px-6 py-3 font-medium transition-colors ${
+              activeTab === 'preview'
+                ? 'border-b-2 border-green-500 text-green-500'
+                : isDarkTheme
+                ? 'text-neutral-400 hover:text-neutral-200'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            预览
+          </button>
+          <button
+            onClick={() => setActiveTab('code')}
+            className={`px-6 py-3 font-medium transition-colors ${
+              activeTab === 'code'
+                ? 'border-b-2 border-green-500 text-green-500'
+                : isDarkTheme
+                ? 'text-neutral-400 hover:text-neutral-200'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            代码
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="h-[calc(100%-8rem)] overflow-auto">
+          {activeTab === 'preview' ? (
+            <SandpackProvider
+              template="static"
+              files={{
+                '/index.html': combinedHTML,
+              }}
+              theme={isDarkTheme ? 'dark' : 'light'}
+            >
+              <SandpackPreview
+                showNavigator={false}
+                showRefreshButton={true}
+                style={{ height: '100%' }}
+              />
+            </SandpackProvider>
+          ) : (
+            <SandpackProvider
+              template="static"
+              files={{
+                '/index.html': code.html,
+                '/styles.css': code.css,
+                '/script.js': code.js || '// No JavaScript',
+              }}
+              theme={isDarkTheme ? 'dark' : 'light'}
+            >
+              <SandpackCodeEditor
+                showTabs
+                showLineNumbers
+                showInlineErrors
+                wrapContent
+                style={{ height: '100%' }}
+              />
+            </SandpackProvider>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// === Website Builder Page (Bolt/V0 Style) ===
+
+interface WebsiteBuilderProps {
+  websiteData: WebsiteData | null; // ✅ v0-style: structured data instead of code
+  messages: WebsiteMessage[];
+  isOptimizing: boolean;
+  isGenerating: boolean;
+  progress: { current: number; total: number; currentFile: string } | null;
+  strategyReport: SEOStrategyReport;
+  targetLanguage: TargetLanguage;
+  onSendMessage: (message: string) => void;
+  onBack: () => void;
+  onWebsiteGenerated: (data: WebsiteData) => void; // ✅ Changed from onCodeGenerated
+  onProgressUpdate: (progress: { current: number; total: number; currentFile: string }) => void;
+  isDarkTheme: boolean;
+}
+
+const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
+  websiteData,
+  messages,
+  isOptimizing,
+  isGenerating,
+  progress,
+  strategyReport,
+  targetLanguage,
+  onSendMessage,
+  onBack,
+  onWebsiteGenerated,
+  onProgressUpdate,
+  isDarkTheme,
+}) => {
+  const [input, setInput] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // ✅ Generate website data on component mount
+  useEffect(() => {
+    if (!websiteData && isGenerating) {
+      generateWebsiteData();
+    }
+  }, []);
+
+  const generateWebsiteData = async () => {
+    try {
+      // ✅ Single API call - generate website data (JSON)
+      onProgressUpdate({ current: 1, total: 1, currentFile: '生成网站配置...' });
+
+      const response = await fetch('/api/generate-app-component', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          strategyReport,
+          projectStructure: null, // Not needed anymore
+          targetLanguage,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Failed to generate website');
+      const { data } = await response.json();
+
+      console.log('[WebsiteBuilder] Website data generated:', data);
+
+      // ✅ Success - update with structured data
+      onWebsiteGenerated(data);
+
+    } catch (error: any) {
+      console.error('[WebsiteBuilder] Generation failed:', error);
+      // Handle error (show error message in chat)
+    }
+  };
+
+  const handleSend = () => {
+    if (input.trim() && !isOptimizing && websiteData) {
+      onSendMessage(input);
+      setInput('');
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  const downloadProject = () => {
+    if (!websiteData) return;
+
+    // ✅ Generate complete HTML file with all sections
+    const htmlContent = generateHTMLFromData(websiteData, strategyReport);
+
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${strategyReport.urlSlug || 'website'}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ✅ Helper function to generate complete HTML
+  const generateHTMLFromData = (data: WebsiteData, strategy: SEOStrategyReport): string => {
+    // Import WebsiteRenderer component code and render to HTML string
+    // For now, return a simple HTML structure
+    return `<!DOCTYPE html>
+<html lang="${targetLanguage}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${strategy.pageTitleH1}</title>
+  <meta name="description" content="${strategy.metaDescription}">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <!-- Generated website data: ${JSON.stringify(data)} -->
+  <div id="root">
+    <!-- Website sections will be rendered here by WebsiteRenderer -->
+    <!-- This is a placeholder - actual rendering happens in React -->
+  </div>
+</body>
+</html>`;
+  };
+
+  return (
+    <div className={`flex-1 flex flex-col h-full ${isDarkTheme ? 'bg-neutral-900' : 'bg-gray-50'}`}>
+      {/* Header */}
+      <div className={`flex items-center justify-between px-6 py-4 border-b ${
+        isDarkTheme ? 'border-neutral-700 bg-neutral-800' : 'border-gray-200 bg-white'
+      }`}>
+        <div>
+          <h1 className={`text-2xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
+            网站生成器
+          </h1>
+          <p className={`text-sm mt-1 ${isDarkTheme ? 'text-neutral-400' : 'text-gray-600'}`}>
+            {strategyReport.targetKeyword}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={downloadProject}
+            disabled={!websiteData}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download size={16} />
+            下载HTML
+          </button>
+          <button
+            onClick={onBack}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+              isDarkTheme
+                ? 'bg-neutral-700 text-white hover:bg-neutral-600'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            <ArrowRight size={16} className="rotate-180" />
+            返回
+          </button>
+        </div>
+      </div>
+
+      {/* Split Layout */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left: Chat Area (40%) */}
+        <div className={`w-2/5 flex flex-col border-r ${
+          isDarkTheme ? 'border-neutral-700 bg-neutral-900' : 'border-gray-200 bg-white'
+        }`}>
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-lg px-4 py-3 ${
+                    msg.role === 'user'
+                      ? isDarkTheme
+                        ? 'bg-green-600 text-white'
+                        : 'bg-green-500 text-white'
+                      : msg.role === 'system'
+                      ? isDarkTheme
+                        ? 'bg-neutral-800 text-neutral-300 border border-neutral-700'
+                        : 'bg-gray-100 text-gray-700 border border-gray-200'
+                      : isDarkTheme
+                      ? 'bg-neutral-800 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                  {msg.code && (
+                    <div className="mt-2 pt-2 border-t border-white/10">
+                      <div className="text-xs opacity-70">代码已更新</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {isOptimizing && (
+              <div className="flex justify-start">
+                <div className={`rounded-lg px-4 py-3 ${
+                  isDarkTheme ? 'bg-neutral-800 text-white' : 'bg-gray-100 text-gray-900'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span className="text-sm">正在优化网站...</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Area */}
+          <div className={`p-4 border-t ${
+            isDarkTheme ? 'border-neutral-700 bg-neutral-800' : 'border-gray-200 bg-gray-50'
+          }`}>
+            <div className="flex gap-2">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="输入优化需求，例如：'改成蓝色主题'、'添加联系表单'..."
+                disabled={isOptimizing}
+                rows={3}
+                className={`flex-1 px-3 py-2 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                  isDarkTheme
+                    ? 'bg-neutral-700 border-neutral-600 text-white placeholder-neutral-400'
+                    : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'
+                } disabled:opacity-50`}
+              />
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || isOptimizing}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+              >
+                {isOptimizing ? <Loader2 size={20} className="animate-spin" /> : <ArrowRight size={20} />}
+              </button>
+            </div>
+            <p className={`text-xs mt-2 ${isDarkTheme ? 'text-neutral-500' : 'text-gray-500'}`}>
+              按 Enter 发送，Shift + Enter 换行
+            </p>
+          </div>
+        </div>
+
+        {/* Right: Preview Area (60%) */}
+        <div className={`w-3/5 flex flex-col ${isDarkTheme ? 'bg-neutral-800' : 'bg-gray-100'}`}>
+          {/* ✅ Show loading state while generating */}
+          {isGenerating && !websiteData && progress ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <Loader2 size={48} className="animate-spin mx-auto mb-4 text-green-500" />
+                <h3 className={`text-xl font-bold mb-2 ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
+                  {progress.currentFile}
+                </h3>
+                <div className="w-64 bg-gray-200 rounded-full h-2 mb-2">
+                  <div
+                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                  />
+                </div>
+                <p className={`text-sm ${isDarkTheme ? 'text-neutral-400' : 'text-gray-600'}`}>
+                  {progress.current} / {progress.total}
+                </p>
+              </div>
+            </div>
+          ) : websiteData ? (
+            /* ✅ v0-style: Render using WebsiteRenderer component */
+            <div className="h-full w-full overflow-auto">
+              <WebsiteRenderer data={websiteData} />
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <p className={isDarkTheme ? 'text-neutral-400' : 'text-gray-600'}>
+                等待生成...
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Sidebar: React.FC<SidebarProps> = ({
   tasks,
   activeTaskId,
@@ -1533,7 +1976,9 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   // Get task icon and status indicator
   const getTaskIcon = (task: TaskState) => {
-    if (task.miningState?.isMining || task.batchState || task.deepDiveState?.isDeepDiving) {
+    const isBatchRunning = task.batchState && task.batchState.batchCurrentIndex < task.batchState.batchTotalCount;
+
+    if (task.miningState?.isMining || isBatchRunning || task.deepDiveState?.isDeepDiving) {
       return <Loader2 size={14} className="animate-spin text-emerald-500" />;
     }
     if (task.miningState?.miningSuccess) {
@@ -1921,6 +2366,14 @@ export default function App() {
     batchCurrentIndex: 0,
     batchTotalCount: 0,
     batchInputKeywords: "",
+
+    // Website Generator
+    generatedWebsite: null,
+    isGeneratingWebsite: false,
+    showWebsitePreview: false,
+    websiteMessages: [],
+    isOptimizing: false,
+    websiteGenerationProgress: null,
   });
 
   // Batch translate and analyze state
@@ -2254,6 +2707,22 @@ export default function App() {
     state.miningSuccess,
     state.step,
   ]);
+
+  // Sync activeTab with current task type when switching tasks
+  useEffect(() => {
+    if (state.taskManager.activeTaskId) {
+      const activeTask = state.taskManager.tasks.find(t => t.id === state.taskManager.activeTaskId);
+      if (activeTask && state.step === 'input') {
+        // Map task type to activeTab value
+        const tabMap: Record<TaskType, "mining" | "batch" | "deepDive"> = {
+          'mining': 'mining',
+          'batch': 'batch',
+          'deep-dive': 'deepDive',
+        };
+        setActiveTab(tabMap[activeTask.type]);
+      }
+    }
+  }, [state.taskManager.activeTaskId, state.step]);
 
   // Save archive helper
   const saveToArchive = (currentState: AppState) => {
@@ -3413,6 +3882,12 @@ export default function App() {
   const startMining = async (continueExisting = false) => {
     if (!state.seedKeyword.trim()) return;
 
+    // Check authentication
+    if (!authenticated) {
+      setState(prev => ({ ...prev, error: '请先登录才能使用关键词挖掘功能' }));
+      return;
+    }
+
     // Auto-create task if no active task exists
     if (!state.taskManager.activeTaskId) {
       addTask({
@@ -3794,6 +4269,12 @@ export default function App() {
   };
 
   const handleDeepDive = async (keyword: KeywordData) => {
+    // Check authentication
+    if (!authenticated) {
+      setState(prev => ({ ...prev, error: '请先登录才能使用Deep Dive功能' }));
+      return;
+    }
+
     // Auto-create task if no active task exists
     if (!state.taskManager.activeTaskId) {
       addTask({
@@ -4198,6 +4679,116 @@ export default function App() {
     }
   };
 
+  // === Website Generator ===
+
+  const generateWebsite = async (strategyReport: SEOStrategyReport, targetLanguage: TargetLanguage) => {
+    // Check authentication
+    if (!authenticated) {
+      addLog('❌ 请先登录才能使用网站生成功能', 'error');
+      setState(prev => ({ ...prev, error: '请先登录才能使用网站生成功能' }));
+      return;
+    }
+
+    // ✅ Navigate to independent route using URL hash
+    setState(prev => ({
+      ...prev,
+      currentStrategyReport: strategyReport,
+      targetLanguage: targetLanguage,
+      isGeneratingWebsite: true,
+      generatedWebsite: null,
+      websiteMessages: [
+        {
+          id: Date.now().toString(),
+          role: 'system',
+          content: '正在初始化项目...',
+          timestamp: Date.now(),
+        }
+      ],
+      websiteGenerationProgress: {
+        current: 0,
+        total: 2,
+        currentFile: '准备中...',
+      },
+    }));
+
+    // Jump to independent website builder route
+    window.location.hash = '#/website';
+
+    addLog('🚀 开始生成网站...', 'info');
+  };
+
+  // Optimize website based on user request
+  const optimizeWebsite = async (userRequest: string) => {
+    if (!state.generatedWebsite || !userRequest.trim()) return;
+
+    try {
+      setState(prev => ({ ...prev, isOptimizing: true }));
+
+      // Add user message
+      const userMessage: WebsiteMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content: userRequest,
+        timestamp: Date.now(),
+      };
+
+      setState(prev => ({
+        ...prev,
+        websiteMessages: [...prev.websiteMessages, userMessage],
+      }));
+
+      // ✅ Send WebsiteData to optimize API
+      const response = await fetch('/api/optimize-component', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentData: state.generatedWebsite,
+          userRequest,
+          chatHistory: state.websiteMessages,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Optimization failed');
+      }
+
+      const responseData = await response.json();
+
+      // Add assistant response
+      const assistantMessage: WebsiteMessage = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: responseData.message || '✅ 已根据您的要求优化网站',
+        timestamp: Date.now() + 1,
+      };
+
+      // ✅ Update with new WebsiteData
+      setState(prev => ({
+        ...prev,
+        generatedWebsite: responseData.data,
+        websiteMessages: [...prev.websiteMessages, assistantMessage],
+        isOptimizing: false,
+      }));
+
+    } catch (error: any) {
+      console.error('[optimizeWebsite] Error:', error);
+
+      const errorMessage: WebsiteMessage = {
+        id: (Date.now() + 2).toString(),
+        role: 'assistant',
+        content: `❌ 优化失败: ${error.message}`,
+        timestamp: Date.now() + 2,
+      };
+
+      setState(prev => ({
+        ...prev,
+        websiteMessages: [...prev.websiteMessages, errorMessage],
+        isOptimizing: false,
+      }));
+    }
+  };
+
   // === Workflow Configuration Management ===
 
   const saveWorkflowConfig = (config: WorkflowConfig) => {
@@ -4302,6 +4893,12 @@ export default function App() {
   // Batch translate and analyze handler
   const handleBatchAnalyze = async () => {
     if (!batchInput.trim()) return;
+
+    // Check authentication
+    if (!authenticated) {
+      setState(prev => ({ ...prev, error: '请先登录才能使用批量分析功能' }));
+      return;
+    }
 
     // Check credits balance before starting
     const requiredCredits = 20; // batch_translation costs 20 credits
@@ -4728,6 +5325,69 @@ export default function App() {
     localStorage.setItem('theme', !isDarkTheme ? 'dark' : 'light');
   };
 
+  // ✅ Check if current route is /website (independent page)
+  const currentHash = typeof window !== 'undefined' ? window.location.hash : '';
+  const isWebsiteBuilderRoute = currentHash === '#/website';
+
+  // ✅ If on /website route, render full-screen WebsiteBuilder (no sidebar, no other UI)
+  if (isWebsiteBuilderRoute && state.currentStrategyReport) {
+    return (
+      <div className={`h-screen w-screen ${
+        isDarkTheme
+          ? 'bg-[#050505] text-[#e5e5e5]'
+          : 'bg-gray-50 text-gray-900'
+      }`}>
+        <WebsiteBuilder
+          websiteData={state.generatedWebsite}
+          messages={state.websiteMessages}
+          isOptimizing={state.isOptimizing}
+          isGenerating={state.isGeneratingWebsite}
+          progress={state.websiteGenerationProgress}
+          strategyReport={state.currentStrategyReport}
+          targetLanguage={state.targetLanguage}
+          onSendMessage={optimizeWebsite}
+          onBack={() => {
+            window.location.hash = '';
+            setState(prev => ({ ...prev, step: 'deep-dive-results' }));
+          }}
+          onWebsiteGenerated={(data) => {
+            setState(prev => ({
+              ...prev,
+              generatedWebsite: data,
+              isGeneratingWebsite: false,
+              websiteGenerationProgress: null,
+              websiteMessages: [
+                ...prev.websiteMessages,
+                {
+                  id: Date.now().toString(),
+                  role: 'assistant',
+                  content: '✅ 网站已生成！您可以在右侧预览效果。如需优化，请告诉我您的需求。',
+                  timestamp: Date.now(),
+                },
+              ],
+            }));
+          }}
+          onProgressUpdate={(progress) => {
+            setState(prev => ({
+              ...prev,
+              websiteGenerationProgress: progress,
+              websiteMessages: [
+                ...prev.websiteMessages.slice(0, -1),
+                {
+                  id: Date.now().toString(),
+                  role: 'system',
+                  content: progress.currentFile,
+                  timestamp: Date.now(),
+                },
+              ],
+            }));
+          }}
+          isDarkTheme={isDarkTheme}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`flex h-screen overflow-hidden ${
       isDarkTheme
@@ -4873,6 +5533,8 @@ export default function App() {
               {state.error}
             </div>
           )}
+
+          {/* WEBSITE BUILDER PAGE - Now using independent route #/website */}
 
           {/* STEP 1: INPUT */}
           {state.step === "input" && (
@@ -6354,6 +7016,14 @@ export default function App() {
                 </p>
               </div>
               <div className="flex gap-3">
+                <button
+                  disabled={true}
+                  className="flex items-center gap-2 px-4 py-2 bg-gray-400 text-white rounded-md text-sm font-medium cursor-not-allowed opacity-50"
+                  title="网站生成功能正在维护中，暂时不可用"
+                >
+                  <Globe className="w-4 h-4" />
+                  生成网站 (维护中)
+                </button>
                 <button
                   onClick={() => {
                     const report = state.currentStrategyReport;
