@@ -393,7 +393,7 @@ const LANGUAGES: { code: TargetLanguage; label: string }[] = [
 
 // --- Components ---
 
-const TerminalLog = ({ logs }: { logs: LogEntry[] }) => {
+const TerminalLog = ({ logs, isDarkTheme = true }: { logs: LogEntry[]; isDarkTheme?: boolean }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -403,8 +403,16 @@ const TerminalLog = ({ logs }: { logs: LogEntry[] }) => {
   }, [logs]);
 
   return (
-    <div className="bg-[#0a0a0a] rounded-lg p-3 font-mono text-xs text-emerald-400 h-full overflow-hidden flex flex-col shadow-inner border border-white/10">
-      <div className="flex items-center gap-2 border-b border-white/10 pb-2 mb-2 text-neutral-500 uppercase tracking-wider text-[10px]">
+    <div className={`rounded-lg p-3 font-mono text-xs h-full overflow-hidden flex flex-col shadow-inner ${
+      isDarkTheme
+        ? 'bg-[#0a0a0a] text-emerald-400 border border-white/10'
+        : 'bg-white text-emerald-600 border border-gray-200'
+    }`}>
+      <div className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
+        isDarkTheme
+          ? 'border-white/10 text-neutral-500'
+          : 'border-gray-200 text-gray-500'
+      }`}>
         <Terminal className="w-3 h-3 text-emerald-500" />
         <span>System Logs</span>
       </div>
@@ -417,13 +425,15 @@ const TerminalLog = ({ logs }: { logs: LogEntry[] }) => {
             key={i}
             className={`flex gap-2 ${
               log.type === "error"
-                ? "text-red-400"
+                ? isDarkTheme ? "text-red-400" : "text-red-600"
                 : log.type === "api"
-                ? "text-blue-400"
-                : "text-neutral-300"
+                ? isDarkTheme ? "text-blue-400" : "text-blue-600"
+                : isDarkTheme ? "text-neutral-300" : "text-gray-700"
             }`}
           >
-            <span className="text-neutral-600 w-14 shrink-0">
+            <span className={`w-14 shrink-0 ${
+              isDarkTheme ? 'text-neutral-600' : 'text-gray-500'
+            }`}>
               [{log.timestamp.split(" ")[0]}]
             </span>
             <span className="break-words">
@@ -443,21 +453,31 @@ const SerpPreview = ({
   label,
   disclaimer,
   t,
+  isDarkTheme = true,
 }: {
   keywords: KeywordData[];
   label: string;
   disclaimer: string;
   t: any;
+  isDarkTheme?: boolean;
 }) => {
   const [isOpen, setIsOpen] = useState(true); // Default open
 
   if (!keywords || keywords.length === 0) return null;
 
   return (
-    <div className="mt-2 border border-white/10 rounded-md overflow-hidden bg-black/40">
+    <div className={`mt-2 border rounded-md overflow-hidden ${
+      isDarkTheme
+        ? 'border-white/10 bg-black/40'
+        : 'border-gray-200 bg-gray-50'
+    }`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-2 bg-white/5 hover:bg-white/10 text-xs text-neutral-300 font-medium transition-colors"
+        className={`w-full flex items-center justify-between p-2 text-xs font-medium transition-colors ${
+          isDarkTheme
+            ? 'bg-white/5 hover:bg-white/10 text-neutral-300'
+            : 'bg-white hover:bg-gray-100 text-gray-700'
+        }`}
       >
         <div className="flex items-center gap-2">
           <Search className="w-3 h-3" />
@@ -471,52 +491,80 @@ const SerpPreview = ({
       </button>
 
       {isOpen && (
-        <div className="bg-black/20 p-2 space-y-3 border-t border-white/10">
-          <div className="text-[10px] text-amber-400 px-2 italic mb-2">
+        <div className={`p-2 space-y-3 border-t ${
+          isDarkTheme
+            ? 'bg-black/20 border-white/10'
+            : 'bg-white border-gray-200'
+        }`}>
+          <div className={`text-[10px] px-2 italic mb-2 ${
+            isDarkTheme ? 'text-amber-400' : 'text-amber-600'
+          }`}>
             {disclaimer}
           </div>
           {keywords.map((kw) => (
             <div
               key={kw.id}
-              className="border-b border-white/10 last:border-0 pb-2 last:pb-0"
+              className={`border-b last:border-0 pb-2 last:pb-0 ${
+                isDarkTheme ? 'border-white/10' : 'border-gray-200'
+              }`}
             >
               <div className="flex justify-between items-start mb-1">
-                <div className="font-bold text-xs text-white">
+                <div className={`font-bold text-xs ${
+                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                }`}>
                   {kw.keyword}
                 </div>
                 <div
                   className={`text-[10px] px-1.5 rounded-full ${
                     kw.probability === ProbabilityLevel.HIGH
-                      ? "bg-emerald-500/20 text-emerald-400"
+                      ? isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-700"
                       : kw.probability === ProbabilityLevel.MEDIUM
-                      ? "bg-yellow-500/20 text-yellow-400"
-                      : "bg-red-500/20 text-red-400"
+                      ? isDarkTheme
+                        ? "bg-yellow-500/20 text-yellow-400"
+                        : "bg-yellow-100 text-yellow-700"
+                      : isDarkTheme
+                      ? "bg-red-500/20 text-red-400"
+                      : "bg-red-100 text-red-700"
                   }`}
                 >
                   {kw.probability}
                 </div>
               </div>
               {kw.topSerpSnippets && kw.topSerpSnippets.length > 0 ? (
-                <div className="space-y-1.5 pl-2 border-l-2 border-white/10">
+                <div className={`space-y-1.5 pl-2 border-l-2 ${
+                  isDarkTheme ? 'border-white/10' : 'border-gray-200'
+                }`}>
                   {kw.topSerpSnippets.slice(0, 3).map((snippet, idx) => (
                     <div key={idx} className="text-[10px]">
                       <div
-                        className="text-blue-400 truncate hover:underline cursor-pointer"
+                        className={`truncate hover:underline cursor-pointer ${
+                          isDarkTheme ? 'text-blue-400' : 'text-blue-600'
+                        }`}
                         title={snippet.title}
                       >
                         {snippet.title}
                       </div>
-                      <div className="text-emerald-400 truncate text-[9px]">
+                      <div className={`truncate text-[9px] ${
+                        isDarkTheme ? 'text-emerald-400' : 'text-emerald-600'
+                      }`}>
                         {snippet.url}
                       </div>
-                      <div className="text-neutral-400 line-clamp-2">
+                      <div className={`line-clamp-2 ${
+                        isDarkTheme ? 'text-neutral-400' : 'text-gray-600'
+                      }`}>
                         {snippet.snippet}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-[10px] text-neutral-500 italic pl-2 border-l-2 border-white/10">
+                <div className={`text-[10px] italic pl-2 border-l-2 ${
+                  isDarkTheme
+                    ? 'text-neutral-500 border-white/10'
+                    : 'text-gray-500 border-gray-200'
+                }`}>
                   No SERP snippets returned. (May be zero results or API missing
                   data)
                 </div>
@@ -528,7 +576,11 @@ const SerpPreview = ({
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 flex w-full items-center justify-center gap-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 text-[10px] py-1 rounded border border-blue-500/30 transition-colors font-medium"
+                className={`mt-2 flex w-full items-center justify-center gap-1 text-[10px] py-1 rounded border transition-colors font-medium ${
+                  isDarkTheme
+                    ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30'
+                    : 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200'
+                }`}
               >
                 <ExternalLink className="w-3 h-3" />
                 {t.verifyBtn}
@@ -541,7 +593,7 @@ const SerpPreview = ({
   );
 };
 
-const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
+const AgentStream = ({ thoughts, t, isDarkTheme = true }: { thoughts: AgentThought[]; t: any; isDarkTheme?: boolean }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -551,8 +603,16 @@ const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
   }, [thoughts]);
 
   return (
-    <div className="bg-[#0a0a0a] rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border border-white/10">
-      <div className="flex items-center gap-2 border-b border-white/10 pb-2 mb-2 text-neutral-400 uppercase tracking-wider text-[10px]">
+    <div className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${
+      isDarkTheme
+        ? 'bg-[#0a0a0a] border-white/10'
+        : 'bg-white border-gray-200'
+    }`}>
+      <div className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
+        isDarkTheme
+          ? 'border-white/10 text-neutral-400'
+          : 'border-gray-200 text-gray-500'
+      }`}>
         <BrainCircuit className="w-3 h-3 text-emerald-500" />
         <span>{t.agentStreamTitle}</span>
       </div>
@@ -566,19 +626,29 @@ const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   thought.type === "generation"
-                    ? "bg-blue-500/20 text-blue-400"
+                    ? isDarkTheme
+                      ? "bg-blue-500/20 text-blue-400"
+                      : "bg-blue-100 text-blue-700"
                     : thought.type === "analysis"
-                    ? "bg-purple-500/20 text-purple-400"
-                    : "bg-emerald-500/20 text-emerald-400"
+                    ? isDarkTheme
+                      ? "bg-purple-500/20 text-purple-400"
+                      : "bg-purple-100 text-purple-700"
+                    : isDarkTheme
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-emerald-100 text-emerald-700"
                 }`}
               >
                 ROUND {thought.round}
               </span>
-              <span className="text-xs text-neutral-500 uppercase font-semibold">
+              <span className={`text-xs uppercase font-semibold ${
+                isDarkTheme ? 'text-neutral-500' : 'text-gray-500'
+              }`}>
                 {thought.type}
               </span>
             </div>
-            <p className="text-sm text-neutral-300 mb-2 font-medium">
+            <p className={`text-sm mb-2 font-medium ${
+              isDarkTheme ? 'text-neutral-300' : 'text-gray-700'
+            }`}>
               {thought.content}
             </p>
 
@@ -587,7 +657,11 @@ const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
                 {thought.keywords.map((kw, idx) => (
                   <span
                     key={idx}
-                    className="px-2 py-1 bg-white/5 border border-white/10 rounded text-xs text-neutral-400"
+                    className={`px-2 py-1 border rounded text-xs ${
+                      isDarkTheme
+                        ? 'bg-white/5 border-white/10 text-neutral-400'
+                        : 'bg-gray-50 border-gray-200 text-gray-600'
+                    }`}
                   >
                     {kw}
                   </span>
@@ -597,13 +671,25 @@ const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
 
             {thought.stats && (
               <div className="flex gap-2 text-xs items-center">
-                <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">
+                <span className={`font-bold px-2 py-0.5 rounded ${
+                  isDarkTheme
+                    ? 'text-emerald-400 bg-emerald-500/10'
+                    : 'text-emerald-700 bg-emerald-100'
+                }`}>
                   {thought.stats.high} High
                 </span>
-                <span className="text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded">
+                <span className={`px-2 py-0.5 rounded ${
+                  isDarkTheme
+                    ? 'text-yellow-400 bg-yellow-500/10'
+                    : 'text-yellow-700 bg-yellow-100'
+                }`}>
                   {thought.stats.medium} Medium
                 </span>
-                <span className="text-red-400 bg-red-500/10 px-2 py-0.5 rounded">
+                <span className={`px-2 py-0.5 rounded ${
+                  isDarkTheme
+                    ? 'text-red-400 bg-red-500/10'
+                    : 'text-red-700 bg-red-100'
+                }`}>
                   {thought.stats.low} Low
                 </span>
               </div>
@@ -616,6 +702,7 @@ const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
                 label={t.serpEvidence}
                 disclaimer={t.serpEvidenceDisclaimer}
                 t={t}
+                isDarkTheme={isDarkTheme}
               />
             )}
           </div>
@@ -628,9 +715,11 @@ const AgentStream = ({ thoughts, t }: { thoughts: AgentThought[]; t: any }) => {
 const BatchAnalysisStream = ({
   thoughts,
   t,
+  isDarkTheme = true,
 }: {
   thoughts: BatchAnalysisThought[];
   t: any;
+  isDarkTheme?: boolean;
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -641,8 +730,16 @@ const BatchAnalysisStream = ({
   }, [thoughts]);
 
   return (
-    <div className="bg-[#0a0a0a] rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border border-white/10">
-      <div className="flex items-center gap-2 border-b border-white/10 pb-2 mb-2 text-neutral-400 uppercase tracking-wider text-[10px]">
+    <div className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${
+      isDarkTheme
+        ? 'bg-[#0a0a0a] border-white/10'
+        : 'bg-white border-gray-200'
+    }`}>
+      <div className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
+        isDarkTheme
+          ? 'border-white/10 text-neutral-400'
+          : 'border-gray-200 text-gray-500'
+      }`}>
         <Languages className="w-3 h-3 text-emerald-500" />
         <span>Batch Analysis Stream</span>
       </div>
@@ -656,61 +753,111 @@ const BatchAnalysisStream = ({
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   thought.type === "translation"
-                    ? "bg-blue-500/20 text-blue-400"
+                    ? isDarkTheme
+                      ? "bg-blue-500/20 text-blue-400"
+                      : "bg-blue-100 text-blue-700"
                     : thought.type === "seranking"
-                    ? "bg-orange-500/20 text-orange-400"
+                    ? isDarkTheme
+                      ? "bg-orange-500/20 text-orange-400"
+                      : "bg-orange-100 text-orange-700"
                     : thought.type === "serp-search"
-                    ? "bg-purple-500/20 text-purple-400"
+                    ? isDarkTheme
+                      ? "bg-purple-500/20 text-purple-400"
+                      : "bg-purple-100 text-purple-700"
                     : thought.type === "intent-analysis"
-                    ? "bg-indigo-500/20 text-indigo-400"
-                    : "bg-emerald-500/20 text-emerald-400"
+                    ? isDarkTheme
+                      ? "bg-indigo-500/20 text-indigo-400"
+                      : "bg-indigo-100 text-indigo-700"
+                    : isDarkTheme
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-emerald-100 text-emerald-700"
                 }`}
               >
                 {thought.type === "seranking" ? "SEO RESEARCH" : thought.type.toUpperCase().replace("-", " ")}
               </span>
-              <span className="text-xs text-neutral-400 font-medium truncate">
+              <span className={`text-xs font-medium truncate ${
+                isDarkTheme ? 'text-neutral-400' : 'text-gray-600'
+              }`}>
                 {thought.keyword}
               </span>
             </div>
-            <p className="text-sm text-neutral-300 mb-2">{thought.content}</p>
+            <p className={`text-sm mb-2 ${
+              isDarkTheme ? 'text-neutral-300' : 'text-gray-700'
+            }`}>{thought.content}</p>
 
             {/* SE Ranking Data Display */}
             {thought.type === "seranking" && thought.serankingData && (
               <div className="mt-2">
                 {thought.serankingData.is_data_found ? (
-                  <div className="bg-black/40 p-3 rounded border border-orange-500/30">
-                    <div className="text-[10px] text-orange-400 font-bold mb-2 flex items-center gap-1">
+                  <div className={`p-3 rounded border ${
+                    isDarkTheme
+                      ? 'bg-black/40 border-orange-500/30'
+                      : 'bg-orange-50 border-orange-200'
+                  }`}>
+                    <div className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
+                      isDarkTheme ? 'text-orange-400' : 'text-orange-600'
+                    }`}>
                       <TrendingUp className="w-3 h-3" />
                       SE RANKING DATA
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="p-2 bg-white/5 rounded border border-white/10">
-                        <div className="text-[9px] text-neutral-400 font-bold mb-1">VOLUME</div>
-                        <div className="text-sm font-bold text-blue-400">
+                      <div className={`p-2 rounded border ${
+                        isDarkTheme
+                          ? 'bg-white/5 border-white/10'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <div className={`text-[9px] font-bold mb-1 ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-500'
+                        }`}>VOLUME</div>
+                        <div className={`text-sm font-bold ${
+                          isDarkTheme ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
                           {thought.serankingData.volume?.toLocaleString() || "N/A"}
                         </div>
                       </div>
-                      <div className="p-2 bg-white/5 rounded border border-white/10">
-                        <div className="text-[9px] text-neutral-400 font-bold mb-1">KD</div>
+                      <div className={`p-2 rounded border ${
+                        isDarkTheme
+                          ? 'bg-white/5 border-white/10'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <div className={`text-[9px] font-bold mb-1 ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-500'
+                        }`}>KD</div>
                         <div className={`text-sm font-bold ${
                           (thought.serankingData.difficulty || 0) <= 40
-                            ? "text-emerald-400"
+                            ? isDarkTheme ? "text-emerald-400" : "text-emerald-600"
                             : (thought.serankingData.difficulty || 0) <= 60
-                            ? "text-yellow-400"
-                            : "text-red-400"
+                            ? isDarkTheme ? "text-yellow-400" : "text-yellow-600"
+                            : isDarkTheme ? "text-red-400" : "text-red-600"
                         }`}>
                           {thought.serankingData.difficulty || "N/A"}
                         </div>
                       </div>
-                      <div className="p-2 bg-white/5 rounded border border-white/10">
-                        <div className="text-[9px] text-neutral-400 font-bold mb-1">CPC</div>
-                        <div className="text-sm font-bold text-emerald-400">
+                      <div className={`p-2 rounded border ${
+                        isDarkTheme
+                          ? 'bg-white/5 border-white/10'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <div className={`text-[9px] font-bold mb-1 ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-500'
+                        }`}>CPC</div>
+                        <div className={`text-sm font-bold ${
+                          isDarkTheme ? 'text-emerald-400' : 'text-emerald-600'
+                        }`}>
                           ${thought.serankingData.cpc?.toFixed(2) || "N/A"}
                         </div>
                       </div>
-                      <div className="p-2 bg-white/5 rounded border border-white/10">
-                        <div className="text-[9px] text-neutral-400 font-bold mb-1">COMP</div>
-                        <div className="text-sm font-bold text-purple-400">
+                      <div className={`p-2 rounded border ${
+                        isDarkTheme
+                          ? 'bg-white/5 border-white/10'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <div className={`text-[9px] font-bold mb-1 ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-500'
+                        }`}>COMP</div>
+                        <div className={`text-sm font-bold ${
+                          isDarkTheme ? 'text-purple-400' : 'text-purple-600'
+                        }`}>
                           {thought.serankingData.competition
                             ? typeof thought.serankingData.competition === 'number'
                               ? (thought.serankingData.competition * 100).toFixed(1) + "%"
@@ -721,8 +868,14 @@ const BatchAnalysisStream = ({
                     </div>
                   </div>
                 ) : (
-                  <div className="bg-emerald-500/10 p-3 rounded border border-emerald-500/30">
-                    <div className="text-xs text-emerald-400 font-medium flex items-center gap-2">
+                  <div className={`p-3 rounded border ${
+                    isDarkTheme
+                      ? 'bg-emerald-500/10 border-emerald-500/30'
+                      : 'bg-emerald-50 border-emerald-200'
+                  }`}>
+                    <div className={`text-xs font-medium flex items-center gap-2 ${
+                      isDarkTheme ? 'text-emerald-400' : 'text-emerald-700'
+                    }`}>
                       <Lightbulb className="w-4 h-4" />
                       Blue Ocean Signal - No competition data found!
                     </div>
@@ -734,19 +887,35 @@ const BatchAnalysisStream = ({
             {/* Intent Analysis Display */}
             {thought.type === "intent-analysis" && thought.intentData && (
               <div className="mt-2 space-y-2">
-                <div className="bg-purple-500/10 p-2 rounded border border-purple-500/20">
-                  <div className="text-[10px] text-purple-400 font-bold mb-1">
+                <div className={`p-2 rounded border ${
+                  isDarkTheme
+                    ? 'bg-purple-500/10 border-purple-500/20'
+                    : 'bg-purple-50 border-purple-200'
+                }`}>
+                  <div className={`text-[10px] font-bold mb-1 ${
+                    isDarkTheme ? 'text-purple-400' : 'text-purple-700'
+                  }`}>
                     USER INTENT
                   </div>
-                  <p className="text-xs text-neutral-300">
+                  <p className={`text-xs ${
+                    isDarkTheme ? 'text-neutral-300' : 'text-gray-700'
+                  }`}>
                     {thought.intentData.searchIntent}
                   </p>
                 </div>
-                <div className="bg-blue-500/10 p-2 rounded border border-blue-500/20">
-                  <div className="text-[10px] text-blue-400 font-bold mb-1">
+                <div className={`p-2 rounded border ${
+                  isDarkTheme
+                    ? 'bg-blue-500/10 border-blue-500/20'
+                    : 'bg-blue-50 border-blue-200'
+                }`}>
+                  <div className={`text-[10px] font-bold mb-1 ${
+                    isDarkTheme ? 'text-blue-400' : 'text-blue-700'
+                  }`}>
                     INTENT vs SERP
                   </div>
-                  <p className="text-xs text-neutral-300">
+                  <p className={`text-xs ${
+                    isDarkTheme ? 'text-neutral-300' : 'text-gray-700'
+                  }`}>
                     {thought.intentData.intentAnalysis}
                   </p>
                 </div>
@@ -757,20 +926,34 @@ const BatchAnalysisStream = ({
             {thought.type === "serp-search" &&
               thought.serpSnippets &&
               thought.serpSnippets.length > 0 && (
-                <div className="mt-2 border border-white/10 rounded-md overflow-hidden bg-black/40">
+                <div className={`mt-2 border rounded-md overflow-hidden ${
+                  isDarkTheme
+                    ? 'border-white/10 bg-black/40'
+                    : 'border-gray-200 bg-gray-50'
+                }`}>
                   <div className="space-y-2 p-2">
                     {thought.serpSnippets.slice(0, 3).map((snippet, idx) => (
                       <div
                         key={idx}
-                        className="bg-white/5 p-2 rounded border border-white/10 text-xs"
+                        className={`p-2 rounded border text-xs ${
+                          isDarkTheme
+                            ? 'bg-white/5 border-white/10'
+                            : 'bg-white border-gray-200'
+                        }`}
                       >
-                        <div className="text-blue-400 font-medium truncate">
+                        <div className={`font-medium truncate ${
+                          isDarkTheme ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
                           {snippet.title}
                         </div>
-                        <div className="text-emerald-400 text-[10px] truncate">
+                        <div className={`text-[10px] truncate ${
+                          isDarkTheme ? 'text-emerald-400' : 'text-emerald-600'
+                        }`}>
                           {snippet.url}
                         </div>
-                        <div className="text-neutral-400 mt-1 line-clamp-2">
+                        <div className={`mt-1 line-clamp-2 ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-600'
+                        }`}>
                           {snippet.snippet}
                         </div>
                       </div>
@@ -781,24 +964,38 @@ const BatchAnalysisStream = ({
 
             {/* Analysis Result */}
             {thought.type === "analysis" && thought.analysis && (
-              <div className="mt-2 bg-black/40 p-3 rounded border border-white/10">
+              <div className={`mt-2 p-3 rounded border ${
+                isDarkTheme
+                  ? 'bg-black/40 border-white/10'
+                  : 'bg-gray-50 border-gray-200'
+              }`}>
                 <div className="flex items-center gap-2 mb-2">
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                       thought.analysis.probability === ProbabilityLevel.HIGH
-                        ? "bg-emerald-500/20 text-emerald-400"
+                        ? isDarkTheme
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "bg-emerald-100 text-emerald-700"
                         : thought.analysis.probability ===
                           ProbabilityLevel.MEDIUM
-                        ? "bg-yellow-500/20 text-yellow-400"
-                        : "bg-red-500/20 text-red-400"
+                        ? isDarkTheme
+                          ? "bg-yellow-500/20 text-yellow-400"
+                          : "bg-yellow-100 text-yellow-700"
+                        : isDarkTheme
+                        ? "bg-red-500/20 text-red-400"
+                        : "bg-red-100 text-red-700"
                     }`}
                   >
                     {thought.analysis.probability}
                   </span>
-                  <span className="text-xs text-neutral-400">
+                  <span className={`text-xs ${
+                    isDarkTheme ? 'text-neutral-400' : 'text-gray-600'
+                  }`}>
                     {thought.analysis.topDomainType}
                   </span>
-                  <span className="text-xs text-neutral-500">
+                  <span className={`text-xs ${
+                    isDarkTheme ? 'text-neutral-500' : 'text-gray-500'
+                  }`}>
                     (
                     {thought.analysis.serpResultCount === -1
                       ? "Many"
@@ -806,7 +1003,9 @@ const BatchAnalysisStream = ({
                     results)
                   </span>
                 </div>
-                <p className="text-xs text-neutral-300 whitespace-pre-wrap">
+                <p className={`text-xs whitespace-pre-wrap ${
+                  isDarkTheme ? 'text-neutral-300' : 'text-gray-700'
+                }`}>
                   {thought.analysis.reasoning}
                 </p>
               </div>
@@ -821,9 +1020,11 @@ const BatchAnalysisStream = ({
 const DeepDiveAnalysisStream = ({
   thoughts,
   t,
+  isDarkTheme = true,
 }: {
   thoughts: DeepDiveThought[];
   t: any;
+  isDarkTheme?: boolean;
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -834,8 +1035,16 @@ const DeepDiveAnalysisStream = ({
   }, [thoughts]);
 
   return (
-    <div className="bg-[#0a0a0a] rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border border-white/10">
-      <div className="flex items-center gap-2 border-b border-white/10 pb-2 mb-2 text-neutral-400 uppercase tracking-wider text-[10px]">
+    <div className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${
+      isDarkTheme
+        ? 'bg-[#0a0a0a] border-white/10'
+        : 'bg-white border-gray-200'
+    }`}>
+      <div className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
+        isDarkTheme
+          ? 'border-white/10 text-neutral-400'
+          : 'border-gray-200 text-gray-500'
+      }`}>
         <BrainCircuit className="w-3 h-3 text-emerald-500" />
         <span>Deep Dive Analysis Stream</span>
       </div>
@@ -849,18 +1058,28 @@ const DeepDiveAnalysisStream = ({
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   thought.type === "content-generation"
-                    ? "bg-blue-500/20 text-blue-400"
+                    ? isDarkTheme
+                      ? "bg-blue-500/20 text-blue-400"
+                      : "bg-blue-100 text-blue-700"
                     : thought.type === "keyword-extraction"
-                    ? "bg-purple-500/20 text-purple-400"
+                    ? isDarkTheme
+                      ? "bg-purple-500/20 text-purple-400"
+                      : "bg-purple-100 text-purple-700"
                     : thought.type === "serp-verification"
-                    ? "bg-indigo-500/20 text-indigo-400"
-                    : "bg-emerald-500/20 text-emerald-400"
+                    ? isDarkTheme
+                      ? "bg-indigo-500/20 text-indigo-400"
+                      : "bg-indigo-100 text-indigo-700"
+                    : isDarkTheme
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-emerald-100 text-emerald-700"
                 }`}
               >
                 {thought.type.toUpperCase().replace("-", " ")}
               </span>
             </div>
-            <p className="text-sm text-neutral-300 mb-2">{thought.content}</p>
+            <p className={`text-sm mb-2 ${
+              isDarkTheme ? 'text-neutral-300' : 'text-gray-700'
+            }`}>{thought.content}</p>
 
             {/* Core Keywords Display */}
             {thought.type === "keyword-extraction" &&
@@ -869,7 +1088,11 @@ const DeepDiveAnalysisStream = ({
                   {thought.data.keywords.map((kw, idx) => (
                     <span
                       key={idx}
-                      className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded-md text-xs font-medium border border-purple-500/30"
+                      className={`px-2 py-1 rounded-md text-xs font-medium border ${
+                        isDarkTheme
+                          ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                          : 'bg-purple-100 text-purple-700 border-purple-300'
+                      }`}
                     >
                       {kw}
                     </span>
@@ -887,23 +1110,37 @@ const DeepDiveAnalysisStream = ({
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {thought.data.serankingData.volume !== undefined && (
-                      <div className="bg-black/40 px-2 py-1 rounded border border-white/10">
-                        <div className="text-[9px] text-neutral-400 uppercase">Volume</div>
-                        <div className="font-bold text-blue-400">
+                      <div className={`px-2 py-1 rounded border ${
+                        isDarkTheme
+                          ? 'bg-black/40 border-white/10'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <div className={`text-[9px] uppercase ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-500'
+                        }`}>Volume</div>
+                        <div className={`font-bold ${
+                          isDarkTheme ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
                           {thought.data.serankingData.volume.toLocaleString()}
                         </div>
                       </div>
                     )}
                     {thought.data.serankingData.difficulty !== undefined && (
-                      <div className="bg-black/40 px-2 py-1 rounded border border-white/10">
-                        <div className="text-[9px] text-neutral-400 uppercase">KD</div>
+                      <div className={`px-2 py-1 rounded border ${
+                        isDarkTheme
+                          ? 'bg-black/40 border-white/10'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <div className={`text-[9px] uppercase ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-500'
+                        }`}>KD</div>
                         <div
                           className={`font-bold ${
                             thought.data.serankingData.difficulty > 40
-                              ? "text-red-400"
+                              ? isDarkTheme ? "text-red-400" : "text-red-600"
                               : thought.data.serankingData.difficulty > 20
-                              ? "text-yellow-400"
-                              : "text-green-400"
+                              ? isDarkTheme ? "text-yellow-400" : "text-yellow-600"
+                              : isDarkTheme ? "text-green-400" : "text-green-600"
                           }`}
                         >
                           {thought.data.serankingData.difficulty}
@@ -911,17 +1148,33 @@ const DeepDiveAnalysisStream = ({
                       </div>
                     )}
                     {thought.data.serankingData.cpc !== undefined && (
-                      <div className="bg-black/40 px-2 py-1 rounded border border-white/10">
-                        <div className="text-[9px] text-neutral-400 uppercase">CPC</div>
-                        <div className="font-bold text-blue-400">
+                      <div className={`px-2 py-1 rounded border ${
+                        isDarkTheme
+                          ? 'bg-black/40 border-white/10'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <div className={`text-[9px] uppercase ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-500'
+                        }`}>CPC</div>
+                        <div className={`font-bold ${
+                          isDarkTheme ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
                           ${thought.data.serankingData.cpc.toFixed(2)}
                         </div>
                       </div>
                     )}
                     {thought.data.serankingData.competition !== undefined && (
-                      <div className="bg-black/40 px-2 py-1 rounded border border-white/10">
-                        <div className="text-[9px] text-neutral-400 uppercase">Competition</div>
-                        <div className="font-bold text-blue-400">
+                      <div className={`px-2 py-1 rounded border ${
+                        isDarkTheme
+                          ? 'bg-black/40 border-white/10'
+                          : 'bg-white border-gray-200'
+                      }`}>
+                        <div className={`text-[9px] uppercase ${
+                          isDarkTheme ? 'text-neutral-400' : 'text-gray-500'
+                        }`}>Competition</div>
+                        <div className={`font-bold ${
+                          isDarkTheme ? 'text-blue-400' : 'text-blue-600'
+                        }`}>
                           {thought.data.serankingData.competition.toFixed(2)}
                         </div>
                       </div>
@@ -935,22 +1188,36 @@ const DeepDiveAnalysisStream = ({
               thought.data?.serpResults &&
               thought.data.serpResults.length > 0 && (
                 <div className="mt-2 space-y-2">
-                  <div className="border border-white/10 rounded-md overflow-hidden bg-black/20">
+                  <div className={`border rounded-md overflow-hidden ${
+                    isDarkTheme
+                      ? 'border-white/10 bg-black/20'
+                      : 'border-gray-200 bg-gray-50'
+                  }`}>
                     <div className="space-y-2 p-2">
                       {thought.data.serpResults
                         .slice(0, 3)
                         .map((snippet, idx) => (
                           <div
                             key={idx}
-                            className="bg-white/5 p-2 rounded border border-white/10 text-xs"
+                            className={`p-2 rounded border text-xs ${
+                              isDarkTheme
+                                ? 'bg-white/5 border-white/10'
+                                : 'bg-white border-gray-200'
+                            }`}
                           >
-                            <div className="text-blue-400 font-medium truncate">
+                            <div className={`font-medium truncate ${
+                              isDarkTheme ? 'text-blue-400' : 'text-blue-600'
+                            }`}>
                               {snippet.title}
                             </div>
-                            <div className="text-emerald-400 text-[10px] truncate">
+                            <div className={`text-[10px] truncate ${
+                              isDarkTheme ? 'text-emerald-400' : 'text-emerald-600'
+                            }`}>
                               {snippet.url}
                             </div>
-                            <div className="text-neutral-400 mt-1 line-clamp-2">
+                            <div className={`mt-1 line-clamp-2 ${
+                              isDarkTheme ? 'text-neutral-400' : 'text-gray-600'
+                            }`}>
                               {snippet.snippet}
                             </div>
                           </div>
@@ -958,11 +1225,19 @@ const DeepDiveAnalysisStream = ({
                     </div>
                   </div>
                   {thought.data.analysis && (
-                    <div className="bg-indigo-500/10 p-2 rounded border border-indigo-500/30">
-                      <div className="text-[10px] text-indigo-400 font-bold mb-1">
+                    <div className={`p-2 rounded border ${
+                      isDarkTheme
+                        ? 'bg-indigo-500/10 border-indigo-500/30'
+                        : 'bg-indigo-50 border-indigo-200'
+                    }`}>
+                      <div className={`text-[10px] font-bold mb-1 ${
+                        isDarkTheme ? 'text-indigo-400' : 'text-indigo-700'
+                      }`}>
                         COMPETITION ANALYSIS
                       </div>
-                      <p className="text-xs text-neutral-300 whitespace-pre-wrap">
+                      <p className={`text-xs whitespace-pre-wrap ${
+                        isDarkTheme ? 'text-neutral-300' : 'text-gray-700'
+                      }`}>
                         {thought.data.analysis}
                       </p>
                     </div>
@@ -974,21 +1249,33 @@ const DeepDiveAnalysisStream = ({
             {thought.type === "probability-analysis" &&
               thought.data?.probability &&
               thought.data?.analysis && (
-                <div className="mt-2 bg-black/20 p-3 rounded border border-white/10">
+                <div className={`mt-2 p-3 rounded border ${
+                  isDarkTheme
+                    ? 'bg-black/20 border-white/10'
+                    : 'bg-gray-50 border-gray-200'
+                }`}>
                   <div className="flex items-center gap-2 mb-2">
                     <span
-                      className={`px-3 py-1 rounded-full text-sm font-bold ${
+                      className={`px-3 py-1 rounded-full text-sm font-bold border ${
                         thought.data.probability === ProbabilityLevel.HIGH
-                          ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                          ? isDarkTheme
+                            ? "bg-green-500/20 text-green-400 border-green-500/30"
+                            : "bg-green-100 text-green-700 border-green-300"
                           : thought.data.probability === ProbabilityLevel.MEDIUM
-                          ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30"
-                          : "bg-red-500/20 text-red-400 border border-red-500/30"
+                          ? isDarkTheme
+                            ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                            : "bg-yellow-100 text-yellow-700 border-yellow-300"
+                          : isDarkTheme
+                          ? "bg-red-500/20 text-red-400 border-red-500/30"
+                          : "bg-red-100 text-red-700 border-red-300"
                       }`}
                     >
                       {thought.data.probability} Probability
                     </span>
                   </div>
-                  <p className="text-xs text-neutral-300 whitespace-pre-wrap">
+                  <p className={`text-xs whitespace-pre-wrap ${
+                    isDarkTheme ? 'text-neutral-300' : 'text-gray-700'
+                  }`}>
                     {thought.data.analysis}
                   </p>
                 </div>
@@ -1009,6 +1296,7 @@ const WorkflowConfigPanel = ({
   onLoad,
   onReset,
   t,
+  isDarkTheme = true,
 }: {
   workflowDef: any;
   currentConfig: WorkflowConfig | null;
@@ -1017,6 +1305,7 @@ const WorkflowConfigPanel = ({
   onLoad: (configId: string) => void;
   onReset: () => void;
   t: any;
+  isDarkTheme?: boolean;
 }) => {
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [configName, setConfigName] = useState("");
@@ -1069,13 +1358,21 @@ const WorkflowConfigPanel = ({
   );
 
   return (
-    <div className="bg-black/20 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6 mb-6">
+    <div className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 mb-6 ${
+      isDarkTheme
+        ? 'bg-black/20 border-green-500/20'
+        : 'bg-white border-green-200'
+    }`}>
       <div className="mb-4">
-        <h3 className="text-lg font-bold text-white flex items-center gap-2">
+        <h3 className={`text-lg font-bold flex items-center gap-2 ${
+          isDarkTheme ? 'text-white' : 'text-gray-900'
+        }`}>
           <BrainCircuit className="w-5 h-5 text-green-400" />
           {workflowDef.name}
         </h3>
-        <p className="text-sm text-slate-400 mt-1">{workflowDef.description}</p>
+        <p className={`text-sm mt-1 ${
+          isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+        }`}>{workflowDef.description}</p>
       </div>
 
       {/* Workflow Nodes Visualization */}
@@ -1085,8 +1382,12 @@ const WorkflowConfigPanel = ({
             <div
               className={`p-4 rounded-lg border-2 ${
                 node.type === "agent"
-                  ? "border-green-500/30 bg-green-500/10"
-                  : "border-green-500/20 bg-black/40"
+                  ? isDarkTheme
+                    ? "border-green-500/30 bg-green-500/10"
+                    : "border-green-300 bg-green-50"
+                  : isDarkTheme
+                  ? "border-green-500/20 bg-black/40"
+                  : "border-green-200 bg-gray-50"
               } ${!node.configurable ? "opacity-60" : ""}`}
             >
               <div className="flex items-start justify-between">
@@ -1096,25 +1397,35 @@ const WorkflowConfigPanel = ({
                       className={`px-2 py-0.5 rounded text-xs font-bold ${
                         node.type === "agent"
                           ? "bg-green-500 text-black"
-                          : "bg-slate-600 text-white"
+                          : isDarkTheme
+                          ? "bg-slate-600 text-white"
+                          : "bg-gray-600 text-white"
                       }`}
                     >
                       {node.type === "agent" ? t.agentNode : t.toolNode}
                     </span>
-                    <span className="font-bold text-sm text-white">
+                    <span className={`font-bold text-sm ${
+                      isDarkTheme ? 'text-white' : 'text-gray-900'
+                    }`}>
                       {node.name}
                     </span>
                     <span
                       className={`text-xs px-2 py-0.5 rounded ${
                         node.configurable
-                          ? "bg-green-500/20 text-green-400"
-                          : "bg-slate-500/20 text-slate-400"
+                          ? isDarkTheme
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-green-100 text-green-700"
+                          : isDarkTheme
+                          ? "bg-slate-500/20 text-slate-400"
+                          : "bg-gray-200 text-gray-600"
                       }`}
                     >
                       {node.configurable ? t.configurable : t.notConfigurable}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">{node.description}</p>
+                  <p className={`text-xs ${
+                    isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                  }`}>{node.description}</p>
 
                   {/* Editable Prompt Area */}
                   {node.configurable && node.type === "agent" && (
@@ -1126,7 +1437,11 @@ const WorkflowConfigPanel = ({
                             onChange={(e) =>
                               handleNodePromptChange(node.id, e.target.value)
                             }
-                            className="w-full h-32 p-2 text-xs font-mono border border-green-500/30 bg-black/60 rounded focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white placeholder:text-slate-500"
+                            className={`w-full h-32 p-2 text-xs font-mono border rounded focus:outline-none focus:ring-2 ${
+                              isDarkTheme
+                                ? 'border-green-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-green-500/50'
+                                : 'border-green-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-green-500'
+                            }`}
                             placeholder={t.editPrompt}
                           />
                           <div className="flex gap-2">
@@ -1152,12 +1467,20 @@ const WorkflowConfigPanel = ({
                       ) : (
                         <div
                           onClick={() => setEditingNodeId(node.id)}
-                          className="mt-2 p-2 bg-black/60 border border-green-500/30 rounded cursor-pointer hover:border-green-400 transition-colors"
+                          className={`mt-2 p-2 border rounded cursor-pointer transition-colors ${
+                            isDarkTheme
+                              ? 'bg-black/60 border-green-500/30 hover:border-green-400'
+                              : 'bg-gray-50 border-green-300 hover:border-green-400'
+                          }`}
                         >
-                          <div className="text-[10px] text-slate-500 mb-1">
+                          <div className={`text-[10px] mb-1 ${
+                            isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                          }`}>
                             {t.editPrompt}
                           </div>
-                          <div className="text-xs text-slate-300 line-clamp-2 font-mono">
+                          <div className={`text-xs line-clamp-2 font-mono ${
+                            isDarkTheme ? 'text-slate-300' : 'text-gray-700'
+                          }`}>
                             {node.prompt || "No prompt"}
                           </div>
                         </div>
@@ -1187,7 +1510,11 @@ const WorkflowConfigPanel = ({
             value={configName}
             onChange={(e) => setConfigName(e.target.value)}
             placeholder={t.configNamePlaceholder}
-            className="flex-1 px-3 py-2 border border-green-500/30 bg-black/60 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white placeholder:text-slate-500"
+            className={`flex-1 px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 ${
+              isDarkTheme
+                ? 'border-green-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-green-500/50'
+                : 'border-green-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-green-500'
+            }`}
           />
           <button
             onClick={handleSaveConfig}
@@ -1208,7 +1535,9 @@ const WorkflowConfigPanel = ({
         {/* Saved Configs List */}
         {workflowConfigs.length > 0 && (
           <div>
-            <div className="text-xs text-slate-400 uppercase font-bold mb-2">
+            <div className={`text-xs uppercase font-bold mb-2 ${
+              isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+            }`}>
               {t.loadWorkflowConfig}
             </div>
             <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar">
@@ -1217,15 +1546,23 @@ const WorkflowConfigPanel = ({
                   key={config.id}
                   className={`flex items-center justify-between p-2 rounded border ${
                     currentConfig?.id === config.id
-                      ? "border-green-500/50 bg-green-500/20"
-                      : "border-green-500/20 bg-black/40"
+                      ? isDarkTheme
+                        ? "border-green-500/50 bg-green-500/20"
+                        : "border-green-400 bg-green-100"
+                      : isDarkTheme
+                      ? "border-green-500/20 bg-black/40"
+                      : "border-green-200 bg-gray-50"
                   }`}
                 >
                   <div className="flex-1">
-                    <div className="text-sm font-medium text-white">
+                    <div className={`text-sm font-medium ${
+                      isDarkTheme ? 'text-white' : 'text-gray-900'
+                    }`}>
                       {config.name}
                     </div>
-                    <div className="text-xs text-slate-500">
+                    <div className={`text-xs ${
+                      isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                    }`}>
                       {new Date(config.createdAt).toLocaleDateString()}
                     </div>
                   </div>
@@ -1249,7 +1586,9 @@ const WorkflowConfigPanel = ({
         )}
 
         {workflowConfigs.length === 0 && (
-          <div className="text-center py-4 text-slate-500 text-sm">
+          <div className={`text-center py-4 text-sm ${
+            isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+          }`}>
             {t.noSavedConfigs}
           </div>
         )}
@@ -5752,26 +6091,48 @@ export default function App() {
                     }`}>
                       <History className="w-4 h-4" /> {t.miningArchives}
                     </h3>
-                    <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-green-500/10 max-h-96 overflow-y-auto custom-scrollbar">
+                    <div className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
+                      isDarkTheme
+                        ? 'bg-black/40 border-green-500/20'
+                        : 'bg-white border-green-200'
+                    }`}>
+                      <div className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
+                        isDarkTheme ? 'divide-green-500/10' : 'divide-gray-200'
+                      }`}>
                         {state.archives.map((arch) => (
                           <div
                             key={arch.id}
                             onClick={() => loadArchive(arch)}
-                            className="p-4 flex items-center justify-between hover:bg-green-500/10 cursor-pointer group transition-colors"
+                            className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
+                              isDarkTheme
+                                ? 'hover:bg-green-500/10'
+                                : 'hover:bg-green-50'
+                            }`}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="bg-green-500/20 p-2 rounded text-green-400 group-hover:bg-green-500/30 transition-colors">
+                              <div className={`p-2 rounded text-green-400 transition-colors ${
+                                isDarkTheme
+                                  ? 'bg-green-500/20 group-hover:bg-green-500/30'
+                                  : 'bg-green-100 group-hover:bg-green-200'
+                              }`}>
                                 <Search className="w-4 h-4" />
                               </div>
                               <div>
-                                <div className="font-medium text-white flex items-center gap-2">
+                                <div className={`font-medium flex items-center gap-2 ${
+                                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                                }`}>
                                   {arch.seedKeyword}
-                                  <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 uppercase">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase ${
+                                    isDarkTheme
+                                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                      : 'bg-green-100 text-green-700 border-green-300'
+                                  }`}>
                                     {arch.targetLanguage}
                                   </span>
                                 </div>
-                                <div className="text-xs text-slate-500">
+                                <div className={`text-xs ${
+                                  isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                                }`}>
                                   {new Date(arch.timestamp).toLocaleString()} •{" "}
                                   {arch.keywords.length} keywords
                                 </div>
@@ -5779,7 +6140,11 @@ export default function App() {
                             </div>
                             <button
                               onClick={(e) => deleteArchive(arch.id, e)}
-                              className="p-2 text-slate-600 hover:text-red-400 transition-colors"
+                              className={`p-2 transition-colors ${
+                                isDarkTheme
+                                  ? 'text-slate-600 hover:text-red-400'
+                                  : 'text-gray-500 hover:text-red-600'
+                              }`}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -5795,14 +6160,22 @@ export default function App() {
             {/* Batch Translation Tab Content */}
             {activeTab === "batch" && (
               <div className="max-w-3xl mx-auto">
-                <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm p-6">
+                <div className={`backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
+                  isDarkTheme
+                    ? 'bg-black/40 border-green-500/20'
+                    : 'bg-white border-green-200'
+                }`}>
                   <div className="flex items-center gap-2 mb-3">
                     <Languages className="w-5 h-5 text-green-400" />
-                    <h3 className="text-lg font-bold text-white">
+                    <h3 className={`text-lg font-bold ${
+                      isDarkTheme ? 'text-white' : 'text-gray-900'
+                    }`}>
                       {t.batchTranslateTitle}
                     </h3>
                   </div>
-                  <p className="text-sm text-slate-400 mb-4">
+                  <p className={`text-sm mb-4 ${
+                    isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                  }`}>
                     {t.batchTranslateDesc}
                   </p>
 
@@ -5813,7 +6186,11 @@ export default function App() {
                         value={batchInput}
                         onChange={(e) => setBatchInput(e.target.value)}
                         placeholder={t.batchInputPlaceholder}
-                        className="w-full h-32 px-4 py-3 border border-green-500/30 bg-black/60 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500/50 resize-none text-white placeholder:text-slate-500"
+                        className={`w-full h-32 px-4 py-3 border rounded-lg text-sm outline-none focus:ring-2 resize-none ${
+                          isDarkTheme
+                            ? 'border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500'
+                            : 'border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400'
+                        }`}
                       />
                     </div>
 
@@ -5832,34 +6209,58 @@ export default function App() {
                 {/* Batch Archive List */}
                 {state.batchArchives.length > 0 && (
                   <div className="mt-12">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <h3 className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${
+                      isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                    }`}>
                       <History className="w-4 h-4" /> {t.batchArchives}
                     </h3>
-                    <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-green-500/10 max-h-96 overflow-y-auto custom-scrollbar">
+                    <div className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
+                      isDarkTheme
+                        ? 'bg-black/40 border-green-500/20'
+                        : 'bg-white border-green-200'
+                    }`}>
+                      <div className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
+                        isDarkTheme ? 'divide-green-500/10' : 'divide-gray-200'
+                      }`}>
                         {state.batchArchives.map((arch) => (
                           <div
                             key={arch.id}
                             onClick={() => loadBatchArchive(arch)}
-                            className="p-4 flex items-center justify-between hover:bg-green-500/10 cursor-pointer group transition-colors"
+                            className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
+                              isDarkTheme
+                                ? 'hover:bg-green-500/10'
+                                : 'hover:bg-green-50'
+                            }`}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="bg-green-500/20 p-2 rounded text-green-400 group-hover:bg-green-500/30 transition-colors">
+                              <div className={`p-2 rounded text-green-400 transition-colors ${
+                                isDarkTheme
+                                  ? 'bg-green-500/20 group-hover:bg-green-500/30'
+                                  : 'bg-green-100 group-hover:bg-green-200'
+                              }`}>
                                 <Languages className="w-4 h-4" />
                               </div>
                               <div>
-                                <div className="font-medium text-white flex items-center gap-2">
+                                <div className={`font-medium flex items-center gap-2 ${
+                                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                                }`}>
                                   {arch.inputKeywords
                                     .split(",")
                                     .slice(0, 3)
                                     .join(", ")}
                                   {arch.inputKeywords.split(",").length > 3 &&
                                     "..."}
-                                  <span className="text-[10px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded border border-green-500/30 uppercase font-bold">
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${
+                                    isDarkTheme
+                                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                                      : 'bg-green-100 text-green-700 border-green-300'
+                                  }`}>
                                     {arch.targetLanguage}
                                   </span>
                                 </div>
-                                <div className="text-xs text-slate-500">
+                                <div className={`text-xs ${
+                                  isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                                }`}>
                                   {new Date(arch.timestamp).toLocaleString()} •{" "}
                                   {arch.totalCount} keywords
                                 </div>
@@ -5867,7 +6268,11 @@ export default function App() {
                             </div>
                             <button
                               onClick={(e) => deleteBatchArchive(arch.id, e)}
-                              className="p-2 text-slate-600 hover:text-red-400 transition-colors"
+                              className={`p-2 transition-colors ${
+                                isDarkTheme
+                                  ? 'text-slate-600 hover:text-red-400'
+                                  : 'text-gray-500 hover:text-red-600'
+                              }`}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -5883,14 +6288,22 @@ export default function App() {
             {/* Deep Dive Tab Content */}
             {activeTab === "deepDive" && (
               <div className="max-w-3xl mx-auto">
-                <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm p-6">
+                <div className={`backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
+                  isDarkTheme
+                    ? 'bg-black/40 border-green-500/20'
+                    : 'bg-white border-green-200'
+                }`}>
                   <div className="flex items-center gap-2 mb-3">
                     <FileText className="w-5 h-5 text-green-400" />
-                    <h3 className="text-lg font-bold text-white">
+                    <h3 className={`text-lg font-bold ${
+                      isDarkTheme ? 'text-white' : 'text-gray-900'
+                    }`}>
                       {t.deepDiveTitle}
                     </h3>
                   </div>
-                  <p className="text-sm text-slate-400 mb-4">
+                  <p className={`text-sm mb-4 ${
+                    isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                  }`}>
                     {t.deepDiveDesc}
                   </p>
 
@@ -5902,7 +6315,11 @@ export default function App() {
                         value={deepDiveInput}
                         onChange={(e) => setDeepDiveInput(e.target.value)}
                         placeholder={t.deepDiveInputPlaceholder}
-                        className="w-full px-4 py-3 border border-green-500/30 bg-black/60 rounded-lg text-sm outline-none focus:ring-2 focus:ring-green-500/50 text-white placeholder:text-slate-500"
+                        className={`w-full px-4 py-3 border rounded-lg text-sm outline-none focus:ring-2 ${
+                          isDarkTheme
+                            ? 'border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500'
+                            : 'border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400'
+                        }`}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" && deepDiveInput.trim()) {
                             const keywordData: KeywordData = {
@@ -5942,33 +6359,57 @@ export default function App() {
                 {/* Deep Dive Archive List */}
                 {state.deepDiveArchives && state.deepDiveArchives.length > 0 && (
                   <div className="mt-12">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                    <h3 className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${
+                      isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                    }`}>
                       <History className="w-4 h-4" /> {t.deepDiveArchives}
                     </h3>
-                    <div className="bg-black/40 backdrop-blur-sm rounded-xl border border-green-500/20 shadow-sm overflow-hidden">
-                      <div className="divide-y divide-green-500/10 max-h-96 overflow-y-auto custom-scrollbar">
+                    <div className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
+                      isDarkTheme
+                        ? 'bg-black/40 border-green-500/20'
+                        : 'bg-white border-green-200'
+                    }`}>
+                      <div className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
+                        isDarkTheme ? 'divide-green-500/10' : 'divide-gray-200'
+                      }`}>
                         {state.deepDiveArchives.map((arch) => (
                           <div
                             key={arch.id}
                             onClick={() => loadDeepDiveArchive(arch)}
-                            className="p-4 flex items-center justify-between hover:bg-green-500/10 cursor-pointer group transition-colors"
+                            className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
+                              isDarkTheme
+                                ? 'hover:bg-green-500/10'
+                                : 'hover:bg-green-50'
+                            }`}
                           >
                             <div className="flex items-center gap-3">
-                              <div className="bg-green-500/20 p-2 rounded text-green-400 group-hover:bg-green-500/30 transition-colors">
+                              <div className={`p-2 rounded text-green-400 transition-colors ${
+                                isDarkTheme
+                                  ? 'bg-green-500/20 group-hover:bg-green-500/30'
+                                  : 'bg-green-100 group-hover:bg-green-200'
+                              }`}>
                                 <FileText className="w-4 h-4" />
                               </div>
                               <div>
-                                <div className="font-medium text-white">
+                                <div className={`font-medium ${
+                                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                                }`}>
                                   {arch.keyword}
                                 </div>
-                                <div className="text-xs text-slate-500">
+                                <div className={`text-xs ${
+                                  isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                                }`}>
                                   {new Date(arch.timestamp).toLocaleString()}
                                 </div>
                               </div>
                             </div>
                             <button
                               onClick={(e) => deleteDeepDiveArchive(arch.id, e)}
-                              className="p-2 text-slate-600 hover:text-red-400 transition-colors"
+                              className={`p-2 transition-colors ${
+                                isDarkTheme
+                                  ? 'text-slate-600 hover:text-red-400'
+                                  : 'text-gray-500 hover:text-red-600'
+                              }`}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -5982,7 +6423,11 @@ export default function App() {
             )}
 
             {/* Prompt Config (Collapsible) */}
-            <div className="mt-12 border border-green-500/20 rounded-xl bg-black/40 backdrop-blur-sm shadow-sm overflow-hidden max-w-2xl mx-auto">
+            <div className={`mt-12 border rounded-xl backdrop-blur-sm shadow-sm overflow-hidden max-w-2xl mx-auto ${
+              isDarkTheme
+                ? 'border-green-500/20 bg-black/40'
+                : 'border-green-200 bg-white'
+            }`}>
               <button
                 onClick={() =>
                   setState((prev) => ({
@@ -5990,7 +6435,11 @@ export default function App() {
                     showPrompts: !prev.showPrompts,
                   }))
                 }
-                className="w-full flex items-center justify-between p-4 bg-green-500/10 hover:bg-green-500/20 transition-colors text-white font-medium"
+                className={`w-full flex items-center justify-between p-4 transition-colors font-medium ${
+                  isDarkTheme
+                    ? 'bg-green-500/10 hover:bg-green-500/20 text-white'
+                    : 'bg-green-50 hover:bg-green-100 text-gray-900'
+                }`}
               >
                 <div className="flex items-center gap-2">
                   <Settings className="w-4 h-4 text-green-400" />
@@ -6013,8 +6462,12 @@ export default function App() {
                       onClick={togglePromptTranslation}
                       className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${
                         state.showPromptTranslation
-                          ? "bg-green-500/20 text-green-400 border-green-500/30"
-                          : "bg-black/60 text-slate-400 border-green-500/20"
+                          ? isDarkTheme
+                            ? "bg-green-500/20 text-green-400 border-green-500/30"
+                            : "bg-green-100 text-green-700 border-green-300"
+                          : isDarkTheme
+                          ? "bg-black/60 text-slate-400 border-green-500/20"
+                          : "bg-gray-100 text-gray-600 border-green-200"
                       }`}
                     >
                       <Languages className="w-3 h-3" />
@@ -6024,7 +6477,9 @@ export default function App() {
 
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-semibold text-white">
+                      <label className={`text-sm font-semibold ${
+                        isDarkTheme ? 'text-white' : 'text-gray-900'
+                      }`}>
                         {t.promptGenLabel}
                       </label>
                       <button
@@ -6037,7 +6492,11 @@ export default function App() {
 
                     <div className="grid grid-cols-1 gap-4">
                       <textarea
-                        className="w-full h-32 p-3 border border-green-500/30 bg-black/60 rounded-md text-sm font-mono text-white focus:ring-2 focus:ring-green-500/50 outline-none placeholder:text-slate-500"
+                        className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${
+                          isDarkTheme
+                            ? 'border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500'
+                            : 'border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400'
+                        }`}
                         value={state.genPrompt}
                         onChange={(e) =>
                           setState((prev) => ({
@@ -6047,14 +6506,22 @@ export default function App() {
                         }
                       />
                       {state.showPromptTranslation && (
-                        <div className="w-full h-32 p-3 bg-black/60 border border-green-500/30 rounded-md text-sm text-slate-300 overflow-y-auto">
-                          <div className="text-[10px] uppercase font-bold text-green-400 mb-1">
+                        <div className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${
+                          isDarkTheme
+                            ? 'bg-black/60 border-green-500/30 text-slate-300'
+                            : 'bg-gray-50 border-green-200 text-gray-700'
+                        }`}>
+                          <div className={`text-[10px] uppercase font-bold mb-1 ${
+                            isDarkTheme ? 'text-green-400' : 'text-green-600'
+                          }`}>
                             {t.transRefLabel}
                           </div>
                           {state.translatedGenPrompt ? (
                             state.translatedGenPrompt
                           ) : (
-                            <div className="animate-pulse text-slate-500">Translating...</div>
+                            <div className={`animate-pulse ${
+                              isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                            }`}>Translating...</div>
                           )}
                         </div>
                       )}
@@ -6063,7 +6530,9 @@ export default function App() {
 
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="text-sm font-semibold text-white">
+                      <label className={`text-sm font-semibold ${
+                        isDarkTheme ? 'text-white' : 'text-gray-900'
+                      }`}>
                         {t.promptAnlzLabel}
                       </label>
                       <button
@@ -6075,7 +6544,11 @@ export default function App() {
                     </div>
                     <div className="grid grid-cols-1 gap-4">
                       <textarea
-                        className="w-full h-32 p-3 border border-green-500/30 bg-black/60 rounded-md text-sm font-mono text-white focus:ring-2 focus:ring-green-500/50 outline-none placeholder:text-slate-500"
+                        className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${
+                          isDarkTheme
+                            ? 'border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500'
+                            : 'border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400'
+                        }`}
                         value={state.analyzePrompt}
                         onChange={(e) =>
                           setState((prev) => ({
@@ -6085,14 +6558,22 @@ export default function App() {
                         }
                       />
                       {state.showPromptTranslation && (
-                        <div className="w-full h-32 p-3 bg-black/60 border border-green-500/30 rounded-md text-sm text-slate-300 overflow-y-auto">
-                          <div className="text-[10px] uppercase font-bold text-green-400 mb-1">
+                        <div className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${
+                          isDarkTheme
+                            ? 'bg-black/60 border-green-500/30 text-slate-300'
+                            : 'bg-gray-50 border-green-200 text-gray-700'
+                        }`}>
+                          <div className={`text-[10px] uppercase font-bold mb-1 ${
+                            isDarkTheme ? 'text-green-400' : 'text-green-600'
+                          }`}>
                             {t.transRefLabel}
                           </div>
                           {state.translatedAnalyzePrompt ? (
                             state.translatedAnalyzePrompt
                           ) : (
-                            <div className="animate-pulse text-slate-500">Translating...</div>
+                            <div className={`animate-pulse ${
+                              isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                            }`}>Translating...</div>
                           )}
                         </div>
                       )}
@@ -6205,7 +6686,11 @@ export default function App() {
                         ))}
                       </div>
                     ) : (
-                      <div className="text-sm text-slate-400 text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                      <div className={`text-sm text-center py-4 rounded-lg border border-dashed ${
+                        isDarkTheme
+                          ? 'text-slate-400 bg-slate-50 border-slate-200'
+                          : 'text-gray-600 bg-gray-50 border-gray-200'
+                      }`}>
                         {t.noConfigs}
                       </div>
                     )}
@@ -6224,14 +6709,22 @@ export default function App() {
                 <div className="bg-green-500 p-3 rounded-lg">
                   <BrainCircuit className="w-8 h-8 text-black" />
                 </div>
-                <h2 className="text-3xl font-bold text-white">
+                <h2 className={`text-3xl font-bold ${
+                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                }`}>
                   {t.workflowConfig}
                 </h2>
               </div>
-              <p className="text-slate-400 mb-4">{t.workflowConfigDesc}</p>
+              <p className={`mb-4 ${
+                isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+              }`}>{t.workflowConfigDesc}</p>
               <button
                 onClick={() => setState((prev) => ({ ...prev, step: "input" }))}
-                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-green-400 transition-colors"
+                className={`inline-flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                  isDarkTheme
+                    ? 'text-slate-400 hover:text-green-400'
+                    : 'text-gray-600 hover:text-green-600'
+                }`}
               >
                 <ArrowRight className="w-4 h-4 rotate-180" />
                 {state.uiLanguage === "en" ? "Back to Home" : "返回首页"}
@@ -6240,12 +6733,20 @@ export default function App() {
 
             <div className="space-y-8">
               {/* Mining Workflow */}
-              <div className="bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6">
-                <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <div className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
+                isDarkTheme
+                  ? 'bg-black/40 border-green-500/20'
+                  : 'bg-white border-green-200'
+              }`}>
+                <h3 className={`text-xl font-bold mb-2 flex items-center gap-2 ${
+                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                }`}>
                   <Search className="w-5 h-5 text-green-400" />
                   {t.miningWorkflow}
                 </h3>
-                <p className="text-sm text-slate-400 mb-6">
+                <p className={`text-sm mb-6 ${
+                  isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                }`}>
                   {MINING_WORKFLOW.description}
                 </p>
                 <WorkflowConfigPanel
@@ -6256,16 +6757,25 @@ export default function App() {
                   onLoad={(configId) => loadWorkflowConfig("mining", configId)}
                   onReset={() => resetWorkflowToDefault("mining")}
                   t={t}
+                  isDarkTheme={isDarkTheme}
                 />
               </div>
 
               {/* Batch Workflow */}
-              <div className="bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6">
-                <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <div className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
+                isDarkTheme
+                  ? 'bg-black/40 border-green-500/20'
+                  : 'bg-white border-green-200'
+              }`}>
+                <h3 className={`text-xl font-bold mb-2 flex items-center gap-2 ${
+                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                }`}>
                   <Languages className="w-5 h-5 text-green-400" />
                   {t.batchWorkflow}
                 </h3>
-                <p className="text-sm text-slate-400 mb-6">
+                <p className={`text-sm mb-6 ${
+                  isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                }`}>
                   {BATCH_WORKFLOW.description}
                 </p>
                 <WorkflowConfigPanel
@@ -6276,16 +6786,25 @@ export default function App() {
                   onLoad={(configId) => loadWorkflowConfig("batch", configId)}
                   onReset={() => resetWorkflowToDefault("batch")}
                   t={t}
+                  isDarkTheme={isDarkTheme}
                 />
               </div>
 
               {/* Deep Dive Workflow */}
-              <div className="bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6">
-                <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <div className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
+                isDarkTheme
+                  ? 'bg-black/40 border-green-500/20'
+                  : 'bg-white border-green-200'
+              }`}>
+                <h3 className={`text-xl font-bold mb-2 flex items-center gap-2 ${
+                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                }`}>
                   <Lightbulb className="w-5 h-5 text-green-400" />
                   {t.deepDiveWorkflow}
                 </h3>
-                <p className="text-sm text-slate-400 mb-6">
+                <p className={`text-sm mb-6 ${
+                  isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                }`}>
                   {DEEP_DIVE_WORKFLOW.description}
                 </p>
                 <WorkflowConfigPanel
@@ -6298,6 +6817,7 @@ export default function App() {
                   }
                   onReset={() => resetWorkflowToDefault("deepDive")}
                   t={t}
+                  isDarkTheme={isDarkTheme}
                 />
               </div>
             </div>
@@ -6370,7 +6890,11 @@ export default function App() {
               {!state.miningSuccess && (
                 <button
                   onClick={handleStop}
-                  className="flex items-center gap-2 px-4 py-2 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-sm font-medium shadow-sm"
+                  className={`flex items-center gap-2 px-4 py-2 border rounded-md transition-colors text-sm font-medium shadow-sm ${
+                    isDarkTheme
+                      ? 'bg-black/60 border-red-500/30 text-red-400 hover:bg-red-500/10'
+                      : 'bg-white border-red-300 text-red-600 hover:bg-red-50'
+                  }`}
                 >
                   <Square className="w-4 h-4 fill-current" />
                   {t.btnStop}
@@ -6380,16 +6904,24 @@ export default function App() {
 
             {/* Mining Control Panel */}
             {!state.miningSuccess && (
-              <div className="mb-4 bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-4">
+              <div className={`mb-4 backdrop-blur-sm rounded-xl shadow-sm border p-4 ${
+                isDarkTheme
+                  ? 'bg-black/40 border-green-500/20'
+                  : 'bg-white border-green-200'
+              }`}>
                 <div className="flex items-center gap-2 mb-3">
                   <Settings className="w-4 h-4 text-green-400" />
-                  <h4 className="text-sm font-bold text-white">{t.miningSettings}</h4>
+                  <h4 className={`text-sm font-bold ${
+                    isDarkTheme ? 'text-white' : 'text-gray-900'
+                  }`}>{t.miningSettings}</h4>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Words Per Round */}
                   <div>
-                    <label className="block text-xs text-slate-400 font-medium mb-2">
+                    <label className={`block text-xs font-medium mb-2 ${
+                      isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                    }`}>
                       {t.wordsPerRound}
                     </label>
                     <input
@@ -6398,30 +6930,46 @@ export default function App() {
                       max="20"
                       value={state.wordsPerRound}
                       onChange={(e) => setState((prev) => ({ ...prev, wordsPerRound: Math.max(5, Math.min(20, parseInt(e.target.value) || 10)) }))}
-                      className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white"
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
+                        isDarkTheme
+                          ? 'border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white'
+                          : 'border-green-300 bg-white focus:ring-green-500 text-gray-900'
+                      }`}
                     />
-                    <p className="text-xs text-slate-500 mt-1">{t.applyNextRound}</p>
+                    <p className={`text-xs mt-1 ${
+                      isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                    }`}>{t.applyNextRound}</p>
                   </div>
 
                   {/* Mining Strategy */}
                   <div>
-                    <label className="block text-xs text-slate-400 font-medium mb-2">
+                    <label className={`block text-xs font-medium mb-2 ${
+                      isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                    }`}>
                       {t.miningStrategy}
                     </label>
                     <select
                       value={state.miningStrategy}
                       onChange={(e) => setState((prev) => ({ ...prev, miningStrategy: e.target.value as 'horizontal' | 'vertical' }))}
-                      className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white"
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
+                        isDarkTheme
+                          ? 'border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white'
+                          : 'border-green-300 bg-white focus:ring-green-500 text-gray-900'
+                      }`}
                     >
-                      <option value="horizontal" className="bg-black">{t.horizontal}</option>
-                      <option value="vertical" className="bg-black">{t.vertical}</option>
+                      <option value="horizontal" className={isDarkTheme ? 'bg-black' : 'bg-white'}>{t.horizontal}</option>
+                      <option value="vertical" className={isDarkTheme ? 'bg-black' : 'bg-white'}>{t.vertical}</option>
                     </select>
-                    <p className="text-xs text-slate-500 mt-1">{t.applyNextRound}</p>
+                    <p className={`text-xs mt-1 ${
+                      isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                    }`}>{t.applyNextRound}</p>
                   </div>
 
                   {/* User Suggestion */}
                   <div className="md:col-span-1">
-                    <label className="block text-xs text-slate-400 font-medium mb-2">
+                    <label className={`block text-xs font-medium mb-2 ${
+                      isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                    }`}>
                       {t.userSuggestion}
                     </label>
                     <input
@@ -6429,9 +6977,15 @@ export default function App() {
                       value={state.userSuggestion}
                       onChange={(e) => setState((prev) => ({ ...prev, userSuggestion: e.target.value }))}
                       placeholder={t.suggestionPlaceholder}
-                      className="w-full px-3 py-2 border border-green-500/30 bg-black/60 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500/50 text-white placeholder:text-slate-500"
+                      className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
+                        isDarkTheme
+                          ? 'border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500'
+                          : 'border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400'
+                      }`}
                     />
-                    <p className="text-xs text-slate-500 mt-1">{t.applyNextRound}</p>
+                    <p className={`text-xs mt-1 ${
+                      isDarkTheme ? 'text-slate-500' : 'text-gray-500'
+                    }`}>{t.applyNextRound}</p>
                   </div>
                 </div>
               </div>
@@ -6439,10 +6993,10 @@ export default function App() {
 
             <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
               <div className="w-full md:w-1/3 h-full">
-                <TerminalLog logs={state.logs} />
+                <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
               </div>
               <div className="w-full md:w-2/3 h-full">
-                <AgentStream thoughts={state.agentThoughts} t={t} />
+                <AgentStream thoughts={state.agentThoughts} t={t} isDarkTheme={isDarkTheme} />
               </div>
             </div>
           </div>
@@ -6477,10 +7031,10 @@ export default function App() {
 
             <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
               <div className="w-full md:w-1/3 h-full">
-                <TerminalLog logs={state.logs} />
+                <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
               </div>
               <div className="w-full md:w-2/3 h-full">
-                <BatchAnalysisStream thoughts={state.batchThoughts} t={t} />
+                <BatchAnalysisStream thoughts={state.batchThoughts} t={t} isDarkTheme={isDarkTheme} />
               </div>
             </div>
           </div>
@@ -6491,11 +7045,15 @@ export default function App() {
           <div className="animate-fade-in flex-1">
             <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                <h2 className={`text-2xl font-bold flex items-center gap-2 ${
+                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                }`}>
                   <Languages className="w-6 h-6 text-green-400" />
                   {t.batchResultsTitle}
                 </h2>
-                <p className="text-slate-400 mt-1">
+                <p className={`mt-1 ${
+                  isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                }`}>
                   {t.foundOpp} {state.batchKeywords.length} {t.opps}.
                 </p>
               </div>
@@ -6509,7 +7067,11 @@ export default function App() {
                 </button>
                 <button
                   onClick={reset}
-                  className="px-4 py-2 text-sm text-slate-400 hover:text-green-400 font-medium transition-colors border border-green-500/30 rounded-md bg-black/60 hover:bg-green-500/10"
+                  className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${
+                    isDarkTheme
+                      ? 'text-slate-400 hover:text-green-400 border-green-500/30 bg-black/60 hover:bg-green-500/10'
+                      : 'text-gray-700 hover:text-green-600 border-green-300 bg-white hover:bg-green-50'
+                  }`}
                 >
                   {t.newAnalysis}
                 </button>
@@ -6517,10 +7079,20 @@ export default function App() {
             </div>
 
             {/* Batch Results Table */}
-            <div className="bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 overflow-hidden min-h-[400px]">
+            <div className={`backdrop-blur-sm rounded-xl shadow-sm border overflow-hidden min-h-[400px] ${
+              isDarkTheme
+                ? 'bg-black/40 border-green-500/20'
+                : 'bg-white border-green-200'
+            }`}>
               <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left text-sm text-slate-300">
-                  <thead className="bg-black/60 text-xs uppercase font-semibold text-slate-400 border-b border-green-500/20">
+                <table className={`w-full text-left text-sm ${
+                  isDarkTheme ? 'text-slate-300' : 'text-gray-700'
+                }`}>
+                  <thead className={`text-xs uppercase font-semibold border-b ${
+                    isDarkTheme
+                      ? 'bg-black/60 text-slate-400 border-green-500/20'
+                      : 'bg-gray-100 text-gray-700 border-gray-200'
+                  }`}>
                     <tr>
                       <th className="px-4 py-4 w-10"></th>
                       <th className="px-4 py-4">{t.originalKeyword}</th>
@@ -6644,7 +7216,11 @@ export default function App() {
 
                           {/* Expanded Detail View */}
                           {isExpanded && (
-                            <tr className="bg-slate-50/80 animate-fade-in border-b border-slate-100">
+                            <tr className={`animate-fade-in border-b ${
+                              isDarkTheme
+                                ? 'bg-slate-50/80 border-slate-100'
+                                : 'bg-gray-50 border-gray-200'
+                            }`}>
                               <td colSpan={6} className="px-4 py-4">
                                 <div className="flex flex-col md:flex-row gap-6 px-4">
                                   <div className="flex-1 space-y-2">
@@ -6991,12 +7567,13 @@ export default function App() {
 
             <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
               <div className="w-full md:w-1/3 h-full">
-                <TerminalLog logs={state.logs} />
+                <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
               </div>
               <div className="w-full md:w-2/3 h-full">
                 <DeepDiveAnalysisStream
                   thoughts={state.deepDiveThoughts}
                   t={t}
+                  isDarkTheme={isDarkTheme}
                 />
               </div>
             </div>
@@ -7599,13 +8176,21 @@ export default function App() {
           <div className="animate-fade-in flex-1">
             <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                  <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded text-base border border-green-500/30">
+                <h2 className={`text-2xl font-bold flex items-center gap-2 ${
+                  isDarkTheme ? 'text-white' : 'text-gray-900'
+                }`}>
+                  <span className={`px-2 py-1 rounded text-base border ${
+                    isDarkTheme
+                      ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                      : 'bg-green-100 text-green-700 border-green-300'
+                  }`}>
                     {state.seedKeyword}
                   </span>
                   {t.resultsTitle}
                 </h2>
-                <p className="text-slate-400 mt-1">
+                <p className={`mt-1 ${
+                  isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                }`}>
                   {t.foundOpp} {state.keywords.length} {t.opps}.
                 </p>
               </div>
@@ -7619,7 +8204,11 @@ export default function App() {
                 </button>
                 <button
                   onClick={reset}
-                  className="px-4 py-2 text-sm text-slate-400 hover:text-green-400 font-medium transition-colors border border-green-500/30 rounded-md bg-black/60 hover:bg-green-500/10"
+                  className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${
+                    isDarkTheme
+                      ? 'text-slate-400 hover:text-green-400 border-green-500/30 bg-black/60 hover:bg-green-500/10'
+                      : 'text-gray-700 hover:text-green-600 border-green-300 bg-white hover:bg-green-50'
+                  }`}
                 >
                   {t.newAnalysis}
                 </button>
@@ -7627,10 +8216,16 @@ export default function App() {
             </div>
 
             {/* Toolbar */}
-            <div className="bg-black/40 backdrop-blur-sm p-3 rounded-t-xl border border-b-0 border-green-500/20 flex flex-wrap gap-4 items-center justify-between">
+            <div className={`backdrop-blur-sm p-3 rounded-t-xl border border-b-0 flex flex-wrap gap-4 items-center justify-between ${
+              isDarkTheme
+                ? 'bg-black/40 border-green-500/20'
+                : 'bg-gray-100 border-green-200'
+            }`}>
               <div className="flex items-center gap-4">
                 {/* Filter */}
-                <div className="flex items-center gap-2 text-sm text-slate-300">
+                <div className={`flex items-center gap-2 text-sm ${
+                  isDarkTheme ? 'text-slate-300' : 'text-gray-700'
+                }`}>
                   <Filter className="w-4 h-4" />
                   <select
                     value={state.filterLevel}
@@ -7640,17 +8235,23 @@ export default function App() {
                         filterLevel: e.target.value as any,
                       }))
                     }
-                    className="bg-black/60 border border-green-500/30 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-green-500/50 text-white"
+                    className={`border rounded px-2 py-1 outline-none focus:ring-1 ${
+                      isDarkTheme
+                        ? 'bg-black/60 border-green-500/30 focus:ring-green-500/50 text-white'
+                        : 'bg-white border-green-300 focus:ring-green-500 text-gray-900'
+                    }`}
                   >
-                    <option value={ProbabilityLevel.HIGH} className="bg-black">
+                    <option value={ProbabilityLevel.HIGH} className={isDarkTheme ? 'bg-black' : 'bg-white'}>
                       {t.filterHigh}
                     </option>
-                    <option value="ALL" className="bg-black">{t.filterAll}</option>
+                    <option value="ALL" className={isDarkTheme ? 'bg-black' : 'bg-white'}>{t.filterAll}</option>
                   </select>
                 </div>
 
                 {/* Sort */}
-                <div className="flex items-center gap-2 text-sm text-slate-300">
+                <div className={`flex items-center gap-2 text-sm ${
+                  isDarkTheme ? 'text-slate-300' : 'text-gray-700'
+                }`}>
                   <ArrowUpDown className="w-4 h-4" />
                   <select
                     value={state.sortBy}
@@ -7660,27 +8261,45 @@ export default function App() {
                         sortBy: e.target.value as any,
                       }))
                     }
-                    className="bg-black/60 border border-green-500/30 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-green-500/50 text-white"
+                    className={`border rounded px-2 py-1 outline-none focus:ring-1 ${
+                      isDarkTheme
+                        ? 'bg-black/60 border-green-500/30 focus:ring-green-500/50 text-white'
+                        : 'bg-white border-green-300 focus:ring-green-500 text-gray-900'
+                    }`}
                   >
-                    <option value="probability" className="bg-black">Sort: Probability</option>
-                    <option value="volume" className="bg-black">Sort: Volume</option>
+                    <option value="probability" className={isDarkTheme ? 'bg-black' : 'bg-white'}>Sort: Probability</option>
+                    <option value="volume" className={isDarkTheme ? 'bg-black' : 'bg-white'}>Sort: Volume</option>
                   </select>
                 </div>
               </div>
 
               <button
                 onClick={downloadCSV}
-                className="flex items-center gap-2 text-sm text-slate-300 hover:text-green-400 px-3 py-1 rounded hover:bg-green-500/10 transition-colors"
+                className={`flex items-center gap-2 text-sm px-3 py-1 rounded transition-colors ${
+                  isDarkTheme
+                    ? 'text-slate-300 hover:text-green-400 hover:bg-green-500/10'
+                    : 'text-gray-700 hover:text-green-600 hover:bg-green-50'
+                }`}
               >
                 <Download className="w-4 h-4" /> {t.downloadCSV}
               </button>
             </div>
 
             {/* Table */}
-            <div className="bg-black/40 backdrop-blur-sm rounded-b-xl shadow-sm border border-green-500/20 overflow-hidden min-h-[400px]">
+            <div className={`backdrop-blur-sm rounded-b-xl shadow-sm border overflow-hidden min-h-[400px] ${
+              isDarkTheme
+                ? 'bg-black/40 border-green-500/20'
+                : 'bg-white border-green-200'
+            }`}>
               <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left text-sm text-slate-300">
-                  <thead className="bg-black/60 text-xs uppercase font-semibold text-slate-400 border-b border-green-500/20">
+                <table className={`w-full text-left text-sm ${
+                  isDarkTheme ? 'text-slate-300' : 'text-gray-700'
+                }`}>
+                  <thead className={`text-xs uppercase font-semibold border-b ${
+                    isDarkTheme
+                      ? 'bg-black/60 text-slate-400 border-green-500/20'
+                      : 'bg-gray-100 text-gray-700 border-gray-200'
+                  }`}>
                     <tr>
                       <th className="px-4 py-4 w-10"></th>
                       <th className="px-4 py-4">{t.colKw}</th>
@@ -7718,7 +8337,9 @@ export default function App() {
                               )}
                             </td>
                             <td
-                              className="px-4 py-4 font-medium text-white"
+                              className={`px-4 py-4 font-medium ${
+                                isDarkTheme ? 'text-white' : 'text-gray-900'
+                              }`}
                               onClick={() =>
                                 setState((prev) => ({
                                   ...prev,
@@ -7730,10 +8351,14 @@ export default function App() {
                                 {item.keyword}
                               </div>
                             </td>
-                            <td className="px-4 py-4 text-slate-400">
+                            <td className={`px-4 py-4 ${
+                              isDarkTheme ? 'text-slate-400' : 'text-gray-600'
+                            }`}>
                               {item.translation}
                             </td>
-                            <td className="px-4 py-4 font-mono text-white">
+                            <td className={`px-4 py-4 font-mono ${
+                              isDarkTheme ? 'text-white' : 'text-gray-900'
+                            }`}>
                               {item.volume.toLocaleString()}
                             </td>
                             <td className="px-4 py-4">
@@ -7802,7 +8427,11 @@ export default function App() {
 
                           {/* Expanded Detail View */}
                           {isExpanded && (
-                            <tr className="bg-slate-50/80 animate-fade-in border-b border-slate-100">
+                            <tr className={`animate-fade-in border-b ${
+                              isDarkTheme
+                                ? 'bg-slate-50/80 border-slate-100'
+                                : 'bg-gray-50 border-gray-200'
+                            }`}>
                               <td colSpan={7} className="px-4 py-4">
                                 <div className="flex flex-col md:flex-row gap-6 px-4">
                                   <div className="flex-1 space-y-2">
