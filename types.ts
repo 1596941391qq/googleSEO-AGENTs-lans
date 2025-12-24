@@ -111,7 +111,7 @@ export interface DeepDiveArchiveEntry {
 }
 
 export type UILanguage = 'en' | 'zh';
-export type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar';
+export type TargetLanguage = 'en' | 'zh' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar';
 
 // Agent配置存档
 export interface DeepDiveThought {

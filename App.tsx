@@ -380,6 +380,7 @@ const TEXT = {
 
 const LANGUAGES: { code: TargetLanguage; label: string }[] = [
   { code: "en", label: "English (Global/US)" },
+  { code: "zh", label: "Chinese (CN)" },
   { code: "ru", label: "Russian (Ru)" },
   { code: "fr", label: "French (Fr)" },
   { code: "ja", label: "Japanese (Jp)" },
