@@ -2336,8 +2336,8 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Logo Area */}
       <div className={`p-6 border-b ${isDarkTheme ? 'border-white/5' : 'border-gray-200'}`}>
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-emerald-600 rounded flex items-center justify-center">
-            <Database className="text-white w-4 h-4" />
+          <div className="w-8 h-8 flex items-center justify-center">
+            <img src="/logo.png" alt="Logo" className="w-8 h-8 object-contain" />
           </div>
           <div>
             <h1 className={`text-xs font-black tracking-widest leading-none ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>NICHE MINING</h1>
