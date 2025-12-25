@@ -414,7 +414,7 @@ IMPORTANT: Consider the SE Ranking Keyword Difficulty (KD) score in your analysi
 
 Combine the KD score with your SERP analysis to make a final judgment.`
       : keywordData.serankingData
-      ? `\n\nSE RANKING KEYWORD DATA FOR "${keywordData.keyword}":
+        ? `\n\nSE RANKING KEYWORD DATA FOR "${keywordData.keyword}":
 ⚠️ NO DATA FOUND - This is a BLUE OCEAN SIGNAL!
 
 When SE Ranking has no data for a keyword, it typically means:
@@ -424,7 +424,7 @@ When SE Ranking has no data for a keyword, it typically means:
 4. **This is a POSITIVE indicator for ranking probability**
 
 ACTION: Give this keyword a BONUS toward HIGH probability, as it indicates low competition and untapped opportunity.`
-      : `\n\nNote: SE Ranking keyword data not available for this keyword.`;
+        : `\n\nNote: SE Ranking keyword data not available for this keyword (API call failed or not attempted).`;
 
     const topSerpSnippetsJson = serpResults.length > 0
       ? JSON.stringify(serpResults.slice(0, 3).map(r => ({
@@ -838,7 +838,7 @@ export const searchGoogleSerp = async (
  * Call SE Ranking API to get keyword research data
  * Returns keyword difficulty, volume, CPC, competition, and trends
  */
-const SERANKING_API_KEY = '6b45bdef-7426-aacd-e59f-1a5d25d01e0b';
+const SERANKING_API_KEY = 'a3eefe61-1e2b-0939-f0c9-d01d9a957852';
 const SERANKING_ENDPOINT = 'https://api.seranking.com/v1/keywords/export';
 
 interface SErankingResponse {

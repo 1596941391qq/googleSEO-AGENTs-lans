@@ -55,6 +55,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       });
 
+      // Flag to indicate that SE Ranking API call succeeded (even if some keywords have no data)
+      // This is used to distinguish between "API failure" vs "API returned data (which might have is_data_found=false)"
+      (serankingDataMap as any).apiSucceeded = true;
+
       console.log(`[SE Ranking] Successfully fetched data for ${serankingResults.length}/${coreKeywords.length} keywords`);
 
       // Log SE Ranking data for each keyword
@@ -94,7 +98,8 @@ Provide a brief analysis of the competition strength for this keyword.`;
           keyword: coreKeyword,
           serpResults: serpResults.slice(0, 3),
           analysis: analysisResponse.text || 'Analysis unavailable',
-          serankingData: serankingData && serankingData.is_data_found ? {
+          // Only include serankingData if API succeeded
+          serankingData: (serankingDataMap as any).apiSucceeded && serankingData && serankingData.is_data_found ? {
             volume: serankingData.volume,
             difficulty: serankingData.difficulty,
             cpc: serankingData.cpc,
@@ -115,7 +120,8 @@ Provide a brief analysis of the competition strength for this keyword.`;
           keyword: coreKeyword,
           serpResults: [],
           analysis: 'SERP search failed',
-          serankingData: serankingData && serankingData.is_data_found ? {
+          // Only include serankingData if API succeeded
+          serankingData: (serankingDataMap as any).apiSucceeded && serankingData && serankingData.is_data_found ? {
             volume: serankingData.volume,
             difficulty: serankingData.difficulty,
             cpc: serankingData.cpc,

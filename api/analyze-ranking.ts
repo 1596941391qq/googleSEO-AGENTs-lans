@@ -39,6 +39,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       });
 
+      // Flag to indicate that SE Ranking API call succeeded (even if some keywords have no data)
+      // This is used to distinguish between "API failure" vs "API returned no data" (true blue ocean)
+      const serankingApiSucceeded = true;
+
       console.log(`[SE Ranking] Successfully fetched data for ${serankingResults.length}/${keywords.length} keywords`);
 
       // Log SE Ranking data for each keyword
@@ -52,8 +56,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       for (const keyword of keywords) {
         const serankingData = serankingDataMap.get(keyword.keyword.toLowerCase());
 
-        if (serankingData && serankingData.is_data_found) {
-          // Attach SE Ranking data to keyword
+        if (serankingApiSucceeded && serankingData) {
+          // Only attach SE Ranking data if API succeeded
+          // This distinguishes between "API failure" vs "API returned data (which might have is_data_found=false)"
           keyword.serankingData = {
             is_data_found: serankingData.is_data_found,
             volume: serankingData.volume,
