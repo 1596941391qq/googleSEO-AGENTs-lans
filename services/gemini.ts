@@ -65,7 +65,8 @@ export const generateKeywords = async (
   roundIndex: number = 1,
   wordsPerRound: number = 10,
   miningStrategy: 'horizontal' | 'vertical' = 'horizontal',
-  userSuggestion: string = ''
+  userSuggestion: string = '',
+  uiLanguage: 'zh' | 'en' = 'en'
 ): Promise<KeywordData[]> => {
   const result = await apiCall('/api/generate-keywords', {
     seedKeyword,
@@ -76,6 +77,7 @@ export const generateKeywords = async (
     wordsPerRound,
     miningStrategy,
     userSuggestion,
+    uiLanguage,
   });
   return result.keywords;
 };

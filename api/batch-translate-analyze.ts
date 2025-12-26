@@ -54,6 +54,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`Translated ${translatedResults.length} keywords`);
 
     // Step 2: Convert translated keywords to KeywordData format for analysis
+    // For batch translation, translation field stores the original keyword meaning
+    // We'll translate it to UI language if needed (simplified: just use original for now)
+    // The translation will be handled on the frontend based on uiLanguage
     const keywordsForAnalysis: KeywordData[] = translatedResults.map((result, index) => ({
       id: `bt-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`, // Ensure unique IDs
       keyword: result.translated,

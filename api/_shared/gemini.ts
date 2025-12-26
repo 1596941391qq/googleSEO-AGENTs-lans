@@ -258,9 +258,11 @@ export const generateKeywords = async (
   roundIndex: number = 1,
   wordsPerRound: number = 10,
   miningStrategy: 'horizontal' | 'vertical' = 'horizontal',
-  userSuggestion: string = ''
+  userSuggestion: string = '',
+  uiLanguage: 'en' | 'zh' = 'en'
 ): Promise<KeywordData[]> => {
   const targetLangName = getLanguageName(targetLanguage);
+  const translationLang = uiLanguage === 'zh' ? 'Chinese' : 'English';
 
   // Build strategy-specific guidance
   let strategyGuidance = '';
@@ -301,12 +303,12 @@ CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoug
 
 Return a JSON array with objects containing:
 - keyword: The keyword in ${targetLangName}
-- translation: Meaning in English/Chinese
+- translation: Meaning in ${translationLang} (must be in ${translationLang} language)
 - intent: One of "Informational", "Transactional", "Local", "Commercial"
 - volume: Estimated monthly searches (number)
 
 Example format:
-[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]`;
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`;
   } else {
     promptContext = `
 The user is looking for "Blue Ocean" opportunities in the ${targetLangName} market.
@@ -323,7 +325,7 @@ CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoug
 
 Return a JSON array with objects containing:
 - keyword: The keyword in ${targetLangName}
-- translation: Meaning in English/Chinese
+- translation: Meaning in ${translationLang} (must be in ${translationLang} language)
 - intent: One of "Informational", "Transactional", "Local", "Commercial"
 - volume: Estimated monthly searches (number)`;
   }

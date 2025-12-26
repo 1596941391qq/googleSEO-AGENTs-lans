@@ -23,7 +23,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       roundIndex,
       wordsPerRound,
       miningStrategy,
-      userSuggestion
+      userSuggestion,
+      uiLanguage
     } = body;
 
     if (!seedKeyword || !targetLanguage || !systemInstruction) {
@@ -38,7 +39,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       roundIndex || 1,
       wordsPerRound || 10,
       miningStrategy || 'horizontal',
-      userSuggestion || ''
+      userSuggestion || '',
+      uiLanguage || 'en'
     );
 
     return res.json({ keywords });

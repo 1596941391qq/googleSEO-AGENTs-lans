@@ -4979,7 +4979,8 @@ export default function App() {
           currentRound,
           state.wordsPerRound,
           state.miningStrategy,
-          state.userSuggestion
+          state.userSuggestion,
+          state.uiLanguage
         );
 
         if (generatedKeywords.length === 0) {
