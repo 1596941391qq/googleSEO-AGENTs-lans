@@ -4,7 +4,11 @@ import { Client, QueryResultRow } from 'pg';
 const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
 if (!connectionString) {
-  console.error('Database connection string not found. Please set POSTGRES_URL or DATABASE_URL environment variable.');
+  console.error('[db] Database connection string not found. Please set POSTGRES_URL or DATABASE_URL environment variable.');
+  // 在生产环境中，如果没有连接字符串，应该抛出错误
+  if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    throw new Error('Database connection string (POSTGRES_URL or DATABASE_URL) is required in production');
+  }
 }
 
 // 导出 SQL 查询函数 (tagged template 语法)
@@ -12,11 +16,17 @@ export const sql = async <T extends QueryResultRow = any>(
   strings: TemplateStringsArray,
   ...values: any[]
 ): Promise<{ rows: T[]; rowCount: number }> => {
+  if (!connectionString) {
+    const error = new Error('Database connection string not configured. Please set POSTGRES_URL or DATABASE_URL environment variable.');
+    console.error('[sql]', error.message);
+    throw error;
+  }
+
   const client = new Client({
     connectionString,
-    ssl: {
+    ssl: connectionString.includes('sslmode=require') || connectionString.includes('ssl=true') || connectionString.includes('vercel') ? {
       rejectUnauthorized: false
-    }
+    } : undefined
   });
 
   try {

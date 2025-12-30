@@ -1,14 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
-import { WorkflowConfig } from '../types.ts';
-import { authenticateRequest } from './_shared/auth.ts';
+import { WorkflowConfig } from '../types.js';
+import { authenticateRequest } from './_shared/auth.js';
 import {
   createWorkflowConfig,
   getUserWorkflowConfigs,
   getWorkflowConfigById,
   updateWorkflowConfig,
   deleteWorkflowConfig,
-} from './lib/db.ts';
+} from './lib/db.js';
 /**
  * Workflow Configuration Management API
  * 
@@ -71,7 +71,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         try {
           const parts = tokenValue.split('.');
           if (parts.length === 3) {
-            const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+            // 在 Node.js/Vercel 环境中，Buffer 总是可用的
+            const payloadStr = Buffer.from(parts[1], 'base64').toString('utf-8');
+            const payload = JSON.parse(payloadStr);
             const now = Math.floor(Date.now() / 1000);
             if (payload.exp && payload.exp < now) {
               return res.status(401).json({
@@ -83,6 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         } catch (e) {
           // 无法解析，继续返回通用错误
+          console.error('[workflow-configs] Failed to parse token for expiry check:', e);
         }
       }
 
@@ -126,7 +129,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
   } catch (error: any) {
-    console.error('Workflow config API error:', error);
+    console.error('[workflow-configs] API error:', error);
+    console.error('[workflow-configs] Error stack:', error?.stack);
+    console.error('[workflow-configs] Error details:', {
+      message: error?.message,
+      name: error?.name,
+      code: error?.code,
+    });
     return sendErrorResponse(res, error, 'Failed to process workflow config request');
   }
 }

@@ -64,7 +64,9 @@ export async function verifyToken(token: string): Promise<AppJWTPayload | null> 
           // 不验证过期时间，只验证签名和基本格式
           const parts = token.split('.');
           if (parts.length === 3) {
-            const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
+            // 使用 Buffer 解析 payload（在 Node.js/Vercel 环境中可用）
+            const payloadStr = Buffer.from(parts[1], 'base64').toString('utf-8');
+            const payload = JSON.parse(payloadStr);
             console.log('[verifyToken] Using expired token payload in dev mode:', {
               userId: payload.userId,
               email: payload.email,
