@@ -6248,23 +6248,14 @@ export default function App() {
         response.statusText
       );
 
-      // 如果是 401，尝试获取详细的错误信息
+      // 如果是 401，只记录状态，不读取 body（让调用者读取）
       if (response.status === 401) {
-        try {
-          const errorBody = await response.clone().json();
-          console.error(
-            "[makeWorkflowConfigRequest] 401 Error details:",
-            errorBody
-          );
-        } catch (e) {
-          const errorText = await response.clone().text();
-          console.error(
-            "[makeWorkflowConfigRequest] 401 Error text:",
-            errorText
-          );
-        }
+        console.error(
+          "[makeWorkflowConfigRequest] 401 Unauthorized - response body will be read by caller"
+        );
       }
 
+      // 返回 response，调用者可以读取 body
       return response;
     } catch (fetchError: any) {
       console.error("[makeWorkflowConfigRequest] Fetch error:", fetchError);
