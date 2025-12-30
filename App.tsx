@@ -1550,15 +1550,17 @@ const WorkflowConfigPanel = ({
   onSave,
   onLoad,
   onReset,
+  onDelete,
   t,
   isDarkTheme = true,
 }: {
   workflowDef: any;
   currentConfig: WorkflowConfig | null;
   allConfigs: WorkflowConfig[];
-  onSave: (config: WorkflowConfig) => void;
+  onSave: (config: WorkflowConfig) => Promise<void>;
   onLoad: (configId: string) => void;
   onReset: () => void;
+  onDelete: (configId: string) => Promise<void>;
   t: any;
   isDarkTheme?: boolean;
 }) => {
@@ -1582,7 +1584,7 @@ const WorkflowConfigPanel = ({
     );
   };
 
-  const handleSaveConfig = () => {
+  const handleSaveConfig = async () => {
     if (!configName.trim()) {
       alert(t.configNamePlaceholder);
       return;
@@ -1597,8 +1599,25 @@ const WorkflowConfigPanel = ({
       nodes: JSON.parse(JSON.stringify(nodes)),
     };
 
-    onSave(newConfig);
-    setConfigName("");
+    console.log("[handleSaveConfig] Calling onSave with:", newConfig);
+    console.log("[handleSaveConfig] onSave function:", onSave);
+    console.log("[handleSaveConfig] onSave type:", typeof onSave);
+
+    if (!onSave || typeof onSave !== "function") {
+      console.error("[handleSaveConfig] onSave is not a function!", onSave);
+      alert("保存功能未正确初始化，请刷新页面重试");
+      return;
+    }
+
+    try {
+      console.log("[handleSaveConfig] About to call onSave...");
+      await onSave(newConfig);
+      console.log("[handleSaveConfig] onSave completed successfully");
+      setConfigName("");
+    } catch (error) {
+      console.error("[handleSaveConfig] Save failed:", error);
+      alert(`保存失败: ${error instanceof Error ? error.message : "未知错误"}`);
+    }
   };
 
   const handleResetToDefault = () => {
@@ -1790,7 +1809,12 @@ const WorkflowConfigPanel = ({
             }`}
           />
           <button
-            onClick={handleSaveConfig}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              console.log("[Save Button] Clicked, calling handleSaveConfig");
+              handleSaveConfig();
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-green-500 text-black rounded hover:bg-green-600 text-sm font-medium"
           >
             <Save className="w-4 h-4" />
@@ -1854,8 +1878,35 @@ const WorkflowConfigPanel = ({
                     <button
                       onClick={() => onLoad(config.id)}
                       className="px-3 py-1 bg-green-500/20 text-green-400 rounded text-xs hover:bg-green-500/30"
+                      title={t.loadWorkflowConfig || "加载配置"}
                     >
                       <FolderOpen className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        if (
+                          confirm(t.deleteConfirm || "确定要删除此配置吗？")
+                        ) {
+                          console.log(
+                            "[WorkflowConfigPanel] Deleting config:",
+                            config.id
+                          );
+                          try {
+                            await onDelete(config.id);
+                          } catch (error) {
+                            console.error(
+                              "[WorkflowConfigPanel] Delete failed:",
+                              error
+                            );
+                          }
+                        }
+                      }}
+                      className="px-3 py-1 bg-red-500/20 text-red-400 rounded text-xs hover:bg-red-500/30"
+                      title={t.deleteConfig || "删除配置"}
+                    >
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                 </div>
@@ -2123,10 +2174,18 @@ const SidebarLink: React.FC<{
   onClick: () => void;
   active?: boolean;
   isDarkTheme?: boolean;
-}> = ({ icon, label, onClick, active, isDarkTheme = true }) => (
+  showBadge?: boolean;
+}> = ({
+  icon,
+  label,
+  onClick,
+  active,
+  isDarkTheme = true,
+  showBadge = false,
+}) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center space-x-3 px-3 py-2 rounded transition-all text-xs font-bold uppercase tracking-wider ${
+    className={`w-full flex items-center space-x-3 px-3 py-2 rounded transition-all text-xs font-bold uppercase tracking-wider relative ${
       active
         ? isDarkTheme
           ? "text-white bg-white/5 border border-white/10"
@@ -2136,10 +2195,20 @@ const SidebarLink: React.FC<{
         : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent"
     }`}
   >
-    <span className={`shrink-0 ${active ? "opacity-100" : "opacity-60"}`}>
+    <span
+      className={`shrink-0 relative ${active ? "opacity-100" : "opacity-60"}`}
+    >
       {icon}
+      {showBadge && (
+        <>
+          {/* 外圈光晕 */}
+          <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500/30 rounded-full animate-ping" />
+          {/* 主红点 */}
+          <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-gradient-to-br from-red-500 to-red-600 rounded-full border-2 border-white shadow-[0_0_10px_rgba(239,68,68,1),0_0_20px_rgba(239,68,68,0.6)] animate-pulse" />
+        </>
+      )}
     </span>
-    <span>{label}</span>
+    <span className="flex-1">{label}</span>
   </button>
 );
 
@@ -2875,6 +2944,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               onClick={onWorkflowConfig}
               active={step === "workflow-config"}
               isDarkTheme={isDarkTheme}
+              showBadge={true}
             />
             <SidebarLink
               icon={<Languages size={14} />}
@@ -3451,65 +3521,125 @@ export default function App() {
       console.error("Failed to load agent configs", e);
     }
 
-    // Load workflow configs
-    try {
-      const savedWorkflowConfigs = localStorage.getItem(
-        "google_seo_workflow_configs"
-      );
-      if (savedWorkflowConfigs) {
-        setState((prev) => ({
-          ...prev,
-          workflowConfigs: JSON.parse(savedWorkflowConfigs),
-        }));
+    // Load workflow configs from database
+    const loadWorkflowConfigs = async () => {
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        // Not authenticated, skip loading
+        return;
       }
-    } catch (e) {
-      console.error("Failed to load workflow configs", e);
-    }
 
-    // Migrate old agentConfigs to new workflowConfigs system (one-time migration)
-    try {
-      const oldConfigs = localStorage.getItem("google_seo_agent_configs");
-      const existingWorkflowConfigs = localStorage.getItem(
-        "google_seo_workflow_configs"
-      );
-
-      if (oldConfigs && !existingWorkflowConfigs) {
-        console.log("Migrating old agent configs to new workflow configs...");
-        const oldAgentConfigs: AgentConfig[] = JSON.parse(oldConfigs);
-
-        const migratedConfigs: WorkflowConfig[] = oldAgentConfigs.map(
-          (oldCfg) => ({
-            id: oldCfg.id,
-            workflowId: "mining",
-            name: oldCfg.name,
-            createdAt: oldCfg.createdAt,
-            updatedAt: oldCfg.updatedAt,
-            nodes: MINING_WORKFLOW.nodes.map((node) => ({
-              ...node,
-              prompt:
-                node.id === "mining-gen"
-                  ? oldCfg.genPrompt
-                  : node.id === "mining-analyze"
-                  ? oldCfg.analyzePrompt
-                  : node.prompt,
-            })),
-          })
+      try {
+        const response = await makeWorkflowConfigRequest(
+          "/api/workflow-configs",
+          {
+            method: "GET",
+          }
         );
 
-        localStorage.setItem(
-          "google_seo_workflow_configs",
-          JSON.stringify(migratedConfigs)
-        );
-        setState((prev) => ({
-          ...prev,
-          workflowConfigs: migratedConfigs,
-        }));
-        console.log(`Migrated ${migratedConfigs.length} configs to new system`);
+        if (response.ok) {
+          const result = await response.json();
+          setState((prev) => ({
+            ...prev,
+            workflowConfigs: result.data || [],
+          }));
+        } else {
+          console.error("Failed to load workflow configs from API");
+        }
+      } catch (e) {
+        console.error("Failed to load workflow configs", e);
       }
-    } catch (e) {
-      console.error("Failed to migrate old configs", e);
-    }
+    };
+
+    loadWorkflowConfigs();
   }, []);
+
+  // Load workflow configs when user logs in
+  useEffect(() => {
+    if (authenticated && user) {
+      const loadWorkflowConfigs = async () => {
+        const token = localStorage.getItem("auth_token");
+        if (!token) return;
+
+        try {
+          // 使用本地 API 端点
+          const response = await fetch("/api/workflow-configs", {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            setState((prev) => ({
+              ...prev,
+              workflowConfigs: result.data || [],
+            }));
+
+            // Migrate old localStorage configs to database (one-time)
+            const oldConfigs = localStorage.getItem(
+              "google_seo_workflow_configs"
+            );
+            if (oldConfigs) {
+              try {
+                const oldConfigsArray: WorkflowConfig[] =
+                  JSON.parse(oldConfigs);
+                const token = localStorage.getItem("auth_token");
+
+                if (token && oldConfigsArray.length > 0) {
+                  // Migrate each config to database
+                  for (const oldConfig of oldConfigsArray) {
+                    try {
+                      await makeWorkflowConfigRequest("/api/workflow-configs", {
+                        method: "POST",
+                        body: JSON.stringify({
+                          workflowId: oldConfig.workflowId,
+                          name: oldConfig.name,
+                          nodes: oldConfig.nodes,
+                        }),
+                      });
+                    } catch (e) {
+                      console.error("Failed to migrate config:", e);
+                    }
+                  }
+
+                  // Clear old localStorage after migration
+                  localStorage.removeItem("google_seo_workflow_configs");
+                  console.log(
+                    `Migrated ${oldConfigsArray.length} configs to database`
+                  );
+
+                  // Reload configs from database
+                  const reloadResponse = await makeWorkflowConfigRequest(
+                    "/api/workflow-configs",
+                    {
+                      method: "GET",
+                    }
+                  );
+                  if (reloadResponse.ok) {
+                    const reloadResult = await reloadResponse.json();
+                    setState((prev) => ({
+                      ...prev,
+                      workflowConfigs: reloadResult.data || [],
+                    }));
+                  }
+                }
+              } catch (e) {
+                console.error("Failed to parse old configs for migration", e);
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Failed to load workflow configs", e);
+        }
+      };
+
+      loadWorkflowConfigs();
+    }
+  }, [authenticated, user]);
 
   // Load tasks from localStorage on mount
   useEffect(() => {
@@ -3683,12 +3813,17 @@ export default function App() {
   };
 
   // Agent Config management
-  const saveAgentConfig = (name: string) => {
+  const saveAgentConfig = async (name: string) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      addLog("请先登录才能保存配置", "error");
+      return;
+    }
+
     // New unified system: save as Mining Workflow Config
     const miningWorkflow = MINING_WORKFLOW;
 
-    const newConfig: WorkflowConfig = {
-      id: `cfg-${Date.now()}`,
+    const configData = {
       workflowId: "mining",
       name:
         name.trim() ||
@@ -3696,8 +3831,6 @@ export default function App() {
           state.workflowConfigs.filter((c) => c.workflowId === "mining")
             .length + 1
         }`,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
       nodes: miningWorkflow.nodes.map((node) => ({
         ...node,
         prompt:
@@ -3709,21 +3842,46 @@ export default function App() {
       })),
     };
 
-    const updatedConfigs = [newConfig, ...state.workflowConfigs].slice(0, 50);
-    localStorage.setItem(
-      "google_seo_workflow_configs",
-      JSON.stringify(updatedConfigs)
-    );
-    setState((prev) => ({
-      ...prev,
-      workflowConfigs: updatedConfigs,
-      currentWorkflowConfigIds: {
-        ...prev.currentWorkflowConfigIds,
-        mining: newConfig.id,
-      },
-      currentConfigId: newConfig.id, // Keep for backward compatibility
-    }));
-    addLog(`Mining config "${newConfig.name}" saved.`, "success");
+    try {
+      const response = await makeWorkflowConfigRequest(
+        "/api/workflow-configs",
+        {
+          method: "POST",
+          body: JSON.stringify(configData),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("[saveAgentConfig] API error:", {
+          status: response.status,
+          error: error,
+        });
+        throw new Error(error.message || error.error || "保存失败");
+      }
+
+      const result = await response.json();
+      console.log("[saveAgentConfig] Success:", result);
+      const newConfig = result.data;
+
+      const updatedConfigs = [
+        newConfig,
+        ...state.workflowConfigs.filter((c) => c.id !== newConfig.id),
+      ].slice(0, 50);
+      setState((prev) => ({
+        ...prev,
+        workflowConfigs: updatedConfigs,
+        currentWorkflowConfigIds: {
+          ...prev.currentWorkflowConfigIds,
+          mining: newConfig.id,
+        },
+        currentConfigId: newConfig.id, // Keep for backward compatibility
+      }));
+      addLog(`Mining config "${newConfig.name}" saved.`, "success");
+    } catch (error: any) {
+      console.error("Failed to save agent config:", error);
+      addLog(`保存失败: ${error.message}`, "error");
+    }
   };
 
   const loadAgentConfig = (config: AgentConfig | WorkflowConfig) => {
@@ -3760,53 +3918,101 @@ export default function App() {
     addLog(`Loaded config: "${config.name}"`, "info");
   };
 
-  const updateAgentConfig = (id: string) => {
-    // Update in WorkflowConfig
-    const updatedConfigs = state.workflowConfigs.map((cfg) =>
-      cfg.id === id && cfg.workflowId === "mining"
-        ? {
-            ...cfg,
-            updatedAt: Date.now(),
-            nodes: cfg.nodes.map((node) => ({
-              ...node,
-              prompt:
-                node.id === "mining-gen"
-                  ? state.genPrompt
-                  : node.id === "mining-analyze"
-                  ? state.analyzePrompt
-                  : node.prompt,
-            })),
-          }
-        : cfg
+  const updateAgentConfig = async (id: string) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      addLog("请先登录才能更新配置", "error");
+      return;
+    }
+
+    const config = state.workflowConfigs.find(
+      (c) => c.id === id && c.workflowId === "mining"
     );
-    localStorage.setItem(
-      "google_seo_workflow_configs",
-      JSON.stringify(updatedConfigs)
-    );
-    setState((prev) => ({ ...prev, workflowConfigs: updatedConfigs }));
-    addLog("Mining config updated.", "success");
+    if (!config) {
+      addLog("配置不存在", "error");
+      return;
+    }
+
+    const updatedNodes = config.nodes.map((node) => ({
+      ...node,
+      prompt:
+        node.id === "mining-gen"
+          ? state.genPrompt
+          : node.id === "mining-analyze"
+          ? state.analyzePrompt
+          : node.prompt,
+    }));
+
+    try {
+      const response = await makeWorkflowConfigRequest(
+        `/api/workflow-configs/${id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            nodes: updatedNodes,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "更新失败");
+      }
+
+      const result = await response.json();
+      const updatedConfig = result.data;
+
+      const updatedConfigs = state.workflowConfigs.map((cfg) =>
+        cfg.id === id ? updatedConfig : cfg
+      );
+      setState((prev) => ({ ...prev, workflowConfigs: updatedConfigs }));
+      addLog("Mining config updated.", "success");
+    } catch (error: any) {
+      console.error("Failed to update agent config:", error);
+      addLog(`更新失败: ${error.message}`, "error");
+    }
   };
 
-  const deleteAgentConfig = (id: string, e: React.MouseEvent) => {
+  const deleteAgentConfig = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const updated = state.workflowConfigs.filter((c) => c.id !== id);
-    localStorage.setItem(
-      "google_seo_workflow_configs",
-      JSON.stringify(updated)
-    );
-    setState((prev) => ({
-      ...prev,
-      workflowConfigs: updated,
-      currentConfigId:
-        prev.currentConfigId === id ? null : prev.currentConfigId,
-      currentWorkflowConfigIds: {
-        ...prev.currentWorkflowConfigIds,
-        mining:
-          prev.currentWorkflowConfigIds.mining === id
-            ? undefined
-            : prev.currentWorkflowConfigIds.mining,
-      },
-    }));
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      addLog("请先登录才能删除配置", "error");
+      return;
+    }
+
+    try {
+      const response = await makeWorkflowConfigRequest(
+        `/api/workflow-configs/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "删除失败");
+      }
+
+      const updated = state.workflowConfigs.filter((c) => c.id !== id);
+      setState((prev) => ({
+        ...prev,
+        workflowConfigs: updated,
+        currentConfigId:
+          prev.currentConfigId === id ? null : prev.currentConfigId,
+        currentWorkflowConfigIds: {
+          ...prev.currentWorkflowConfigIds,
+          mining:
+            prev.currentWorkflowConfigIds.mining === id
+              ? undefined
+              : prev.currentWorkflowConfigIds.mining,
+        },
+      }));
+      addLog("Config deleted.", "info");
+    } catch (error: any) {
+      console.error("Failed to delete agent config:", error);
+      addLog(`删除失败: ${error.message}`, "error");
+    }
   };
 
   const addLog = (
@@ -5812,21 +6018,408 @@ export default function App() {
 
   // === Workflow Configuration Management ===
 
-  const saveWorkflowConfig = (config: WorkflowConfig) => {
-    const updated = [config, ...state.workflowConfigs];
-    localStorage.setItem(
-      "google_seo_workflow_configs",
-      JSON.stringify(updated)
-    );
-    setState((prev) => ({
-      ...prev,
-      workflowConfigs: updated,
-      currentWorkflowConfigIds: {
-        ...prev.currentWorkflowConfigIds,
-        [config.workflowId]: config.id,
+  // Check and get API key (按照 SUBPROJECT_API_KEY_INTEGRATION.md 文档实现)
+  const checkAndGetApiKey = async (): Promise<string | null> => {
+    const MAIN_APP_URL =
+      import.meta.env.VITE_MAIN_APP_URL || "https://www.nichedigger.ai";
+
+    // 1. 先检查 localStorage 中是否有保存的 API key
+    const savedApiKey = localStorage.getItem("nichedigger_api_key");
+    if (savedApiKey && savedApiKey.startsWith("nm_live_")) {
+      console.log("[checkAndGetApiKey] Found saved API key in localStorage");
+      return savedApiKey;
+    }
+
+    try {
+      // 2. 检查用户登录状态（按照文档要求）
+      const sessionResponse = await fetch(`${MAIN_APP_URL}/api/auth/session`, {
+        method: "GET",
+        credentials: "include", // 重要：发送 cookie
+      });
+
+      const session = await sessionResponse.json();
+      if (!session.authenticated) {
+        console.warn("[checkAndGetApiKey] User not authenticated");
+        return null;
+      }
+
+      console.log(
+        "[checkAndGetApiKey] User authenticated, checking API keys..."
+      );
+
+      // 3. 获取用户的 API Keys（按照文档要求）
+      const keysResponse = await fetch(`${MAIN_APP_URL}/api/v1/api-keys`, {
+        method: "GET",
+        credentials: "include", // 重要：发送 cookie（包含 JWT token）
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (keysResponse.ok) {
+        const keysData = await keysResponse.json();
+        if (keysData.success && keysData.data?.apiKeys?.length > 0) {
+          // 用户已有 API Keys，但 GET 接口只返回前缀，不返回完整 Key
+          // 如果之前保存过完整 Key，可以从本地存储获取
+          // 否则返回 null，需要创建新的
+          console.log(
+            "[checkAndGetApiKey] User has API keys, but full key not available from GET endpoint"
+          );
+          // 如果之前保存过，应该已经在第一步返回了
+          // 这里返回 null，表示需要创建新的或使用已保存的
+          return null;
+        }
+      }
+
+      console.log("[checkAndGetApiKey] No API keys found");
+      return null;
+    } catch (error) {
+      console.error("[checkAndGetApiKey] Failed to check API keys:", error);
+      return null;
+    }
+  };
+
+  // Create API key (按照 SUBPROJECT_API_KEY_INTEGRATION.md 文档实现)
+  const createApiKey = async (): Promise<string | null> => {
+    const MAIN_APP_URL =
+      import.meta.env.VITE_MAIN_APP_URL || "https://www.nichedigger.ai";
+
+    try {
+      // 按照文档要求：先检查登录状态
+      const sessionResponse = await fetch(`${MAIN_APP_URL}/api/auth/session`, {
+        method: "GET",
+        credentials: "include",
+      });
+
+      const session = await sessionResponse.json();
+      if (!session.authenticated) {
+        throw new Error("用户未登录，无法创建 API Key");
+      }
+
+      console.log("[createApiKey] User authenticated, creating API key...");
+
+      // 创建新的 API Key（按照文档要求）
+      const response = await fetch(`${MAIN_APP_URL}/api/v1/api-keys`, {
+        method: "POST",
+        credentials: "include", // 重要：发送 cookie（包含 JWT token）
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Google SEO Agent API Key" }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "创建 API Key 失败");
+      }
+
+      const data = await response.json();
+      if (data.success && data.data?.apiKey) {
+        const apiKey = data.data.apiKey;
+        // 重要：创建 API Key 时，响应中会返回完整的 API Key
+        // 这是唯一一次可以看到完整 Key 的机会，必须妥善保存
+        localStorage.setItem("nichedigger_api_key", apiKey);
+        console.log("[createApiKey] API key created and saved successfully");
+        return apiKey;
+      }
+
+      console.error(
+        "[createApiKey] API key creation failed: invalid response format"
+      );
+      return null;
+    } catch (error: any) {
+      console.error("[createApiKey] Failed to create API key:", error);
+      throw error;
+    }
+  };
+
+  // Handle authentication error and prompt for API key
+  const handleAuthError = async (
+    error: any,
+    operation: string
+  ): Promise<string | null> => {
+    // Check if it's a token expired error
+    if (error.errorType === "expired" || error.message?.includes("expired")) {
+      // User is logged in but token expired
+      if (authenticated && user) {
+        // Check if user has API key
+        const apiKey = await checkAndGetApiKey();
+        if (!apiKey) {
+          // Ask user if they want to create API key
+          const shouldCreate = window.confirm(
+            state.uiLanguage === "zh"
+              ? "登录令牌已过期。检测到您没有 API Key，是否创建 API Key 以继续使用工作流配置功能？"
+              : "Login token expired. You don't have an API Key. Would you like to create one to continue using workflow configuration?"
+          );
+
+          if (shouldCreate) {
+            try {
+              const newApiKey = await createApiKey();
+              if (newApiKey) {
+                addLog(
+                  state.uiLanguage === "zh"
+                    ? "API Key 创建成功！"
+                    : "API Key created successfully!",
+                  "success"
+                );
+                return newApiKey; // Return the new API key for retry
+              }
+            } catch (createError: any) {
+              addLog(
+                state.uiLanguage === "zh"
+                  ? `创建 API Key 失败: ${createError.message}`
+                  : `Failed to create API Key: ${createError.message}`,
+                "error"
+              );
+              return null;
+            }
+          } else {
+            addLog(
+              state.uiLanguage === "zh"
+                ? "操作已取消。请刷新页面重新登录或创建 API Key。"
+                : "Operation cancelled. Please refresh the page to re-login or create an API Key.",
+              "info"
+            );
+            return null;
+          }
+        } else {
+          // User has API key, return it for retry
+          return apiKey;
+        }
+      } else {
+        // User not logged in
+        addLog(
+          state.uiLanguage === "zh"
+            ? "请先登录才能使用此功能"
+            : "Please login first to use this feature",
+          "error"
+        );
+        return null;
+      }
+    }
+
+    return null;
+  };
+
+  // Helper function to make authenticated API calls using JWT token
+  // 现在使用本地 API 端点，避免跨域请求
+  const makeWorkflowConfigRequest = async (
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<Response> => {
+    // 使用本地 API 端点（相对路径）
+    // 确保使用 /api/workflow-configs 而不是 /api/v1/workflow-configs
+    const url = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+
+    console.log("[makeWorkflowConfigRequest] Calling local API:", url);
+
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      throw new Error("请先登录才能使用此功能");
+    }
+
+    // 确保 token 没有多余的空格
+    const cleanToken = token.trim();
+
+    const defaultHeaders = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${cleanToken}`,
+    };
+
+    console.log("[makeWorkflowConfigRequest] Request options:", {
+      method: options.method,
+      body: options.body ? JSON.parse(options.body as string) : undefined,
+      headers: {
+        ...defaultHeaders,
+        Authorization: `Bearer ${cleanToken.substring(0, 20)}...`, // 只显示前20个字符
       },
-    }));
-    addLog(`Workflow config "${config.name}" saved`, "success");
+      tokenLength: cleanToken.length,
+    });
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          ...defaultHeaders,
+          ...options.headers,
+        },
+        credentials: "include",
+      });
+
+      console.log(
+        "[makeWorkflowConfigRequest] Response status:",
+        response.status,
+        response.statusText
+      );
+
+      // 如果是 401，尝试获取详细的错误信息
+      if (response.status === 401) {
+        try {
+          const errorBody = await response.clone().json();
+          console.error(
+            "[makeWorkflowConfigRequest] 401 Error details:",
+            errorBody
+          );
+        } catch (e) {
+          const errorText = await response.clone().text();
+          console.error(
+            "[makeWorkflowConfigRequest] 401 Error text:",
+            errorText
+          );
+        }
+      }
+
+      return response;
+    } catch (fetchError: any) {
+      console.error("[makeWorkflowConfigRequest] Fetch error:", fetchError);
+      console.error("[makeWorkflowConfigRequest] Error details:", {
+        message: fetchError.message,
+        name: fetchError.name,
+        stack: fetchError.stack,
+      });
+
+      // Check if it's a CORS error
+      if (
+        fetchError.message?.includes("Failed to fetch") ||
+        fetchError.name === "TypeError"
+      ) {
+        const isCrossOrigin = new URL(url).origin !== window.location.origin;
+        const errorMsg = isCrossOrigin
+          ? `跨域请求失败（CORS 错误）。\n\n当前域名: ${
+              window.location.origin
+            }\n目标域名: ${
+              new URL(url).origin
+            }\n\n可能的原因：\n1. 主应用 ${MAIN_APP_URL} 未配置允许来自 ${
+              window.location.origin
+            } 的跨域请求\n2. 需要检查主应用的 CORS 配置（Access-Control-Allow-Origin）\n3. 或者需要通过本地 API 代理转发请求`
+          : `网络请求失败。请检查：\n1. 主应用 ${MAIN_APP_URL} 是否可访问\n2. 网络连接是否正常\n3. 浏览器控制台是否有其他错误`;
+        throw new Error(errorMsg);
+      }
+      throw fetchError;
+    }
+  };
+
+  const saveWorkflowConfig = async (config: WorkflowConfig) => {
+    console.log("[saveWorkflowConfig] Function called with config:", config);
+
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      console.error("[saveWorkflowConfig] No token found!");
+      addLog("请先登录才能保存工作流配置", "error");
+      return;
+    }
+
+    console.log("[saveWorkflowConfig] Token exists, proceeding with save");
+    console.log("[saveWorkflowConfig] Saving config:", {
+      workflowId: config.workflowId,
+      name: config.name,
+      nodesCount: config.nodes?.length,
+    });
+
+    try {
+      console.log(
+        "[saveWorkflowConfig] About to call makeWorkflowConfigRequest"
+      );
+      const response = await makeWorkflowConfigRequest(
+        "/api/workflow-configs",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            workflowId: config.workflowId,
+            name: config.name,
+            nodes: config.nodes,
+          }),
+        }
+      );
+
+      console.log("[saveWorkflowConfig] Response received:", {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+      });
+
+      if (!response.ok) {
+        let error: any = {};
+        try {
+          error = await response.json();
+        } catch (e) {
+          // If response is not JSON, get text
+          const text = await response.text();
+          error = {
+            message: text || `HTTP ${response.status}: ${response.statusText}`,
+          };
+        }
+
+        console.error("[saveWorkflowConfig] API error:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: error,
+        });
+
+        // Handle specific error cases
+        if (response.status === 401) {
+          // 检查是否是 token 过期
+          if (
+            error.errorType === "expired" ||
+            error.message?.includes("expired") ||
+            error.message?.includes("Token expired")
+          ) {
+            addLog("登录令牌已过期，请重新登录", "error");
+            // 清除过期的 token
+            localStorage.removeItem("auth_token");
+            localStorage.removeItem("user");
+            // 提示用户重新登录
+            if (window.confirm("登录令牌已过期，是否重新登录？")) {
+              window.location.reload();
+            }
+            throw new Error("登录令牌已过期，请重新登录");
+          }
+          throw new Error("认证失败，请重新登录");
+        }
+
+        throw new Error(
+          error.message || error.error || `保存失败 (${response.status})`
+        );
+      }
+
+      const result = await response.json();
+      console.log("[saveWorkflowConfig] Success:", result);
+      const savedConfig = result.data;
+
+      // Update local state
+      const updated = [
+        savedConfig,
+        ...state.workflowConfigs.filter((c) => c.id !== savedConfig.id),
+      ];
+      setState((prev) => ({
+        ...prev,
+        workflowConfigs: updated,
+        currentWorkflowConfigIds: {
+          ...prev.currentWorkflowConfigIds,
+          [savedConfig.workflowId]: savedConfig.id,
+        },
+      }));
+      addLog(`工作流配置 "${savedConfig.name}" 已保存`, "success");
+    } catch (error: any) {
+      console.error(
+        "[saveWorkflowConfig] Failed to save workflow config:",
+        error
+      );
+      console.error("[saveWorkflowConfig] Error details:", {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      });
+
+      const errorMessage = error.message || "保存失败";
+      addLog(`保存失败: ${errorMessage}`, "error");
+
+      // Show alert for critical errors
+      if (
+        error.message?.includes("网络请求失败") ||
+        error.message?.includes("Failed to fetch")
+      ) {
+        alert(
+          `保存失败：${errorMessage}\n\n请检查：\n1. 网络连接是否正常\n2. 主应用 https://www.nichedigger.ai 是否可访问\n3. 浏览器控制台是否有 CORS 错误\n4. 是否已登录`
+        );
+      }
+    }
   };
 
   const loadWorkflowConfig = (workflowId: string, configId: string) => {
@@ -5850,6 +6443,49 @@ export default function App() {
       };
     });
     addLog("Workflow reset to default", "info");
+  };
+
+  const deleteWorkflowConfig = async (configId: string) => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      addLog("请先登录才能删除工作流配置", "error");
+      return;
+    }
+
+    try {
+      console.log("[deleteWorkflowConfig] Deleting config:", configId);
+      const response = await makeWorkflowConfigRequest(
+        `/api/workflow-configs/${configId}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("[deleteWorkflowConfig] API error:", {
+          status: response.status,
+          error: error,
+        });
+        throw new Error(error.message || error.error || "删除失败");
+      }
+
+      // Update local state
+      const updated = state.workflowConfigs.filter((c) => c.id !== configId);
+      setState((prev) => ({
+        ...prev,
+        workflowConfigs: updated,
+        currentWorkflowConfigIds: Object.fromEntries(
+          Object.entries(prev.currentWorkflowConfigIds).filter(
+            ([_, id]) => id !== configId
+          )
+        ),
+      }));
+      addLog("工作流配置已删除", "success");
+    } catch (error: any) {
+      console.error("Failed to delete workflow config:", error);
+      addLog(`删除失败: ${error.message}`, "error");
+    }
   };
 
   const getCurrentWorkflowConfig = (
@@ -7795,6 +8431,7 @@ export default function App() {
                       loadWorkflowConfig("mining", configId)
                     }
                     onReset={() => resetWorkflowToDefault("mining")}
+                    onDelete={deleteWorkflowConfig}
                     t={t}
                     isDarkTheme={isDarkTheme}
                   />
@@ -7830,6 +8467,7 @@ export default function App() {
                     onSave={saveWorkflowConfig}
                     onLoad={(configId) => loadWorkflowConfig("batch", configId)}
                     onReset={() => resetWorkflowToDefault("batch")}
+                    onDelete={deleteWorkflowConfig}
                     t={t}
                     isDarkTheme={isDarkTheme}
                   />
@@ -7867,6 +8505,7 @@ export default function App() {
                       loadWorkflowConfig("deepDive", configId)
                     }
                     onReset={() => resetWorkflowToDefault("deepDive")}
+                    onDelete={deleteWorkflowConfig}
                     t={t}
                     isDarkTheme={isDarkTheme}
                   />
