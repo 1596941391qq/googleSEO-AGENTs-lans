@@ -343,6 +343,11 @@ export interface AppState {
   wordsPerRound: number; // 5-20
   miningStrategy: 'horizontal' | 'vertical'; // horizontal: broad topics, vertical: deep dive into specific
   userSuggestion: string; // Real-time user suggestions during mining
+  miningIndustry?: string; // User selected industry for targeted keyword generation
+  miningConfig?: {
+    industry?: string;
+    additionalSuggestions?: string; // User's additional suggestions for AI
+  };
 
   // Archives
   archives: ArchiveEntry[];

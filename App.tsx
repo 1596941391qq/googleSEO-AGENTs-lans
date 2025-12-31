@@ -36,9 +36,25 @@ import {
   LogOut,
   User,
   Coins,
+  Hash,
+  Network,
 } from "lucide-react";
+import { Button } from "./components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./components/ui/select";
+import { Input } from "./components/ui/input";
+import { cn } from "./lib/utils";
 import { WebsiteRenderer } from "./components/website/WebsiteRenderer";
 import { useAuth } from "./contexts/AuthContext";
+import {
+  KeywordMiningGuide,
+  MiningConfig,
+} from "./components/workflow/KeywordMiningGuide";
 import {
   AppState,
   KeywordData,
@@ -302,7 +318,7 @@ const TEXT = {
     inputTitle: "定义您的利基市场",
     inputDesc:
       "输入核心关键词。Agent 将循环挖掘，直到发现“蓝海词”或“弱竞争对手”（如论坛、PDF）占位的机会。",
-    placeholder: "输入关键词 (例如: 拖拉机配件)",
+    placeholder: "输入初始词 (例如: manus,nanobanana)",
     targetMarket: "目标市场语言",
     btnStart: "开始挖掘",
     btnStop: "停止挖掘",
@@ -1356,8 +1372,8 @@ const DeepDiveAnalysisStream = ({
                                 ? "text-yellow-400"
                                 : "text-yellow-600"
                               : isDarkTheme
-                              ? "text-green-400"
-                              : "text-green-600"
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
                           }`}
                         >
                           {thought.data.serankingData.difficulty}
@@ -1512,8 +1528,8 @@ const DeepDiveAnalysisStream = ({
                       className={`px-3 py-1 rounded-full text-sm font-bold border ${
                         thought.data.probability === ProbabilityLevel.HIGH
                           ? isDarkTheme
-                            ? "bg-green-500/20 text-green-400 border-green-500/30"
-                            : "bg-green-100 text-green-700 border-green-300"
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                            : "bg-emerald-100 text-emerald-700 border-emerald-300"
                           : thought.data.probability === ProbabilityLevel.MEDIUM
                           ? isDarkTheme
                             ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
@@ -1635,8 +1651,8 @@ const WorkflowConfigPanel = ({
     <div
       className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 mb-6 ${
         isDarkTheme
-          ? "bg-black/20 border-green-500/20"
-          : "bg-white border-green-200"
+          ? "bg-black/20 border-emerald-500/20"
+          : "bg-white border-emerald-200"
       }`}
     >
       <div className="mb-4">
@@ -1645,7 +1661,7 @@ const WorkflowConfigPanel = ({
             isDarkTheme ? "text-white" : "text-gray-900"
           }`}
         >
-          <BrainCircuit className="w-5 h-5 text-green-400" />
+          <BrainCircuit className="w-5 h-5 text-emerald-400" />
           {workflowDef.name}
         </h3>
         <p
@@ -1665,11 +1681,11 @@ const WorkflowConfigPanel = ({
               className={`p-4 rounded-lg border-2 ${
                 node.type === "agent"
                   ? isDarkTheme
-                    ? "border-green-500/30 bg-green-500/10"
-                    : "border-green-300 bg-green-50"
+                    ? "border-emerald-500/30 bg-emerald-500/10"
+                    : "border-emerald-300 bg-emerald-50"
                   : isDarkTheme
-                  ? "border-green-500/20 bg-black/40"
-                  : "border-green-200 bg-gray-50"
+                  ? "border-emerald-500/20 bg-black/40"
+                  : "border-emerald-200 bg-gray-50"
               } ${!node.configurable ? "opacity-60" : ""}`}
             >
               <div className="flex items-start justify-between">
@@ -1678,7 +1694,7 @@ const WorkflowConfigPanel = ({
                     <span
                       className={`px-2 py-0.5 rounded text-xs font-bold ${
                         node.type === "agent"
-                          ? "bg-green-500 text-black"
+                          ? "bg-emerald-500 text-black"
                           : isDarkTheme
                           ? "bg-slate-600 text-white"
                           : "bg-gray-600 text-white"
@@ -1697,8 +1713,8 @@ const WorkflowConfigPanel = ({
                       className={`text-xs px-2 py-0.5 rounded ${
                         node.configurable
                           ? isDarkTheme
-                            ? "bg-green-500/20 text-green-400"
-                            : "bg-green-100 text-green-700"
+                            ? "bg-emerald-500/20 text-emerald-400"
+                            : "bg-emerald-100 text-emerald-700"
                           : isDarkTheme
                           ? "bg-slate-500/20 text-slate-400"
                           : "bg-gray-200 text-gray-600"
@@ -1727,15 +1743,15 @@ const WorkflowConfigPanel = ({
                             }
                             className={`w-full h-32 p-2 text-xs font-mono border rounded focus:outline-none focus:ring-2 ${
                               isDarkTheme
-                                ? "border-green-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-green-500/50"
-                                : "border-green-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-green-500"
+                                ? "border-emerald-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-emerald-500/50"
+                                : "border-emerald-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-emerald-500"
                             }`}
                             placeholder={t.editPrompt}
                           />
                           <div className="flex gap-2">
                             <button
                               onClick={() => setEditingNodeId(null)}
-                              className="px-3 py-1 bg-green-500 text-black rounded text-xs hover:bg-green-600"
+                              className="px-3 py-1 bg-emerald-500 text-black rounded text-xs hover:bg-emerald-600"
                             >
                               {t.close}
                             </button>
@@ -1757,8 +1773,8 @@ const WorkflowConfigPanel = ({
                           onClick={() => setEditingNodeId(node.id)}
                           className={`mt-2 p-2 border rounded cursor-pointer transition-colors ${
                             isDarkTheme
-                              ? "bg-black/60 border-green-500/30 hover:border-green-400"
-                              : "bg-gray-50 border-green-300 hover:border-green-400"
+                              ? "bg-black/60 border-emerald-500/30 hover:border-emerald-400"
+                              : "bg-gray-50 border-emerald-300 hover:border-emerald-400"
                           }`}
                         >
                           <div
@@ -1786,7 +1802,7 @@ const WorkflowConfigPanel = ({
             {/* Connector Arrow */}
             {index < nodes.length - 1 && (
               <div className="flex justify-center py-2">
-                <ArrowRight className="w-5 h-5 text-green-500/30" />
+                <ArrowRight className="w-5 h-5 text-emerald-500/30" />
               </div>
             )}
           </div>
@@ -1794,7 +1810,7 @@ const WorkflowConfigPanel = ({
       </div>
 
       {/* Configuration Management */}
-      <div className="border-t border-green-500/20 pt-4 space-y-4">
+      <div className="border-t border-emerald-500/20 pt-4 space-y-4">
         {/* Save New Config */}
         <div className="flex gap-2">
           <input
@@ -1804,8 +1820,8 @@ const WorkflowConfigPanel = ({
             placeholder={t.configNamePlaceholder}
             className={`flex-1 px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 ${
               isDarkTheme
-                ? "border-green-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-green-500/50"
-                : "border-green-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-green-500"
+                ? "border-emerald-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-emerald-500/50"
+                : "border-emerald-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-emerald-500"
             }`}
           />
           <button
@@ -1815,7 +1831,7 @@ const WorkflowConfigPanel = ({
               console.log("[Save Button] Clicked, calling handleSaveConfig");
               handleSaveConfig();
             }}
-            className="flex items-center gap-2 px-4 py-2 bg-green-500 text-black rounded hover:bg-green-600 text-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded hover:bg-emerald-600 text-sm font-medium"
           >
             <Save className="w-4 h-4" />
             {t.saveWorkflowConfig}
@@ -1846,11 +1862,11 @@ const WorkflowConfigPanel = ({
                   className={`flex items-center justify-between p-2 rounded border ${
                     currentConfig?.id === config.id
                       ? isDarkTheme
-                        ? "border-green-500/50 bg-green-500/20"
-                        : "border-green-400 bg-green-100"
+                        ? "border-emerald-500/50 bg-emerald-500/20"
+                        : "border-emerald-400 bg-emerald-100"
                       : isDarkTheme
-                      ? "border-green-500/20 bg-black/40"
-                      : "border-green-200 bg-gray-50"
+                      ? "border-emerald-500/20 bg-black/40"
+                      : "border-emerald-200 bg-gray-50"
                   }`}
                 >
                   <div className="flex-1">
@@ -1871,13 +1887,13 @@ const WorkflowConfigPanel = ({
                   </div>
                   <div className="flex gap-2">
                     {currentConfig?.id === config.id && (
-                      <span className="text-xs bg-green-500/30 text-green-400 px-2 py-1 rounded">
+                      <span className="text-xs bg-emerald-500/30 text-emerald-400 px-2 py-1 rounded">
                         {t.currentlyUsing}
                       </span>
                     )}
                     <button
                       onClick={() => onLoad(config.id)}
-                      className="px-3 py-1 bg-green-500/20 text-green-400 rounded text-xs hover:bg-green-500/30"
+                      className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded text-xs hover:bg-emerald-500/30"
                       title={t.loadWorkflowConfig || "加载配置"}
                     >
                       <FolderOpen className="w-3 h-3" />
@@ -2041,12 +2057,12 @@ const StrategyModal = ({
             {/* Right Column: Translation */}
             <div className="space-y-4">
               <h4 className="font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-500"></span>{" "}
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>{" "}
                 Translation Reference
               </h4>
 
-              <div className="p-3 bg-green-50/50 rounded border border-green-100">
-                <div className="text-xs text-green-500 uppercase font-bold mb-1">
+              <div className="p-3 bg-emerald-50/50 rounded border border-emerald-100">
+                <div className="text-xs text-emerald-500 uppercase font-bold mb-1">
                   Translated Title
                 </div>
                 <div className="font-medium text-slate-800">
@@ -2054,8 +2070,8 @@ const StrategyModal = ({
                 </div>
               </div>
 
-              <div className="p-3 bg-green-50/50 rounded border border-green-100">
-                <div className="text-xs text-green-500 uppercase font-bold mb-1">
+              <div className="p-3 bg-emerald-50/50 rounded border border-emerald-100">
+                <div className="text-xs text-emerald-500 uppercase font-bold mb-1">
                   Translated Description
                 </div>
                 <div className="text-sm text-slate-700">
@@ -2068,7 +2084,7 @@ const StrategyModal = ({
                   Structure (Translated)
                 </div>
                 {report.contentStructure.map((item, idx) => (
-                  <div key={idx} className="border-l-2 border-green-200 pl-3">
+                  <div key={idx} className="border-l-2 border-emerald-200 pl-3">
                     <div className="font-bold text-slate-800 text-sm">
                       {item.header_trans || "-"}
                     </div>
@@ -2087,7 +2103,7 @@ const StrategyModal = ({
                   {report.longTailKeywords_trans?.map((kw, i) => (
                     <span
                       key={i}
-                      className="px-2 py-1 bg-green-50 border border-green-100 text-green-700 rounded text-xs font-medium"
+                      className="px-2 py-1 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded text-xs font-medium"
                     >
                       {kw}
                     </span>
@@ -2297,7 +2313,7 @@ const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={downloadHTML}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors flex items-center gap-2"
             >
               <Download size={16} />
               下载HTML
@@ -2327,7 +2343,7 @@ const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
             onClick={() => setActiveTab("preview")}
             className={`px-6 py-3 font-medium transition-colors ${
               activeTab === "preview"
-                ? "border-b-2 border-green-500 text-green-500"
+                ? "border-b-2 border-emerald-500 text-emerald-500"
                 : isDarkTheme
                 ? "text-neutral-400 hover:text-neutral-200"
                 : "text-gray-600 hover:text-gray-900"
@@ -2339,7 +2355,7 @@ const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
             onClick={() => setActiveTab("code")}
             className={`px-6 py-3 font-medium transition-colors ${
               activeTab === "code"
-                ? "border-b-2 border-green-500 text-green-500"
+                ? "border-b-2 border-emerald-500 text-emerald-500"
                 : isDarkTheme
                 ? "text-neutral-400 hover:text-neutral-200"
                 : "text-gray-600 hover:text-gray-900"
@@ -2565,7 +2581,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
           <button
             onClick={downloadProject}
             disabled={!websiteData}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Download size={16} />
             下载HTML
@@ -2607,8 +2623,8 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
                   className={`max-w-[85%] rounded-lg px-4 py-3 ${
                     msg.role === "user"
                       ? isDarkTheme
-                        ? "bg-green-600 text-white"
-                        : "bg-green-500 text-white"
+                        ? "bg-emerald-600 text-white"
+                        : "bg-emerald-500 text-white"
                       : msg.role === "system"
                       ? isDarkTheme
                         ? "bg-neutral-800 text-neutral-300 border border-neutral-700"
@@ -2664,7 +2680,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
                 placeholder="输入优化需求，例如：'改成蓝色主题'、'添加联系表单'..."
                 disabled={isOptimizing}
                 rows={3}
-                className={`flex-1 px-3 py-2 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                className={`flex-1 px-3 py-2 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   isDarkTheme
                     ? "bg-neutral-700 border-neutral-600 text-white placeholder-neutral-400"
                     : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
@@ -2673,7 +2689,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isOptimizing}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
               >
                 {isOptimizing ? (
                   <Loader2 size={20} className="animate-spin" />
@@ -2704,7 +2720,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
               <div className="text-center">
                 <Loader2
                   size={48}
-                  className="animate-spin mx-auto mb-4 text-green-500"
+                  className="animate-spin mx-auto mb-4 text-emerald-500"
                 />
                 <h3
                   className={`text-xl font-bold mb-2 ${
@@ -2715,7 +2731,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
                 </h3>
                 <div className="w-64 bg-gray-200 rounded-full h-2 mb-2">
                   <div
-                    className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                    className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
                     style={{
                       width: `${(progress.current / progress.total) * 100}%`,
                     }}
@@ -3051,15 +3067,15 @@ const TaskTab: React.FC<TaskTabProps> = ({
         transition-all flex-shrink-0 max-w-[200px] group
         ${
           isActive
-            ? "bg-black/80 border-green-500/30 text-white"
-            : "bg-black/40 border-green-500/10 text-slate-400 hover:bg-black/60 hover:text-green-400"
+            ? "bg-black/80 border-emerald-500/30 text-white"
+            : "bg-black/40 border-emerald-500/10 text-slate-400 hover:bg-black/60 hover:text-emerald-400"
         }
       `}
     >
       {/* Task Icon */}
       <TaskIcon
         className={`w-3.5 h-3.5 flex-shrink-0 ${
-          isRunning ? "animate-pulse text-green-400" : ""
+          isRunning ? "animate-pulse text-emerald-400" : ""
         }`}
       />
 
@@ -3072,7 +3088,7 @@ const TaskTab: React.FC<TaskTabProps> = ({
           onBlur={handleSaveName}
           onKeyDown={handleKeyDown}
           autoFocus
-          className="flex-1 bg-transparent outline-none text-xs font-medium border-b border-green-500/50 text-white"
+          className="flex-1 bg-transparent outline-none text-xs font-medium border-b border-emerald-500/50 text-white"
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
@@ -3081,10 +3097,10 @@ const TaskTab: React.FC<TaskTabProps> = ({
 
       {/* Status Indicator */}
       {isRunning && (
-        <Loader2 className="w-3 h-3 animate-spin text-green-400 flex-shrink-0" />
+        <Loader2 className="w-3 h-3 animate-spin text-emerald-400 flex-shrink-0" />
       )}
       {!isRunning && hasResults && (
-        <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
+        <CheckCircle className="w-3 h-3 text-emerald-500 flex-shrink-0" />
       )}
 
       {/* Close Button */}
@@ -3125,7 +3141,7 @@ const TaskMenuModal: React.FC<TaskMenuModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-black/90 border border-green-500/30 rounded-xl p-6 max-w-md w-full mx-4"
+        className="bg-black/90 border border-emerald-500/30 rounded-xl p-6 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-bold text-white mb-4">
@@ -3138,9 +3154,9 @@ const TaskMenuModal: React.FC<TaskMenuModalProps> = ({
               onCreate("mining");
               onClose();
             }}
-            className="w-full flex items-center gap-3 p-4 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 rounded-lg transition-colors"
+            className="w-full flex items-center gap-3 p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-colors"
           >
-            <Search className="w-5 h-5 text-green-400" />
+            <Search className="w-5 h-5 text-emerald-400" />
             <div className="text-left">
               <div className="font-semibold text-white">{t.tabMining}</div>
               <div className="text-xs text-slate-400">
@@ -3278,6 +3294,7 @@ export default function App() {
   );
   const [showTaskMenu, setShowTaskMenu] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true); // Theme toggle state
+  const [showMiningGuide, setShowMiningGuide] = useState(false); // 挖词引导模态框
   const stopBatchRef = useRef(false);
 
   const stopMiningRef = useRef(false);
@@ -4012,6 +4029,24 @@ export default function App() {
     } catch (error: any) {
       console.error("Failed to delete agent config:", error);
       addLog(`删除失败: ${error.message}`, "error");
+    }
+  };
+
+  // Typewriter effect helper function
+  const typeWriterLog = async (
+    fullMessage: string,
+    taskId?: string,
+    speed: number = 30
+  ) => {
+    const lines = fullMessage.split('\n');
+    let currentLog = '';
+
+    for (const line of lines) {
+      if (line.trim()) {
+        currentLog += line + '\n';
+        addLog(currentLog.trim(), "info", taskId);
+        await new Promise(resolve => setTimeout(resolve, speed));
+      }
     }
   };
 
@@ -5050,6 +5085,40 @@ export default function App() {
 
   // --- MINING LOGIC ---
 
+  // 挖词引导处理函数
+  const handleMiningGuideStart = (config: MiningConfig) => {
+    console.log("Mining config:", config);
+
+    // 更新state以保存配置
+    setState((prev) => ({
+      ...prev,
+      miningConfig: {
+        industry: config.industry,
+        additionalSuggestions: config.additionalSuggestions,
+      },
+    }));
+
+    // 关闭模态框
+    setShowMiningGuide(false);
+
+    // 显示成功日志
+    addLog(
+      `✨ ${
+        state.uiLanguage === "zh" ? "配置已保存" : "Configuration saved"
+      }: ${state.uiLanguage === "zh" ? "行业" : "Industry"}="${
+        config.industry
+      }"${
+        config.additionalSuggestions
+          ? `, ${state.uiLanguage === "zh" ? "建议" : "Suggestions"}="${
+              config.additionalSuggestions
+            }"`
+          : ""
+      }`,
+      "success",
+      state.taskManager.activeTaskId || undefined
+    );
+  };
+
   const startMining = async (continueExisting = false) => {
     if (!state.seedKeyword.trim()) return;
 
@@ -5160,6 +5229,13 @@ export default function App() {
         taskId
       );
 
+      // Add AI thinking logs
+      addLog(
+        `💭 ${state.uiLanguage === 'zh' ? `准备分析 "${state.seedKeyword}" 的关键词机会` : `Preparing to analyze keyword opportunities for "${state.seedKeyword}"`}`,
+        "info",
+        taskId
+      );
+
       // Dynamic thought message based on mining strategy
       let thoughtMessage = "";
       if (currentRound === 1) {
@@ -5175,9 +5251,16 @@ export default function App() {
       }
 
       addThought("generation", thoughtMessage, undefined, taskId);
+      addLog(`💭 ${thoughtMessage}`, "info", taskId);
 
       try {
-        const generatedKeywords = await generateKeywords(
+        addLog(
+          `🤖 ${state.uiLanguage === 'zh' ? 'AI 正在思考...' : 'AI is thinking...'}`,
+          "info",
+          taskId
+        );
+
+        const result = await generateKeywords(
           state.seedKeyword,
           state.targetLanguage,
           getWorkflowPrompt("mining", "mining-gen", state.genPrompt),
@@ -5186,8 +5269,41 @@ export default function App() {
           state.wordsPerRound,
           state.miningStrategy,
           state.userSuggestion,
-          state.uiLanguage
+          state.uiLanguage,
+          state.miningConfig?.industry,
+          state.miningConfig?.additionalSuggestions
         );
+
+        const generatedKeywords = result.keywords;
+        const rawResponse = result.rawResponse;
+
+        // Display AI's raw response with typewriter effect
+        if (rawResponse && rawResponse.trim()) {
+          addLog(
+            state.uiLanguage === 'zh' ? '以下内容由 keyword generate agent 生成：' : 'Below is generated by keyword generate agent:',
+            "info",
+            taskId
+          );
+
+          // Format JSON for display
+          let formattedResponse = rawResponse;
+          try {
+            const parsed = JSON.parse(rawResponse);
+            formattedResponse = JSON.stringify(parsed, null, 2);
+          } catch (e) {
+            // Not valid JSON, keep as is
+          }
+
+          // Typewriter effect - show chunks gradually
+          const lines = formattedResponse.split('\n');
+          const chunkSize = 5;
+          for (let i = 0; i < lines.length; i += chunkSize) {
+            const chunk = lines.slice(i, i + chunkSize).join('\n');
+            addLog(chunk, "info", taskId);
+            // Small delay for typewriter effect
+            await new Promise(resolve => setTimeout(resolve, 50));
+          }
+        }
 
         if (generatedKeywords.length === 0) {
           addLog(
@@ -5205,9 +5321,22 @@ export default function App() {
           taskId
         );
 
+        // Add success log with sample keywords
+        const sampleKeywords = generatedKeywords.slice(0, 3).map(k => k.keyword).join(", ");
+        addLog(
+          `✨ ${state.uiLanguage === 'zh' ? `成功生成 ${generatedKeywords.length} 个候选关键词` : `Generated ${generatedKeywords.length} candidate keywords`}: ${sampleKeywords}...`,
+          "success",
+          taskId
+        );
+
         addLog(
           `[Round ${currentRound}] Analyzing SERP probability (Google)...`,
           "api",
+          taskId
+        );
+        addLog(
+          `🔍 ${state.uiLanguage === 'zh' ? '正在分析搜索引擎结果页面 (SERP) 估算排名概率...' : 'Analyzing Search Engine Results Page (SERP) to estimate ranking probability...'}`,
+          "info",
           taskId
         );
 
@@ -7342,73 +7471,37 @@ export default function App() {
             <div className="max-w-6xl mx-auto mt-8 flex-1 w-full">
               <div className="text-center mb-10">
                 <h2
-                  className={`text-3xl font-bold mb-4 ${
+                  className={`text-2xl font-bold mb-3 ${
                     isDarkTheme ? "text-white" : "text-gray-900"
                   }`}
                 >
                   {t.inputTitle}
                 </h2>
                 <p
-                  className={`mb-8 ${
+                  className={`text-sm mb-6 ${
                     isDarkTheme ? "text-slate-400" : "text-gray-600"
                   }`}
                 >
                   {t.inputDesc}
                 </p>
 
-                {/* Target Language Selector */}
-                <div className="mb-6 flex justify-center">
-                  <div
-                    className={`flex items-center gap-2 backdrop-blur-sm px-4 py-2 rounded-full border shadow-sm text-sm font-medium ${
-                      isDarkTheme
-                        ? "bg-black/40 border-green-500/30 text-slate-300"
-                        : "bg-white border-green-500/30 text-gray-700"
-                    }`}
-                  >
-                    <Globe className="w-4 h-4 text-green-400" />
-                    <span>{t.targetMarket}:</span>
-                    <select
-                      value={state.targetLanguage}
-                      onChange={(e) =>
-                        setState((prev) => ({
-                          ...prev,
-                          targetLanguage: e.target.value as TargetLanguage,
-                        }))
-                      }
-                      className={`outline-none text-green-400 font-bold cursor-pointer border-none ${
-                        isDarkTheme ? "bg-black/60" : "bg-white"
-                      }`}
-                    >
-                      {LANGUAGES.map((l) => (
-                        <option
-                          key={l.code}
-                          value={l.code}
-                          className={isDarkTheme ? "bg-black" : "bg-white"}
-                        >
-                          {l.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
                 {/* Tabs */}
                 <div className="flex justify-center mb-8">
                   <div
                     className={`inline-flex backdrop-blur-sm rounded-lg border shadow-sm p-1 ${
                       isDarkTheme
-                        ? "bg-black/40 border-green-500/20"
-                        : "bg-white border-green-500/30"
+                        ? "bg-black/40 border-emerald-500/20"
+                        : "bg-white border-emerald-500/30"
                     }`}
                   >
                     <button
                       onClick={() => setActiveTab("mining")}
-                      className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
+                      className={`px-5 py-2 rounded-md font-medium text-sm transition-all ${
                         activeTab === "mining"
-                          ? "bg-green-500 text-black shadow-sm"
+                          ? "bg-emerald-500 text-white shadow-sm"
                           : isDarkTheme
-                          ? "text-slate-400 hover:text-green-400"
-                          : "text-gray-600 hover:text-green-600"
+                          ? "text-slate-400 hover:text-emerald-400"
+                          : "text-gray-600 hover:text-emerald-600"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -7418,12 +7511,12 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => setActiveTab("batch")}
-                      className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
+                      className={`px-5 py-2 rounded-md font-medium text-sm transition-all ${
                         activeTab === "batch"
-                          ? "bg-green-500 text-black shadow-sm"
+                          ? "bg-emerald-500 text-white shadow-sm"
                           : isDarkTheme
-                          ? "text-slate-400 hover:text-green-400"
-                          : "text-gray-600 hover:text-green-600"
+                          ? "text-slate-400 hover:text-emerald-400"
+                          : "text-gray-600 hover:text-emerald-600"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -7433,12 +7526,12 @@ export default function App() {
                     </button>
                     <button
                       onClick={() => setActiveTab("deepDive")}
-                      className={`px-6 py-2.5 rounded-md font-semibold text-sm transition-all ${
+                      className={`px-5 py-2 rounded-md font-medium text-sm transition-all ${
                         activeTab === "deepDive"
-                          ? "bg-green-500 text-black shadow-sm"
+                          ? "bg-emerald-500 text-white shadow-sm"
                           : isDarkTheme
-                          ? "text-slate-400 hover:text-green-400"
-                          : "text-gray-600 hover:text-green-600"
+                          ? "text-slate-400 hover:text-emerald-400"
+                          : "text-gray-600 hover:text-emerald-600"
                       }`}
                     >
                       <div className="flex items-center gap-2">
@@ -7453,36 +7546,150 @@ export default function App() {
               {/* Mining Tab Content */}
               {activeTab === "mining" && (
                 <div className="max-w-3xl mx-auto">
-                  {/* Clean Input Design */}
-                  <div
-                    className={`flex w-full backdrop-blur-sm rounded-lg shadow-lg border overflow-hidden focus-within:ring-2 focus-within:ring-green-500/50 transition-all ${
-                      isDarkTheme
-                        ? "bg-black/40 border-green-500/30"
-                        : "bg-white border-green-500/30"
-                    }`}
-                  >
-                    <div className="flex items-center justify-center pl-4 text-green-400/60">
-                      <Search className="w-5 h-5" />
+                  {/* Refine Industry Button */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                      <span
+                        className={`text-sm font-semibold ${
+                          isDarkTheme ? "text-white" : "text-gray-900"
+                        }`}
+                      >
+                        {state.uiLanguage === "zh"
+                          ? "需要帮助？"
+                          : "Need Help?"}
+                      </span>
                     </div>
-                    <input
-                      type="text"
-                      placeholder={t.placeholder}
-                      className={`flex-1 p-4 text-lg outline-none bg-transparent placeholder:text-slate-500 ${
-                        isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
-                      value={state.seedKeyword}
-                      onChange={(e) =>
+                    <button
+                      onClick={() => setShowMiningGuide(true)}
+                      className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                    >
+                      <Lightbulb className="w-3.5 h-3.5" />
+                      {state.uiLanguage === "zh"
+                        ? "精确行业"
+                        : "Refine Industry"}
+                    </button>
+                  </div>
+
+                  {/* Display Saved Mining Configuration */}
+                  {state.miningConfig && (
+                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Lightbulb className="w-4 h-4 text-emerald-400" />
+                        <span className="text-sm font-semibold text-emerald-400">
+                          {state.uiLanguage === "zh"
+                            ? "已保存的配置"
+                            : "Saved Configuration"}
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <p
+                          className={
+                            isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                          }
+                        >
+                          <span className="text-emerald-400 font-medium">
+                            {state.uiLanguage === "zh" ? "行业:" : "Industry:"}
+                          </span>{" "}
+                          {state.miningConfig.industry}
+                        </p>
+                        {state.miningConfig.additionalSuggestions && (
+                          <p
+                            className={
+                              isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                            }
+                          >
+                            <span className="text-emerald-400 font-medium">
+                              {state.uiLanguage === "zh"
+                                ? "建议:"
+                                : "Suggestions:"}
+                            </span>{" "}
+                            {state.miningConfig.additionalSuggestions}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Clean Input Design */}
+                  <div className="flex w-full gap-2 items-center h-[56px]">
+                    {/* Target Language Selector */}
+                    <Select
+                      value={state.targetLanguage}
+                      onValueChange={(value) =>
                         setState((prev) => ({
                           ...prev,
-                          seedKeyword: e.target.value,
+                          targetLanguage: value as TargetLanguage,
                         }))
                       }
-                      onKeyDown={(e) => e.key === "Enter" && startMining(false)}
-                    />
+                    >
+                      <SelectTrigger
+                        hideIcon
+                        className={cn(
+                          "flex-shrink-0 h-[56px] px-4 bg-emerald-500 border-0 shadow-sm gap-2 rounded-l-lg rounded-r-none",
+                          "text-white hover:bg-emerald-600 transition-colors font-medium text-sm"
+                        )}
+                      >
+                        <Globe className="w-4 h-4 text-white flex-shrink-0" />
+                        <SelectValue className="text-white font-medium" />
+                        <ChevronRight className="w-4 h-4 text-white ml-auto flex-shrink-0" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={cn(
+                          isDarkTheme
+                            ? "bg-black/90 border-emerald-500/30"
+                            : "bg-white border-emerald-500/30"
+                        )}
+                      >
+                        {LANGUAGES.map((l) => (
+                          <SelectItem
+                            key={l.code}
+                            value={l.code}
+                            className={cn(
+                              isDarkTheme
+                                ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                            )}
+                          >
+                            {l.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Input Field */}
+                    <div
+                      className={`flex flex-1 h-[56px] backdrop-blur-sm rounded-r-lg rounded-l-none shadow-lg border border-l-0 overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/50 transition-all ${
+                        isDarkTheme
+                          ? "bg-black/40 border-emerald-500/30"
+                          : "bg-white border-emerald-500/30"
+                      }`}
+                    >
+                      <div className="flex items-center justify-center pl-4 text-emerald-400/60">
+                        <Search className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="text"
+                        placeholder={t.placeholder}
+                        className={`flex-1 px-3 py-0 h-full text-sm outline-none bg-transparent placeholder:text-slate-500 ${
+                          isDarkTheme ? "text-white" : "text-gray-900"
+                        }`}
+                        value={state.seedKeyword}
+                        onChange={(e) =>
+                          setState((prev) => ({
+                            ...prev,
+                            seedKeyword: e.target.value,
+                          }))
+                        }
+                        onKeyDown={(e) =>
+                          e.key === "Enter" && startMining(false)
+                        }
+                      />
+                    </div>
                     <button
                       onClick={() => startMining(false)}
                       disabled={!state.seedKeyword.trim()}
-                      className="bg-green-500 hover:bg-green-600 text-black px-8 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="h-[56px] px-6 bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                     >
                       {t.btnStart}
                     </button>
@@ -7492,12 +7699,12 @@ export default function App() {
                   <div
                     className={`mt-6 backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
                       isDarkTheme
-                        ? "bg-black/40 border-green-500/20"
-                        : "bg-white border-green-500/30"
+                        ? "bg-black/40 border-emerald-500/20"
+                        : "bg-white border-emerald-500/30"
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-4">
-                      <Settings className="w-4 h-4 text-green-400" />
+                      <Settings className="w-4 h-4 text-emerald-400" />
                       <h4
                         className={`text-sm font-bold ${
                           isDarkTheme ? "text-white" : "text-gray-900"
@@ -7513,15 +7720,16 @@ export default function App() {
                       {/* Words Per Round */}
                       <div>
                         <label
-                          className={`block text-xs font-semibold mb-2 ${
+                          className={`flex items-center gap-2 text-xs font-semibold mb-2 ${
                             isDarkTheme ? "text-slate-400" : "text-gray-600"
                           }`}
                         >
+                          <Hash className="w-3.5 h-3.5 text-emerald-400" />
                           {state.uiLanguage === "zh"
                             ? "每轮词语数"
                             : "Words Per Round"}
                         </label>
-                        <input
+                        <Input
                           type="number"
                           min="5"
                           max="20"
@@ -7535,11 +7743,12 @@ export default function App() {
                               ),
                             }))
                           }
-                          className={`w-full px-3 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-green-500/50 outline-none ${
+                          className={cn(
+                            "text-sm font-medium h-10",
                             isDarkTheme
-                              ? "border-green-500/30 bg-black/60 text-white"
-                              : "border-green-500/30 bg-white text-gray-900"
-                          }`}
+                              ? "border-emerald-500/30 bg-black/60 text-white"
+                              : "border-emerald-500/30 bg-white text-gray-900"
+                          )}
                         />
                         <p
                           className={`text-xs mt-1 ${
@@ -7555,59 +7764,77 @@ export default function App() {
                       {/* Mining Strategy */}
                       <div>
                         <label
-                          className={`block text-xs font-semibold mb-2 ${
+                          className={`flex items-center gap-2 text-xs font-semibold mb-2 ${
                             isDarkTheme ? "text-slate-400" : "text-gray-600"
                           }`}
                         >
+                          <Network className="w-3.5 h-3.5 text-emerald-400" />
                           {state.uiLanguage === "zh"
                             ? "挖词策略"
                             : "Mining Strategy"}
                         </label>
-                        <select
+                        <Select
                           value={state.miningStrategy}
-                          onChange={(e) =>
+                          onValueChange={(value) =>
                             setState((prev) => ({
                               ...prev,
-                              miningStrategy: e.target.value as
+                              miningStrategy: value as
                                 | "horizontal"
                                 | "vertical",
                             }))
                           }
-                          className={`w-full px-3 py-2 border rounded-lg text-sm font-semibold focus:ring-2 focus:ring-green-500/50 outline-none cursor-pointer ${
-                            isDarkTheme
-                              ? "border-green-500/30 bg-black/60 text-white"
-                              : "border-green-500/30 bg-white text-gray-900"
-                          }`}
                         >
-                          <option
-                            value="horizontal"
-                            className={isDarkTheme ? "bg-black" : "bg-white"}
+                          <SelectTrigger
+                            className={cn(
+                              "text-sm font-medium h-10",
+                              isDarkTheme
+                                ? "border-emerald-500/30 bg-black/60 text-white"
+                                : "border-emerald-500/30 bg-white text-gray-900"
+                            )}
                           >
-                            {state.uiLanguage === "zh"
-                              ? "🌐 横向挖词 (广泛主题)"
-                              : "🌐 Horizontal (Broad Topics)"}
-                          </option>
-                          <option
-                            value="vertical"
-                            className={isDarkTheme ? "bg-black" : "bg-white"}
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent
+                            className={cn(
+                              isDarkTheme
+                                ? "bg-black/90 border-emerald-500/30"
+                                : "bg-white border-emerald-500/30"
+                            )}
                           >
-                            {state.uiLanguage === "zh"
-                              ? "🎯 纵向挖词 (深度挖掘)"
-                              : "🎯 Vertical (Deep Dive)"}
-                          </option>
-                        </select>
+                            <SelectItem
+                              value="horizontal"
+                              className={cn(
+                                isDarkTheme
+                                  ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                  : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                              )}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "横向挖掘(广泛主题)"
+                                : "Horizontal Mining (Broad Topics)"}
+                            </SelectItem>
+                            <SelectItem
+                              value="vertical"
+                              className={cn(
+                                isDarkTheme
+                                  ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                  : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                              )}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "纵向挖掘(深度挖掘)"
+                                : "Vertical Mining (Deep Dive)"}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
                         <p
                           className={`text-xs mt-1 ${
                             isDarkTheme ? "text-slate-500" : "text-gray-500"
                           }`}
                         >
-                          {state.miningStrategy === "horizontal"
-                            ? state.uiLanguage === "zh"
-                              ? "探索不同的平行主题"
-                              : "Explore different parallel topics"
-                            : state.uiLanguage === "zh"
-                            ? "深入挖掘同一主题"
-                            : "Deep dive into same topic"}
+                          {state.uiLanguage === "zh"
+                            ? "探索不同的平行主题"
+                            : "Explore different parallel topics"}
                         </p>
                       </div>
                     </div>
@@ -7626,14 +7853,14 @@ export default function App() {
                       <div
                         className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
                           isDarkTheme
-                            ? "bg-black/40 border-green-500/20"
-                            : "bg-white border-green-200"
+                            ? "bg-black/40 border-emerald-500/20"
+                            : "bg-white border-emerald-200"
                         }`}
                       >
                         <div
                           className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
                             isDarkTheme
-                              ? "divide-green-500/10"
+                              ? "divide-emerald-500/10"
                               : "divide-gray-200"
                           }`}
                         >
@@ -7643,16 +7870,16 @@ export default function App() {
                               onClick={() => loadArchive(arch)}
                               className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
                                 isDarkTheme
-                                  ? "hover:bg-green-500/10"
-                                  : "hover:bg-green-50"
+                                  ? "hover:bg-emerald-500/10"
+                                  : "hover:bg-emerald-50"
                               }`}
                             >
                               <div className="flex items-center gap-3">
                                 <div
-                                  className={`p-2 rounded text-green-400 transition-colors ${
+                                  className={`p-2 rounded text-emerald-400 transition-colors ${
                                     isDarkTheme
-                                      ? "bg-green-500/20 group-hover:bg-green-500/30"
-                                      : "bg-green-100 group-hover:bg-green-200"
+                                      ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
+                                      : "bg-emerald-100 group-hover:bg-emerald-200"
                                   }`}
                                 >
                                   <Search className="w-4 h-4" />
@@ -7669,8 +7896,8 @@ export default function App() {
                                     <span
                                       className={`text-[10px] px-1.5 py-0.5 rounded border uppercase ${
                                         isDarkTheme
-                                          ? "bg-green-500/20 text-green-400 border-green-500/30"
-                                          : "bg-green-100 text-green-700 border-green-300"
+                                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
                                       }`}
                                     >
                                       {arch.targetLanguage}
@@ -7713,12 +7940,12 @@ export default function App() {
                   <div
                     className={`backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
                       isDarkTheme
-                        ? "bg-black/40 border-green-500/20"
-                        : "bg-white border-green-200"
+                        ? "bg-black/40 border-emerald-500/20"
+                        : "bg-white border-emerald-200"
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-3">
-                      <Languages className="w-5 h-5 text-green-400" />
+                      <Languages className="w-5 h-5 text-emerald-400" />
                       <h3
                         className={`text-lg font-bold ${
                           isDarkTheme ? "text-white" : "text-gray-900"
@@ -7744,8 +7971,8 @@ export default function App() {
                           placeholder={t.batchInputPlaceholder}
                           className={`w-full h-32 px-4 py-3 border rounded-lg text-sm outline-none focus:ring-2 resize-none ${
                             isDarkTheme
-                              ? "border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500"
-                              : "border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400"
+                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
                           }`}
                         />
                       </div>
@@ -7754,7 +7981,7 @@ export default function App() {
                       <button
                         onClick={handleBatchAnalyze}
                         disabled={!batchInput.trim()}
-                        className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-black px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-black px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Search className="w-5 h-5" />
                         {t.btnBatchAnalyze}
@@ -7775,14 +8002,14 @@ export default function App() {
                       <div
                         className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
                           isDarkTheme
-                            ? "bg-black/40 border-green-500/20"
-                            : "bg-white border-green-200"
+                            ? "bg-black/40 border-emerald-500/20"
+                            : "bg-white border-emerald-200"
                         }`}
                       >
                         <div
                           className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
                             isDarkTheme
-                              ? "divide-green-500/10"
+                              ? "divide-emerald-500/10"
                               : "divide-gray-200"
                           }`}
                         >
@@ -7792,16 +8019,16 @@ export default function App() {
                               onClick={() => loadBatchArchive(arch)}
                               className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
                                 isDarkTheme
-                                  ? "hover:bg-green-500/10"
-                                  : "hover:bg-green-50"
+                                  ? "hover:bg-emerald-500/10"
+                                  : "hover:bg-emerald-50"
                               }`}
                             >
                               <div className="flex items-center gap-3">
                                 <div
-                                  className={`p-2 rounded text-green-400 transition-colors ${
+                                  className={`p-2 rounded text-emerald-400 transition-colors ${
                                     isDarkTheme
-                                      ? "bg-green-500/20 group-hover:bg-green-500/30"
-                                      : "bg-green-100 group-hover:bg-green-200"
+                                      ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
+                                      : "bg-emerald-100 group-hover:bg-emerald-200"
                                   }`}
                                 >
                                   <Languages className="w-4 h-4" />
@@ -7823,8 +8050,8 @@ export default function App() {
                                     <span
                                       className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${
                                         isDarkTheme
-                                          ? "bg-green-500/20 text-green-400 border-green-500/30"
-                                          : "bg-green-100 text-green-700 border-green-300"
+                                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
                                       }`}
                                     >
                                       {arch.targetLanguage}
@@ -7867,12 +8094,12 @@ export default function App() {
                   <div
                     className={`backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
                       isDarkTheme
-                        ? "bg-black/40 border-green-500/20"
-                        : "bg-white border-green-200"
+                        ? "bg-black/40 border-emerald-500/20"
+                        : "bg-white border-emerald-200"
                     }`}
                   >
                     <div className="flex items-center gap-2 mb-3">
-                      <FileText className="w-5 h-5 text-green-400" />
+                      <FileText className="w-5 h-5 text-emerald-400" />
                       <h3
                         className={`text-lg font-bold ${
                           isDarkTheme ? "text-white" : "text-gray-900"
@@ -7899,8 +8126,8 @@ export default function App() {
                           placeholder={t.deepDiveInputPlaceholder}
                           className={`w-full px-4 py-3 border rounded-lg text-sm outline-none focus:ring-2 ${
                             isDarkTheme
-                              ? "border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500"
-                              : "border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400"
+                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
                           }`}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && deepDiveInput.trim()) {
@@ -7930,7 +8157,7 @@ export default function App() {
                           }
                         }}
                         disabled={!deepDiveInput.trim()}
-                        className="w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-black px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-black px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <FileText className="w-5 h-5" />
                         {t.btnDeepDive}
@@ -7952,14 +8179,14 @@ export default function App() {
                         <div
                           className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
                             isDarkTheme
-                              ? "bg-black/40 border-green-500/20"
-                              : "bg-white border-green-200"
+                              ? "bg-black/40 border-emerald-500/20"
+                              : "bg-white border-emerald-200"
                           }`}
                         >
                           <div
                             className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
                               isDarkTheme
-                                ? "divide-green-500/10"
+                                ? "divide-emerald-500/10"
                                 : "divide-gray-200"
                             }`}
                           >
@@ -7969,16 +8196,16 @@ export default function App() {
                                 onClick={() => loadDeepDiveArchive(arch)}
                                 className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
                                   isDarkTheme
-                                    ? "hover:bg-green-500/10"
-                                    : "hover:bg-green-50"
+                                    ? "hover:bg-emerald-500/10"
+                                    : "hover:bg-emerald-50"
                                 }`}
                               >
                                 <div className="flex items-center gap-3">
                                   <div
-                                    className={`p-2 rounded text-green-400 transition-colors ${
+                                    className={`p-2 rounded text-emerald-400 transition-colors ${
                                       isDarkTheme
-                                        ? "bg-green-500/20 group-hover:bg-green-500/30"
-                                        : "bg-green-100 group-hover:bg-green-200"
+                                        ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
+                                        : "bg-emerald-100 group-hover:bg-emerald-200"
                                     }`}
                                   >
                                     <FileText className="w-4 h-4" />
@@ -8031,8 +8258,8 @@ export default function App() {
               <div
                 className={`mt-12 border rounded-xl backdrop-blur-sm shadow-sm overflow-hidden max-w-2xl mx-auto ${
                   isDarkTheme
-                    ? "border-green-500/20 bg-black/40"
-                    : "border-green-200 bg-white"
+                    ? "border-emerald-500/20 bg-black/40"
+                    : "border-emerald-200 bg-white"
                 }`}
               >
                 <button
@@ -8044,12 +8271,12 @@ export default function App() {
                   }
                   className={`w-full flex items-center justify-between p-4 transition-colors font-medium ${
                     isDarkTheme
-                      ? "bg-green-500/10 hover:bg-green-500/20 text-white"
-                      : "bg-green-50 hover:bg-green-100 text-gray-900"
+                      ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-white"
+                      : "bg-emerald-50 hover:bg-emerald-100 text-gray-900"
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-green-400" />
+                    <Settings className="w-4 h-4 text-emerald-400" />
                     {t.configPrompts}
                   </div>
                   <div
@@ -8057,7 +8284,7 @@ export default function App() {
                       state.showPrompts ? "rotate-180" : ""
                     }`}
                   >
-                    <ChevronDown className="w-4 h-4 text-green-400" />
+                    <ChevronDown className="w-4 h-4 text-emerald-400" />
                   </div>
                 </button>
 
@@ -8070,11 +8297,11 @@ export default function App() {
                         className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${
                           state.showPromptTranslation
                             ? isDarkTheme
-                              ? "bg-green-500/20 text-green-400 border-green-500/30"
-                              : "bg-green-100 text-green-700 border-green-300"
+                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                              : "bg-emerald-100 text-emerald-700 border-emerald-300"
                             : isDarkTheme
-                            ? "bg-black/60 text-slate-400 border-green-500/20"
-                            : "bg-gray-100 text-gray-600 border-green-200"
+                            ? "bg-black/60 text-slate-400 border-emerald-500/20"
+                            : "bg-gray-100 text-gray-600 border-emerald-200"
                         }`}
                       >
                         <Languages className="w-3 h-3" />
@@ -8093,7 +8320,7 @@ export default function App() {
                         </label>
                         <button
                           onClick={() => handleTranslatePrompt("gen")}
-                          className="text-xs flex items-center gap-1 text-green-400 hover:text-green-300 hover:underline"
+                          className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline"
                         >
                           <RefreshCw className="w-3 h-3" />{" "}
                           {t.btnTranslatePrompt}
@@ -8104,8 +8331,8 @@ export default function App() {
                         <textarea
                           className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${
                             isDarkTheme
-                              ? "border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500"
-                              : "border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400"
+                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
                           }`}
                           value={state.genPrompt}
                           onChange={(e) =>
@@ -8119,15 +8346,15 @@ export default function App() {
                           <div
                             className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${
                               isDarkTheme
-                                ? "bg-black/60 border-green-500/30 text-slate-300"
-                                : "bg-gray-50 border-green-200 text-gray-700"
+                                ? "bg-black/60 border-emerald-500/30 text-slate-300"
+                                : "bg-gray-50 border-emerald-200 text-gray-700"
                             }`}
                           >
                             <div
                               className={`text-[10px] uppercase font-bold mb-1 ${
                                 isDarkTheme
-                                  ? "text-green-400"
-                                  : "text-green-600"
+                                  ? "text-emerald-400"
+                                  : "text-emerald-600"
                               }`}
                             >
                               {t.transRefLabel}
@@ -8161,7 +8388,7 @@ export default function App() {
                         </label>
                         <button
                           onClick={() => handleTranslatePrompt("analyze")}
-                          className="text-xs flex items-center gap-1 text-green-400 hover:text-green-300 hover:underline"
+                          className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline"
                         >
                           <RefreshCw className="w-3 h-3" />{" "}
                           {t.btnTranslatePrompt}
@@ -8171,8 +8398,8 @@ export default function App() {
                         <textarea
                           className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${
                             isDarkTheme
-                              ? "border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500"
-                              : "border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400"
+                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
                           }`}
                           value={state.analyzePrompt}
                           onChange={(e) =>
@@ -8186,15 +8413,15 @@ export default function App() {
                           <div
                             className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${
                               isDarkTheme
-                                ? "bg-black/60 border-green-500/30 text-slate-300"
-                                : "bg-gray-50 border-green-200 text-gray-700"
+                                ? "bg-black/60 border-emerald-500/30 text-slate-300"
+                                : "bg-gray-50 border-emerald-200 text-gray-700"
                             }`}
                           >
                             <div
                               className={`text-[10px] uppercase font-bold mb-1 ${
                                 isDarkTheme
-                                  ? "text-green-400"
-                                  : "text-green-600"
+                                  ? "text-emerald-400"
+                                  : "text-emerald-600"
                               }`}
                             >
                               {t.transRefLabel}
@@ -8356,7 +8583,7 @@ export default function App() {
             <div className="max-w-7xl mx-auto mt-8 flex-1 w-full">
               <div className="text-center mb-8">
                 <div className="flex items-center justify-center gap-3 mb-4">
-                  <div className="bg-green-500 p-3 rounded-lg">
+                  <div className="bg-emerald-500 p-3 rounded-lg">
                     <BrainCircuit className="w-8 h-8 text-black" />
                   </div>
                   <h2
@@ -8380,8 +8607,8 @@ export default function App() {
                   }
                   className={`inline-flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
                     isDarkTheme
-                      ? "text-slate-400 hover:text-green-400"
-                      : "text-gray-600 hover:text-green-600"
+                      ? "text-slate-400 hover:text-emerald-400"
+                      : "text-gray-600 hover:text-emerald-600"
                   }`}
                 >
                   <ArrowRight className="w-4 h-4 rotate-180" />
@@ -8394,8 +8621,8 @@ export default function App() {
                 <div
                   className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
                     isDarkTheme
-                      ? "bg-black/40 border-green-500/20"
-                      : "bg-white border-green-200"
+                      ? "bg-black/40 border-emerald-500/20"
+                      : "bg-white border-emerald-200"
                   }`}
                 >
                   <h3
@@ -8403,7 +8630,7 @@ export default function App() {
                       isDarkTheme ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    <Search className="w-5 h-5 text-green-400" />
+                    <Search className="w-5 h-5 text-emerald-400" />
                     {t.miningWorkflow}
                   </h3>
                   <p
@@ -8432,8 +8659,8 @@ export default function App() {
                 <div
                   className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
                     isDarkTheme
-                      ? "bg-black/40 border-green-500/20"
-                      : "bg-white border-green-200"
+                      ? "bg-black/40 border-emerald-500/20"
+                      : "bg-white border-emerald-200"
                   }`}
                 >
                   <h3
@@ -8441,7 +8668,7 @@ export default function App() {
                       isDarkTheme ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    <Languages className="w-5 h-5 text-green-400" />
+                    <Languages className="w-5 h-5 text-emerald-400" />
                     {t.batchWorkflow}
                   </h3>
                   <p
@@ -8468,8 +8695,8 @@ export default function App() {
                 <div
                   className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
                     isDarkTheme
-                      ? "bg-black/40 border-green-500/20"
-                      : "bg-white border-green-200"
+                      ? "bg-black/40 border-emerald-500/20"
+                      : "bg-white border-emerald-200"
                   }`}
                 >
                   <h3
@@ -8477,7 +8704,7 @@ export default function App() {
                       isDarkTheme ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    <Lightbulb className="w-5 h-5 text-green-400" />
+                    <Lightbulb className="w-5 h-5 text-emerald-400" />
                     {t.deepDiveWorkflow}
                   </h3>
                   <p
@@ -8511,16 +8738,16 @@ export default function App() {
               {/* SUCCESS OVERLAY */}
               {state.miningSuccess && (
                 <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm rounded-xl flex items-start justify-center p-4 pt-8 animate-fade-in overflow-y-auto">
-                  <div className="bg-black/80 backdrop-blur-sm rounded-xl shadow-2xl border border-green-500/30 p-8 max-w-md w-full text-center">
-                    <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle className="w-8 h-8 text-green-400" />
+                  <div className="bg-black/80 backdrop-blur-sm rounded-xl shadow-2xl border border-emerald-500/30 p-8 max-w-md w-full text-center">
+                    <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <CheckCircle className="w-8 h-8 text-emerald-400" />
                     </div>
                     <h3 className="text-2xl font-bold text-white mb-2">
                       {t.miningSuccessTitle}
                     </h3>
                     <p className="text-slate-400 mb-6">{t.miningSuccessDesc}</p>
 
-                    <div className="bg-black/60 rounded-lg p-4 mb-6 border border-green-500/20">
+                    <div className="bg-black/60 rounded-lg p-4 mb-6 border border-emerald-500/20">
                       <div className="text-3xl font-bold text-white">
                         {
                           state.keywords.filter(
@@ -8536,13 +8763,13 @@ export default function App() {
                     <div className="flex flex-col gap-3">
                       <button
                         onClick={goToResults}
-                        className="w-full py-3 bg-green-500 text-black rounded-lg hover:bg-green-600 transition-colors font-bold shadow-lg shadow-green-500/20"
+                        className="w-full py-3 bg-emerald-500 text-black rounded-lg hover:bg-emerald-600 transition-colors font-bold shadow-lg shadow-emerald-500/20"
                       >
                         {t.viewResults}
                       </button>
                       <button
                         onClick={continueMining}
-                        className="w-full py-3 bg-black/60 text-white border border-green-500/30 rounded-lg hover:bg-green-500/10 transition-colors font-medium"
+                        className="w-full py-3 bg-black/60 text-white border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors font-medium"
                       >
                         {t.btnExpand}
                       </button>
@@ -8554,14 +8781,14 @@ export default function App() {
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-3">
                   <Loader2
-                    className={`w-6 h-6 text-green-400 ${
+                    className={`w-6 h-6 text-emerald-400 ${
                       !state.miningSuccess && "animate-spin"
                     }`}
                   />
                   <div>
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                       {t.generating}
-                      <span className="text-sm font-normal bg-green-500/20 px-2 py-0.5 rounded-full text-green-400">
+                      <span className="text-sm font-normal bg-emerald-500/20 px-2 py-0.5 rounded-full text-emerald-400">
                         Round {state.miningRound}
                       </span>
                     </h3>
@@ -8588,12 +8815,12 @@ export default function App() {
                 <div
                   className={`mb-4 backdrop-blur-sm rounded-xl shadow-sm border p-4 ${
                     isDarkTheme
-                      ? "bg-black/40 border-green-500/20"
-                      : "bg-white border-green-200"
+                      ? "bg-black/40 border-emerald-500/20"
+                      : "bg-white border-emerald-200"
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-3">
-                    <Settings className="w-4 h-4 text-green-400" />
+                    <Settings className="w-4 h-4 text-emerald-400" />
                     <h4
                       className={`text-sm font-bold ${
                         isDarkTheme ? "text-white" : "text-gray-900"
@@ -8629,8 +8856,8 @@ export default function App() {
                         }
                         className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
                           isDarkTheme
-                            ? "border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white"
-                            : "border-green-300 bg-white focus:ring-green-500 text-gray-900"
+                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
+                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
                         }`}
                       />
                       <p
@@ -8663,8 +8890,8 @@ export default function App() {
                         }
                         className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
                           isDarkTheme
-                            ? "border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white"
-                            : "border-green-300 bg-white focus:ring-green-500 text-gray-900"
+                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
+                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
                         }`}
                       >
                         <option
@@ -8710,8 +8937,8 @@ export default function App() {
                         placeholder={t.suggestionPlaceholder}
                         className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
                           isDarkTheme
-                            ? "border-green-500/30 bg-black/60 focus:ring-green-500/50 text-white placeholder:text-slate-500"
-                            : "border-green-300 bg-white focus:ring-green-500 text-gray-900 placeholder:text-gray-400"
+                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
                         }`}
                       />
                       <p
@@ -8746,11 +8973,11 @@ export default function App() {
             <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-3">
-                  <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
+                  <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
                   <div>
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                       {t.batchAnalyzing}
-                      <span className="text-sm font-normal bg-green-500/20 px-2 py-0.5 rounded-full text-green-400">
+                      <span className="text-sm font-normal bg-emerald-500/20 px-2 py-0.5 rounded-full text-emerald-400">
                         {state.batchCurrentIndex} / {state.batchTotalCount}
                       </span>
                     </h3>
@@ -8793,7 +9020,7 @@ export default function App() {
                       isDarkTheme ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    <Languages className="w-6 h-6 text-green-400" />
+                    <Languages className="w-6 h-6 text-emerald-400" />
                     {t.batchResultsTitle}
                   </h2>
                   <p
@@ -8807,7 +9034,7 @@ export default function App() {
                 <div className="flex gap-3">
                   <button
                     onClick={downloadBatchCSV}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-500 text-black rounded-md hover:bg-green-600 transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded-md hover:bg-emerald-600 transition-colors text-sm font-medium"
                   >
                     <Download className="w-4 h-4" />
                     {t.downloadCSV}
@@ -8816,8 +9043,8 @@ export default function App() {
                     onClick={reset}
                     className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${
                       isDarkTheme
-                        ? "text-slate-400 hover:text-green-400 border-green-500/30 bg-black/60 hover:bg-green-500/10"
-                        : "text-gray-700 hover:text-green-600 border-green-300 bg-white hover:bg-green-50"
+                        ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
+                        : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
                     }`}
                   >
                     {t.newAnalysis}
@@ -8829,8 +9056,8 @@ export default function App() {
               <div
                 className={`backdrop-blur-sm rounded-xl shadow-sm border overflow-hidden min-h-[400px] ${
                   isDarkTheme
-                    ? "bg-black/40 border-green-500/20"
-                    : "bg-white border-green-200"
+                    ? "bg-black/40 border-emerald-500/20"
+                    : "bg-white border-emerald-200"
                 }`}
               >
                 <div className="overflow-x-auto custom-scrollbar">
@@ -8842,7 +9069,7 @@ export default function App() {
                     <thead
                       className={`text-xs uppercase font-semibold border-b ${
                         isDarkTheme
-                          ? "bg-black/60 text-slate-400 border-green-500/20"
+                          ? "bg-black/60 text-slate-400 border-emerald-500/20"
                           : "bg-gray-100 text-gray-700 border-gray-200"
                       }`}
                     >
@@ -8855,7 +9082,7 @@ export default function App() {
                         <th className="px-4 py-4 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-green-500/10">
+                    <tbody className="divide-y divide-emerald-500/10">
                       {state.batchKeywords.map((item) => {
                         const isExpanded = state.expandedRowId === item.id;
 
@@ -8864,8 +9091,8 @@ export default function App() {
                             <tr
                               className={`transition-colors ${
                                 isExpanded
-                                  ? "bg-green-500/10"
-                                  : "hover:bg-green-500/5"
+                                  ? "bg-emerald-500/10"
+                                  : "hover:bg-emerald-500/5"
                               }`}
                             >
                               <td
@@ -8878,9 +9105,9 @@ export default function App() {
                                 }
                               >
                                 {isExpanded ? (
-                                  <ChevronUp className="w-4 h-4 text-green-400" />
+                                  <ChevronUp className="w-4 h-4 text-emerald-400" />
                                 ) : (
-                                  <ChevronDown className="w-4 h-4 text-green-400" />
+                                  <ChevronDown className="w-4 h-4 text-emerald-400" />
                                 )}
                               </td>
                               <td
@@ -8906,7 +9133,7 @@ export default function App() {
                                 {item.keyword}
                               </td>
                               <td className="px-4 py-4">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                                   {item.topDomainType || "-"}
                                 </span>
                               </td>
@@ -8914,7 +9141,7 @@ export default function App() {
                                 <span
                                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                                     item.probability === ProbabilityLevel.HIGH
-                                      ? "bg-green-500/30 text-green-400 border-green-500/50"
+                                      ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
                                       : item.probability ===
                                         ProbabilityLevel.MEDIUM
                                       ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
@@ -8932,7 +9159,7 @@ export default function App() {
                                     )}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1 px-2 py-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-xs font-medium border border-green-500/30"
+                                    className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium border border-emerald-500/30"
                                     title={t.verifyBtn}
                                     onClick={(e) => e.stopPropagation()}
                                   >
@@ -8941,7 +9168,7 @@ export default function App() {
                                   </a>
 
                                   <button
-                                    className="text-slate-400 hover:text-green-400 text-xs flex items-center gap-1"
+                                    className="text-slate-400 hover:text-emerald-400 text-xs flex items-center gap-1"
                                     onClick={() =>
                                       setState((prev) => ({
                                         ...prev,
@@ -8959,7 +9186,7 @@ export default function App() {
                                       e.stopPropagation();
                                       handleDeepDive(item);
                                     }}
-                                    className="flex items-center gap-1 px-2 py-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-xs font-medium"
+                                    className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium"
                                     title={t.deepDive}
                                   >
                                     <FileText className="w-3 h-3" />
@@ -9013,7 +9240,7 @@ export default function App() {
                                                   className={`text-lg font-bold ${
                                                     (item.serankingData
                                                       .difficulty || 0) <= 40
-                                                      ? "text-green-600"
+                                                      ? "text-emerald-600"
                                                       : (item.serankingData
                                                           .difficulty || 0) <=
                                                         60
@@ -9040,7 +9267,7 @@ export default function App() {
                                                 <div className="text-[10px] text-slate-500 font-bold mb-1">
                                                   CPC
                                                 </div>
-                                                <div className="text-lg font-bold text-green-600">
+                                                <div className="text-lg font-bold text-emerald-600">
                                                   $
                                                   {item.serankingData.cpc?.toFixed(
                                                     2
@@ -9213,7 +9440,7 @@ export default function App() {
                                                 className={`text-sm font-bold ${
                                                   (item.serankingData
                                                     .difficulty || 0) <= 40
-                                                    ? "text-green-600"
+                                                    ? "text-emerald-600"
                                                     : (item.serankingData
                                                         .difficulty || 0) <= 60
                                                     ? "text-yellow-600"
@@ -9265,7 +9492,7 @@ export default function App() {
                                                     <div className="text-blue-700 font-medium truncate">
                                                       {snip.title}
                                                     </div>
-                                                    <div className="text-green-700 text-[10px] truncate">
+                                                    <div className="text-emerald-700 text-[10px] truncate">
                                                       {snip.url}
                                                     </div>
                                                     <div className="text-slate-500 mt-1 line-clamp-2">
@@ -9308,7 +9535,7 @@ export default function App() {
             <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
               <div className="flex justify-between items-center mb-4">
                 <div className="flex items-center gap-3">
-                  <Loader2 className="w-6 h-6 text-green-400 animate-spin" />
+                  <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
                   <div>
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                       {t.deepDiveAnalyzing || "Deep Dive Analysis"}
@@ -9334,7 +9561,7 @@ export default function App() {
               </div>
 
               {/* Progress Bar */}
-              <div className="mb-6 bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-green-500/20 p-6">
+              <div className="mb-6 bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-emerald-500/20 p-6">
                 <div className="flex items-center justify-between mb-3">
                   <div className="text-sm font-bold text-white">
                     {state.deepDiveCurrentStep ||
@@ -9342,13 +9569,13 @@ export default function App() {
                         ? "初始化..."
                         : "Initializing...")}
                   </div>
-                  <div className="text-sm font-bold text-green-400">
+                  <div className="text-sm font-bold text-emerald-400">
                     {Math.round(state.deepDiveProgress)}%
                   </div>
                 </div>
                 <div className="w-full bg-black/60 rounded-full h-3 overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-green-500 to-green-600 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
+                    className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
                     style={{ width: `${state.deepDiveProgress}%` }}
                   >
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
@@ -9378,7 +9605,7 @@ export default function App() {
                 <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
                   <div>
                     <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                      <FileText className="w-6 h-6 text-green-400" />
+                      <FileText className="w-6 h-6 text-emerald-400" />
                       {t.deepDiveResults || "Deep Dive Results"}
                     </h2>
                     <p className="text-slate-400 mt-1">
@@ -9750,7 +9977,7 @@ export default function App() {
                                   state.currentStrategyReport
                                     .rankingProbability ===
                                   ProbabilityLevel.HIGH
-                                    ? "bg-green-100 text-green-800 border-2 border-green-300"
+                                    ? "bg-emerald-100 text-emerald-800 border-2 border-emerald-300"
                                     : state.currentStrategyReport
                                         .rankingProbability ===
                                       ProbabilityLevel.MEDIUM
@@ -9894,7 +10121,7 @@ export default function App() {
                                                 className={`text-sm font-bold ${
                                                   (data.serankingData
                                                     .difficulty || 0) <= 40
-                                                    ? "text-green-600"
+                                                    ? "text-emerald-600"
                                                     : (data.serankingData
                                                         .difficulty || 0) <= 60
                                                     ? "text-yellow-600"
@@ -9909,7 +10136,7 @@ export default function App() {
                                               <div className="text-[9px] text-slate-500 font-bold mb-1">
                                                 CPC
                                               </div>
-                                              <div className="text-sm font-bold text-green-600">
+                                              <div className="text-sm font-bold text-emerald-600">
                                                 $
                                                 {data.serankingData.cpc?.toFixed(
                                                   2
@@ -9955,7 +10182,7 @@ export default function App() {
                                                   <div className="text-blue-700 font-medium truncate">
                                                     {result.title}
                                                   </div>
-                                                  <div className="text-green-700 text-[10px] truncate mt-1">
+                                                  <div className="text-emerald-700 text-[10px] truncate mt-1">
                                                     {result.url}
                                                   </div>
                                                   <div className="text-slate-500 mt-2 line-clamp-2">
@@ -10006,8 +10233,8 @@ export default function App() {
                     <span
                       className={`px-2 py-1 rounded text-base border ${
                         isDarkTheme
-                          ? "bg-green-500/20 text-green-400 border-green-500/30"
-                          : "bg-green-100 text-green-700 border-green-300"
+                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
                       }`}
                     >
                       {state.seedKeyword}
@@ -10025,7 +10252,7 @@ export default function App() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => startMining(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-green-500 text-black rounded-md hover:bg-green-600 transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded-md hover:bg-emerald-600 transition-colors text-sm font-medium"
                   >
                     <Plus className="w-4 h-4" />
                     {t.btnExpand}
@@ -10034,8 +10261,8 @@ export default function App() {
                     onClick={reset}
                     className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${
                       isDarkTheme
-                        ? "text-slate-400 hover:text-green-400 border-green-500/30 bg-black/60 hover:bg-green-500/10"
-                        : "text-gray-700 hover:text-green-600 border-green-300 bg-white hover:bg-green-50"
+                        ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
+                        : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
                     }`}
                   >
                     {t.newAnalysis}
@@ -10047,8 +10274,8 @@ export default function App() {
               <div
                 className={`backdrop-blur-sm p-3 rounded-t-xl border border-b-0 flex flex-wrap gap-4 items-center justify-between ${
                   isDarkTheme
-                    ? "bg-black/40 border-green-500/20"
-                    : "bg-gray-100 border-green-200"
+                    ? "bg-black/40 border-emerald-500/20"
+                    : "bg-gray-100 border-emerald-200"
                 }`}
               >
                 <div className="flex items-center gap-4">
@@ -10069,8 +10296,8 @@ export default function App() {
                       }
                       className={`border rounded px-2 py-1 outline-none focus:ring-1 ${
                         isDarkTheme
-                          ? "bg-black/60 border-green-500/30 focus:ring-green-500/50 text-white"
-                          : "bg-white border-green-300 focus:ring-green-500 text-gray-900"
+                          ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
+                          : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
                       }`}
                     >
                       <option
@@ -10105,8 +10332,8 @@ export default function App() {
                       }
                       className={`border rounded px-2 py-1 outline-none focus:ring-1 ${
                         isDarkTheme
-                          ? "bg-black/60 border-green-500/30 focus:ring-green-500/50 text-white"
-                          : "bg-white border-green-300 focus:ring-green-500 text-gray-900"
+                          ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
+                          : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
                       }`}
                     >
                       <option
@@ -10129,8 +10356,8 @@ export default function App() {
                   onClick={downloadCSV}
                   className={`flex items-center gap-2 text-sm px-3 py-1 rounded transition-colors ${
                     isDarkTheme
-                      ? "text-slate-300 hover:text-green-400 hover:bg-green-500/10"
-                      : "text-gray-700 hover:text-green-600 hover:bg-green-50"
+                      ? "text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10"
+                      : "text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
                   }`}
                 >
                   <Download className="w-4 h-4" /> {t.downloadCSV}
@@ -10141,8 +10368,8 @@ export default function App() {
               <div
                 className={`backdrop-blur-sm rounded-b-xl shadow-sm border overflow-hidden min-h-[400px] ${
                   isDarkTheme
-                    ? "bg-black/40 border-green-500/20"
-                    : "bg-white border-green-200"
+                    ? "bg-black/40 border-emerald-500/20"
+                    : "bg-white border-emerald-200"
                 }`}
               >
                 <div className="overflow-x-auto custom-scrollbar">
@@ -10154,7 +10381,7 @@ export default function App() {
                     <thead
                       className={`text-xs uppercase font-semibold border-b ${
                         isDarkTheme
-                          ? "bg-black/60 text-slate-400 border-green-500/20"
+                          ? "bg-black/60 text-slate-400 border-emerald-500/20"
                           : "bg-gray-100 text-gray-700 border-gray-200"
                       }`}
                     >
@@ -10168,7 +10395,7 @@ export default function App() {
                         <th className="px-4 py-4 text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-green-500/10">
+                    <tbody className="divide-y divide-emerald-500/10">
                       {getProcessedKeywords().map((item) => {
                         const isExpanded = state.expandedRowId === item.id;
 
@@ -10177,8 +10404,8 @@ export default function App() {
                             <tr
                               className={`transition-colors ${
                                 isExpanded
-                                  ? "bg-green-500/10"
-                                  : "hover:bg-green-500/5"
+                                  ? "bg-emerald-500/10"
+                                  : "hover:bg-emerald-500/5"
                               }`}
                             >
                               <td
@@ -10191,9 +10418,9 @@ export default function App() {
                                 }
                               >
                                 {isExpanded ? (
-                                  <ChevronUp className="w-4 h-4 text-green-400" />
+                                  <ChevronUp className="w-4 h-4 text-emerald-400" />
                                 ) : (
-                                  <ChevronDown className="w-4 h-4 text-green-400" />
+                                  <ChevronDown className="w-4 h-4 text-emerald-400" />
                                 )}
                               </td>
                               <td
@@ -10228,7 +10455,7 @@ export default function App() {
                                 {item.volume.toLocaleString()}
                               </td>
                               <td className="px-4 py-4">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                                   {item.topDomainType || "-"}
                                 </span>
                               </td>
@@ -10236,7 +10463,7 @@ export default function App() {
                                 <span
                                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
                                     item.probability === ProbabilityLevel.HIGH
-                                      ? "bg-green-500/30 text-green-400 border-green-500/50"
+                                      ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
                                       : item.probability ===
                                         ProbabilityLevel.MEDIUM
                                       ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
@@ -10255,7 +10482,7 @@ export default function App() {
                                     )}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="flex items-center gap-1 px-2 py-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-xs font-medium border border-green-500/30"
+                                    className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium border border-emerald-500/30"
                                     title={t.verifyBtn}
                                     onClick={(e) => e.stopPropagation()}
                                   >
@@ -10264,7 +10491,7 @@ export default function App() {
                                   </a>
 
                                   <button
-                                    className="text-slate-400 hover:text-green-400 text-xs flex items-center gap-1"
+                                    className="text-slate-400 hover:text-emerald-400 text-xs flex items-center gap-1"
                                     onClick={() =>
                                       setState((prev) => ({
                                         ...prev,
@@ -10281,7 +10508,7 @@ export default function App() {
                                       e.stopPropagation();
                                       handleDeepDive(item);
                                     }}
-                                    className="flex items-center gap-1 px-2 py-1.5 bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 transition-colors text-xs font-medium"
+                                    className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium"
                                     title={t.deepDive}
                                   >
                                     <FileText className="w-3 h-3" />
@@ -10366,7 +10593,7 @@ export default function App() {
                                                   className={`text-lg font-bold ${
                                                     (item.serankingData
                                                       .difficulty || 0) <= 40
-                                                      ? "text-green-600"
+                                                      ? "text-emerald-600"
                                                       : (item.serankingData
                                                           .difficulty || 0) <=
                                                         60
@@ -10393,7 +10620,7 @@ export default function App() {
                                                 <div className="text-[10px] text-slate-500 font-bold mb-1">
                                                   CPC
                                                 </div>
-                                                <div className="text-lg font-bold text-green-600">
+                                                <div className="text-lg font-bold text-emerald-600">
                                                   $
                                                   {item.serankingData.cpc?.toFixed(
                                                     2
@@ -10548,7 +10775,7 @@ export default function App() {
                                                     <div className="text-blue-700 font-medium truncate">
                                                       {snip.title}
                                                     </div>
-                                                    <div className="text-green-700 text-[10px] truncate">
+                                                    <div className="text-emerald-700 text-[10px] truncate">
                                                       {snip.url}
                                                     </div>
                                                     <div className="text-slate-500 mt-1 line-clamp-2">
@@ -10621,6 +10848,15 @@ export default function App() {
           onCreate={(type) => addTask({ type })}
           uiLanguage={state.uiLanguage}
         />
+
+        {/* Mining Guide Modal */}
+        {showMiningGuide && (
+          <KeywordMiningGuide
+            uiLanguage={state.uiLanguage}
+            onStart={handleMiningGuideStart}
+            onCancel={() => setShowMiningGuide(false)}
+          />
+        )}
       </div>
     </div>
   );

@@ -24,14 +24,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       wordsPerRound,
       miningStrategy,
       userSuggestion,
-      uiLanguage
+      uiLanguage,
+      industry,
+      additionalSuggestions
     } = body;
 
     if (!seedKeyword || !targetLanguage || !systemInstruction) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const keywords = await generateKeywords(
+    const result = await generateKeywords(
       seedKeyword,
       targetLanguage,
       systemInstruction,
@@ -40,10 +42,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       wordsPerRound || 10,
       miningStrategy || 'horizontal',
       userSuggestion || '',
-      uiLanguage || 'en'
+      uiLanguage || 'en',
+      industry,
+      additionalSuggestions
     );
 
-    return res.json({ keywords });
+    return res.json({ keywords: result.keywords, rawResponse: result.rawResponse });
   } catch (error: any) {
     console.error('Handler error:', error);
     return sendErrorResponse(res, error, 'Failed to generate keywords');

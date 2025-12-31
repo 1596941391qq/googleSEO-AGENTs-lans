@@ -259,7 +259,9 @@ export const generateKeywords = async (
   wordsPerRound: number = 10,
   miningStrategy: 'horizontal' | 'vertical' = 'horizontal',
   userSuggestion: string = '',
-  uiLanguage: 'en' | 'zh' = 'en'
+  uiLanguage: 'en' | 'zh' = 'en',
+  industry?: string,
+  additionalSuggestions?: string
 ): Promise<KeywordData[]> => {
   const targetLangName = getLanguageName(targetLanguage);
   const translationLang = uiLanguage === 'zh' ? 'Chinese' : 'English';
@@ -282,6 +284,25 @@ VERTICAL MINING STRATEGY (Deep Dive):
 - Example: If seed is "dog food", explore "grain-free dog food", "senior dog nutrition", "large breed puppy food"`;
   }
 
+  // Add industry-specific guidance if provided
+  let industryGuidance = '';
+  if (industry && industry.trim()) {
+    industryGuidance = `
+
+USER INDUSTRY CONTEXT:
+The user is focusing on the "${industry}" industry.
+This is an excellent choice! The ${industry} industry shows tremendous potential and growth opportunities.
+
+Please tailor keyword suggestions specifically for this industry by considering:
+- Industry-specific terminology and jargon
+- Common pain points and challenges in this industry
+- Long-tail question keywords relevant to this industry
+- Competitor comparison terms
+- Industry trends and emerging topics
+
+This is crucial for generating highly relevant and targeted keywords.`;
+  }
+
   // Add user suggestion if provided
   let userGuidance = '';
   if (userSuggestion && userSuggestion.trim()) {
@@ -293,11 +314,21 @@ ${userSuggestion}
 Please incorporate the user's guidance into your keyword generation.`;
   }
 
+  // Add additional suggestions from mining config
+  if (additionalSuggestions && additionalSuggestions.trim()) {
+    userGuidance += `
+
+ADDITIONAL USER SUGGESTIONS:
+${additionalSuggestions}
+
+Please incorporate these additional requirements into your keyword generation.`;
+  }
+
   let promptContext = "";
 
   if (roundIndex === 1) {
     promptContext = `Generate ${wordsPerRound} high-potential ${targetLangName} SEO keywords for the seed term: "${seedKeyword}". Focus on commercial and informational intent.
-${strategyGuidance}${userGuidance}
+${strategyGuidance}${industryGuidance}${userGuidance}
 
 CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
 
@@ -317,7 +348,7 @@ We have already generated these: ${existingKeywords.slice(-20).join(', ')}.
 CRITICAL: Do NOT generate similar words.
 Think LATERALLY. Use the "SCAMPER" method.
 Example: If seed is "AI Pet Photos", think "Pet ID Cards", "Fake Dog Passport", "Cat Genealogy".
-${strategyGuidance}${userGuidance}
+${strategyGuidance}${industryGuidance}${userGuidance}
 
 Generate ${wordsPerRound} NEW, UNEXPECTED, but SEARCHABLE keywords related to "${seedKeyword}" in ${targetLangName}.
 
@@ -336,12 +367,16 @@ Return a JSON array with objects containing:
     });
 
     let text = response.text || "[]";
+
+    // Save original response before extraction
+    const originalResponse = text;
+
     text = extractJSON(text);
 
     // Validate extracted JSON
     if (!text || text.trim() === '') {
       console.error("Empty JSON response from model");
-      return [];
+      return { keywords: [], rawResponse: originalResponse };
     }
 
     let rawData;
@@ -350,22 +385,24 @@ Return a JSON array with objects containing:
     } catch (e: any) {
       console.error("JSON Parse Error in generateKeywords:", e.message);
       console.error("Extracted text (first 500 chars):", text.substring(0, 500));
-      return [];
+      return { keywords: [], rawResponse: originalResponse };
     }
 
     // Validate it's an array
     if (!Array.isArray(rawData)) {
       console.error("Response is not a JSON array:", typeof rawData);
-      return [];
+      return { keywords: [], rawResponse: originalResponse };
     }
 
-    return rawData.map((item: any, index: number) => ({
+    const keywords = rawData.map((item: any, index: number) => ({
       ...item,
       id: `kw-${Date.now()}-${index}`,
     }));
+
+    return { keywords, rawResponse: originalResponse };
   } catch (error: any) {
     console.error("Generate Keywords Error:", error);
-    return [];
+    return { keywords: [], rawResponse: "Error: " + error.message };
   }
 };
 
