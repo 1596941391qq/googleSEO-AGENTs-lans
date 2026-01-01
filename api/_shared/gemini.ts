@@ -454,15 +454,23 @@ IMPORTANT: Consider the SE Ranking Keyword Difficulty (KD) score in your analysi
 Combine the KD score with your SERP analysis to make a final judgment.`
       : keywordData.serankingData
         ? `\n\nSE RANKING KEYWORD DATA FOR "${keywordData.keyword}":
-⚠️ NO DATA FOUND - This is a BLUE OCEAN SIGNAL!
+⚠️ NO DATA FOUND
 
-When SE Ranking has no data for a keyword, it typically means:
-1. Very low or zero search volume in their database
-2. New, emerging, or highly niche keyword
-3. Little to no advertising competition
-4. **This is a POSITIVE indicator for ranking probability**
+**CRITICAL**: Do NOT automatically treat "no SE Ranking data" as a blue ocean signal!
 
-ACTION: Give this keyword a BONUS toward HIGH probability, as it indicates low competition and untapped opportunity.`
+When SE Ranking has no data for a keyword, it could mean:
+1. **For non-English languages (${targetLanguage})**: SE Ranking's database may not have comprehensive coverage for this language. This is NORMAL and does NOT indicate a blue ocean opportunity.
+2. Very low or zero search volume in their database (possible but not guaranteed)
+3. New, emerging, or highly niche keyword (possible but not guaranteed)
+4. Little to no advertising competition (possible but not guaranteed)
+
+**IMPORTANT ANALYSIS RULES**:
+- **For non-English target languages**: SE Ranking "no data" is often due to limited database coverage, NOT because it's a blue ocean keyword. Do NOT give bonus points for this.
+- **For English keywords**: SE Ranking "no data" MIGHT indicate a blue ocean, but you MUST verify with SERP results first.
+- **ALWAYS prioritize SERP analysis over SE Ranking data absence**: If SERP shows strong competition (authoritative sites, optimized content), the keyword is NOT a blue ocean regardless of SE Ranking data.
+- **Only consider it a positive signal if**: SERP results ALSO show weak competition (forums, low-quality content) AND the target language is English.
+
+ACTION: Analyze SERP results first. Do NOT automatically assign HIGH probability just because SE Ranking has no data.`
         : `\n\nNote: SE Ranking keyword data not available for this keyword (API call failed or not attempted).`;
 
     const topSerpSnippetsJson = serpResults.length > 0
@@ -500,7 +508,7 @@ STRICT SCORING CRITERIA (Be conservative and strict):
   * Top 3 results are ALL weak competitors (Forums like Reddit/Quora, Social Media, PDFs, low-quality blogs, OR off-topic/irrelevant content)
   * NO highly relevant authoritative sites in top 5
   * Content quality of top results is clearly poor, outdated, or doesn't match user intent
-  * **BONUS**: SE Ranking shows NO DATA (blue ocean signal)
+  * **BONUS**: SE Ranking shows NO DATA - BUT ONLY if target language is English AND SERP also shows weak competition (do NOT assume blue ocean for non-English languages)
 
   **RELEVANCE CHECK**: If you see Wikipedia/.gov/.edu in top results:
     ├─ Are they HIGHLY RELEVANT to the keyword topic? → Competition is strong → NOT HIGH
@@ -533,7 +541,7 @@ IMPORTANT ANALYSIS RULES:
 - If authoritative sites are present but OFF-TOPIC, treat it as a blue ocean opportunity
 - Analyze the actual quality and relevance of top results, not just domain names
 - Use the REAL SERP results provided above for your analysis
-- Consider SE Ranking's "no data" as a strong positive signal
+- **CRITICAL**: For non-English target languages (${targetLanguage}), SE Ranking "no data" is often due to limited database coverage, NOT a blue ocean signal. Do NOT treat it as positive. Always verify with SERP results first.
 - Output all text fields (reasoning, searchIntent, intentAnalysis, topSerpSnippets titles/snippets) in ${uiLangName}
 - The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}
 - For topSerpSnippets, use the ACTUAL results from the SERP data above (first 3 results)
@@ -630,7 +638,7 @@ Return a JSON object:
         analysis.topDomainType = 'Weak Page';
       }
 
-      return { ...keywordData, ...analysis };
+      return { ...keywordData, ...analysis, rawResponse: response.text };
 
     } catch (error) {
       console.error(`Analysis failed for ${keywordData.keyword}:`, error);
@@ -639,7 +647,8 @@ Return a JSON object:
         probability: ProbabilityLevel.LOW,
         reasoning: "API Analysis Failed (Timeout or Rate Limit).",
         topDomainType: "Unknown",
-        serpResultCount: -1
+        serpResultCount: -1,
+        rawResponse: "Error: " + error.message
       };
     }
   };

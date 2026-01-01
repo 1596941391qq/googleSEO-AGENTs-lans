@@ -48,6 +48,8 @@ import {
   SelectValue,
 } from "./components/ui/select";
 import { Input } from "./components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
+import { Badge } from "./components/ui/badge";
 import { cn } from "./lib/utils";
 import { WebsiteRenderer } from "./components/website/WebsiteRenderer";
 import { useAuth } from "./contexts/AuthContext";
@@ -101,50 +103,61 @@ import {
 } from "./workflows";
 
 // --- Markdown Parser ---
-const parseMarkdown = (text: string): string => {
+const parseMarkdown = (text: string, isDarkTheme: boolean = false): string => {
   if (!text) return "";
 
   let html = text;
 
+  const textColor = isDarkTheme ? "text-white" : "text-slate-900";
+  const textColorSecondary = isDarkTheme ? "text-gray-300" : "text-slate-700";
+  const codeBg = isDarkTheme ? "bg-slate-800" : "bg-slate-100";
+  const codeText = isDarkTheme ? "text-gray-200" : "text-slate-800";
+  const linkColor = isDarkTheme
+    ? "text-blue-400 hover:text-blue-300"
+    : "text-blue-600 hover:text-blue-800";
+
   // Headers (### ## #)
   html = html.replace(
     /^### (.*$)/gim,
-    '<h3 class="text-sm font-bold text-slate-900 mt-2 mb-1">$1</h3>'
+    `<h3 class="text-sm font-bold ${textColor} mt-2 mb-1">$1</h3>`
   );
   html = html.replace(
     /^## (.*$)/gim,
-    '<h2 class="text-base font-bold text-slate-900 mt-2 mb-1">$1</h2>'
+    `<h2 class="text-base font-bold ${textColor} mt-2 mb-1">$1</h2>`
   );
   html = html.replace(
     /^# (.*$)/gim,
-    '<h1 class="text-lg font-bold text-slate-900 mt-3 mb-1">$1</h1>'
+    `<h1 class="text-lg font-bold ${textColor} mt-3 mb-1">$1</h1>`
   );
 
   // Bold (**text** or __text__)
   html = html.replace(
     /\*\*(.+?)\*\*/g,
-    '<strong class="font-semibold text-slate-900">$1</strong>'
+    `<strong class="font-semibold ${textColor}">$1</strong>`
   );
   html = html.replace(
     /__(.+?)__/g,
-    '<strong class="font-semibold text-slate-900">$1</strong>'
+    `<strong class="font-semibold ${textColor}">$1</strong>`
   );
 
   // Italic (*text* or _text_)
   html = html.replace(
     /\*(.+?)\*/g,
-    '<em class="italic text-slate-700">$1</em>'
+    `<em class="italic ${textColorSecondary}">$1</em>`
   );
-  html = html.replace(/_(.+?)_/g, '<em class="italic text-slate-700">$1</em>');
+  html = html.replace(
+    /_(.+?)_/g,
+    `<em class="italic ${textColorSecondary}">$1</em>`
+  );
 
   // Lists (- item or * item or 1. item)
   html = html.replace(
     /^\s*[-*]\s+(.+)$/gim,
-    '<li class="ml-4 mb-0.5 list-disc list-inside text-slate-700">$1</li>'
+    `<li class="ml-4 mb-0.5 list-disc list-inside ${textColorSecondary}">$1</li>`
   );
   html = html.replace(
     /^\s*\d+\.\s+(.+)$/gim,
-    '<li class="ml-4 mb-0.5 list-decimal list-inside text-slate-700">$1</li>'
+    `<li class="ml-4 mb-0.5 list-decimal list-inside ${textColorSecondary}">$1</li>`
   );
 
   // Wrap consecutive <li> tags in <ul>
@@ -160,13 +173,13 @@ const parseMarkdown = (text: string): string => {
   // Links [text](url)
   html = html.replace(
     /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 underline">$1</a>'
+    `<a href="$2" target="_blank" rel="noopener noreferrer" class="${linkColor} underline">$1</a>`
   );
 
   // Inline code `code`
   html = html.replace(
     /`([^`]+)`/g,
-    '<code class="bg-slate-100 text-slate-800 px-1 py-0.5 rounded text-xs font-mono">$1</code>'
+    `<code class="${codeBg} ${codeText} px-1 py-0.5 rounded text-xs font-mono">$1</code>`
   );
 
   // Line breaks
@@ -176,11 +189,17 @@ const parseMarkdown = (text: string): string => {
 };
 
 // Markdown display component
-const MarkdownContent: React.FC<{ content: string }> = ({ content }) => {
+const MarkdownContent: React.FC<{ content: string; isDarkTheme?: boolean }> = ({
+  content,
+  isDarkTheme = false,
+}) => {
   return (
     <div
-      className="markdown-content text-sm text-slate-700 leading-relaxed"
-      dangerouslySetInnerHTML={{ __html: parseMarkdown(content) }}
+      className={cn(
+        "markdown-content text-sm leading-relaxed",
+        isDarkTheme ? "text-gray-200" : "text-slate-700"
+      )}
+      dangerouslySetInnerHTML={{ __html: parseMarkdown(content, isDarkTheme) }}
     />
   );
 };
@@ -474,7 +493,7 @@ const TerminalLog = ({
       <div
         className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
           isDarkTheme
-            ? "border-white/10 text-neutral-500"
+            ? "border-emerald-500/30 text-white/70"
             : "border-gray-200 text-gray-500"
         }`}
       >
@@ -495,16 +514,16 @@ const TerminalLog = ({
                   : "text-red-600"
                 : log.type === "api"
                 ? isDarkTheme
-                  ? "text-blue-400"
-                  : "text-blue-600"
+                  ? "text-emerald-400"
+                  : "text-emerald-600"
                 : isDarkTheme
-                ? "text-neutral-300"
+                ? "text-white"
                 : "text-gray-700"
             }`}
           >
             <span
               className={`w-14 shrink-0 ${
-                isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                isDarkTheme ? "text-white/60" : "text-gray-500"
               }`}
             >
               [{log.timestamp.split(" ")[0]}]
@@ -550,7 +569,7 @@ const SerpPreview = ({
         onClick={() => setIsOpen(!isOpen)}
         className={`w-full flex items-center justify-between p-2 text-xs font-medium transition-colors ${
           isDarkTheme
-            ? "bg-white/5 hover:bg-white/10 text-neutral-300"
+            ? "bg-black hover:bg-emerald-500/20 text-white border border-emerald-500/20"
             : "bg-white hover:bg-gray-100 text-gray-700"
         }`}
       >
@@ -569,7 +588,7 @@ const SerpPreview = ({
         <div
           className={`p-2 space-y-3 border-t ${
             isDarkTheme
-              ? "bg-black/20 border-white/10"
+              ? "bg-black border-emerald-500/20"
               : "bg-white border-gray-200"
           }`}
         >
@@ -623,7 +642,7 @@ const SerpPreview = ({
                     <div key={idx} className="text-[10px]">
                       <div
                         className={`truncate hover:underline cursor-pointer ${
-                          isDarkTheme ? "text-blue-400" : "text-blue-600"
+                          isDarkTheme ? "text-emerald-400" : "text-emerald-600"
                         }`}
                         title={snippet.title}
                       >
@@ -638,7 +657,7 @@ const SerpPreview = ({
                       </div>
                       <div
                         className={`line-clamp-2 ${
-                          isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                          isDarkTheme ? "text-white/90" : "text-gray-600"
                         }`}
                       >
                         {snippet.snippet}
@@ -650,7 +669,7 @@ const SerpPreview = ({
                 <div
                   className={`text-[10px] italic pl-2 border-l-2 ${
                     isDarkTheme
-                      ? "text-neutral-500 border-white/10"
+                      ? "text-white/70 border-emerald-500/30"
                       : "text-gray-500 border-gray-200"
                   }`}
                 >
@@ -667,8 +686,8 @@ const SerpPreview = ({
                 rel="noopener noreferrer"
                 className={`mt-2 flex w-full items-center justify-center gap-1 text-[10px] py-1 rounded border transition-colors font-medium ${
                   isDarkTheme
-                    ? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border-blue-500/30"
-                    : "bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200"
+                    ? "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border-emerald-500/30"
+                    : "bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-200"
                 }`}
               >
                 <ExternalLink className="w-3 h-3" />
@@ -728,12 +747,12 @@ const AgentStream = ({
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   thought.type === "generation"
                     ? isDarkTheme
-                      ? "bg-blue-500/20 text-blue-400"
-                      : "bg-blue-100 text-blue-700"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
                     : thought.type === "analysis"
                     ? isDarkTheme
-                      ? "bg-purple-500/20 text-purple-400"
-                      : "bg-purple-100 text-purple-700"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
                     : isDarkTheme
                     ? "bg-emerald-500/20 text-emerald-400"
                     : "bg-emerald-100 text-emerald-700"
@@ -743,7 +762,7 @@ const AgentStream = ({
               </span>
               <span
                 className={`text-xs uppercase font-semibold ${
-                  isDarkTheme ? "text-neutral-500" : "text-gray-500"
+                  isDarkTheme ? "text-white/70" : "text-gray-500"
                 }`}
               >
                 {thought.type}
@@ -751,7 +770,7 @@ const AgentStream = ({
             </div>
             <p
               className={`text-sm mb-2 font-medium ${
-                isDarkTheme ? "text-neutral-300" : "text-gray-700"
+                isDarkTheme ? "text-white" : "text-gray-700"
               }`}
             >
               {thought.content}
@@ -764,7 +783,7 @@ const AgentStream = ({
                     key={idx}
                     className={`px-2 py-1 border rounded text-xs ${
                       isDarkTheme
-                        ? "bg-white/5 border-white/10 text-neutral-400"
+                        ? "bg-black border-emerald-500/20 text-white/90"
                         : "bg-gray-50 border-gray-200 text-gray-600"
                     }`}
                   >
@@ -816,6 +835,9 @@ const AgentStream = ({
                 isDarkTheme={isDarkTheme}
               />
             )}
+
+            {/* Table Display */}
+            {thought.table && <div className="mt-2">{thought.table}</div>}
           </div>
         ))}
       </div>
@@ -851,7 +873,7 @@ const BatchAnalysisStream = ({
       <div
         className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
           isDarkTheme
-            ? "border-white/10 text-neutral-400"
+            ? "border-emerald-500/30 text-white/90"
             : "border-gray-200 text-gray-500"
         }`}
       >
@@ -869,20 +891,20 @@ const BatchAnalysisStream = ({
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   thought.type === "translation"
                     ? isDarkTheme
-                      ? "bg-blue-500/20 text-blue-400"
-                      : "bg-blue-100 text-blue-700"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
                     : thought.type === "seranking"
                     ? isDarkTheme
                       ? "bg-orange-500/20 text-orange-400"
                       : "bg-orange-100 text-orange-700"
                     : thought.type === "serp-search"
                     ? isDarkTheme
-                      ? "bg-purple-500/20 text-purple-400"
-                      : "bg-purple-100 text-purple-700"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
                     : thought.type === "intent-analysis"
                     ? isDarkTheme
-                      ? "bg-indigo-500/20 text-indigo-400"
-                      : "bg-indigo-100 text-indigo-700"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
                     : isDarkTheme
                     ? "bg-emerald-500/20 text-emerald-400"
                     : "bg-emerald-100 text-emerald-700"
@@ -894,7 +916,7 @@ const BatchAnalysisStream = ({
               </span>
               <span
                 className={`text-xs font-medium truncate ${
-                  isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                  isDarkTheme ? "text-white/90" : "text-gray-600"
                 }`}
               >
                 {thought.keyword}
@@ -902,7 +924,7 @@ const BatchAnalysisStream = ({
             </div>
             <p
               className={`text-sm mb-2 ${
-                isDarkTheme ? "text-neutral-300" : "text-gray-700"
+                isDarkTheme ? "text-white" : "text-gray-700"
               }`}
             >
               {thought.content}
@@ -931,20 +953,22 @@ const BatchAnalysisStream = ({
                       <div
                         className={`p-2 rounded border ${
                           isDarkTheme
-                            ? "bg-white/5 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
                         <div
                           className={`text-[9px] font-bold mb-1 ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            isDarkTheme ? "text-white/70" : "text-gray-500"
                           }`}
                         >
                           VOLUME
                         </div>
                         <div
                           className={`text-sm font-bold ${
-                            isDarkTheme ? "text-blue-400" : "text-blue-600"
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
                           }`}
                         >
                           {thought.serankingData.volume?.toLocaleString() ||
@@ -954,7 +978,7 @@ const BatchAnalysisStream = ({
                       <div
                         className={`p-2 rounded border ${
                           isDarkTheme
-                            ? "bg-white/5 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
@@ -986,7 +1010,7 @@ const BatchAnalysisStream = ({
                       <div
                         className={`p-2 rounded border ${
                           isDarkTheme
-                            ? "bg-white/5 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
@@ -1010,7 +1034,7 @@ const BatchAnalysisStream = ({
                       <div
                         className={`p-2 rounded border ${
                           isDarkTheme
-                            ? "bg-white/5 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
@@ -1023,7 +1047,9 @@ const BatchAnalysisStream = ({
                         </div>
                         <div
                           className={`text-sm font-bold ${
-                            isDarkTheme ? "text-purple-400" : "text-purple-600"
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
                           }`}
                         >
                           {thought.serankingData.competition
@@ -1065,20 +1091,20 @@ const BatchAnalysisStream = ({
                 <div
                   className={`p-2 rounded border ${
                     isDarkTheme
-                      ? "bg-purple-500/10 border-purple-500/20"
-                      : "bg-purple-50 border-purple-200"
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-emerald-50 border-emerald-200"
                   }`}
                 >
                   <div
                     className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-purple-400" : "text-purple-700"
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
                     }`}
                   >
                     USER INTENT
                   </div>
                   <p
                     className={`text-xs ${
-                      isDarkTheme ? "text-neutral-300" : "text-gray-700"
+                      isDarkTheme ? "text-white" : "text-gray-700"
                     }`}
                   >
                     {thought.intentData.searchIntent}
@@ -1087,20 +1113,20 @@ const BatchAnalysisStream = ({
                 <div
                   className={`p-2 rounded border ${
                     isDarkTheme
-                      ? "bg-blue-500/10 border-blue-500/20"
-                      : "bg-blue-50 border-blue-200"
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-emerald-50 border-emerald-200"
                   }`}
                 >
                   <div
                     className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-blue-400" : "text-blue-700"
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
                     }`}
                   >
                     INTENT vs SERP
                   </div>
                   <p
                     className={`text-xs ${
-                      isDarkTheme ? "text-neutral-300" : "text-gray-700"
+                      isDarkTheme ? "text-white" : "text-gray-700"
                     }`}
                   >
                     {thought.intentData.intentAnalysis}
@@ -1116,7 +1142,7 @@ const BatchAnalysisStream = ({
                 <div
                   className={`mt-2 border rounded-md overflow-hidden ${
                     isDarkTheme
-                      ? "border-white/10 bg-black/40"
+                      ? "border-emerald-500/30 bg-black"
                       : "border-gray-200 bg-gray-50"
                   }`}
                 >
@@ -1126,13 +1152,15 @@ const BatchAnalysisStream = ({
                         key={idx}
                         className={`p-2 rounded border text-xs ${
                           isDarkTheme
-                            ? "bg-white/5 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
                         <div
                           className={`font-medium truncate ${
-                            isDarkTheme ? "text-blue-400" : "text-blue-600"
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
                           }`}
                         >
                           {snippet.title}
@@ -1140,7 +1168,7 @@ const BatchAnalysisStream = ({
                         <div
                           className={`text-[10px] truncate ${
                             isDarkTheme
-                              ? "text-emerald-400"
+                              ? "text-emerald-500/70"
                               : "text-emerald-600"
                           }`}
                         >
@@ -1148,7 +1176,7 @@ const BatchAnalysisStream = ({
                         </div>
                         <div
                           className={`mt-1 line-clamp-2 ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                            isDarkTheme ? "text-white/90" : "text-gray-600"
                           }`}
                         >
                           {snippet.snippet}
@@ -1164,7 +1192,7 @@ const BatchAnalysisStream = ({
               <div
                 className={`mt-2 p-3 rounded border ${
                   isDarkTheme
-                    ? "bg-black/40 border-white/10"
+                    ? "bg-black border-emerald-500/30"
                     : "bg-gray-50 border-gray-200"
                 }`}
               >
@@ -1268,16 +1296,16 @@ const DeepDiveAnalysisStream = ({
                 className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                   thought.type === "content-generation"
                     ? isDarkTheme
-                      ? "bg-blue-500/20 text-blue-400"
-                      : "bg-blue-100 text-blue-700"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
                     : thought.type === "keyword-extraction"
                     ? isDarkTheme
-                      ? "bg-purple-500/20 text-purple-400"
-                      : "bg-purple-100 text-purple-700"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
                     : thought.type === "serp-verification"
                     ? isDarkTheme
-                      ? "bg-indigo-500/20 text-indigo-400"
-                      : "bg-indigo-100 text-indigo-700"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
                     : isDarkTheme
                     ? "bg-emerald-500/20 text-emerald-400"
                     : "bg-emerald-100 text-emerald-700"
@@ -1303,8 +1331,8 @@ const DeepDiveAnalysisStream = ({
                       key={idx}
                       className={`px-2 py-1 rounded-md text-xs font-medium border ${
                         isDarkTheme
-                          ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
-                          : "bg-purple-100 text-purple-700 border-purple-300"
+                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
                       }`}
                     >
                       {kw}
@@ -1316,8 +1344,8 @@ const DeepDiveAnalysisStream = ({
             {/* SE Ranking Data Display */}
             {thought.type === "serp-verification" &&
               thought.data?.serankingData && (
-                <div className="mt-2 mb-2 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 p-3 rounded-md border border-blue-500/30">
-                  <div className="text-[10px] text-blue-400 font-bold mb-2 flex items-center gap-1">
+                <div className="mt-2 mb-2 bg-gradient-to-r from-emerald-500/10 to-emerald-600/10 p-3 rounded-md border border-emerald-500/30">
+                  <div className="text-[10px] text-emerald-400 font-bold mb-2 flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" />
                     SE RANKING DATA
                   </div>
@@ -1326,7 +1354,7 @@ const DeepDiveAnalysisStream = ({
                       <div
                         className={`px-2 py-1 rounded border ${
                           isDarkTheme
-                            ? "bg-black/40 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
@@ -1339,7 +1367,9 @@ const DeepDiveAnalysisStream = ({
                         </div>
                         <div
                           className={`font-bold ${
-                            isDarkTheme ? "text-blue-400" : "text-blue-600"
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
                           }`}
                         >
                           {thought.data.serankingData.volume.toLocaleString()}
@@ -1350,7 +1380,7 @@ const DeepDiveAnalysisStream = ({
                       <div
                         className={`px-2 py-1 rounded border ${
                           isDarkTheme
-                            ? "bg-black/40 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
@@ -1384,7 +1414,7 @@ const DeepDiveAnalysisStream = ({
                       <div
                         className={`px-2 py-1 rounded border ${
                           isDarkTheme
-                            ? "bg-black/40 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
@@ -1397,7 +1427,9 @@ const DeepDiveAnalysisStream = ({
                         </div>
                         <div
                           className={`font-bold ${
-                            isDarkTheme ? "text-blue-400" : "text-blue-600"
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
                           }`}
                         >
                           ${thought.data.serankingData.cpc.toFixed(2)}
@@ -1408,7 +1440,7 @@ const DeepDiveAnalysisStream = ({
                       <div
                         className={`px-2 py-1 rounded border ${
                           isDarkTheme
-                            ? "bg-black/40 border-white/10"
+                            ? "bg-black border-emerald-500/20"
                             : "bg-white border-gray-200"
                         }`}
                       >
@@ -1421,7 +1453,9 @@ const DeepDiveAnalysisStream = ({
                         </div>
                         <div
                           className={`font-bold ${
-                            isDarkTheme ? "text-blue-400" : "text-blue-600"
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
                           }`}
                         >
                           {thought.data.serankingData.competition.toFixed(2)}
@@ -1440,7 +1474,7 @@ const DeepDiveAnalysisStream = ({
                   <div
                     className={`border rounded-md overflow-hidden ${
                       isDarkTheme
-                        ? "border-white/10 bg-black/20"
+                        ? "border-emerald-500/30 bg-black"
                         : "border-gray-200 bg-gray-50"
                     }`}
                   >
@@ -1452,13 +1486,15 @@ const DeepDiveAnalysisStream = ({
                             key={idx}
                             className={`p-2 rounded border text-xs ${
                               isDarkTheme
-                                ? "bg-white/5 border-white/10"
+                                ? "bg-black border-emerald-500/20"
                                 : "bg-white border-gray-200"
                             }`}
                           >
                             <div
                               className={`font-medium truncate ${
-                                isDarkTheme ? "text-blue-400" : "text-blue-600"
+                                isDarkTheme
+                                  ? "text-emerald-400"
+                                  : "text-emerald-600"
                               }`}
                             >
                               {snippet.title}
@@ -1519,7 +1555,7 @@ const DeepDiveAnalysisStream = ({
                 <div
                   className={`mt-2 p-3 rounded border ${
                     isDarkTheme
-                      ? "bg-black/20 border-white/10"
+                      ? "bg-black border-emerald-500/20"
                       : "bg-gray-50 border-gray-200"
                   }`}
                 >
@@ -1962,7 +1998,7 @@ const StrategyModal = ({
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
-          <div className="flex items-center gap-2 text-blue-600 font-bold">
+          <div className="flex items-center gap-2 text-emerald-600 font-bold">
             <FileText className="w-5 h-5" />
             <span>{title}</span>
           </div>
@@ -1976,9 +2012,9 @@ const StrategyModal = ({
 
         {/* Content */}
         <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-          <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 flex justify-between items-start">
+          <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 flex justify-between items-start">
             <div>
-              <div className="text-xs text-blue-600 uppercase font-bold mb-1">
+              <div className="text-xs text-emerald-600 uppercase font-bold mb-1">
                 Target Keyword
               </div>
               <div className="text-xl font-bold text-slate-900">
@@ -1986,10 +2022,10 @@ const StrategyModal = ({
               </div>
             </div>
             <div className="text-right">
-              <div className="text-xs text-blue-600 uppercase font-bold mb-1">
+              <div className="text-xs text-emerald-600 uppercase font-bold mb-1">
                 URL Slug
               </div>
-              <div className="font-mono text-sm text-blue-600 bg-white px-2 py-1 rounded border border-blue-200">
+              <div className="font-mono text-sm text-emerald-600 bg-white px-2 py-1 rounded border border-emerald-200">
                 {report.urlSlug}
               </div>
             </div>
@@ -1999,7 +2035,7 @@ const StrategyModal = ({
             {/* Left Column: Original */}
             <div className="space-y-4">
               <h4 className="font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-500"></span>{" "}
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>{" "}
                 Content (Target Lang)
               </h4>
 
@@ -2292,14 +2328,14 @@ const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div
         className={`w-full h-full max-w-7xl max-h-[90vh] m-4 rounded-lg overflow-hidden ${
-          isDarkTheme ? "bg-neutral-900" : "bg-white"
+          isDarkTheme ? "bg-black" : "bg-white"
         }`}
       >
         {/* Header */}
         <div
           className={`flex items-center justify-between px-6 py-4 border-b ${
             isDarkTheme
-              ? "border-neutral-700 bg-neutral-800"
+              ? "border-emerald-500/30 bg-black"
               : "border-gray-200 bg-gray-50"
           }`}
         >
@@ -2322,7 +2358,7 @@ const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
               onClick={onClose}
               className={`p-2 rounded-lg transition-colors ${
                 isDarkTheme
-                  ? "hover:bg-neutral-700 text-neutral-400"
+                  ? "hover:bg-emerald-500/20 text-white"
                   : "hover:bg-gray-200 text-gray-600"
               }`}
             >
@@ -2335,7 +2371,7 @@ const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
         <div
           className={`flex border-b ${
             isDarkTheme
-              ? "border-neutral-700 bg-neutral-800"
+              ? "border-emerald-500/30 bg-black"
               : "border-gray-200 bg-gray-50"
           }`}
         >
@@ -2345,7 +2381,7 @@ const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
               activeTab === "preview"
                 ? "border-b-2 border-emerald-500 text-emerald-500"
                 : isDarkTheme
-                ? "text-neutral-400 hover:text-neutral-200"
+                ? "text-white/70 hover:text-white"
                 : "text-gray-600 hover:text-gray-900"
             }`}
           >
@@ -2357,7 +2393,7 @@ const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
               activeTab === "code"
                 ? "border-b-2 border-emerald-500 text-emerald-500"
                 : isDarkTheme
-                ? "text-neutral-400 hover:text-neutral-200"
+                ? "text-white/70 hover:text-white"
                 : "text-gray-600 hover:text-gray-900"
             }`}
           >
@@ -2550,14 +2586,14 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
   return (
     <div
       className={`flex-1 flex flex-col h-full ${
-        isDarkTheme ? "bg-neutral-900" : "bg-gray-50"
+        isDarkTheme ? "bg-black" : "bg-gray-50"
       }`}
     >
       {/* Header */}
       <div
         className={`flex items-center justify-between px-6 py-4 border-b ${
           isDarkTheme
-            ? "border-neutral-700 bg-neutral-800"
+            ? "border-emerald-500/30 bg-black"
             : "border-gray-200 bg-white"
         }`}
       >
@@ -2571,7 +2607,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
           </h1>
           <p
             className={`text-sm mt-1 ${
-              isDarkTheme ? "text-neutral-400" : "text-gray-600"
+              isDarkTheme ? "text-white/70" : "text-gray-600"
             }`}
           >
             {strategyReport.targetKeyword}
@@ -2590,7 +2626,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
             onClick={onBack}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
               isDarkTheme
-                ? "bg-neutral-700 text-white hover:bg-neutral-600"
+                ? "bg-emerald-500/20 text-white hover:bg-emerald-500/30"
                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
             }`}
           >
@@ -2606,7 +2642,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
         <div
           className={`w-2/5 flex flex-col border-r ${
             isDarkTheme
-              ? "border-neutral-700 bg-neutral-900"
+              ? "border-emerald-500/30 bg-black"
               : "border-gray-200 bg-white"
           }`}
         >
@@ -2627,10 +2663,10 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
                         : "bg-emerald-500 text-white"
                       : msg.role === "system"
                       ? isDarkTheme
-                        ? "bg-neutral-800 text-neutral-300 border border-neutral-700"
+                        ? "bg-black text-white border border-emerald-500/30"
                         : "bg-gray-100 text-gray-700 border border-gray-200"
                       : isDarkTheme
-                      ? "bg-neutral-800 text-white"
+                      ? "bg-black text-white border border-emerald-500/30"
                       : "bg-gray-100 text-gray-900"
                   }`}
                 >
@@ -2650,7 +2686,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
                 <div
                   className={`rounded-lg px-4 py-3 ${
                     isDarkTheme
-                      ? "bg-neutral-800 text-white"
+                      ? "bg-black text-white border border-emerald-500/30"
                       : "bg-gray-100 text-gray-900"
                   }`}
                 >
@@ -2668,7 +2704,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
           <div
             className={`p-4 border-t ${
               isDarkTheme
-                ? "border-neutral-700 bg-neutral-800"
+                ? "border-emerald-500/30 bg-black"
                 : "border-gray-200 bg-gray-50"
             }`}
           >
@@ -2682,7 +2718,7 @@ const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
                 rows={3}
                 className={`flex-1 px-3 py-2 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
                   isDarkTheme
-                    ? "bg-neutral-700 border-neutral-600 text-white placeholder-neutral-400"
+                    ? "bg-black border-emerald-500/30 text-white placeholder-white/50"
                     : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
                 } disabled:opacity-50`}
               />
@@ -3172,9 +3208,9 @@ const TaskMenuModal: React.FC<TaskMenuModalProps> = ({
               onCreate("batch");
               onClose();
             }}
-            className="w-full flex items-center gap-3 p-4 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 rounded-lg transition-colors"
+            className="w-full flex items-center gap-3 p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-colors"
           >
-            <Languages className="w-5 h-5 text-blue-400" />
+            <Languages className="w-5 h-5 text-emerald-400" />
             <div className="text-left">
               <div className="font-semibold text-white">{t.tabBatch}</div>
               <div className="text-xs text-slate-400">
@@ -3190,9 +3226,9 @@ const TaskMenuModal: React.FC<TaskMenuModalProps> = ({
               onCreate("deep-dive");
               onClose();
             }}
-            className="w-full flex items-center gap-3 p-4 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-lg transition-colors"
+            className="w-full flex items-center gap-3 p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-colors"
           >
-            <FileText className="w-5 h-5 text-purple-400" />
+            <FileText className="w-5 h-5 text-emerald-400" />
             <div className="text-left">
               <div className="font-semibold text-white">{t.tabDeepDive}</div>
               <div className="text-xs text-slate-400">
@@ -3284,6 +3320,7 @@ export default function App() {
     websiteMessages: [],
     isOptimizing: false,
     websiteGenerationProgress: null,
+    showSuccessPrompt: false,
   });
 
   // Batch translate and analyze state
@@ -4038,16 +4075,264 @@ export default function App() {
     taskId?: string,
     speed: number = 30
   ) => {
-    const lines = fullMessage.split('\n');
-    let currentLog = '';
+    const lines = fullMessage.split("\n");
+    let currentLog = "";
 
     for (const line of lines) {
       if (line.trim()) {
-        currentLog += line + '\n';
+        currentLog += line + "\n";
         addLog(currentLog.trim(), "info", taskId);
-        await new Promise(resolve => setTimeout(resolve, speed));
+        await new Promise((resolve) => setTimeout(resolve, speed));
       }
     }
+  };
+
+  // Render agent data as formatted table or cards
+  const renderAgentDataTable = (
+    data: any,
+    dataType: "keywords" | "analysis",
+    isDarkTheme: boolean = true
+  ) => {
+    if (dataType === "keywords") {
+      return (
+        <div className="overflow-x-auto mt-2">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr
+                className={`border-b ${
+                  isDarkTheme
+                    ? "border-emerald-500/30 bg-black"
+                    : "border-emerald-200 bg-emerald-50"
+                }`}
+              >
+                <th
+                  className={`py-2 px-3 text-left font-semibold ${
+                    isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                  }`}
+                >
+                  Keyword
+                </th>
+                <th
+                  className={`py-2 px-3 text-left font-semibold ${
+                    isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                  }`}
+                >
+                  Translation
+                </th>
+                <th
+                  className={`py-2 px-3 text-left font-semibold ${
+                    isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                  }`}
+                >
+                  Intent
+                </th>
+                <th
+                  className={`py-2 px-3 text-left font-semibold ${
+                    isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                  }`}
+                >
+                  Volume
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((item: any, i: number) => (
+                <tr
+                  key={i}
+                  className={`border-b ${
+                    isDarkTheme
+                      ? "border-emerald-500/20 hover:bg-emerald-500/5"
+                      : "border-gray-200 hover:bg-emerald-50"
+                  }`}
+                >
+                  <td
+                    className={`py-2 px-3 ${
+                      isDarkTheme ? "text-white" : "text-gray-800"
+                    }`}
+                  >
+                    {item.keyword}
+                  </td>
+                  <td
+                    className={`py-2 px-3 ${
+                      isDarkTheme ? "text-white/80" : "text-gray-600"
+                    }`}
+                  >
+                    {item.translation}
+                  </td>
+                  <td
+                    className={`py-2 px-3 ${
+                      isDarkTheme ? "text-white/80" : "text-gray-600"
+                    }`}
+                  >
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs ${
+                        isDarkTheme
+                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {item.intent}
+                    </span>
+                  </td>
+                  <td
+                    className={`py-2 px-3 font-mono ${
+                      isDarkTheme ? "text-white" : "text-gray-800"
+                    }`}
+                  >
+                    {item.volume?.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      );
+    }
+
+    if (dataType === "analysis") {
+      return (
+        <div className="space-y-3 mt-2">
+          {/* Analysis Result Cards */}
+          <div className="grid grid-cols-2 gap-2">
+            <div
+              className={`p-3 rounded-lg border ${
+                isDarkTheme
+                  ? "bg-black border-emerald-500/30"
+                  : "bg-gray-50 border-gray-200"
+              }`}
+            >
+              <div
+                className={`text-[10px] font-bold mb-1 ${
+                  isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                }`}
+              >
+                PROBABILITY
+              </div>
+              <div
+                className={`text-lg font-bold ${
+                  data.probability === "High"
+                    ? isDarkTheme
+                      ? "text-emerald-400"
+                      : "text-emerald-600"
+                    : data.probability === "Medium"
+                    ? isDarkTheme
+                      ? "text-yellow-400"
+                      : "text-yellow-600"
+                    : isDarkTheme
+                    ? "text-red-400"
+                    : "text-red-600"
+                }`}
+              >
+                {data.probability || "N/A"}
+              </div>
+            </div>
+            <div
+              className={`p-3 rounded-lg border ${
+                isDarkTheme
+                  ? "bg-black border-emerald-500/30"
+                  : "bg-gray-50 border-gray-200"
+              }`}
+            >
+              <div
+                className={`text-[10px] font-bold mb-1 ${
+                  isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                }`}
+              >
+                DOMAIN TYPE
+              </div>
+              <div
+                className={`text-sm ${
+                  isDarkTheme ? "text-white" : "text-gray-800"
+                }`}
+              >
+                {data.topDomainType || "Unknown"}
+              </div>
+            </div>
+          </div>
+
+          {/* SERP Results */}
+          {data.topSerpSnippets && data.topSerpSnippets.length > 0 && (
+            <div
+              className={`p-3 rounded-lg border ${
+                isDarkTheme
+                  ? "bg-black border-emerald-500/30"
+                  : "bg-white border-gray-200"
+              }`}
+            >
+              <div
+                className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
+                  isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                }`}
+              >
+                🔍 TOP GOOGLE RESULTS ({data.serpResultCount || "N/A"} total)
+              </div>
+              <div className="space-y-2">
+                {data.topSerpSnippets.map((snippet: any, i: number) => (
+                  <div
+                    key={i}
+                    className={`p-2 rounded border ${
+                      isDarkTheme
+                        ? "bg-black border-emerald-500/20"
+                        : "bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <div
+                      className={`text-xs font-medium mb-1 ${
+                        isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                      }`}
+                    >
+                      {snippet.title}
+                    </div>
+                    <div
+                      className={`text-[10px] mb-1 ${
+                        isDarkTheme ? "text-emerald-500/70" : "text-gray-500"
+                      }`}
+                    >
+                      {snippet.url}
+                    </div>
+                    <div
+                      className={`text-xs line-clamp-2 ${
+                        isDarkTheme ? "text-white/90" : "text-gray-600"
+                      }`}
+                    >
+                      {snippet.snippet}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Reasoning */}
+          {data.reasoning && (
+            <div
+              className={`p-3 rounded-lg border ${
+                isDarkTheme
+                  ? "bg-black border-emerald-500/20"
+                  : "bg-white border-gray-200"
+              }`}
+            >
+              <div
+                className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
+                  isDarkTheme ? "text-white/70" : "text-gray-600"
+                }`}
+              >
+                ANALYSIS REASONING
+              </div>
+              <div
+                className={`text-xs leading-relaxed ${
+                  isDarkTheme ? "text-white" : "text-gray-700"
+                }`}
+              >
+                {data.reasoning}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    return null;
   };
 
   const addLog = (
@@ -5231,7 +5516,11 @@ export default function App() {
 
       // Add AI thinking logs
       addLog(
-        `💭 ${state.uiLanguage === 'zh' ? `准备分析 "${state.seedKeyword}" 的关键词机会` : `Preparing to analyze keyword opportunities for "${state.seedKeyword}"`}`,
+        `💭 ${
+          state.uiLanguage === "zh"
+            ? `准备分析 "${state.seedKeyword}" 的关键词机会`
+            : `Preparing to analyze keyword opportunities for "${state.seedKeyword}"`
+        }`,
         "info",
         taskId
       );
@@ -5255,7 +5544,9 @@ export default function App() {
 
       try {
         addLog(
-          `🤖 ${state.uiLanguage === 'zh' ? 'AI 正在思考...' : 'AI is thinking...'}`,
+          `🤖 ${
+            state.uiLanguage === "zh" ? "AI 正在思考..." : "AI is thinking..."
+          }`,
           "info",
           taskId
         );
@@ -5280,7 +5571,9 @@ export default function App() {
         // Display AI's raw response with typewriter effect
         if (rawResponse && rawResponse.trim()) {
           addLog(
-            state.uiLanguage === 'zh' ? '以下内容由 keyword generate agent 生成：' : 'Below is generated by keyword generate agent:',
+            state.uiLanguage === "zh"
+              ? "以下内容由 keyword generate agent 生成："
+              : "Below is generated by keyword generate agent:",
             "info",
             taskId
           );
@@ -5295,13 +5588,13 @@ export default function App() {
           }
 
           // Typewriter effect - show chunks gradually
-          const lines = formattedResponse.split('\n');
+          const lines = formattedResponse.split("\n");
           const chunkSize = 5;
           for (let i = 0; i < lines.length; i += chunkSize) {
-            const chunk = lines.slice(i, i + chunkSize).join('\n');
+            const chunk = lines.slice(i, i + chunkSize).join("\n");
             addLog(chunk, "info", taskId);
             // Small delay for typewriter effect
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise((resolve) => setTimeout(resolve, 50));
           }
         }
 
@@ -5317,14 +5610,28 @@ export default function App() {
         addThought(
           "generation",
           `Generated ${generatedKeywords.length} candidates.`,
-          { keywords: generatedKeywords.map((k) => k.keyword) },
+          {
+            keywords: generatedKeywords.map((k) => k.keyword),
+            table: renderAgentDataTable(
+              generatedKeywords,
+              "keywords",
+              isDarkTheme
+            ),
+          },
           taskId
         );
 
         // Add success log with sample keywords
-        const sampleKeywords = generatedKeywords.slice(0, 3).map(k => k.keyword).join(", ");
+        const sampleKeywords = generatedKeywords
+          .slice(0, 3)
+          .map((k) => k.keyword)
+          .join(", ");
         addLog(
-          `✨ ${state.uiLanguage === 'zh' ? `成功生成 ${generatedKeywords.length} 个候选关键词` : `Generated ${generatedKeywords.length} candidate keywords`}: ${sampleKeywords}...`,
+          `✨ ${
+            state.uiLanguage === "zh"
+              ? `成功生成 ${generatedKeywords.length} 个候选关键词`
+              : `Generated ${generatedKeywords.length} candidate keywords`
+          }: ${sampleKeywords}...`,
           "success",
           taskId
         );
@@ -5335,7 +5642,11 @@ export default function App() {
           taskId
         );
         addLog(
-          `🔍 ${state.uiLanguage === 'zh' ? '正在分析搜索引擎结果页面 (SERP) 估算排名概率...' : 'Analyzing Search Engine Results Page (SERP) to estimate ranking probability...'}`,
+          `🔍 ${
+            state.uiLanguage === "zh"
+              ? "正在分析搜索引擎结果页面 (SERP) 估算排名概率..."
+              : "Analyzing Search Engine Results Page (SERP) to estimate ranking probability..."
+          }`,
           "info",
           taskId
         );
@@ -5439,12 +5750,26 @@ export default function App() {
           (k) => k.probability === ProbabilityLevel.LOW
         ).length;
 
+        // Filter HIGH probability keywords for detailed display
+        const highProbKeywords = analyzedBatch.filter(
+          (k) => k.probability === ProbabilityLevel.HIGH
+        );
+
         addThought(
           "analysis",
           `Analysis Complete.`,
           {
             stats: { high, medium, low },
             analyzedKeywords: analyzedBatch,
+            table: highProbKeywords.length > 0 ? (
+              <div className="space-y-3">
+                {highProbKeywords.map((kw, idx) => (
+                  <div key={idx}>
+                    {renderAgentDataTable(kw, "analysis", isDarkTheme)}
+                  </div>
+                ))}
+              </div>
+            ) : undefined,
           },
           taskId
         );
@@ -5468,6 +5793,7 @@ export default function App() {
                     ...task.miningState,
                     isMining: false,
                     miningSuccess: true,
+                    showSuccessPrompt: true,
                   },
                 };
               }
@@ -5483,6 +5809,7 @@ export default function App() {
                 ...prev,
                 isMining: false,
                 miningSuccess: true,
+                showSuccessPrompt: true,
                 taskManager: {
                   ...prev.taskManager,
                   tasks: updatedTasks,
@@ -5540,7 +5867,12 @@ export default function App() {
     setState((prev) => {
       if (!currentTaskId) {
         saveToArchive(prev);
-        return { ...prev, isMining: false, miningSuccess: true };
+        return {
+          ...prev,
+          isMining: false,
+          miningSuccess: true,
+          showSuccessPrompt: true,
+        };
       }
 
       // Update task object
@@ -5552,6 +5884,7 @@ export default function App() {
               ...task.miningState,
               isMining: false,
               miningSuccess: true,
+              showSuccessPrompt: true,
             },
           };
         }
@@ -5565,6 +5898,7 @@ export default function App() {
         ...prev,
         isMining: false,
         miningSuccess: true,
+        showSuccessPrompt: true,
         taskManager: {
           ...prev.taskManager,
           tasks: updatedTasks,
@@ -7585,7 +7919,7 @@ export default function App() {
                       <div className="space-y-1 text-sm">
                         <p
                           className={
-                            isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                            isDarkTheme ? "text-white" : "text-gray-700"
                           }
                         >
                           <span className="text-emerald-400 font-medium">
@@ -7596,7 +7930,7 @@ export default function App() {
                         {state.miningConfig.additionalSuggestions && (
                           <p
                             className={
-                              isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                              isDarkTheme ? "text-white" : "text-gray-700"
                             }
                           >
                             <span className="text-emerald-400 font-medium">
@@ -8448,7 +8782,7 @@ export default function App() {
                     <div className="border-t border-slate-200 pt-6">
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                          <FolderOpen className="w-4 h-4 text-purple-500" />
+                          <FolderOpen className="w-4 h-4 text-emerald-500" />
                           {t.agentConfigs}
                         </h4>
                         <button
@@ -8458,13 +8792,13 @@ export default function App() {
                               step: "workflow-config",
                             }))
                           }
-                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1 font-medium"
+                          className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1 font-medium"
                         >
                           <Settings className="w-3 h-3" />
                           {state.uiLanguage === "zh" ? "高级配置" : "Advanced"}
                         </button>
                       </div>
-                      <p className="text-xs text-slate-500 mb-4 bg-blue-50 border border-blue-100 rounded p-2">
+                      <p className="text-xs text-slate-500 mb-4 bg-emerald-50 border border-emerald-100 rounded p-2">
                         {state.uiLanguage === "zh"
                           ? "💡 这些配置同时保存在 Workflow 配置页面中，两者共通。"
                           : "💡 These configs are shared with the Workflow Configuration page."}
@@ -8476,7 +8810,7 @@ export default function App() {
                           type="text"
                           id="configNameInput"
                           placeholder={t.enterConfigName}
-                          className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                          className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               const input = e.target as HTMLInputElement;
@@ -8493,7 +8827,7 @@ export default function App() {
                             saveAgentConfig(input?.value || "");
                             if (input) input.value = "";
                           }}
-                          className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm font-medium"
+                          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium"
                         >
                           <Save className="w-4 h-4" />
                           {t.saveConfig}
@@ -8512,7 +8846,7 @@ export default function App() {
                                 key={cfg.id}
                                 className={`p-3 rounded-lg border flex items-center justify-between group transition-colors ${
                                   state.currentConfigId === cfg.id
-                                    ? "bg-purple-50 border-purple-200"
+                                    ? "bg-emerald-50 border-emerald-200"
                                     : "bg-slate-50 border-slate-200 hover:bg-slate-100"
                                 }`}
                               >
@@ -8523,7 +8857,7 @@ export default function App() {
                                       MINING
                                     </span>
                                     {state.currentConfigId === cfg.id && (
-                                      <span className="text-[10px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded font-bold">
+                                      <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded font-bold">
                                         ACTIVE
                                       </span>
                                     )}
@@ -8536,7 +8870,7 @@ export default function App() {
                                   {state.currentConfigId === cfg.id ? (
                                     <button
                                       onClick={() => updateAgentConfig(cfg.id)}
-                                      className="px-2 py-1 text-xs bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition-colors font-medium"
+                                      className="px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 transition-colors font-medium"
                                     >
                                       {t.updateConfig}
                                     </button>
@@ -8736,9 +9070,21 @@ export default function App() {
           {state.step === "mining" && (
             <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
               {/* SUCCESS OVERLAY */}
-              {state.miningSuccess && (
+              {state.miningSuccess && state.showSuccessPrompt && (
                 <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm rounded-xl flex items-start justify-center p-4 pt-8 animate-fade-in overflow-y-auto">
-                  <div className="bg-black/80 backdrop-blur-sm rounded-xl shadow-2xl border border-emerald-500/30 p-8 max-w-md w-full text-center">
+                  <div className="relative bg-black/80 backdrop-blur-sm rounded-xl shadow-2xl border border-emerald-500/30 p-8 max-w-md w-full text-center">
+                    {/* Close Button */}
+                    <button
+                      onClick={() =>
+                        setState((prev) => ({
+                          ...prev,
+                          showSuccessPrompt: false,
+                        }))
+                      }
+                      className="absolute top-3 right-3 text-zinc-400 hover:text-white transition-colors p-1 rounded hover:bg-zinc-700/50"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                     <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
                       <CheckCircle className="w-8 h-8 text-emerald-400" />
                     </div>
@@ -8795,6 +9141,21 @@ export default function App() {
                     <p className="text-sm text-slate-400">{t.analyzing}</p>
                   </div>
                 </div>
+                {state.miningSuccess && !state.showSuccessPrompt && (
+                  <button
+                    onClick={() =>
+                      setState((prev) => ({ ...prev, showSuccessPrompt: true }))
+                    }
+                    className={`flex items-center gap-2 px-4 py-2 border rounded-md transition-colors text-sm font-medium shadow-sm ${
+                      isDarkTheme
+                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30"
+                        : "bg-emerald-100 border-emerald-300 text-emerald-700 hover:bg-emerald-200"
+                    }`}
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    {state.uiLanguage === "zh" ? "完成查看" : "Complete"}
+                  </button>
+                )}
                 {!state.miningSuccess && (
                   <button
                     onClick={handleStop}
@@ -9111,7 +9472,11 @@ export default function App() {
                                 )}
                               </td>
                               <td
-                                className="px-4 py-4 text-slate-300 cursor-pointer"
+                                className={`px-4 py-4 cursor-pointer ${
+                                  isDarkTheme
+                                    ? "text-white/80"
+                                    : "text-gray-700"
+                                }`}
                                 onClick={() =>
                                   setState((prev) => ({
                                     ...prev,
@@ -9122,7 +9487,9 @@ export default function App() {
                                 {item.translation}
                               </td>
                               <td
-                                className="px-4 py-4 font-medium text-white cursor-pointer"
+                                className={`px-4 py-4 font-medium cursor-pointer ${
+                                  isDarkTheme ? "text-white" : "text-gray-900"
+                                }`}
                                 onClick={() =>
                                   setState((prev) => ({
                                     ...prev,
@@ -9168,7 +9535,11 @@ export default function App() {
                                   </a>
 
                                   <button
-                                    className="text-slate-400 hover:text-emerald-400 text-xs flex items-center gap-1"
+                                    className={`text-xs flex items-center gap-1 transition-colors ${
+                                      isDarkTheme
+                                        ? "text-white/70 hover:text-emerald-400"
+                                        : "text-gray-600 hover:text-emerald-600"
+                                    }`}
                                     onClick={() =>
                                       setState((prev) => ({
                                         ...prev,
@@ -9201,307 +9572,753 @@ export default function App() {
                               <tr
                                 className={`animate-fade-in border-b ${
                                   isDarkTheme
-                                    ? "bg-slate-50/80 border-slate-100"
+                                    ? "bg-black border-emerald-500/20"
                                     : "bg-gray-50 border-gray-200"
                                 }`}
                               >
-                                <td colSpan={6} className="px-4 py-4">
-                                  <div className="flex flex-col md:flex-row gap-6 px-4">
-                                    <div className="flex-1 space-y-2">
+                                <td colSpan={6} className="px-4 py-6">
+                                  <div className="flex flex-col md:flex-row gap-6">
+                                    <div className="flex-1 space-y-4">
                                       {/* SE Ranking Data Section */}
                                       {item.serankingData &&
                                         item.serankingData.is_data_found && (
-                                          <div className="mb-3">
-                                            <h4 className="text-xs font-bold uppercase text-blue-600 mb-2 flex items-center gap-1">
-                                              <TrendingUp className="w-3 h-3" />
-                                              SEO词研究工具 (SE Ranking Data)
-                                            </h4>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                              {/* Search Volume */}
-                                              <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                                <div className="text-[10px] text-slate-500 font-bold mb-1">
-                                                  SEARCH VOLUME
-                                                </div>
-                                                <div className="text-lg font-bold text-blue-600">
-                                                  {item.serankingData.volume?.toLocaleString() ||
-                                                    "N/A"}
-                                                </div>
-                                                <div className="text-[9px] text-slate-400">
-                                                  monthly searches
-                                                </div>
-                                              </div>
-
-                                              {/* Keyword Difficulty */}
-                                              <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                                <div className="text-[10px] text-slate-500 font-bold mb-1">
-                                                  KEYWORD DIFFICULTY
-                                                </div>
-                                                <div
-                                                  className={`text-lg font-bold ${
-                                                    (item.serankingData
-                                                      .difficulty || 0) <= 40
-                                                      ? "text-emerald-600"
-                                                      : (item.serankingData
-                                                          .difficulty || 0) <=
-                                                        60
-                                                      ? "text-yellow-600"
-                                                      : "text-red-600"
-                                                  }`}
+                                          <Card
+                                            className={cn(
+                                              isDarkTheme
+                                                ? "bg-black border-emerald-500/20"
+                                                : "bg-white border-emerald-200"
+                                            )}
+                                          >
+                                            <CardHeader className="pb-3">
+                                              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                                <TrendingUp
+                                                  className={cn(
+                                                    "w-4 h-4",
+                                                    isDarkTheme
+                                                      ? "text-emerald-400"
+                                                      : "text-emerald-600"
+                                                  )}
+                                                />
+                                                <span
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "text-white"
+                                                      : "text-slate-900"
+                                                  )}
                                                 >
-                                                  {item.serankingData
-                                                    .difficulty || "N/A"}
-                                                </div>
-                                                <div className="text-[9px] text-slate-400">
-                                                  {(item.serankingData
-                                                    .difficulty || 0) <= 40
-                                                    ? "Low competition"
-                                                    : (item.serankingData
-                                                        .difficulty || 0) <= 60
-                                                    ? "Medium competition"
-                                                    : "High competition"}
-                                                </div>
+                                                  SEO词研究工具 (SE Ranking
+                                                  Data)
+                                                </span>
+                                              </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                {/* Search Volume */}
+                                                <Card
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "bg-black border-emerald-500/20"
+                                                      : "bg-emerald-50 border-emerald-200"
+                                                  )}
+                                                >
+                                                  <CardContent className="p-4">
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs font-medium mb-1.5",
+                                                        isDarkTheme
+                                                          ? "text-white/70"
+                                                          : "text-emerald-700"
+                                                      )}
+                                                    >
+                                                      SEARCH VOLUME
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xl font-bold",
+                                                        isDarkTheme
+                                                          ? "text-emerald-400"
+                                                          : "text-emerald-600"
+                                                      )}
+                                                    >
+                                                      {item.serankingData.volume?.toLocaleString() ||
+                                                        "N/A"}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs mt-1",
+                                                        isDarkTheme
+                                                          ? "text-white/60"
+                                                          : "text-emerald-600/70"
+                                                      )}
+                                                    >
+                                                      monthly searches
+                                                    </div>
+                                                  </CardContent>
+                                                </Card>
+
+                                                {/* Keyword Difficulty */}
+                                                <Card
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "bg-black border-emerald-500/20"
+                                                      : "bg-emerald-50 border-emerald-200"
+                                                  )}
+                                                >
+                                                  <CardContent className="p-4">
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs font-medium mb-1.5",
+                                                        isDarkTheme
+                                                          ? "text-white/70"
+                                                          : "text-emerald-700"
+                                                      )}
+                                                    >
+                                                      KEYWORD DIFFICULTY
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xl font-bold",
+                                                        (item.serankingData
+                                                          .difficulty || 0) <=
+                                                          40
+                                                          ? isDarkTheme
+                                                            ? "text-emerald-400"
+                                                            : "text-emerald-600"
+                                                          : (item.serankingData
+                                                              .difficulty ||
+                                                              0) <= 60
+                                                          ? isDarkTheme
+                                                            ? "text-yellow-400"
+                                                            : "text-yellow-600"
+                                                          : isDarkTheme
+                                                          ? "text-red-400"
+                                                          : "text-red-600"
+                                                      )}
+                                                    >
+                                                      {item.serankingData
+                                                        .difficulty || "N/A"}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs mt-1",
+                                                        isDarkTheme
+                                                          ? "text-white/60"
+                                                          : "text-emerald-600/70"
+                                                      )}
+                                                    >
+                                                      {(item.serankingData
+                                                        .difficulty || 0) <= 40
+                                                        ? "Low competition"
+                                                        : (item.serankingData
+                                                            .difficulty || 0) <=
+                                                          60
+                                                        ? "Medium competition"
+                                                        : "High competition"}
+                                                    </div>
+                                                  </CardContent>
+                                                </Card>
+
+                                                {/* CPC */}
+                                                <Card
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "bg-black border-emerald-500/20"
+                                                      : "bg-emerald-50 border-emerald-200"
+                                                  )}
+                                                >
+                                                  <CardContent className="p-4">
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs font-medium mb-1.5",
+                                                        isDarkTheme
+                                                          ? "text-white/70"
+                                                          : "text-emerald-700"
+                                                      )}
+                                                    >
+                                                      CPC
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xl font-bold",
+                                                        isDarkTheme
+                                                          ? "text-emerald-400"
+                                                          : "text-emerald-600"
+                                                      )}
+                                                    >
+                                                      $
+                                                      {item.serankingData.cpc?.toFixed(
+                                                        2
+                                                      ) || "N/A"}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs mt-1",
+                                                        isDarkTheme
+                                                          ? "text-white/60"
+                                                          : "text-emerald-600/70"
+                                                      )}
+                                                    >
+                                                      cost per click
+                                                    </div>
+                                                  </CardContent>
+                                                </Card>
+
+                                                {/* Competition */}
+                                                <Card
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "bg-black border-emerald-500/20"
+                                                      : "bg-emerald-50 border-emerald-200"
+                                                  )}
+                                                >
+                                                  <CardContent className="p-4">
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs font-medium mb-1.5",
+                                                        isDarkTheme
+                                                          ? "text-white/70"
+                                                          : "text-emerald-700"
+                                                      )}
+                                                    >
+                                                      COMPETITION
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xl font-bold",
+                                                        isDarkTheme
+                                                          ? "text-emerald-400"
+                                                          : "text-emerald-600"
+                                                      )}
+                                                    >
+                                                      {item.serankingData
+                                                        .competition
+                                                        ? typeof item
+                                                            .serankingData
+                                                            .competition ===
+                                                          "number"
+                                                          ? (
+                                                              item.serankingData
+                                                                .competition *
+                                                              100
+                                                            ).toFixed(1) + "%"
+                                                          : item.serankingData
+                                                              .competition
+                                                        : "N/A"}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs mt-1",
+                                                        isDarkTheme
+                                                          ? "text-white/60"
+                                                          : "text-emerald-600/70"
+                                                      )}
+                                                    >
+                                                      advertiser competition
+                                                    </div>
+                                                  </CardContent>
+                                                </Card>
                                               </div>
 
-                                              {/* CPC */}
-                                              <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                                <div className="text-[10px] text-slate-500 font-bold mb-1">
-                                                  CPC
-                                                </div>
-                                                <div className="text-lg font-bold text-emerald-600">
-                                                  $
-                                                  {item.serankingData.cpc?.toFixed(
-                                                    2
-                                                  ) || "N/A"}
-                                                </div>
-                                                <div className="text-[9px] text-slate-400">
-                                                  cost per click
-                                                </div>
-                                              </div>
-
-                                              {/* Competition */}
-                                              <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                                <div className="text-[10px] text-slate-500 font-bold mb-1">
-                                                  COMPETITION
-                                                </div>
-                                                <div className="text-lg font-bold text-purple-600">
-                                                  {item.serankingData
-                                                    .competition
-                                                    ? typeof item.serankingData
-                                                        .competition ===
-                                                      "number"
-                                                      ? (
+                                              {/* History Trend - Full Width Below */}
+                                              {item.serankingData
+                                                .history_trend &&
+                                                Object.keys(
+                                                  item.serankingData
+                                                    .history_trend
+                                                ).length > 0 && (
+                                                  <Card
+                                                    className={cn(
+                                                      isDarkTheme
+                                                        ? "bg-emerald-500/10 border-emerald-500/30"
+                                                        : "bg-emerald-50 border-emerald-200"
+                                                    )}
+                                                  >
+                                                    <CardContent className="p-4">
+                                                      <div
+                                                        className={cn(
+                                                          "text-xs font-semibold mb-3 flex items-center gap-2",
+                                                          isDarkTheme
+                                                            ? "text-emerald-300"
+                                                            : "text-emerald-700"
+                                                        )}
+                                                      >
+                                                        <TrendingUp
+                                                          className={cn(
+                                                            "w-4 h-4",
+                                                            isDarkTheme
+                                                              ? "text-emerald-400"
+                                                              : "text-emerald-600"
+                                                          )}
+                                                        />
+                                                        SEARCH VOLUME TREND
+                                                        (Last 12 Months)
+                                                      </div>
+                                                      <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                                                        {Object.entries(
                                                           item.serankingData
-                                                            .competition * 100
-                                                        ).toFixed(1) + "%"
-                                                      : item.serankingData
-                                                          .competition
-                                                    : "N/A"}
-                                                </div>
-                                                <div className="text-[9px] text-slate-400">
-                                                  advertiser competition
-                                                </div>
-                                              </div>
-                                            </div>
-
-                                            {/* History Trend - Full Width Below */}
-                                            {item.serankingData.history_trend &&
-                                              Object.keys(
-                                                item.serankingData.history_trend
-                                              ).length > 0 && (
-                                                <div className="mt-4 bg-white p-4 rounded border border-slate-200 shadow-sm">
-                                                  <div className="text-[10px] text-slate-500 font-bold mb-3 flex items-center gap-1">
-                                                    <TrendingUp className="w-3 h-3" />
-                                                    SEARCH VOLUME TREND (Last 12
-                                                    Months)
-                                                  </div>
-                                                  <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                                                    {Object.entries(
-                                                      item.serankingData
-                                                        .history_trend
-                                                    )
-                                                      .sort(
-                                                        ([dateA], [dateB]) =>
-                                                          dateA.localeCompare(
-                                                            dateB
+                                                            .history_trend
+                                                        )
+                                                          .sort(
+                                                            (
+                                                              [dateA],
+                                                              [dateB]
+                                                            ) =>
+                                                              dateA.localeCompare(
+                                                                dateB
+                                                              )
                                                           )
-                                                      )
-                                                      .map(([date, volume]) => {
-                                                        const monthYear =
-                                                          new Date(
-                                                            date
-                                                          ).toLocaleDateString(
-                                                            "en-US",
-                                                            {
-                                                              month: "short",
-                                                              year: "2-digit",
+                                                          .map(
+                                                            ([
+                                                              date,
+                                                              volume,
+                                                            ]) => {
+                                                              const monthYear =
+                                                                new Date(
+                                                                  date
+                                                                ).toLocaleDateString(
+                                                                  "en-US",
+                                                                  {
+                                                                    month:
+                                                                      "short",
+                                                                    year: "2-digit",
+                                                                  }
+                                                                );
+                                                              return (
+                                                                <Card
+                                                                  key={date}
+                                                                  className={cn(
+                                                                    "text-center",
+                                                                    isDarkTheme
+                                                                      ? "bg-black border-emerald-500/20"
+                                                                      : "bg-white border-emerald-200"
+                                                                  )}
+                                                                >
+                                                                  <CardContent className="p-2">
+                                                                    <div
+                                                                      className={cn(
+                                                                        "text-xs font-medium mb-1",
+                                                                        isDarkTheme
+                                                                          ? "text-emerald-300/80"
+                                                                          : "text-emerald-600/80"
+                                                                      )}
+                                                                    >
+                                                                      {
+                                                                        monthYear
+                                                                      }
+                                                                    </div>
+                                                                    <div
+                                                                      className={cn(
+                                                                        "text-sm font-bold",
+                                                                        isDarkTheme
+                                                                          ? "text-emerald-400"
+                                                                          : "text-emerald-600"
+                                                                      )}
+                                                                    >
+                                                                      {typeof volume ===
+                                                                      "number"
+                                                                        ? volume.toLocaleString()
+                                                                        : volume}
+                                                                    </div>
+                                                                  </CardContent>
+                                                                </Card>
+                                                              );
                                                             }
-                                                          );
-                                                        return (
-                                                          <div
-                                                            key={date}
-                                                            className="text-center p-2 bg-slate-50 rounded border border-slate-100"
-                                                          >
-                                                            <div className="text-[9px] text-slate-400 font-medium mb-1">
-                                                              {monthYear}
-                                                            </div>
-                                                            <div className="text-sm font-bold text-blue-600">
-                                                              {typeof volume ===
-                                                              "number"
-                                                                ? volume.toLocaleString()
-                                                                : volume}
-                                                            </div>
-                                                          </div>
-                                                        );
-                                                      })}
-                                                  </div>
-                                                </div>
-                                              )}
-                                          </div>
+                                                          )}
+                                                      </div>
+                                                    </CardContent>
+                                                  </Card>
+                                                )}
+                                            </CardContent>
+                                          </Card>
                                         )}
 
                                       {/* Search Intent Section */}
                                       {(item.searchIntent ||
                                         item.intentAnalysis) && (
-                                        <div className="mb-3">
-                                          <h4 className="text-xs font-bold uppercase text-purple-600 mb-2 flex items-center gap-1">
-                                            <BrainCircuit className="w-3 h-3" />
-                                            Search Intent Analysis
-                                          </h4>
-                                          {item.searchIntent && (
-                                            <div className="bg-purple-50 p-3 rounded border border-purple-100 mb-2">
-                                              <div className="text-[10px] text-purple-600 font-bold mb-1">
-                                                USER INTENT
-                                              </div>
-                                              <p className="text-sm text-slate-700">
-                                                {item.searchIntent}
-                                              </p>
-                                            </div>
+                                        <Card
+                                          className={cn(
+                                            isDarkTheme
+                                              ? "bg-black border-emerald-500/30"
+                                              : "bg-white border-emerald-200"
                                           )}
-                                          {item.intentAnalysis && (
-                                            <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                              <div className="text-[10px] text-blue-600 font-bold mb-1">
-                                                INTENT vs SERP MATCH
-                                              </div>
-                                              <p className="text-sm text-slate-700">
-                                                {item.intentAnalysis}
-                                              </p>
-                                            </div>
-                                          )}
-                                        </div>
+                                        >
+                                          <CardHeader className="pb-3">
+                                            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                              <BrainCircuit
+                                                className={cn(
+                                                  "w-4 h-4",
+                                                  isDarkTheme
+                                                    ? "text-emerald-400"
+                                                    : "text-emerald-600"
+                                                )}
+                                              />
+                                              <span
+                                                className={cn(
+                                                  isDarkTheme
+                                                    ? "text-white"
+                                                    : "text-slate-900"
+                                                )}
+                                              >
+                                                Search Intent Analysis
+                                              </span>
+                                            </CardTitle>
+                                          </CardHeader>
+                                          <CardContent className="space-y-3">
+                                            {item.searchIntent && (
+                                              <Card
+                                                className={cn(
+                                                  isDarkTheme
+                                                    ? "bg-black border-emerald-500/30"
+                                                    : "bg-emerald-50 border-emerald-200"
+                                                )}
+                                              >
+                                                <CardContent className="p-4">
+                                                  <div
+                                                    className={cn(
+                                                      "text-xs font-semibold mb-2",
+                                                      isDarkTheme
+                                                        ? "text-emerald-400"
+                                                        : "text-emerald-700"
+                                                    )}
+                                                  >
+                                                    USER INTENT
+                                                  </div>
+                                                  <p
+                                                    className={cn(
+                                                      "text-sm leading-relaxed",
+                                                      isDarkTheme
+                                                        ? "text-white"
+                                                        : "text-slate-700"
+                                                    )}
+                                                  >
+                                                    {item.searchIntent}
+                                                  </p>
+                                                </CardContent>
+                                              </Card>
+                                            )}
+                                            {item.intentAnalysis && (
+                                              <Card
+                                                className={cn(
+                                                  isDarkTheme
+                                                    ? "bg-black border-emerald-500/30"
+                                                    : "bg-emerald-50 border-emerald-200"
+                                                )}
+                                              >
+                                                <CardContent className="p-4">
+                                                  <div
+                                                    className={cn(
+                                                      "text-xs font-semibold mb-2",
+                                                      isDarkTheme
+                                                        ? "text-emerald-400"
+                                                        : "text-emerald-700"
+                                                    )}
+                                                  >
+                                                    INTENT vs SERP MATCH
+                                                  </div>
+                                                  <p
+                                                    className={cn(
+                                                      "text-sm leading-relaxed",
+                                                      isDarkTheme
+                                                        ? "text-white"
+                                                        : "text-slate-700"
+                                                    )}
+                                                  >
+                                                    {item.intentAnalysis}
+                                                  </p>
+                                                </CardContent>
+                                              </Card>
+                                            )}
+                                          </CardContent>
+                                        </Card>
                                       )}
 
-                                      <h4 className="text-xs font-bold uppercase text-slate-500">
-                                        Analysis Reasoning
-                                      </h4>
-                                      <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                        <MarkdownContent
-                                          content={
-                                            item.reasoning ||
-                                            "No reasoning provided"
-                                          }
-                                        />
-                                      </div>
-
-                                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-2">
-                                        {/* SE Ranking Volume (replaces SERP estimate) */}
-                                        {item.serankingData &&
-                                        item.serankingData.is_data_found ? (
-                                          <div>
-                                            <span className="text-xs text-slate-400 block">
-                                              Search Volume (SE Ranking)
-                                            </span>
-                                            <span className="text-sm font-medium text-blue-600">
-                                              {item.serankingData.volume?.toLocaleString() ||
-                                                "N/A"}
-                                            </span>
-                                          </div>
-                                        ) : (
-                                          <div>
-                                            <span className="text-xs text-slate-400 block">
-                                              Reference SERP Count
-                                            </span>
-                                            <span className="text-sm font-medium">
-                                              {item.serpResultCount === -1
-                                                ? "Unknown (Many)"
-                                                : item.serpResultCount ??
-                                                  "Unknown"}
-                                            </span>
-                                          </div>
+                                      {/* Analysis Reasoning */}
+                                      <Card
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "bg-black border-emerald-500/20"
+                                            : "bg-white border-emerald-200"
                                         )}
+                                      >
+                                        <CardHeader className="pb-3">
+                                          <CardTitle
+                                            className={cn(
+                                              "text-sm font-semibold",
+                                              isDarkTheme
+                                                ? "text-white"
+                                                : "text-slate-900"
+                                            )}
+                                          >
+                                            Analysis Reasoning
+                                          </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                          <div
+                                            className={cn(
+                                              "prose prose-sm max-w-none",
+                                              isDarkTheme
+                                                ? "prose-invert prose-emerald prose-headings:text-white prose-p:text-white prose-strong:text-white prose-li:text-white"
+                                                : "prose-slate"
+                                            )}
+                                          >
+                                            <MarkdownContent
+                                              content={
+                                                item.reasoning ||
+                                                "No reasoning provided"
+                                              }
+                                              isDarkTheme={isDarkTheme}
+                                            />
+                                          </div>
+                                        </CardContent>
+                                      </Card>
 
-                                        {/* Keyword Difficulty (if SE Ranking data available) */}
-                                        {item.serankingData &&
-                                          item.serankingData.is_data_found && (
+                                      {/* Summary Stats */}
+                                      <Card
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "bg-black border-emerald-500/20"
+                                            : "bg-white border-emerald-200"
+                                        )}
+                                      >
+                                        <CardContent className="p-4">
+                                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                            {/* SE Ranking Volume (replaces SERP estimate) */}
+                                            {item.serankingData &&
+                                            item.serankingData.is_data_found ? (
+                                              <div>
+                                                <span
+                                                  className={cn(
+                                                    "text-xs block mb-1",
+                                                    isDarkTheme
+                                                      ? "text-emerald-300/80"
+                                                      : "text-emerald-700"
+                                                  )}
+                                                >
+                                                  Search Volume (SE Ranking)
+                                                </span>
+                                                <span
+                                                  className={cn(
+                                                    "text-sm font-semibold",
+                                                    isDarkTheme
+                                                      ? "text-emerald-400"
+                                                      : "text-emerald-600"
+                                                  )}
+                                                >
+                                                  {item.serankingData.volume?.toLocaleString() ||
+                                                    "N/A"}
+                                                </span>
+                                              </div>
+                                            ) : (
+                                              <div>
+                                                <span
+                                                  className={cn(
+                                                    "text-xs block mb-1",
+                                                    isDarkTheme
+                                                      ? "text-emerald-300/80"
+                                                      : "text-emerald-700"
+                                                  )}
+                                                >
+                                                  Reference SERP Count
+                                                </span>
+                                                <span
+                                                  className={cn(
+                                                    "text-sm font-semibold",
+                                                    isDarkTheme
+                                                      ? "text-emerald-100"
+                                                      : "text-slate-900"
+                                                  )}
+                                                >
+                                                  {item.serpResultCount === -1
+                                                    ? "Unknown (Many)"
+                                                    : item.serpResultCount ??
+                                                      "Unknown"}
+                                                </span>
+                                              </div>
+                                            )}
+
+                                            {/* Keyword Difficulty (if SE Ranking data available) */}
+                                            {item.serankingData &&
+                                              item.serankingData
+                                                .is_data_found && (
+                                                <div>
+                                                  <span
+                                                    className={cn(
+                                                      "text-xs block mb-1",
+                                                      isDarkTheme
+                                                        ? "text-emerald-300/80"
+                                                        : "text-emerald-700"
+                                                    )}
+                                                  >
+                                                    Keyword Difficulty
+                                                  </span>
+                                                  <span
+                                                    className={cn(
+                                                      "text-sm font-semibold",
+                                                      (item.serankingData
+                                                        .difficulty || 0) <= 40
+                                                        ? isDarkTheme
+                                                          ? "text-emerald-400"
+                                                          : "text-emerald-600"
+                                                        : (item.serankingData
+                                                            .difficulty || 0) <=
+                                                          60
+                                                        ? isDarkTheme
+                                                          ? "text-yellow-400"
+                                                          : "text-yellow-600"
+                                                        : isDarkTheme
+                                                        ? "text-red-400"
+                                                        : "text-red-600"
+                                                    )}
+                                                  >
+                                                    {item.serankingData
+                                                      .difficulty || "N/A"}
+                                                  </span>
+                                                </div>
+                                              )}
+
                                             <div>
-                                              <span className="text-xs text-slate-400 block">
-                                                Keyword Difficulty
-                                              </span>
                                               <span
-                                                className={`text-sm font-bold ${
-                                                  (item.serankingData
-                                                    .difficulty || 0) <= 40
-                                                    ? "text-emerald-600"
-                                                    : (item.serankingData
-                                                        .difficulty || 0) <= 60
-                                                    ? "text-yellow-600"
-                                                    : "text-red-600"
-                                                }`}
+                                                className={cn(
+                                                  "text-xs block mb-1",
+                                                  isDarkTheme
+                                                    ? "text-emerald-300/80"
+                                                    : "text-emerald-700"
+                                                )}
                                               >
-                                                {item.serankingData
-                                                  .difficulty || "N/A"}
+                                                Top Competitor Type
                                               </span>
+                                              <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                  "text-xs",
+                                                  isDarkTheme
+                                                    ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/10"
+                                                    : "border-emerald-300 text-emerald-700 bg-emerald-50"
+                                                )}
+                                              >
+                                                {item.topDomainType ?? "-"}
+                                              </Badge>
                                             </div>
-                                          )}
-
-                                        <div>
-                                          <span className="text-xs text-slate-400 block">
-                                            Top Competitor Type
-                                          </span>
-                                          <span className="text-sm font-medium">
-                                            {item.topDomainType ?? "-"}
-                                          </span>
-                                        </div>
-                                      </div>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
 
                                       {/* SERP EVIDENCE IN DETAILS */}
                                       {item.serpResultCount === 0 ? (
-                                        <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded text-amber-800 text-xs font-medium flex items-center gap-2">
-                                          <Lightbulb className="w-4 h-4" />
-                                          No direct competitors found in search.
-                                        </div>
+                                        <Card
+                                          className={cn(
+                                            isDarkTheme
+                                              ? "bg-emerald-500/10 border-emerald-500/30"
+                                              : "bg-emerald-50 border-emerald-200"
+                                          )}
+                                        >
+                                          <CardContent className="p-4">
+                                            <div
+                                              className={cn(
+                                                "flex items-center gap-2 text-sm font-medium",
+                                                isDarkTheme
+                                                  ? "text-emerald-300"
+                                                  : "text-emerald-700"
+                                              )}
+                                            >
+                                              <Lightbulb
+                                                className={cn(
+                                                  "w-4 h-4",
+                                                  isDarkTheme
+                                                    ? "text-emerald-400"
+                                                    : "text-emerald-600"
+                                                )}
+                                              />
+                                              No direct competitors found in
+                                              search.
+                                            </div>
+                                          </CardContent>
+                                        </Card>
                                       ) : (
                                         item.topSerpSnippets &&
                                         item.topSerpSnippets.length > 0 && (
-                                          <div className="mt-4">
-                                            <div className="flex justify-between items-center mb-2">
-                                              <h4 className="text-xs font-bold uppercase text-slate-500">
-                                                {t.serpEvidence}
-                                              </h4>
-                                              <span className="text-[10px] text-amber-600 italic">
-                                                {t.serpEvidenceDisclaimer}
-                                              </span>
-                                            </div>
-                                            <div className="space-y-2">
-                                              {item.topSerpSnippets
-                                                .slice(0, 3)
-                                                .map((snip, i) => (
-                                                  <div
-                                                    key={i}
-                                                    className="bg-white p-2 rounded border border-slate-100 text-xs"
-                                                  >
-                                                    <div className="text-blue-700 font-medium truncate">
-                                                      {snip.title}
-                                                    </div>
-                                                    <div className="text-emerald-700 text-[10px] truncate">
-                                                      {snip.url}
-                                                    </div>
-                                                    <div className="text-slate-500 mt-1 line-clamp-2">
-                                                      {snip.snippet}
-                                                    </div>
-                                                  </div>
-                                                ))}
-                                            </div>
-                                          </div>
+                                          <Card
+                                            className={cn(
+                                              isDarkTheme
+                                                ? "bg-black/40 border-emerald-500/20"
+                                                : "bg-white border-emerald-200"
+                                            )}
+                                          >
+                                            <CardHeader className="pb-3">
+                                              <div className="flex justify-between items-center">
+                                                <CardTitle
+                                                  className={cn(
+                                                    "text-sm font-semibold",
+                                                    isDarkTheme
+                                                      ? "text-emerald-100"
+                                                      : "text-slate-900"
+                                                  )}
+                                                >
+                                                  {t.serpEvidence}
+                                                </CardTitle>
+                                                <Badge
+                                                  variant="outline"
+                                                  className={cn(
+                                                    "text-[10px]",
+                                                    isDarkTheme
+                                                      ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/10"
+                                                      : "border-emerald-200 text-emerald-700 bg-emerald-50"
+                                                  )}
+                                                >
+                                                  {t.serpEvidenceDisclaimer}
+                                                </Badge>
+                                              </div>
+                                            </CardHeader>
+                                            <CardContent>
+                                              <div className="space-y-3">
+                                                {item.topSerpSnippets
+                                                  .slice(0, 3)
+                                                  .map((snip, i) => (
+                                                    <Card
+                                                      key={i}
+                                                      className={cn(
+                                                        isDarkTheme
+                                                          ? "bg-emerald-500/10 border-emerald-500/30"
+                                                          : "bg-emerald-50 border-emerald-200"
+                                                      )}
+                                                    >
+                                                      <CardContent className="p-3">
+                                                        <div
+                                                          className={cn(
+                                                            "text-sm font-semibold mb-1 truncate",
+                                                            isDarkTheme
+                                                              ? "text-emerald-300"
+                                                              : "text-emerald-700"
+                                                          )}
+                                                        >
+                                                          {snip.title}
+                                                        </div>
+                                                        <div
+                                                          className={cn(
+                                                            "text-xs mb-2 truncate",
+                                                            isDarkTheme
+                                                              ? "text-emerald-400"
+                                                              : "text-emerald-600"
+                                                          )}
+                                                        >
+                                                          {snip.url}
+                                                        </div>
+                                                        <div
+                                                          className={cn(
+                                                            "text-xs line-clamp-2 leading-relaxed",
+                                                            isDarkTheme
+                                                              ? "text-emerald-100/80"
+                                                              : "text-slate-600"
+                                                          )}
+                                                        >
+                                                          {snip.snippet}
+                                                        </div>
+                                                      </CardContent>
+                                                    </Card>
+                                                  ))}
+                                              </div>
+                                            </CardContent>
+                                          </Card>
                                         )
                                       )}
                                     </div>
@@ -9641,7 +10458,7 @@ export default function App() {
                           URL.revokeObjectURL(url);
                         }
                       }}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium"
                     >
                       <Download className="w-4 h-4" />
                       {t.exportHTML || "Export HTML"}
@@ -9650,7 +10467,7 @@ export default function App() {
                       onClick={() =>
                         setState((prev) => ({ ...prev, step: "results" }))
                       }
-                      className="px-4 py-2 text-sm text-slate-500 hover:text-blue-600 font-medium transition-colors border border-slate-200 rounded-md bg-white hover:bg-slate-50"
+                      className="px-4 py-2 text-sm text-slate-500 hover:text-emerald-600 font-medium transition-colors border border-slate-200 rounded-md bg-white hover:bg-slate-50"
                     >
                       {t.backToResults || "Back to Results"}
                     </button>
@@ -10491,7 +11308,11 @@ export default function App() {
                                   </a>
 
                                   <button
-                                    className="text-slate-400 hover:text-emerald-400 text-xs flex items-center gap-1"
+                                    className={`text-xs flex items-center gap-1 transition-colors ${
+                                      isDarkTheme
+                                        ? "text-white/70 hover:text-emerald-400"
+                                        : "text-gray-600 hover:text-emerald-600"
+                                    }`}
                                     onClick={() =>
                                       setState((prev) => ({
                                         ...prev,
@@ -10523,268 +11344,657 @@ export default function App() {
                               <tr
                                 className={`animate-fade-in border-b ${
                                   isDarkTheme
-                                    ? "bg-slate-50/80 border-slate-100"
+                                    ? "bg-black border-emerald-500/20"
                                     : "bg-gray-50 border-gray-200"
                                 }`}
                               >
-                                <td colSpan={7} className="px-4 py-4">
-                                  <div className="flex flex-col md:flex-row gap-6 px-4">
-                                    <div className="flex-1 space-y-2">
+                                <td colSpan={7} className="px-4 py-6">
+                                  <div className="flex flex-col md:flex-row gap-6">
+                                    <div className="flex-1 space-y-4">
                                       {/* Search Intent Section */}
                                       {(item.searchIntent ||
                                         item.intentAnalysis) && (
-                                        <div className="mb-3">
-                                          <h4 className="text-xs font-bold uppercase text-purple-600 mb-2 flex items-center gap-1">
-                                            <BrainCircuit className="w-3 h-3" />
-                                            Search Intent Analysis
-                                          </h4>
-                                          {item.searchIntent && (
-                                            <div className="bg-purple-50 p-3 rounded border border-purple-100 mb-2">
-                                              <div className="text-[10px] text-purple-600 font-bold mb-1">
-                                                USER INTENT
-                                              </div>
-                                              <p className="text-sm text-slate-700">
-                                                {item.searchIntent}
-                                              </p>
-                                            </div>
+                                        <Card
+                                          className={cn(
+                                            isDarkTheme
+                                              ? "bg-black border-emerald-500/30"
+                                              : "bg-white border-slate-200"
                                           )}
-                                          {item.intentAnalysis && (
-                                            <div className="bg-blue-50 p-3 rounded border border-blue-100">
-                                              <div className="text-[10px] text-blue-600 font-bold mb-1">
-                                                INTENT vs SERP MATCH
-                                              </div>
-                                              <p className="text-sm text-slate-700">
-                                                {item.intentAnalysis}
-                                              </p>
-                                            </div>
-                                          )}
-                                        </div>
+                                        >
+                                          <CardHeader className="pb-3">
+                                            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                              <BrainCircuit className="w-4 h-4 text-emerald-500" />
+                                              <span
+                                                className={cn(
+                                                  isDarkTheme
+                                                    ? "text-white"
+                                                    : "text-slate-900"
+                                                )}
+                                              >
+                                                Search Intent Analysis
+                                              </span>
+                                            </CardTitle>
+                                          </CardHeader>
+                                          <CardContent className="space-y-3">
+                                            {item.searchIntent && (
+                                              <Card
+                                                className={cn(
+                                                  isDarkTheme
+                                                    ? "bg-black border-emerald-500/30"
+                                                    : "bg-emerald-50 border-emerald-200"
+                                                )}
+                                              >
+                                                <CardContent className="p-4">
+                                                  <div
+                                                    className={cn(
+                                                      "text-xs font-semibold mb-2",
+                                                      isDarkTheme
+                                                        ? "text-emerald-400"
+                                                        : "text-emerald-700"
+                                                    )}
+                                                  >
+                                                    USER INTENT
+                                                  </div>
+                                                  <p
+                                                    className={cn(
+                                                      "text-sm leading-relaxed",
+                                                      isDarkTheme
+                                                        ? "text-white"
+                                                        : "text-slate-700"
+                                                    )}
+                                                  >
+                                                    {item.searchIntent}
+                                                  </p>
+                                                </CardContent>
+                                              </Card>
+                                            )}
+                                            {item.intentAnalysis && (
+                                              <Card
+                                                className={cn(
+                                                  isDarkTheme
+                                                    ? "bg-black border-emerald-500/30"
+                                                    : "bg-emerald-50 border-emerald-200"
+                                                )}
+                                              >
+                                                <CardContent className="p-4">
+                                                  <div
+                                                    className={cn(
+                                                      "text-xs font-semibold mb-2",
+                                                      isDarkTheme
+                                                        ? "text-emerald-400"
+                                                        : "text-emerald-700"
+                                                    )}
+                                                  >
+                                                    INTENT vs SERP MATCH
+                                                  </div>
+                                                  <p
+                                                    className={cn(
+                                                      "text-sm leading-relaxed",
+                                                      isDarkTheme
+                                                        ? "text-white"
+                                                        : "text-slate-700"
+                                                    )}
+                                                  >
+                                                    {item.intentAnalysis}
+                                                  </p>
+                                                </CardContent>
+                                              </Card>
+                                            )}
+                                          </CardContent>
+                                        </Card>
                                       )}
 
                                       {/* SE Ranking Data Section */}
                                       {item.serankingData &&
                                         item.serankingData.is_data_found && (
-                                          <div className="mb-3">
-                                            <h4 className="text-xs font-bold uppercase text-blue-600 mb-2 flex items-center gap-1">
-                                              <TrendingUp className="w-3 h-3" />
-                                              SEO词研究工具 (SE Ranking Data)
-                                            </h4>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                              {/* Search Volume */}
-                                              <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                                <div className="text-[10px] text-slate-500 font-bold mb-1">
-                                                  SEARCH VOLUME
-                                                </div>
-                                                <div className="text-lg font-bold text-blue-600">
-                                                  {item.serankingData.volume?.toLocaleString() ||
-                                                    "N/A"}
-                                                </div>
-                                                <div className="text-[9px] text-slate-400">
-                                                  monthly searches
-                                                </div>
-                                              </div>
-
-                                              {/* Keyword Difficulty */}
-                                              <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                                <div className="text-[10px] text-slate-500 font-bold mb-1">
-                                                  KEYWORD DIFFICULTY
-                                                </div>
-                                                <div
-                                                  className={`text-lg font-bold ${
-                                                    (item.serankingData
-                                                      .difficulty || 0) <= 40
-                                                      ? "text-emerald-600"
-                                                      : (item.serankingData
-                                                          .difficulty || 0) <=
-                                                        60
-                                                      ? "text-yellow-600"
-                                                      : "text-red-600"
-                                                  }`}
+                                          <Card
+                                            className={cn(
+                                              isDarkTheme
+                                                ? "bg-black border-emerald-500/30"
+                                                : "bg-white border-slate-200"
+                                            )}
+                                          >
+                                            <CardHeader className="pb-3">
+                                              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                                <TrendingUp className="w-4 h-4 text-emerald-500" />
+                                                <span
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "text-white"
+                                                      : "text-slate-900"
+                                                  )}
                                                 >
-                                                  {item.serankingData
-                                                    .difficulty || "N/A"}
-                                                </div>
-                                                <div className="text-[9px] text-slate-400">
-                                                  {(item.serankingData
-                                                    .difficulty || 0) <= 40
-                                                    ? "Low competition"
-                                                    : (item.serankingData
-                                                        .difficulty || 0) <= 60
-                                                    ? "Medium competition"
-                                                    : "High competition"}
-                                                </div>
+                                                  SEO词研究工具 (SE Ranking
+                                                  Data)
+                                                </span>
+                                              </CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                {/* Search Volume */}
+                                                <Card
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "bg-black border-emerald-500/20"
+                                                      : "bg-slate-50 border-slate-200"
+                                                  )}
+                                                >
+                                                  <CardContent className="p-4">
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs font-medium mb-1.5",
+                                                        isDarkTheme
+                                                          ? "text-white/70"
+                                                          : "text-slate-600"
+                                                      )}
+                                                    >
+                                                      SEARCH VOLUME
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xl font-bold",
+                                                        isDarkTheme
+                                                          ? "text-emerald-400"
+                                                          : "text-emerald-600"
+                                                      )}
+                                                    >
+                                                      {item.serankingData.volume?.toLocaleString() ||
+                                                        "N/A"}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs mt-1",
+                                                        isDarkTheme
+                                                          ? "text-white/60"
+                                                          : "text-slate-500"
+                                                      )}
+                                                    >
+                                                      monthly searches
+                                                    </div>
+                                                  </CardContent>
+                                                </Card>
+
+                                                {/* Keyword Difficulty */}
+                                                <Card
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "bg-black border-emerald-500/20"
+                                                      : "bg-emerald-50 border-emerald-200"
+                                                  )}
+                                                >
+                                                  <CardContent className="p-4">
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs font-medium mb-1.5",
+                                                        isDarkTheme
+                                                          ? "text-white/70"
+                                                          : "text-emerald-700"
+                                                      )}
+                                                    >
+                                                      KEYWORD DIFFICULTY
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xl font-bold",
+                                                        (item.serankingData
+                                                          .difficulty || 0) <=
+                                                          40
+                                                          ? isDarkTheme
+                                                            ? "text-emerald-400"
+                                                            : "text-emerald-600"
+                                                          : (item.serankingData
+                                                              .difficulty ||
+                                                              0) <= 60
+                                                          ? isDarkTheme
+                                                            ? "text-yellow-400"
+                                                            : "text-yellow-600"
+                                                          : isDarkTheme
+                                                          ? "text-red-400"
+                                                          : "text-red-600"
+                                                      )}
+                                                    >
+                                                      {item.serankingData
+                                                        .difficulty || "N/A"}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs mt-1",
+                                                        isDarkTheme
+                                                          ? "text-white/60"
+                                                          : "text-emerald-600/70"
+                                                      )}
+                                                    >
+                                                      {(item.serankingData
+                                                        .difficulty || 0) <= 40
+                                                        ? "Low competition"
+                                                        : (item.serankingData
+                                                            .difficulty || 0) <=
+                                                          60
+                                                        ? "Medium competition"
+                                                        : "High competition"}
+                                                    </div>
+                                                  </CardContent>
+                                                </Card>
+
+                                                {/* CPC */}
+                                                <Card
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "bg-black border-emerald-500/20"
+                                                      : "bg-emerald-50 border-emerald-200"
+                                                  )}
+                                                >
+                                                  <CardContent className="p-4">
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs font-medium mb-1.5",
+                                                        isDarkTheme
+                                                          ? "text-white/70"
+                                                          : "text-emerald-700"
+                                                      )}
+                                                    >
+                                                      CPC
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xl font-bold",
+                                                        isDarkTheme
+                                                          ? "text-emerald-400"
+                                                          : "text-emerald-600"
+                                                      )}
+                                                    >
+                                                      $
+                                                      {item.serankingData.cpc?.toFixed(
+                                                        2
+                                                      ) || "N/A"}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs mt-1",
+                                                        isDarkTheme
+                                                          ? "text-white/60"
+                                                          : "text-emerald-600/70"
+                                                      )}
+                                                    >
+                                                      cost per click
+                                                    </div>
+                                                  </CardContent>
+                                                </Card>
+
+                                                {/* Competition */}
+                                                <Card
+                                                  className={cn(
+                                                    isDarkTheme
+                                                      ? "bg-black border-emerald-500/20"
+                                                      : "bg-emerald-50 border-emerald-200"
+                                                  )}
+                                                >
+                                                  <CardContent className="p-4">
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs font-medium mb-1.5",
+                                                        isDarkTheme
+                                                          ? "text-white/70"
+                                                          : "text-emerald-700"
+                                                      )}
+                                                    >
+                                                      COMPETITION
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xl font-bold",
+                                                        isDarkTheme
+                                                          ? "text-emerald-400"
+                                                          : "text-emerald-600"
+                                                      )}
+                                                    >
+                                                      {item.serankingData
+                                                        .competition
+                                                        ? typeof item
+                                                            .serankingData
+                                                            .competition ===
+                                                          "number"
+                                                          ? (
+                                                              item.serankingData
+                                                                .competition *
+                                                              100
+                                                            ).toFixed(1) + "%"
+                                                          : item.serankingData
+                                                              .competition
+                                                        : "N/A"}
+                                                    </div>
+                                                    <div
+                                                      className={cn(
+                                                        "text-xs mt-1",
+                                                        isDarkTheme
+                                                          ? "text-white/60"
+                                                          : "text-emerald-600/70"
+                                                      )}
+                                                    >
+                                                      advertiser competition
+                                                    </div>
+                                                  </CardContent>
+                                                </Card>
                                               </div>
 
-                                              {/* CPC */}
-                                              <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                                <div className="text-[10px] text-slate-500 font-bold mb-1">
-                                                  CPC
-                                                </div>
-                                                <div className="text-lg font-bold text-emerald-600">
-                                                  $
-                                                  {item.serankingData.cpc?.toFixed(
-                                                    2
-                                                  ) || "N/A"}
-                                                </div>
-                                                <div className="text-[9px] text-slate-400">
-                                                  cost per click
-                                                </div>
-                                              </div>
-
-                                              {/* Competition */}
-                                              <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                                <div className="text-[10px] text-slate-500 font-bold mb-1">
-                                                  COMPETITION
-                                                </div>
-                                                <div className="text-lg font-bold text-purple-600">
-                                                  {item.serankingData
-                                                    .competition
-                                                    ? typeof item.serankingData
-                                                        .competition ===
-                                                      "number"
-                                                      ? (
+                                              {/* History Trend - Full Width Below */}
+                                              {item.serankingData
+                                                .history_trend &&
+                                                Object.keys(
+                                                  item.serankingData
+                                                    .history_trend
+                                                ).length > 0 && (
+                                                  <Card
+                                                    className={cn(
+                                                      isDarkTheme
+                                                        ? "bg-black border-emerald-500/20"
+                                                        : "bg-emerald-50 border-emerald-200"
+                                                    )}
+                                                  >
+                                                    <CardContent className="p-4">
+                                                      <div
+                                                        className={cn(
+                                                          "text-xs font-semibold mb-3 flex items-center gap-2",
+                                                          isDarkTheme
+                                                            ? "text-white/70"
+                                                            : "text-emerald-700"
+                                                        )}
+                                                      >
+                                                        <TrendingUp
+                                                          className={cn(
+                                                            "w-4 h-4",
+                                                            isDarkTheme
+                                                              ? "text-emerald-400"
+                                                              : "text-emerald-600"
+                                                          )}
+                                                        />
+                                                        SEARCH VOLUME TREND
+                                                        (Last 12 Months)
+                                                      </div>
+                                                      <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                                                        {Object.entries(
                                                           item.serankingData
-                                                            .competition * 100
-                                                        ).toFixed(1) + "%"
-                                                      : item.serankingData
-                                                          .competition
-                                                    : "N/A"}
-                                                </div>
-                                                <div className="text-[9px] text-slate-400">
-                                                  advertiser competition
-                                                </div>
-                                              </div>
-                                            </div>
-
-                                            {/* History Trend - Full Width Below */}
-                                            {item.serankingData.history_trend &&
-                                              Object.keys(
-                                                item.serankingData.history_trend
-                                              ).length > 0 && (
-                                                <div className="mt-4 bg-white p-4 rounded border border-slate-200 shadow-sm">
-                                                  <div className="text-[10px] text-slate-500 font-bold mb-3 flex items-center gap-1">
-                                                    <TrendingUp className="w-3 h-3" />
-                                                    SEARCH VOLUME TREND (Last 12
-                                                    Months)
-                                                  </div>
-                                                  <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                                                    {Object.entries(
-                                                      item.serankingData
-                                                        .history_trend
-                                                    )
-                                                      .sort(
-                                                        ([dateA], [dateB]) =>
-                                                          dateA.localeCompare(
-                                                            dateB
+                                                            .history_trend
+                                                        )
+                                                          .sort(
+                                                            (
+                                                              [dateA],
+                                                              [dateB]
+                                                            ) =>
+                                                              dateA.localeCompare(
+                                                                dateB
+                                                              )
                                                           )
-                                                      )
-                                                      .map(([date, volume]) => {
-                                                        const monthYear =
-                                                          new Date(
-                                                            date
-                                                          ).toLocaleDateString(
-                                                            "en-US",
-                                                            {
-                                                              month: "short",
-                                                              year: "2-digit",
+                                                          .map(
+                                                            ([
+                                                              date,
+                                                              volume,
+                                                            ]) => {
+                                                              const monthYear =
+                                                                new Date(
+                                                                  date
+                                                                ).toLocaleDateString(
+                                                                  "en-US",
+                                                                  {
+                                                                    month:
+                                                                      "short",
+                                                                    year: "2-digit",
+                                                                  }
+                                                                );
+                                                              return (
+                                                                <Card
+                                                                  key={date}
+                                                                  className={cn(
+                                                                    "text-center",
+                                                                    isDarkTheme
+                                                                      ? "bg-black border-emerald-500/20"
+                                                                      : "bg-white border-emerald-200"
+                                                                  )}
+                                                                >
+                                                                  <CardContent className="p-2">
+                                                                    <div
+                                                                      className={cn(
+                                                                        "text-xs font-medium mb-1",
+                                                                        isDarkTheme
+                                                                          ? "text-white/60"
+                                                                          : "text-emerald-600/80"
+                                                                      )}
+                                                                    >
+                                                                      {
+                                                                        monthYear
+                                                                      }
+                                                                    </div>
+                                                                    <div
+                                                                      className={cn(
+                                                                        "text-sm font-bold",
+                                                                        isDarkTheme
+                                                                          ? "text-white"
+                                                                          : "text-emerald-600"
+                                                                      )}
+                                                                    >
+                                                                      {typeof volume ===
+                                                                      "number"
+                                                                        ? volume.toLocaleString()
+                                                                        : volume}
+                                                                    </div>
+                                                                  </CardContent>
+                                                                </Card>
+                                                              );
                                                             }
-                                                          );
-                                                        return (
-                                                          <div
-                                                            key={date}
-                                                            className="text-center p-2 bg-slate-50 rounded border border-slate-100"
-                                                          >
-                                                            <div className="text-[9px] text-slate-400 font-medium mb-1">
-                                                              {monthYear}
-                                                            </div>
-                                                            <div className="text-sm font-bold text-blue-600">
-                                                              {typeof volume ===
-                                                              "number"
-                                                                ? volume.toLocaleString()
-                                                                : volume}
-                                                            </div>
-                                                          </div>
-                                                        );
-                                                      })}
-                                                  </div>
-                                                </div>
-                                              )}
-                                          </div>
+                                                          )}
+                                                      </div>
+                                                    </CardContent>
+                                                  </Card>
+                                                )}
+                                            </CardContent>
+                                          </Card>
                                         )}
 
-                                      <h4 className="text-xs font-bold uppercase text-slate-500">
-                                        Analysis Reasoning
-                                      </h4>
-                                      <div className="bg-white p-3 rounded border border-slate-200 shadow-sm">
-                                        <MarkdownContent
-                                          content={
-                                            item.reasoning ||
-                                            "No reasoning provided"
-                                          }
-                                        />
-                                      </div>
+                                      {/* Analysis Reasoning */}
+                                      <Card
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "bg-black border-emerald-500/20"
+                                            : "bg-white border-slate-200"
+                                        )}
+                                      >
+                                        <CardHeader className="pb-3">
+                                          <CardTitle
+                                            className={cn(
+                                              "text-sm font-semibold",
+                                              isDarkTheme
+                                                ? "text-white"
+                                                : "text-slate-900"
+                                            )}
+                                          >
+                                            Analysis Reasoning
+                                          </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                          <div
+                                            className={cn(
+                                              "prose prose-sm max-w-none",
+                                              isDarkTheme
+                                                ? "prose-invert prose-emerald prose-headings:text-white prose-p:text-white prose-strong:text-white prose-li:text-white"
+                                                : "prose-slate"
+                                            )}
+                                          >
+                                            <MarkdownContent
+                                              content={
+                                                item.reasoning ||
+                                                "No reasoning provided"
+                                              }
+                                              isDarkTheme={isDarkTheme}
+                                            />
+                                          </div>
+                                        </CardContent>
+                                      </Card>
 
-                                      <div className="grid grid-cols-2 gap-4 mt-2">
-                                        <div>
-                                          <span className="text-xs text-slate-400 block">
-                                            Reference SERP Count
-                                          </span>
-                                          <span className="text-sm font-medium">
-                                            {item.serpResultCount === -1
-                                              ? "Unknown (Many)"
-                                              : item.serpResultCount ??
-                                                "Unknown"}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-xs text-slate-400 block">
-                                            Top Competitor Type
-                                          </span>
-                                          <span className="text-sm font-medium">
-                                            {item.topDomainType ?? "-"}
-                                          </span>
-                                        </div>
-                                      </div>
+                                      {/* Summary Stats */}
+                                      <Card
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "bg-black border-emerald-500/20"
+                                            : "bg-white border-slate-200"
+                                        )}
+                                      >
+                                        <CardContent className="p-4">
+                                          <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                              <span
+                                                className={cn(
+                                                  "text-xs block mb-1",
+                                                  isDarkTheme
+                                                    ? "text-white/70"
+                                                    : "text-slate-600"
+                                                )}
+                                              >
+                                                Reference SERP Count
+                                              </span>
+                                              <span
+                                                className={cn(
+                                                  "text-sm font-semibold",
+                                                  isDarkTheme
+                                                    ? "text-white"
+                                                    : "text-slate-900"
+                                                )}
+                                              >
+                                                {item.serpResultCount === -1
+                                                  ? "Unknown (Many)"
+                                                  : item.serpResultCount ??
+                                                    "Unknown"}
+                                              </span>
+                                            </div>
+                                            <div>
+                                              <span
+                                                className={cn(
+                                                  "text-xs block mb-1",
+                                                  isDarkTheme
+                                                    ? "text-white/70"
+                                                    : "text-slate-600"
+                                                )}
+                                              >
+                                                Top Competitor Type
+                                              </span>
+                                              <Badge
+                                                variant="outline"
+                                                className={cn(
+                                                  "text-xs",
+                                                  isDarkTheme
+                                                    ? "border-emerald-500/30 text-white"
+                                                    : "border-slate-300 text-slate-700"
+                                                )}
+                                              >
+                                                {item.topDomainType ?? "-"}
+                                              </Badge>
+                                            </div>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
 
                                       {/* SERP EVIDENCE IN DETAILS - Conditional Rendering */}
                                       {item.serpResultCount === 0 ? (
-                                        <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded text-amber-800 text-xs font-medium flex items-center gap-2">
-                                          <Lightbulb className="w-4 h-4" />
-                                          No direct competitors found in search.
-                                        </div>
+                                        <Card
+                                          className={cn(
+                                            "border-amber-200 dark:border-amber-800/50",
+                                            isDarkTheme
+                                              ? "bg-amber-950/20"
+                                              : "bg-amber-50"
+                                          )}
+                                        >
+                                          <CardContent className="p-4">
+                                            <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
+                                              <Lightbulb className="w-4 h-4" />
+                                              No direct competitors found in
+                                              search.
+                                            </div>
+                                          </CardContent>
+                                        </Card>
                                       ) : (
                                         item.topSerpSnippets &&
                                         item.topSerpSnippets.length > 0 && (
-                                          <div className="mt-4">
-                                            <div className="flex justify-between items-center mb-2">
-                                              <h4 className="text-xs font-bold uppercase text-slate-500">
-                                                {t.serpEvidence}
-                                              </h4>
-                                              <span className="text-[10px] text-amber-600 italic">
-                                                {t.serpEvidenceDisclaimer}
-                                              </span>
-                                            </div>
-                                            <div className="space-y-2">
-                                              {item.topSerpSnippets
-                                                .slice(0, 3)
-                                                .map((snip, i) => (
-                                                  <div
-                                                    key={i}
-                                                    className="bg-white p-2 rounded border border-slate-100 text-xs"
-                                                  >
-                                                    <div className="text-blue-700 font-medium truncate">
-                                                      {snip.title}
-                                                    </div>
-                                                    <div className="text-emerald-700 text-[10px] truncate">
-                                                      {snip.url}
-                                                    </div>
-                                                    <div className="text-slate-500 mt-1 line-clamp-2">
-                                                      {snip.snippet}
-                                                    </div>
-                                                  </div>
-                                                ))}
-                                            </div>
-                                          </div>
+                                          <Card
+                                            className={cn(
+                                              isDarkTheme
+                                                ? "bg-slate-900/50 border-slate-800"
+                                                : "bg-white border-slate-200"
+                                            )}
+                                          >
+                                            <CardHeader className="pb-3">
+                                              <div className="flex justify-between items-center">
+                                                <CardTitle
+                                                  className={cn(
+                                                    "text-sm font-semibold",
+                                                    isDarkTheme
+                                                      ? "text-slate-200"
+                                                      : "text-slate-900"
+                                                  )}
+                                                >
+                                                  {t.serpEvidence}
+                                                </CardTitle>
+                                                <Badge
+                                                  variant="outline"
+                                                  className={cn(
+                                                    "text-[10px]",
+                                                    isDarkTheme
+                                                      ? "border-amber-800/50 text-amber-400"
+                                                      : "border-amber-200 text-amber-700"
+                                                  )}
+                                                >
+                                                  {t.serpEvidenceDisclaimer}
+                                                </Badge>
+                                              </div>
+                                            </CardHeader>
+                                            <CardContent>
+                                              <div className="space-y-3">
+                                                {item.topSerpSnippets
+                                                  .slice(0, 3)
+                                                  .map((snip, i) => (
+                                                    <Card
+                                                      key={i}
+                                                      className={cn(
+                                                        isDarkTheme
+                                                          ? "bg-slate-800/50 border-slate-700"
+                                                          : "bg-slate-50 border-slate-200"
+                                                      )}
+                                                    >
+                                                      <CardContent className="p-3">
+                                                        <div
+                                                          className={cn(
+                                                            "text-sm font-semibold mb-1 truncate",
+                                                            isDarkTheme
+                                                              ? "text-emerald-400"
+                                                              : "text-emerald-700"
+                                                          )}
+                                                        >
+                                                          {snip.title}
+                                                        </div>
+                                                        <div
+                                                          className={cn(
+                                                            "text-xs mb-2 truncate",
+                                                            isDarkTheme
+                                                              ? "text-emerald-400"
+                                                              : "text-emerald-700"
+                                                          )}
+                                                        >
+                                                          {snip.url}
+                                                        </div>
+                                                        <div
+                                                          className={cn(
+                                                            "text-xs line-clamp-2 leading-relaxed",
+                                                            isDarkTheme
+                                                              ? "text-slate-400"
+                                                              : "text-slate-600"
+                                                          )}
+                                                        >
+                                                          {snip.snippet}
+                                                        </div>
+                                                      </CardContent>
+                                                    </Card>
+                                                  ))}
+                                              </div>
+                                            </CardContent>
+                                          </Card>
                                         )
                                       )}
                                     </div>

@@ -194,13 +194,14 @@ export interface AgentThought {
   round: number;
   type: 'generation' | 'analysis' | 'decision';
   content: string;
-  keywords?: string[]; 
+  keywords?: string[];
   stats?: {
     high: number;
     medium: number;
     low: number;
   };
   analyzedKeywords?: KeywordData[];
+  table?: React.ReactNode; // Table data for structured display
 }
 
 export interface BatchAnalysisThought {
@@ -416,6 +417,9 @@ export interface AppState {
     total: number;
     currentFile: string;
   } | null;
+
+  // Success Prompt UI
+  showSuccessPrompt: boolean; // Controls whether to show the success prompt overlay
 }
 
 // Website Data Structure (v0 style)
