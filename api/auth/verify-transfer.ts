@@ -10,7 +10,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { transferToken } = req.body;
-    console.log('[verify-transfer] Received request with token:', transferToken ? 'present' : 'missing');
 
     if (!transferToken) {
       return res.status(400).json({ error: 'Transfer token required' });
@@ -20,8 +19,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
 
     if (isDevelopment) {
-      console.log('[verify-transfer] 🔧 Development Mode: Using fake user for any token');
-
       // 生成 JWT 给假用户
       const fakeUser = {
         userId: 'dev-user-123',
@@ -51,10 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .update(transferToken)
       .digest('hex');
 
-    console.log('[verify-transfer] Token hash:', tokenHash.substring(0, 20) + '...');
-
     // 2. 在共享数据库中查询 session (Prisma 在 PostgreSQL 中使用 snake_case)
-    console.log('[verify-transfer] Querying sessions table...');
     const sessionResult = await sql`
       SELECT id, user_id, token_hash, created_at, expires_at, last_used_at
       FROM sessions
@@ -62,14 +56,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         AND expires_at > NOW()
     `;
 
-    console.log('[verify-transfer] Session query result, rowCount:', sessionResult.rowCount);
-
     if (sessionResult.rowCount === 0) {
       return res.status(401).json({ error: 'Invalid or expired transfer token' });
     }
 
     const session = sessionResult.rows[0];
-    console.log('[verify-transfer] Found session for user_id:', session.user_id);
 
     // 3. 验证一次性使用 (created_at === last_used_at)
     if (session.created_at.getTime() !== session.last_used_at.getTime()) {
@@ -77,32 +68,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 4. 获取用户信息
-    console.log('[verify-transfer] Querying users table...');
     const userResult = await sql`
       SELECT id, email, name, picture
       FROM users
       WHERE id = ${session.user_id}
     `;
 
-    console.log('[verify-transfer] User query result, rowCount:', userResult.rowCount);
-
     if (userResult.rowCount === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const user = userResult.rows[0];
-    console.log('[verify-transfer] Found user:', user.email);
 
     // 5. 删除 transfer token (一次性使用)
-    console.log('[verify-transfer] Deleting session...');
     await sql`DELETE FROM sessions WHERE id = ${session.id}`;
 
     // 6. 生成长期 JWT token (24小时)
-    console.log('[verify-transfer] Generating JWT...');
     const jwtToken = await generateToken(user.id, user.email);
 
     // 7. 返回用户数据和 JWT
-    console.log('[verify-transfer] Success! Returning user data');
     return res.status(200).json({
       success: true,
       token: jwtToken,

@@ -46,13 +46,8 @@ export const sql = async <T extends QueryResultRow = any>(
       }
     }
 
-    console.log('[sql] Executing query:', queryText.substring(0, 200) + (queryText.length > 200 ? '...' : ''));
-    console.log('[sql] Values:', params.map(v => typeof v === 'string' ? v.substring(0, 50) : v));
-
     // 执行查询
     const result = await client.query<T>(queryText, params);
-
-    console.log('[sql] Query successful, rowCount:', result.rowCount);
 
     return {
       rows: result.rows,
@@ -107,7 +102,6 @@ export async function initWorkflowConfigsTable() {
   // 开始初始化
   workflowConfigsTableInitPromise = (async () => {
     try {
-      console.log('[initWorkflowConfigsTable] Initializing table (first time only)...');
 
       await sql`
         CREATE TABLE IF NOT EXISTS workflow_configs (
@@ -128,7 +122,6 @@ export async function initWorkflowConfigsTable() {
       await sql`CREATE INDEX IF NOT EXISTS idx_workflow_configs_user_workflow ON workflow_configs(user_id, workflow_id)`;
 
       workflowConfigsTableInitialized = true;
-      console.log('[initWorkflowConfigsTable] Table initialized successfully');
     } catch (error) {
       console.error('[initWorkflowConfigsTable] Error initializing table:', error);
       workflowConfigsTableInitPromise = null; // 重置，允许重试
@@ -404,7 +397,6 @@ export async function initApiKeysTable() {
   // 开始初始化
   apiKeysTableInitPromise = (async () => {
     try {
-      console.log('[initApiKeysTable] Initializing table (first time only)...');
 
       await sql`
         CREATE TABLE IF NOT EXISTS api_keys (
@@ -427,7 +419,6 @@ export async function initApiKeysTable() {
       await sql`CREATE INDEX IF NOT EXISTS idx_api_keys_is_active ON api_keys(is_active)`;
 
       apiKeysTableInitialized = true;
-      console.log('[initApiKeysTable] Table initialized successfully');
     } catch (error) {
       console.error('[initApiKeysTable] Error initializing table:', error);
       apiKeysTableInitPromise = null; // 重置，允许重试

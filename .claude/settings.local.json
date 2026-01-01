@@ -9,7 +9,9 @@
       "Bash(dir:*)",
       "Bash(findstr:*)",
       "Bash(npm install:*)",
-      "WebFetch(domain:bolt.new)"
+      "WebFetch(domain:bolt.new)",
+      "WebSearch",
+      "Bash(vercel logs:*)"
     ]
   }
 }

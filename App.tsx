@@ -38,6 +38,7 @@ import {
   Coins,
   Hash,
   Network,
+  Send,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import {
@@ -53,6 +54,7 @@ import { Badge } from "./components/ui/badge";
 import { cn } from "./lib/utils";
 import { WebsiteRenderer } from "./components/website/WebsiteRenderer";
 import { useAuth } from "./contexts/AuthContext";
+import { ContentGenerationView } from "./components/ContentGenerationView";
 import {
   KeywordMiningGuide,
   MiningConfig,
@@ -2278,6 +2280,8 @@ interface SidebarProps {
   uiLanguage: UILanguage;
   step: string;
   isDarkTheme: boolean;
+  onContentGeneration?: (tab?: 'my-website' | 'website-data' | 'article-rankings' | 'publish') => void;
+  contentGenerationTab?: 'my-website' | 'website-data' | 'article-rankings' | 'publish';
 }
 
 // === Website Preview Modal ===
@@ -2813,10 +2817,16 @@ const Sidebar: React.FC<SidebarProps> = ({
   uiLanguage,
   step,
   isDarkTheme,
+  onContentGeneration,
+  contentGenerationTab,
 }) => {
   const labels =
     uiLanguage === "zh"
       ? {
+          myWebsite: "我的网站",
+          websiteData: "网站数据",
+          articleRankings: "文章排名",
+          publish: "发布",
           activeTasks: "进行中的任务",
           options: "配置选项",
           workflow: "工作流编排",
@@ -2825,6 +2835,10 @@ const Sidebar: React.FC<SidebarProps> = ({
           version: "V2.8.5 System Online",
         }
       : {
+          myWebsite: "My Website",
+          websiteData: "Website Data",
+          articleRankings: "Article Rankings",
+          publish: "Publish",
           activeTasks: "Active Tasks",
           options: "Options",
           workflow: "Workflow",
@@ -2896,6 +2910,40 @@ const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto py-6 px-3 space-y-6">
+        {/* Content Generation Section - 4 tabs without main title */}
+        {onContentGeneration && (
+          <div className="space-y-1">
+            <SidebarLink
+              icon={<Globe size={14} />}
+              label={labels.myWebsite}
+              onClick={() => onContentGeneration('my-website')}
+              active={step === "content-generation" && contentGenerationTab === 'my-website'}
+              isDarkTheme={isDarkTheme}
+            />
+            <SidebarLink
+              icon={<Hash size={14} />}
+              label={labels.websiteData}
+              onClick={() => onContentGeneration('website-data')}
+              active={step === "content-generation" && contentGenerationTab === 'website-data'}
+              isDarkTheme={isDarkTheme}
+            />
+            <SidebarLink
+              icon={<TrendingUp size={14} />}
+              label={labels.articleRankings}
+              onClick={() => onContentGeneration('article-rankings')}
+              active={step === "content-generation" && contentGenerationTab === 'article-rankings'}
+              isDarkTheme={isDarkTheme}
+            />
+            <SidebarLink
+              icon={<Send size={14} />}
+              label={labels.publish}
+              onClick={() => onContentGeneration('publish')}
+              active={step === "content-generation" && contentGenerationTab === 'publish'}
+              isDarkTheme={isDarkTheme}
+            />
+          </div>
+        )}
+
         {/* Active Tasks Section */}
         <div>
           <div className="flex items-center justify-between px-3 mb-4">
@@ -3253,7 +3301,7 @@ export default function App() {
       maxTasks: 5,
     },
 
-    step: "input",
+    step: "content-generation",
     seedKeyword: "",
     targetLanguage: "en",
     keywords: [],
@@ -3321,6 +3369,14 @@ export default function App() {
     isOptimizing: false,
     websiteGenerationProgress: null,
     showSuccessPrompt: false,
+
+    // Content Generation
+    contentGeneration: {
+      activeTab: 'my-website',
+      website: null,
+      onboardingStep: 0,
+      websiteData: null,
+    },
   });
 
   // Batch translate and analyze state
@@ -5036,9 +5092,9 @@ export default function App() {
         saveTasksToLocalStorage();
       }, 0);
     } else if (remainingTasks.length === 0) {
-      // No tasks left, reset to input screen
+      // No tasks left, go to content generation screen
       setTimeout(() => {
-        setState((prev) => ({ ...prev, step: "input" }));
+        setState((prev) => ({ ...prev, step: "content-generation" }));
         saveTasksToLocalStorage();
       }, 0);
     } else {
@@ -7580,6 +7636,17 @@ export default function App() {
         uiLanguage={state.uiLanguage}
         step={state.step}
         isDarkTheme={isDarkTheme}
+        onContentGeneration={(tab) =>
+          setState((prev) => ({
+            ...prev,
+            step: "content-generation",
+            contentGeneration: {
+              ...prev.contentGeneration,
+              activeTab: tab || prev.contentGeneration.activeTab,
+            },
+          }))
+        }
+        contentGenerationTab={state.contentGeneration.activeTab}
       />
 
       {/* Main Container */}
@@ -9064,6 +9131,21 @@ export default function App() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* CONTENT GENERATION PAGE */}
+          {state.step === "content-generation" && (
+            <ContentGenerationView
+              state={state.contentGeneration}
+              setState={(update) =>
+                setState((prev) => ({
+                  ...prev,
+                  contentGeneration: { ...prev.contentGeneration, ...update },
+                }))
+              }
+              isDarkTheme={isDarkTheme}
+              uiLanguage={state.uiLanguage}
+            />
           )}
 
           {/* STEP 2: MINING */}

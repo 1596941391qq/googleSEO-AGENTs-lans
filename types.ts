@@ -330,7 +330,7 @@ export interface AppState {
   // Task Management
   taskManager: TaskManagerState;
 
-  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'website-builder';
+  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'website-builder' | 'content-generation';
   seedKeyword: string;
   targetLanguage: TargetLanguage;
   keywords: KeywordData[];
@@ -420,6 +420,39 @@ export interface AppState {
 
   // Success Prompt UI
   showSuccessPrompt: boolean; // Controls whether to show the success prompt overlay
+
+  // Content Generation
+  contentGeneration: ContentGenerationState;
+}
+
+// Content Generation State
+export interface ContentGenerationState {
+  activeTab: 'my-website' | 'website-data' | 'article-rankings' | 'publish';
+  website: WebsiteBinding | null;
+  onboardingStep: number; // 0-4 for 5-step flow
+  websiteData: {
+    rawContent: string;
+    extractedKeywords: string[];
+    rankingOpportunities: KeywordData[];
+  } | null;
+  demoContent?: {
+    chatGPTDemo: any;
+    articleDemo: any;
+    domain: string;
+    brandName: string;
+    screenshot?: string;
+  } | null;
+}
+
+// Website Binding
+export interface WebsiteBinding {
+  url: string;
+  boundAt: string;
+  industry?: string;
+  monthlyVisits?: number;
+  monthlyRevenue?: string;
+  marketingTools?: string[];
+  additionalInfo?: string;
 }
 
 // Website Data Structure (v0 style)

@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Google SEO Agent is a React-based AI-powered content creation platform that uses multi-agent system to generate SEO-optimized content. The system consists of 4 specialized AI agents that collaborate to research, write, review, and enhance content with images. The project is deployed on Vercel using serverless functions.
 
 ### Core Features
+
 - **Multi-Agent AI System**: 4 specialized agents (SEO Researcher, Content Writer, Quality Reviewer, Image Creative Director)
 - **Complete Content Pipeline**: 8-step workflow from keyword research to publication
 - **Smart Keyword Mining**: Identify blue ocean keywords with AI analysis
@@ -44,6 +45,7 @@ User Request → Keyword Mining → Agent Orchestration → Content Generation �
 ## Key Commands
 
 ### Development
+
 ```bash
 # Full development (frontend + API) - RECOMMENDED
 npm run dev:vercel
@@ -61,6 +63,7 @@ npm run preview
 ```
 
 ### Vercel Deployment
+
 ```bash
 # Install Vercel CLI
 npm i -g vercel
@@ -73,7 +76,8 @@ vercel
 
 All API endpoints are in `/api` directory and follow Vercel serverless function patterns:
 
-### Existing SEO功能 (Current)
+### Existing SEO 功能 (Current)
+
 - `/api/generate-keywords` - Generate SEO keywords using Gemini API
 - `/api/analyze-ranking` - Analyze keyword ranking probability
 - `/api/deep-dive-strategy` - Generate detailed content strategy
@@ -82,6 +86,7 @@ All API endpoints are in `/api` directory and follow Vercel serverless function 
 - `/api/seo-agent` - Unified SEO agent API (keyword_mining, batch_translation, deep_dive modes)
 
 ### New AI Agent System (To Be Implemented)
+
 - `/api/agents/orchestrate` - Main orchestrator for multi-agent workflow
 - `/api/agents/seo-researcher` - Agent 1: SEO research & competitor analysis
 - `/api/agents/content-writer` - Agent 2: Content generation
@@ -89,6 +94,7 @@ All API endpoints are in `/api` directory and follow Vercel serverless function 
 - `/api/agents/image-creative` - Agent 4: Image generation & integration
 
 ### Content Pipeline APIs (To Be Implemented)
+
 - `/api/pipeline/search-preferences` - Step 1: Analyze search engine preferences
 - `/api/pipeline/competitor-analysis` - Step 2: Competitor structure analysis
 - `/api/pipeline/keyword-optimization` - Step 3: Keyword density & LSI optimization
@@ -99,12 +105,14 @@ All API endpoints are in `/api` directory and follow Vercel serverless function 
 - `/api/pipeline/image-generation` - Step 8: Generate & integrate images
 
 ### Publication & Tracking (To Be Implemented)
+
 - `/api/publish/configure` - Configure platform parameters
 - `/api/publish/execute` - Publish content to platform
 - `/api/track/rankings` - Track keyword rankings
 - `/api/publish/history` - Get publication history
 
 ### 认证功能 (Existing)
+
 - `/api/auth/verify-transfer` - Verify transfer token from main app
 - `/api/auth/session` - Validate JWT session
 - `/api/init-db` - Initialize database tables (run once)
@@ -117,7 +125,7 @@ Required for local development and Vercel deployment:
 # Gemini API (Primary AI Engine)
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_PROXY_URL=https://api.302.ai
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3-flash-preview
 
 # Nano Banana 2 API (Image Generation)
 NANO_BANANA_API_KEY=your_nano_banana_api_key
@@ -150,6 +158,7 @@ VITE_MAIN_APP_URL=http://localhost:3000
 ```
 
 **Important**:
+
 - `POSTGRES_URL` and `JWT_SECRET` must be identical to the main app (niche-mining)
 - Nano Banana 2 API is critical for image generation feature
 - AI Search APIs are optional but recommended for enhanced competitor analysis
@@ -157,6 +166,7 @@ VITE_MAIN_APP_URL=http://localhost:3000
 ## Code Structure
 
 ### Frontend (To Be Refactored from Single File)
+
 - `App.tsx` - Main React application (currently monolithic, to be refactored)
 - `components/` - UI components
   - `workflow/` - Workflow orchestration UI components
@@ -169,6 +179,7 @@ VITE_MAIN_APP_URL=http://localhost:3000
 - `index.html` - HTML template
 
 ### Backend API
+
 - `api/_shared/gemini.ts` - Gemini API service wrapper with all AI functions
 - `api/_shared/request-handler.ts` - Common request/response utilities
 - `api/_shared/types.ts` - API-specific TypeScript types
@@ -177,6 +188,7 @@ VITE_MAIN_APP_URL=http://localhost:3000
 - `api/lib/auth.ts` - JWT token generation and verification
 
 #### New: Agent System
+
 - `api/agents/_shared/orchestrator.ts` - Multi-agent orchestration logic
 - `api/agents/seo-researcher.ts` - Agent 1: SEO research & competitor analysis
 - `api/agents/content-writer.ts` - Agent 2: Content generation
@@ -184,6 +196,7 @@ VITE_MAIN_APP_URL=http://localhost:3000
 - `api/agents/image-creative.ts` - Agent 4: Image generation & integration
 
 #### New: Content Pipeline
+
 - `api/pipeline/_shared/pipeline-manager.ts` - Pipeline state management
 - `api/pipeline/search-preferences.ts` - Step 1: Search engine preference analysis
 - `api/pipeline/competitor-analysis.ts` - Step 2: Competitor structure analysis
@@ -195,18 +208,21 @@ VITE_MAIN_APP_URL=http://localhost:3000
 - `api/pipeline/image-generation.ts` - Step 8: Image generation & integration
 
 #### New: Publication & Tracking
+
 - `api/publish/configure.ts` - Platform configuration
 - `api/publish/execute.ts` - Publish content
 - `api/publish/history.ts` - Publication history
 - `api/track/rankings.ts` - Keyword ranking tracking
 
 #### Existing APIs
+
 - `api/auth/verify-transfer.ts` - Transfer token verification endpoint
 - `api/auth/session.ts` - Session validation endpoint
 - `api/init-db.ts` - Database initialization script
 - Individual API endpoint files (`generate-keywords.ts`, `analyze-ranking.ts`, etc.)
 
 ### Database Schema (To Be Implemented)
+
 ```sql
 -- Keywords & Projects
 CREATE TABLE projects (
@@ -286,6 +302,7 @@ CREATE TABLE ranking_records (
 ### Key Features Implementation
 
 #### Current Features (Phase 1 - Completed)
+
 1. **Keyword Generation**: Uses Gemini API to generate keywords in target languages with search volume estimates
 2. **Ranking Analysis**: Analyzes SERP competition and assigns probability scores (High/Medium/Low)
 3. **Content Strategy**: Generates detailed SEO content plans with H1 titles, meta descriptions, and content structure
@@ -296,7 +313,9 @@ CREATE TABLE ranking_records (
 #### New Features (Phase 2 - To Implement)
 
 **Multi-Agent AI System (4 Agents)**
+
 1. **SEO Researcher Agent** (`api/agents/seo-researcher.ts`)
+
    - Search engine preference analysis (Google vs ChatGPT vs Claude vs Perplexity)
    - Top 10 competitor structure extraction
    - Content framework identification
@@ -305,6 +324,7 @@ CREATE TABLE ranking_records (
    - GEO/AIO optimization recommendations
 
 2. **Content Writer Agent** (`api/agents/content-writer.ts`)
+
    - Draft generation based on SEO recommendations
    - Follow competitor structure and style
    - Inject target keywords at optimal positions
@@ -312,6 +332,7 @@ CREATE TABLE ranking_records (
    - Apply AIO optimizations (Q&A format, structured data, AI-friendly language)
 
 3. **Quality Reviewer Agent** (`api/agents/quality-reviewer.ts`)
+
    - Keyword density verification (target: 1-2%)
    - AI probability detection (use Gemini to detect AI-written content)
    - GEO/AIO compliance checks
@@ -327,28 +348,34 @@ CREATE TABLE ranking_records (
    - Plan image positions within article
 
 **Complete Content Creation Pipeline (8 Steps)**
+
 1. **Search Engine Preference Analysis**
+
    - Analyze ranking factors for Google vs ChatGPT vs Claude vs Perplexity
    - Generate tailored optimization strategies for each engine
 
 2. **Competitor Analysis**
+
    - Fetch Top 10 SERP results
    - Extract content structure (H1, H2, H3 hierarchy)
    - Identify content framework and style patterns
    - Find content gaps and opportunities
 
 3. **Keyword Optimization**
+
    - Calculate optimal keyword density (1-2%)
    - Identify LSI keywords
    - Plan keyword placement (title, headings, first paragraph, conclusion)
 
 4. **GEO Optimization**
+
    - Add geographic references (cities, landmarks)
    - Include local case studies
    - Incorporate regional statistics/data
    - Use localized language and expressions
 
 5. **AIO (AI Engine Optimization)**
+
    - Structure content in Q&A format
    - Optimize for answer boxes (featured snippets)
    - Use AI-friendly language and sentence structures
@@ -356,11 +383,13 @@ CREATE TABLE ranking_records (
    - Optimize citations and references
 
 6. **Content Generation**
+
    - Synthesize all optimization recommendations
    - Generate final article with all enhancements applied
    - Ensure natural flow and readability
 
 7. **Quality Check**
+
    - Verify keyword density compliance
    - Check AI probability score
    - Validate GEO/AIO optimizations
@@ -376,17 +405,21 @@ CREATE TABLE ranking_records (
    - Plan and insert image positions
 
 **User Workflow (4 Phases)**
+
 1. **Phase 1: Keyword Mining** (Existing)
+
    - Input: Website URL or seed keyword
    - Process: Identify blue ocean keywords
    - Output: User selects target keywords
 
 2. **Phase 2: Content Generation** (New)
+
    - Process: 4 agents collaborate (orchestrated workflow)
    - UI: Real-time progress display with agent status
    - Output: Preview and edit content before finalizing
 
 3. **Phase 3: Publication** (New)
+
    - Select target platform (WordPress, Medium, Ghost, etc.)
    - Configure publication parameters
    - One-click publish
@@ -399,6 +432,7 @@ CREATE TABLE ranking_records (
    - Generate performance reports
 
 **Nano Banana 2 Integration**
+
 - Model: Fast generation (5-10 seconds per image)
 - Quality: 4K resolution
 - Cost: $0.05-0.08 per image
@@ -408,30 +442,40 @@ CREATE TABLE ranking_records (
 ## Development Patterns
 
 ### API Handler Pattern
+
 All API endpoints follow this structure:
+
 ```typescript
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler';
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import {
+  parseRequestBody,
+  setCorsHeaders,
+  handleOptions,
+  sendErrorResponse,
+} from "./_shared/request-handler";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     setCorsHeaders(res);
-    if (req.method === 'OPTIONS') return handleOptions(res);
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    if (req.method === "OPTIONS") return handleOptions(res);
+    if (req.method !== "POST")
+      return res.status(405).json({ error: "Method not allowed" });
 
     const body = parseRequestBody(req);
     // Process request
     return res.json({ result });
   } catch (error) {
-    return sendErrorResponse(res, error, 'Error message');
+    return sendErrorResponse(res, error, "Error message");
   }
 }
 ```
 
 ### Agent System Pattern (New)
+
 Each agent follows this structure:
+
 ```typescript
-import { AgentInput, AgentOutput } from './types';
+import { AgentInput, AgentOutput } from "./types";
 
 export async function runAgent(input: AgentInput): Promise<AgentOutput> {
   // 1. Validate input
@@ -442,14 +486,17 @@ export async function runAgent(input: AgentInput): Promise<AgentOutput> {
 ```
 
 ### Pipeline Orchestration Pattern (New)
-```typescript
-import { runAgent } from './agents';
 
-export async function executePipeline(input: PipelineInput): Promise<PipelineOutput> {
+```typescript
+import { runAgent } from "./agents";
+
+export async function executePipeline(
+  input: PipelineInput
+): Promise<PipelineOutput> {
   const steps = [
-    { agent: 'seo-researcher', name: 'Search Preferences' },
-    { agent: 'seo-researcher', name: 'Competitor Analysis' },
-    { agent: 'content-writer', name: 'Keyword Optimization' },
+    { agent: "seo-researcher", name: "Search Preferences" },
+    { agent: "seo-researcher", name: "Competitor Analysis" },
+    { agent: "content-writer", name: "Keyword Optimization" },
     // ... etc
   ];
 
@@ -463,7 +510,9 @@ export async function executePipeline(input: PipelineInput): Promise<PipelineOut
 ```
 
 ### Gemini API Integration
+
 All AI functions use the shared `callGeminiAPI` wrapper in `api/_shared/gemini.ts` which handles:
+
 - Proxy URL configuration
 - API key management
 - JSON response parsing
@@ -471,24 +520,26 @@ All AI functions use the shared `callGeminiAPI` wrapper in `api/_shared/gemini.t
 - Request batching for rate limit management
 
 ### Nano Banana 2 Integration Pattern
+
 ```typescript
 export async function generateImages(themes: string[]): Promise<Image[]> {
-  const requests = themes.map(theme =>
+  const requests = themes.map((theme) =>
     fetch(NANO_BANANA_API_URL, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${process.env.NANO_BANANA_API_KEY}` },
-      body: JSON.stringify({ prompt: generateOptimizedPrompt(theme) })
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.NANO_BANANA_API_KEY}` },
+      body: JSON.stringify({ prompt: generateOptimizedPrompt(theme) }),
     })
   );
 
   const responses = await Promise.all(requests);
-  return await Promise.all(responses.map(r => downloadAndProcessImage(r)));
+  return await Promise.all(responses.map((r) => downloadAndProcessImage(r)));
 }
 ```
 
 ## Important Notes
 
 ### Performance & Optimization
+
 - API functions have 60-second timeout limit (Vercel serverless constraint)
 - Keywords are processed in batches of 3 to avoid rate limits
 - Image generation uses parallel requests (4-6 images simultaneously)
@@ -496,12 +547,14 @@ export async function generateImages(themes: string[]): Promise<Image[]> {
 - Consider using Vercel Cron Jobs for background tasks (ranking tracking)
 
 ### Architecture Considerations
+
 - Multi-agent system requires careful state management (consider Redux or Zustand for frontend)
 - Pipeline progress should be streamed to frontend via WebSocket or Server-Sent Events
 - Large content drafts may exceed Vercel response size limits (consider pagination or streaming)
 - Image storage: Use Vercel Blob or external CDN (Cloudflare R2, AWS S3)
 
 ### Security & Validation
+
 - Validate all user inputs before passing to AI agents
 - Sanitize HTML content before storage (prevent XSS)
 - Rate limit API calls per user to prevent abuse
@@ -509,6 +562,7 @@ export async function generateImages(themes: string[]): Promise<Image[]> {
 - Implement content moderation filters
 
 ### Development Best Practices
+
 - All API responses include CORS headers for frontend integration
 - Environment variables are automatically injected by Vercel in production
 - The project uses path alias `@/` mapped to project root in TypeScript and Vite configs
@@ -519,6 +573,7 @@ export async function generateImages(themes: string[]): Promise<Image[]> {
 - **Monitoring**: Add error tracking (Sentry) and analytics (Vercel Analytics)
 
 ### Phase 2 Implementation Priorities
+
 1. **Priority 1**: Agent system core (4 agents + orchestrator)
 2. **Priority 2**: Content pipeline (8 steps)
 3. **Priority 3**: Database expansion (new tables)
@@ -528,6 +583,7 @@ export async function generateImages(themes: string[]): Promise<Image[]> {
 7. **Priority 7**: Performance optimization and monitoring
 
 ### Cost Estimates
+
 - Gemini API: ~$0.001-0.002 per 1K tokens (flash model)
 - Nano Banana 2: $0.05-0.08 per image (4-6 images per article = $0.20-0.48)
 - Vercel Serverless: Free tier generous, paid for high traffic
