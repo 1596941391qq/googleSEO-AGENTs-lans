@@ -52,6 +52,9 @@ export interface KeywordData {
 
   // Verification
   isIndexed?: boolean;
+
+  // Debug
+  rawResponse?: string;
 }
 
 export interface SEOStrategyReport {
@@ -73,5 +76,5 @@ export interface SEOStrategyReport {
   recommendedWordCount: number;
 }
 
-export type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar';
+export type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar' | 'zh';
 

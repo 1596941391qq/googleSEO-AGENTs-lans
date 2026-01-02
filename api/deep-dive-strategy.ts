@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateDeepDiveStrategy } from './_shared/gemini.js';
+import { generateDeepDiveStrategy } from './_shared/agents/agent-2-seo-researcher.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const body = parseRequestBody(req);
     const { keyword, uiLanguage, targetLanguage } = body;
-    
+
     if (!keyword || !uiLanguage || !targetLanguage) {
       return res.status(400).json({ error: 'Missing required fields' });
     }

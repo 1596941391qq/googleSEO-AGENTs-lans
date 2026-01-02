@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { analyzeRankingProbability, fetchSErankingData } from './_shared/gemini.js';
+import { analyzeRankingProbability } from './_shared/agents/agent-2-seo-researcher.js';
+import { fetchSErankingData } from './_shared/tools/se-ranking.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { ProbabilityLevel } from './_shared/types.js';
 

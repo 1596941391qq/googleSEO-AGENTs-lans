@@ -1,13 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { 
-  generateKeywords, 
-  analyzeRankingProbability, 
-  translateKeywordToTarget,
+import { executeKeywordMining } from './_shared/services/keyword-mining-service.js';
+import { translateKeywordToTarget } from './_shared/gemini.js';
+import {
+  analyzeRankingProbability,
   generateDeepDiveStrategy,
-  extractCoreKeywords,
-  searchGoogleSerp,
-  fetchSErankingData
-} from './_shared/gemini.js';
+  extractCoreKeywords
+} from './_shared/agents/agent-2-seo-researcher.js';
+import { fetchSErankingData } from './_shared/tools/se-ranking.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { KeywordData, IntentType, ProbabilityLevel } from './_shared/types.js';
 
@@ -117,11 +116,11 @@ async function consumeCredits(
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to consume credits' }));
-    
+
     if (error.error === 'Insufficient credits') {
       throw new Error('INSUFFICIENT_CREDITS');
     }
-    
+
     throw new Error(error.error || 'Failed to consume credits');
   }
 
@@ -160,7 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method !== 'POST') {
-      return res.status(405).json({ 
+      return res.status(405).json({
         error: 'Method not allowed',
         message: 'Only POST method is supported'
       });
@@ -191,7 +190,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       try {
         const credits = await checkCreditsBalance(token);
         const requiredCredits = getCreditsCost(mode, body.keywords?.split(',').length || body.seedKeyword ? 10 : undefined);
-        
+
         if (credits.remaining < requiredCredits) {
           return res.status(402).json({
             error: 'Insufficient credits',
@@ -212,13 +211,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     switch (mode) {
       case 'keyword_mining':
         return await handleKeywordMining(req, res, body);
-      
+
       case 'batch_translation':
         return await handleBatchTranslation(req, res, body);
-      
+
       case 'deep_dive':
         return await handleDeepDive(req, res, body);
-      
+
       default:
         return res.status(400).json({
           error: 'Invalid mode',
@@ -279,7 +278,9 @@ async function handleKeywordMining(
     uiLanguage = 'en',
     // Optional: analyze ranking probability
     analyzeRanking = true,
-    skipCreditsCheck = false
+    skipCreditsCheck = false,
+    industry,
+    additionalSuggestions
   } = body;
 
   // Validate required fields
@@ -306,7 +307,7 @@ async function handleKeywordMining(
 
   // Get expected workflow ID for this mode
   const expectedWorkflowId = getWorkflowIdForMode('keyword_mining');
-  
+
   // Load workflow config if provided
   let activeConfig: any = null;
   if (workflowConfigId) {
@@ -349,37 +350,26 @@ async function handleKeywordMining(
     : systemInstruction || 'Analyze SEO ranking opportunities.';
 
   try {
-    // Generate keywords
-    const keywords = await generateKeywords(
+    // Execute Keyword Mining using Service
+    const result = await executeKeywordMining({
       seedKeyword,
       targetLanguage,
-      genPrompt,
+      systemInstruction: genPrompt,
       existingKeywords,
       roundIndex,
       wordsPerRound,
       miningStrategy,
       userSuggestion,
-      uiLanguage
-    );
+      uiLanguage,
+      industry,
+      additionalSuggestions,
+      analyzeRanking,
+      analyzePrompt
+    });
 
-    // Optionally analyze ranking probability
-    let analyzedKeywords = keywords;
-    if (analyzeRanking) {
-      try {
-        analyzedKeywords = await analyzeRankingProbability(
-          keywords,
-          analyzePrompt,
-          uiLanguage,
-          targetLanguage
-        );
-      } catch (analysisError) {
-        console.warn('Ranking analysis failed, returning keywords without analysis:', analysisError);
-        // Continue with unanalyzed keywords
-      }
-    }
+    const analyzedKeywords = result.keywords;
 
     // Consume credits after successful operation
-    const token = extractToken(req);
     if (!body.skipCreditsCheck && token) {
       try {
         const keywordCount = analyzedKeywords.length;
@@ -464,7 +454,7 @@ async function handleBatchTranslation(
 
   // Get expected workflow ID for this mode
   const expectedWorkflowId = getWorkflowIdForMode('batch_translation');
-  
+
   // Load workflow config if provided
   let activeConfig: any = null;
   if (workflowConfigId) {
@@ -503,7 +493,7 @@ async function handleBatchTranslation(
     : systemInstruction || 'Analyze SEO ranking opportunities.';
 
   // Parse keywords if it's a string
-  const keywordList = typeof keywords === 'string' 
+  const keywordList = typeof keywords === 'string'
     ? keywords.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0)
     : Array.isArray(keywords)
       ? keywords.filter((k: any) => k && k.trim && k.trim().length > 0)
@@ -549,7 +539,7 @@ async function handleBatchTranslation(
     try {
       const translatedKeywordsList = keywordsForAnalysis.map(k => k.keyword);
       const serankingResults = await fetchSErankingData(translatedKeywordsList, 'us');
-      
+
       serankingResults.forEach(data => {
         if (data.keyword) {
           serankingDataMap.set(data.keyword.toLowerCase(), data);
@@ -558,7 +548,7 @@ async function handleBatchTranslation(
 
       for (const keyword of keywordsForAnalysis) {
         const serankingData = serankingDataMap.get(keyword.keyword.toLowerCase());
-        
+
         if (serankingData) {
           keyword.serankingData = {
             is_data_found: serankingData.is_data_found,
@@ -688,7 +678,7 @@ async function handleDeepDive(
 
   // Get expected workflow ID for this mode
   const expectedWorkflowId = getWorkflowIdForMode('deep_dive');
-  
+
   // Load workflow config if provided
   let activeConfig: any = null;
   if (workflowConfigId) {

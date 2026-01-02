@@ -201,7 +201,9 @@ export interface AgentThought {
     low: number;
   };
   analyzedKeywords?: KeywordData[];
-  table?: React.ReactNode; // Table data for structured display
+  data?: any; // Raw data for structured display (replaces table)
+  dataType?: 'keywords' | 'analysis'; // Type of data to render
+  table?: React.ReactNode; // @deprecated - Table data for structured display (JSX not serializable)
 }
 
 export interface BatchAnalysisThought {

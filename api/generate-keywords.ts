@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateKeywords } from './_shared/gemini.js';
+import { generateKeywords } from './_shared/agents/agent-1-keyword-mining.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

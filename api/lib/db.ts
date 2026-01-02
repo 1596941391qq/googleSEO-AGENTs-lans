@@ -429,6 +429,222 @@ export async function initApiKeysTable() {
   await apiKeysTableInitPromise;
 }
 
+// =============================================
+// Website Data Tables Initialization
+// =============================================
+
+let userWebsitesTableInitialized = false;
+let userWebsitesTableInitPromise: Promise<void> | null = null;
+
+export async function initUserWebsitesTable() {
+  if (userWebsitesTableInitialized) return;
+  if (userWebsitesTableInitPromise) {
+    await userWebsitesTableInitPromise;
+    return;
+  }
+
+  userWebsitesTableInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS user_websites (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id INTEGER NOT NULL,
+          website_url VARCHAR(500) NOT NULL,
+          website_domain VARCHAR(255) NOT NULL,
+          website_title VARCHAR(500),
+          website_description TEXT,
+          website_screenshot TEXT,
+          raw_content TEXT,
+          content_updated_at TIMESTAMP,
+          bound_at TIMESTAMP DEFAULT NOW(),
+          industry VARCHAR(100),
+          monthly_visits INTEGER,
+          monthly_revenue VARCHAR(50),
+          marketing_tools TEXT[],
+          additional_info TEXT,
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          CONSTRAINT unique_user_website UNIQUE (user_id, website_url)
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_user_websites_user ON user_websites(user_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_user_websites_domain ON user_websites(website_domain)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_user_websites_active ON user_websites(is_active)`;
+
+      userWebsitesTableInitialized = true;
+    } catch (error) {
+      console.error('[initUserWebsitesTable] Error:', error);
+      userWebsitesTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await userWebsitesTableInitPromise;
+}
+
+let websitePagesTableInitialized = false;
+let websitePagesTableInitPromise: Promise<void> | null = null;
+
+export async function initWebsitePagesTable() {
+  if (websitePagesTableInitialized) return;
+  if (websitePagesTableInitPromise) {
+    await websitePagesTableInitPromise;
+    return;
+  }
+
+  websitePagesTableInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS website_pages (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL,
+          page_url VARCHAR(1000) NOT NULL,
+          page_title VARCHAR(500),
+          page_description TEXT,
+          page_type VARCHAR(50),
+          content_markdown TEXT,
+          content_length INTEGER,
+          topic_cluster VARCHAR(255),
+          cluster_priority INTEGER,
+          is_scraped BOOLEAN DEFAULT false,
+          scraped_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          CONSTRAINT unique_website_page UNIQUE (website_id, page_url),
+          CONSTRAINT fk_website_pages_website FOREIGN KEY (website_id) REFERENCES user_websites(id) ON DELETE CASCADE
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_pages_website ON website_pages(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_pages_cluster ON website_pages(topic_cluster)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_pages_scraped ON website_pages(is_scraped)`;
+
+      websitePagesTableInitialized = true;
+    } catch (error) {
+      console.error('[initWebsitePagesTable] Error:', error);
+      websitePagesTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await websitePagesTableInitPromise;
+}
+
+let websiteKeywordsTableInitialized = false;
+let websiteKeywordsTableInitPromise: Promise<void> | null = null;
+
+export async function initWebsiteKeywordsTable() {
+  if (websiteKeywordsTableInitialized) return;
+  if (websiteKeywordsTableInitPromise) {
+    await websiteKeywordsTableInitPromise;
+    return;
+  }
+
+  websiteKeywordsTableInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS website_keywords (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL,
+          page_id UUID,
+          keyword VARCHAR(500) NOT NULL,
+          translation VARCHAR(500),
+          intent VARCHAR(50),
+          estimated_volume INTEGER,
+          seranking_volume INTEGER,
+          seranking_cpc DECIMAL(10,2),
+          seranking_competition DECIMAL(5,2),
+          seranking_difficulty INTEGER,
+          seranking_history_trend JSONB,
+          seranking_data_found BOOLEAN DEFAULT false,
+          seranking_updated_at TIMESTAMP,
+          ranking_opportunity_score INTEGER,
+          opportunity_reasoning TEXT,
+          suggested_optimization TEXT,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          CONSTRAINT unique_website_keyword UNIQUE (website_id, keyword),
+          CONSTRAINT fk_website_keywords_website FOREIGN KEY (website_id) REFERENCES user_websites(id) ON DELETE CASCADE,
+          CONSTRAINT fk_website_keywords_page FOREIGN KEY (page_id) REFERENCES website_pages(id) ON DELETE SET NULL
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_keywords_website ON website_keywords(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_keywords_page ON website_keywords(page_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_keywords_opportunity ON website_keywords(ranking_opportunity_score DESC)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_keywords_seranking ON website_keywords(seranking_data_found)`;
+
+      websiteKeywordsTableInitialized = true;
+    } catch (error) {
+      console.error('[initWebsiteKeywordsTable] Error:', error);
+      websiteKeywordsTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await websiteKeywordsTableInitPromise;
+}
+
+let articleRankingsTableInitialized = false;
+let articleRankingsTableInitPromise: Promise<void> | null = null;
+
+export async function initArticleRankingsTable() {
+  if (articleRankingsTableInitialized) return;
+  if (articleRankingsTableInitPromise) {
+    await articleRankingsTableInitPromise;
+    return;
+  }
+
+  articleRankingsTableInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS article_rankings (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL,
+          keyword_id UUID NOT NULL,
+          current_position INTEGER,
+          previous_position INTEGER,
+          position_change INTEGER,
+          search_engine VARCHAR(50) DEFAULT 'google',
+          search_location VARCHAR(50) DEFAULT 'us',
+          search_device VARCHAR(50) DEFAULT 'desktop',
+          ranking_history JSONB,
+          is_tracking BOOLEAN DEFAULT true,
+          last_tracked_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          CONSTRAINT unique_ranking UNIQUE (keyword_id, search_engine, search_location, search_device),
+          CONSTRAINT fk_article_rankings_website FOREIGN KEY (website_id) REFERENCES user_websites(id) ON DELETE CASCADE,
+          CONSTRAINT fk_article_rankings_keyword FOREIGN KEY (keyword_id) REFERENCES website_keywords(id) ON DELETE CASCADE
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_article_rankings_website ON article_rankings(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_article_rankings_keyword ON article_rankings(keyword_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_article_rankings_position ON article_rankings(current_position)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_article_rankings_tracking ON article_rankings(is_tracking, last_tracked_at)`;
+
+      articleRankingsTableInitialized = true;
+    } catch (error) {
+      console.error('[initArticleRankingsTable] Error:', error);
+      articleRankingsTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await articleRankingsTableInitPromise;
+}
+
+// Initialize all website data tables
+export async function initWebsiteDataTables() {
+  await initUserWebsitesTable();
+  await initWebsitePagesTable();
+  await initWebsiteKeywordsTable();
+  await initArticleRankingsTable();
+}
+
 /**
  * 根据 key hash 查找 API Key
  */

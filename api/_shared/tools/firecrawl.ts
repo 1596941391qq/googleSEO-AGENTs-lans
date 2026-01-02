@@ -1,4 +1,10 @@
-// Firecrawl API Service for website scraping
+/**
+ * Firecrawl API 工具
+ * 
+ * 职责：抓取网站内容和结构
+ * 特点：纯数据获取，无AI逻辑
+ */
+
 const FIRECRAWL_BASE_URL = process.env.FIRECRAWL_BASE_URL || 'https://api.302.ai';
 const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
 

@@ -23,6 +23,1218 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
 import { ContentGenerationState, WebsiteBinding, KeywordData } from "./types";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
+
+// Website Data Tab Component (独立组件，修复 hooks 问题)
+interface WebsiteDataTabProps {
+  website: WebsiteBinding | null;
+  isDarkTheme: boolean;
+  uiLanguage: "en" | "zh";
+}
+
+const WebsiteDataTab: React.FC<WebsiteDataTabProps> = ({
+  website,
+  isDarkTheme,
+  uiLanguage,
+}) => {
+  const [websiteData, setWebsiteData] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [analyzing, setAnalyzing] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Load website data when component mounts or website changes
+  React.useEffect(() => {
+    if (website?.url) {
+      loadWebsiteData();
+    } else {
+      // Reset state when website is not available
+      setWebsiteData(null);
+      setError(null);
+    }
+  }, [website?.url]);
+
+  const loadWebsiteData = async () => {
+    if (!website?.url) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/website-data/get", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteUrl: website.url,
+          userId: 1, // TODO: Get from session
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setWebsiteData(result.data);
+      } else {
+        const errorText = await response.text();
+        setError(
+          uiLanguage === "zh"
+            ? "加载网站数据失败，请稍后重试"
+            : "Failed to load website data, please try again later"
+        );
+        console.error("[Website Data] API error:", errorText);
+      }
+    } catch (error: any) {
+      console.error("[Website Data] Failed to load:", error);
+
+      // 处理网络错误
+      let errorMessage =
+        uiLanguage === "zh"
+          ? "加载网站数据失败，请稍后重试"
+          : "Failed to load website data, please try again later";
+
+      if (
+        error?.message?.includes("Failed to fetch") ||
+        error?.name === "TypeError"
+      ) {
+        errorMessage =
+          uiLanguage === "zh"
+            ? "网络连接失败，请检查网络连接或稍后重试"
+            : "Network connection failed, please check your connection and try again";
+      }
+
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const analyzeOpportunities = async () => {
+    if (!websiteData || !website?.url) return;
+
+    setAnalyzing(true);
+    try {
+      const websiteId = websiteData.website.id;
+      const response = await fetch("/api/website-data/analyze-opportunities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteId,
+          uiLanguage,
+        }),
+      });
+
+      if (response.ok) {
+        // Reload data to get updated opportunities
+        await loadWebsiteData();
+      } else {
+        const errorText = await response.text();
+        console.error("[Website Data] Analyze API error:", errorText);
+      }
+    } catch (error: any) {
+      console.error("[Website Data] Failed to analyze:", error);
+
+      // 处理网络错误，但不显示错误（因为这是后台操作）
+      if (
+        error?.message?.includes("Failed to fetch") ||
+        error?.name === "TypeError"
+      ) {
+        console.warn("[Website Data] Network error during analysis");
+      }
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  if (!website) {
+    return (
+      <div
+        className={cn(
+          "text-center py-16",
+          isDarkTheme ? "text-zinc-500" : "text-gray-500"
+        )}
+      >
+        <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
+        <p className="text-sm">
+          {uiLanguage === "zh" ? "请先绑定网站" : "Please bind a website first"}
+        </p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center py-16 min-h-[400px]",
+          isDarkTheme ? "bg-zinc-900" : "bg-white"
+        )}
+      >
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
+          <span
+            className={cn(
+              "block text-sm",
+              isDarkTheme ? "text-zinc-400" : "text-gray-600"
+            )}
+          >
+            {uiLanguage === "zh" ? "加载中..." : "Loading..."}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        className={cn(
+          "text-center py-16 min-h-[400px] flex items-center justify-center",
+          isDarkTheme ? "bg-zinc-900 text-zinc-400" : "bg-white text-gray-500"
+        )}
+      >
+        <div>
+          <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
+          <p className="text-sm mb-4">{error}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadWebsiteData}
+            className={cn(
+              isDarkTheme
+                ? "border-zinc-700 hover:bg-zinc-800"
+                : "border-gray-300 hover:bg-gray-100"
+            )}
+          >
+            {uiLanguage === "zh" ? "重试" : "Retry"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!websiteData) {
+    return (
+      <div
+        className={cn(
+          "text-center py-16 min-h-[400px] flex items-center justify-center",
+          isDarkTheme ? "bg-zinc-900 text-zinc-500" : "bg-white text-gray-500"
+        )}
+      >
+        <div>
+          <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
+          <p className="text-sm">
+            {uiLanguage === "zh" ? "暂无数据" : "No data available"}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Website Info Card */}
+      <Card
+        className={cn(
+          isDarkTheme
+            ? "bg-zinc-900 border-zinc-800"
+            : "bg-white border-gray-200"
+        )}
+      >
+        <CardHeader>
+          <CardTitle
+            className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
+          >
+            {uiLanguage === "zh" ? "网站信息" : "Website Information"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {websiteData.website.screenshot && (
+            <div className="rounded-lg overflow-hidden border-2 border-emerald-500/30">
+              <img
+                src={websiteData.website.screenshot}
+                alt={websiteData.website.title || "Website screenshot"}
+                className="w-full"
+              />
+            </div>
+          )}
+          <div>
+            <div
+              className={cn(
+                "text-xs mb-1",
+                isDarkTheme ? "text-zinc-500" : "text-gray-500"
+              )}
+            >
+              URL
+            </div>
+            <a
+              href={websiteData.website.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                "text-sm font-medium flex items-center gap-1 hover:underline",
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
+              {websiteData.website.url}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+          {websiteData.website.title && (
+            <div>
+              <div
+                className={cn(
+                  "text-xs mb-1",
+                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                )}
+              >
+                {uiLanguage === "zh" ? "标题" : "Title"}
+              </div>
+              <div
+                className={cn(
+                  "text-sm",
+                  isDarkTheme ? "text-zinc-200" : "text-gray-900"
+                )}
+              >
+                {websiteData.website.title}
+              </div>
+            </div>
+          )}
+          {websiteData.website.description && (
+            <div>
+              <div
+                className={cn(
+                  "text-xs mb-1",
+                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                )}
+              >
+                {uiLanguage === "zh" ? "描述" : "Description"}
+              </div>
+              <div
+                className={cn(
+                  "text-sm",
+                  isDarkTheme ? "text-zinc-200" : "text-gray-900"
+                )}
+              >
+                {websiteData.website.description}
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-800">
+            <div>
+              <div
+                className={cn(
+                  "text-xs mb-1",
+                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                )}
+              >
+                {uiLanguage === "zh" ? "总关键词" : "Total Keywords"}
+              </div>
+              <div
+                className={cn(
+                  "text-lg font-semibold",
+                  isDarkTheme ? "text-white" : "text-gray-900"
+                )}
+              >
+                {websiteData.totalKeywords}
+              </div>
+            </div>
+            <div>
+              <div
+                className={cn(
+                  "text-xs mb-1",
+                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                )}
+              >
+                {uiLanguage === "zh" ? "总页面" : "Total Pages"}
+              </div>
+              <div
+                className={cn(
+                  "text-lg font-semibold",
+                  isDarkTheme ? "text-white" : "text-gray-900"
+                )}
+              >
+                {websiteData.totalPages}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Keywords List */}
+      <Card
+        className={cn(
+          isDarkTheme
+            ? "bg-zinc-900 border-zinc-800"
+            : "bg-white border-gray-200"
+        )}
+      >
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle
+            className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
+          >
+            {uiLanguage === "zh" ? "关键词列表" : "Keywords"}
+          </CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={analyzeOpportunities}
+            disabled={analyzing}
+            className={cn(
+              isDarkTheme
+                ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                : "border-gray-300 text-gray-700 hover:bg-gray-100"
+            )}
+          >
+            {analyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                {uiLanguage === "zh" ? "分析中..." : "Analyzing..."}
+              </>
+            ) : (
+              <>
+                <Target className="w-4 h-4 mr-2" />
+                {uiLanguage === "zh" ? "分析排名机会" : "Analyze Opportunities"}
+              </>
+            )}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {websiteData.keywords.length === 0 ? (
+              <div
+                className={cn(
+                  "text-center py-8 text-sm",
+                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                )}
+              >
+                {uiLanguage === "zh" ? "暂无关键词" : "No keywords found"}
+              </div>
+            ) : (
+              websiteData.keywords.map((keyword: any) => (
+                <div
+                  key={keyword.id}
+                  className={cn(
+                    "p-4 rounded-lg border",
+                    isDarkTheme
+                      ? "border-zinc-800 bg-zinc-950"
+                      : "border-gray-200 bg-gray-50"
+                  )}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <div
+                        className={cn(
+                          "font-medium",
+                          isDarkTheme ? "text-white" : "text-gray-900"
+                        )}
+                      >
+                        {keyword.keyword}
+                      </div>
+                      {keyword.translation && (
+                        <div
+                          className={cn(
+                            "text-xs mt-1",
+                            isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                          )}
+                        >
+                          {keyword.translation}
+                        </div>
+                      )}
+                    </div>
+                    {keyword.rankingOpportunityScore !== null && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          keyword.rankingOpportunityScore >= 70
+                            ? "border-emerald-500 text-emerald-500 bg-emerald-500/10"
+                            : keyword.rankingOpportunityScore >= 50
+                            ? "border-yellow-500 text-yellow-500 bg-yellow-500/10"
+                            : "border-zinc-500 text-zinc-500 bg-zinc-500/10"
+                        )}
+                      >
+                        {keyword.rankingOpportunityScore}/100
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* SE-Ranking Data */}
+                  {keyword.serankingData && (
+                    <div className="grid grid-cols-4 gap-4 mt-3 pt-3 border-t border-zinc-800">
+                      <div>
+                        <div
+                          className={cn(
+                            "text-xs mb-1",
+                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                          )}
+                        >
+                          {uiLanguage === "zh" ? "搜索量" : "Volume"}
+                        </div>
+                        <div
+                          className={cn(
+                            "text-sm font-medium",
+                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
+                          )}
+                        >
+                          {keyword.serankingData.volume?.toLocaleString() ||
+                            "N/A"}
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          className={cn(
+                            "text-xs mb-1",
+                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                          )}
+                        >
+                          {uiLanguage === "zh" ? "难度" : "Difficulty"}
+                        </div>
+                        <div
+                          className={cn(
+                            "text-sm font-medium",
+                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
+                          )}
+                        >
+                          {keyword.serankingData.difficulty || "N/A"}
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          className={cn(
+                            "text-xs mb-1",
+                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                          )}
+                        >
+                          CPC
+                        </div>
+                        <div
+                          className={cn(
+                            "text-sm font-medium",
+                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
+                          )}
+                        >
+                          ${keyword.serankingData.cpc?.toFixed(2) || "N/A"}
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          className={cn(
+                            "text-xs mb-1",
+                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                          )}
+                        >
+                          {uiLanguage === "zh" ? "竞争度" : "Competition"}
+                        </div>
+                        <div
+                          className={cn(
+                            "text-sm font-medium",
+                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
+                          )}
+                        >
+                          {keyword.serankingData.competition
+                            ? (keyword.serankingData.competition * 100).toFixed(
+                                1
+                              ) + "%"
+                            : "N/A"}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Opportunity Reasoning */}
+                  {keyword.opportunityReasoning && (
+                    <div className="mt-3 pt-3 border-t border-zinc-800">
+                      <div
+                        className={cn(
+                          "text-xs mb-1",
+                          isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                        )}
+                      >
+                        {uiLanguage === "zh"
+                          ? "排名机会"
+                          : "Ranking Opportunity"}
+                      </div>
+                      <div
+                        className={cn(
+                          "text-sm",
+                          isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                        )}
+                      >
+                        {keyword.opportunityReasoning}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Optimization Suggestions */}
+                  {keyword.suggestedOptimization && (
+                    <div className="mt-2">
+                      <div
+                        className={cn(
+                          "text-xs mb-1",
+                          isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                        )}
+                      >
+                        {uiLanguage === "zh"
+                          ? "优化建议"
+                          : "Optimization Suggestions"}
+                      </div>
+                      <div
+                        className={cn(
+                          "text-sm",
+                          isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                        )}
+                      >
+                        {keyword.suggestedOptimization}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pages by Topic Cluster */}
+      {websiteData.pages.byCluster &&
+        Object.keys(websiteData.pages.byCluster).length > 0 && (
+          <Card
+            className={cn(
+              isDarkTheme
+                ? "bg-zinc-900 border-zinc-800"
+                : "bg-white border-gray-200"
+            )}
+          >
+            <CardHeader>
+              <CardTitle
+                className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
+              >
+                {uiLanguage === "zh" ? "主题集群" : "Topic Clusters"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {Object.entries(websiteData.pages.byCluster).map(
+                  ([clusterName, pages]: [string, any]) => (
+                    <div key={clusterName}>
+                      <div
+                        className={cn(
+                          "font-medium mb-2",
+                          isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+                        )}
+                      >
+                        {clusterName}
+                      </div>
+                      <div className="space-y-1">
+                        {pages.map((page: any) => (
+                          <a
+                            key={page.id}
+                            href={page.page_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn(
+                              "text-sm flex items-center gap-2 hover:underline",
+                              isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                            )}
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            {page.page_title || page.page_url}
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+    </div>
+  );
+};
+
+// Article Rankings Tab Component (独立组件，修复 hooks 问题)
+interface ArticleRankingsTabProps {
+  website: WebsiteBinding | null;
+  isDarkTheme: boolean;
+  uiLanguage: "en" | "zh";
+}
+
+const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
+  website,
+  isDarkTheme,
+  uiLanguage,
+}) => {
+  const [rankingsData, setRankingsData] = React.useState<any>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Load rankings data when component mounts or website changes
+  React.useEffect(() => {
+    if (website?.url) {
+      loadRankingsData();
+    } else {
+      // Reset state when website is not available
+      setRankingsData(null);
+      setError(null);
+    }
+  }, [website?.url]);
+
+  const loadRankingsData = async () => {
+    if (!website?.url) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/article-rankings/get", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteUrl: website.url,
+          userId: 1, // TODO: Get from session
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setRankingsData(result.data);
+      } else {
+        const errorText = await response.text();
+        setError(
+          uiLanguage === "zh"
+            ? "加载排名数据失败，请稍后重试"
+            : "Failed to load ranking data, please try again later"
+        );
+        console.error("[Article Rankings] API error:", errorText);
+      }
+    } catch (error: any) {
+      console.error("[Article Rankings] Failed to load:", error);
+
+      // 处理网络错误
+      let errorMessage =
+        uiLanguage === "zh"
+          ? "加载排名数据失败，请稍后重试"
+          : "Failed to load ranking data, please try again later";
+
+      if (
+        error?.message?.includes("Failed to fetch") ||
+        error?.name === "TypeError"
+      ) {
+        errorMessage =
+          uiLanguage === "zh"
+            ? "网络连接失败，请检查网络连接或稍后重试"
+            : "Network connection failed, please check your connection and try again";
+      }
+
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!website) {
+    return (
+      <div
+        className={cn(
+          "text-center py-16",
+          isDarkTheme ? "text-zinc-500" : "text-gray-500"
+        )}
+      >
+        <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
+        <p className="text-sm">
+          {uiLanguage === "zh" ? "请先绑定网站" : "Please bind a website first"}
+        </p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center py-16 min-h-[400px]",
+          isDarkTheme ? "bg-zinc-900" : "bg-white"
+        )}
+      >
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
+          <span
+            className={cn(
+              "block text-sm",
+              isDarkTheme ? "text-zinc-400" : "text-gray-600"
+            )}
+          >
+            {uiLanguage === "zh" ? "加载中..." : "Loading..."}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div
+        className={cn(
+          "text-center py-16 min-h-[400px] flex items-center justify-center",
+          isDarkTheme ? "bg-zinc-900 text-zinc-400" : "bg-white text-gray-500"
+        )}
+      >
+        <div>
+          <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
+          <p className="text-sm mb-4">{error}</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadRankingsData}
+            className={cn(
+              isDarkTheme
+                ? "border-zinc-700 hover:bg-zinc-800"
+                : "border-gray-300 hover:bg-gray-100"
+            )}
+          >
+            {uiLanguage === "zh" ? "重试" : "Retry"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!rankingsData) {
+    return (
+      <div
+        className={cn(
+          "text-center py-16 min-h-[400px] flex items-center justify-center",
+          isDarkTheme ? "bg-zinc-900 text-zinc-500" : "bg-white text-gray-500"
+        )}
+      >
+        <div>
+          <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
+          <p className="text-sm">
+            {uiLanguage === "zh"
+              ? "暂无排名数据。请先启用关键词排名追踪。"
+              : "No ranking data. Please enable keyword tracking first."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card
+          className={cn(
+            isDarkTheme
+              ? "bg-zinc-900 border-zinc-800"
+              : "bg-white border-gray-200"
+          )}
+        >
+          <CardContent className="pt-6">
+            <div
+              className={cn(
+                "text-xs mb-1",
+                isDarkTheme ? "text-zinc-500" : "text-gray-500"
+              )}
+            >
+              {uiLanguage === "zh" ? "总关键词" : "Total Keywords"}
+            </div>
+            <div
+              className={cn(
+                "text-2xl font-bold",
+                isDarkTheme ? "text-white" : "text-gray-900"
+              )}
+            >
+              {rankingsData.overview.totalKeywords}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={cn(
+            isDarkTheme
+              ? "bg-zinc-900 border-zinc-800"
+              : "bg-white border-gray-200"
+          )}
+        >
+          <CardContent className="pt-6">
+            <div
+              className={cn(
+                "text-xs mb-1",
+                isDarkTheme ? "text-zinc-500" : "text-gray-500"
+              )}
+            >
+              {uiLanguage === "zh" ? "前10名" : "Top 10"}
+            </div>
+            <div className={cn("text-2xl font-bold text-emerald-500")}>
+              {rankingsData.overview.top10Keywords}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={cn(
+            isDarkTheme
+              ? "bg-zinc-900 border-zinc-800"
+              : "bg-white border-gray-200"
+          )}
+        >
+          <CardContent className="pt-6">
+            <div
+              className={cn(
+                "text-xs mb-1",
+                isDarkTheme ? "text-zinc-500" : "text-gray-500"
+              )}
+            >
+              {uiLanguage === "zh" ? "平均排名" : "Avg Position"}
+            </div>
+            <div
+              className={cn(
+                "text-2xl font-bold",
+                isDarkTheme ? "text-white" : "text-gray-900"
+              )}
+            >
+              {rankingsData.overview.avgPosition
+                ? Math.round(rankingsData.overview.avgPosition)
+                : "N/A"}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card
+          className={cn(
+            isDarkTheme
+              ? "bg-zinc-900 border-zinc-800"
+              : "bg-white border-gray-200"
+          )}
+        >
+          <CardContent className="pt-6">
+            <div
+              className={cn(
+                "text-xs mb-1",
+                isDarkTheme ? "text-zinc-500" : "text-gray-500"
+              )}
+            >
+              {uiLanguage === "zh" ? "排名提升" : "Improved"}
+            </div>
+            <div className={cn("text-2xl font-bold text-emerald-500")}>
+              {rankingsData.overview.improved}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Rankings Table */}
+      <Card
+        className={cn(
+          isDarkTheme
+            ? "bg-zinc-900 border-zinc-800"
+            : "bg-white border-gray-200"
+        )}
+      >
+        <CardHeader>
+          <CardTitle
+            className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
+          >
+            {uiLanguage === "zh" ? "关键词排名" : "Keyword Rankings"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {rankingsData.rankings.length === 0 ? (
+            <div
+              className={cn(
+                "text-center py-8 text-sm",
+                isDarkTheme ? "text-zinc-500" : "text-gray-500"
+              )}
+            >
+              {uiLanguage === "zh"
+                ? "暂无排名数据"
+                : "No ranking data available"}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr
+                    className={cn(
+                      "border-b",
+                      isDarkTheme ? "border-zinc-800" : "border-gray-200"
+                    )}
+                  >
+                    <th
+                      className={cn(
+                        "text-left py-3 px-4 text-xs font-medium",
+                        isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                      )}
+                    >
+                      {uiLanguage === "zh" ? "关键词" : "Keyword"}
+                    </th>
+                    <th
+                      className={cn(
+                        "text-center py-3 px-4 text-xs font-medium",
+                        isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                      )}
+                    >
+                      {uiLanguage === "zh" ? "当前排名" : "Position"}
+                    </th>
+                    <th
+                      className={cn(
+                        "text-center py-3 px-4 text-xs font-medium",
+                        isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                      )}
+                    >
+                      {uiLanguage === "zh" ? "变化" : "Change"}
+                    </th>
+                    <th
+                      className={cn(
+                        "text-center py-3 px-4 text-xs font-medium",
+                        isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                      )}
+                    >
+                      {uiLanguage === "zh" ? "搜索量" : "Volume"}
+                    </th>
+                    <th
+                      className={cn(
+                        "text-center py-3 px-4 text-xs font-medium",
+                        isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                      )}
+                    >
+                      {uiLanguage === "zh" ? "难度" : "Difficulty"}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rankingsData.rankings.map((ranking: any) => (
+                    <tr
+                      key={ranking.id}
+                      className={cn(
+                        "border-b",
+                        isDarkTheme ? "border-zinc-800" : "border-gray-100"
+                      )}
+                    >
+                      <td className="py-3 px-4">
+                        <div
+                          className={cn(
+                            "font-medium",
+                            isDarkTheme ? "text-white" : "text-gray-900"
+                          )}
+                        >
+                          {ranking.keyword}
+                        </div>
+                        {ranking.translation && (
+                          <div
+                            className={cn(
+                              "text-xs mt-1",
+                              isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                            )}
+                          >
+                            {ranking.translation}
+                          </div>
+                        )}
+                      </td>
+                      <td className="text-center py-3 px-4">
+                        {ranking.currentPosition ? (
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              ranking.currentPosition <= 3
+                                ? "border-emerald-500 text-emerald-500 bg-emerald-500/10"
+                                : ranking.currentPosition <= 10
+                                ? "border-blue-500 text-blue-500 bg-blue-500/10"
+                                : "border-zinc-500 text-zinc-500 bg-zinc-500/10"
+                            )}
+                          >
+                            #{ranking.currentPosition}
+                          </Badge>
+                        ) : (
+                          <span
+                            className={cn(
+                              "text-sm",
+                              isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                            )}
+                          >
+                            N/A
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-center py-3 px-4">
+                        {ranking.positionChange !== null &&
+                        ranking.positionChange !== 0 ? (
+                          <div
+                            className={cn(
+                              "text-sm font-medium flex items-center justify-center gap-1",
+                              ranking.positionChange > 0
+                                ? "text-emerald-500"
+                                : "text-red-500"
+                            )}
+                          >
+                            {ranking.positionChange > 0 ? (
+                              <>
+                                <TrendingUp className="w-4 h-4" />+
+                                {ranking.positionChange}
+                              </>
+                            ) : (
+                              <>
+                                <TrendingUp className="w-4 h-4 rotate-180" />
+                                {ranking.positionChange}
+                              </>
+                            )}
+                          </div>
+                        ) : (
+                          <span
+                            className={cn(
+                              "text-sm",
+                              isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                            )}
+                          >
+                            -
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-center py-3 px-4">
+                        <span
+                          className={cn(
+                            "text-sm",
+                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
+                          )}
+                        >
+                          {ranking.volume?.toLocaleString() || "N/A"}
+                        </span>
+                      </td>
+                      <td className="text-center py-3 px-4">
+                        <span
+                          className={cn(
+                            "text-sm",
+                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
+                          )}
+                        >
+                          {ranking.difficulty || "N/A"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Ranking Trends Chart */}
+      {rankingsData.rankings.length > 0 &&
+        rankingsData.rankings.some(
+          (r: any) => r.historyTrend && Object.keys(r.historyTrend).length > 0
+        ) && (
+          <Card
+            className={cn(
+              isDarkTheme
+                ? "bg-zinc-900 border-zinc-800"
+                : "bg-white border-gray-200"
+            )}
+          >
+            <CardHeader>
+              <CardTitle
+                className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
+              >
+                {uiLanguage === "zh" ? "排名趋势" : "Ranking Trends"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart
+                  data={(() => {
+                    // Get top 5 keywords with history data
+                    const keywordsWithHistory = rankingsData.rankings
+                      .filter(
+                        (r: any) =>
+                          r.historyTrend &&
+                          Object.keys(r.historyTrend).length > 0
+                      )
+                      .slice(0, 5);
+
+                    // Build chart data
+                    const allDates = new Set<string>();
+                    keywordsWithHistory.forEach((r: any) => {
+                      Object.keys(r.historyTrend).forEach((date) =>
+                        allDates.add(date)
+                      );
+                    });
+
+                    const sortedDates = Array.from(allDates).sort();
+
+                    return sortedDates.map((date) => {
+                      const dataPoint: any = { date };
+                      keywordsWithHistory.forEach((r: any) => {
+                        dataPoint[r.keyword] = r.historyTrend[date] || null;
+                      });
+                      return dataPoint;
+                    });
+                  })()}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={isDarkTheme ? "#3f3f46" : "#e5e7eb"}
+                  />
+                  <XAxis
+                    dataKey="date"
+                    stroke={isDarkTheme ? "#a1a1aa" : "#6b7280"}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <YAxis
+                    reversed
+                    stroke={isDarkTheme ? "#a1a1aa" : "#6b7280"}
+                    tick={{ fontSize: 12 }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: isDarkTheme ? "#18181b" : "#ffffff",
+                      border: isDarkTheme
+                        ? "1px solid #3f3f46"
+                        : "1px solid #e5e7eb",
+                      borderRadius: "6px",
+                    }}
+                  />
+                  <Legend />
+                  {rankingsData.rankings
+                    .filter(
+                      (r: any) =>
+                        r.historyTrend && Object.keys(r.historyTrend).length > 0
+                    )
+                    .slice(0, 5)
+                    .map((r: any, index: number) => {
+                      const colors = [
+                        "#10b981",
+                        "#3b82f6",
+                        "#f59e0b",
+                        "#ef4444",
+                        "#8b5cf6",
+                      ];
+                      return (
+                        <Line
+                          key={r.id}
+                          type="monotone"
+                          dataKey={r.keyword}
+                          stroke={colors[index % colors.length]}
+                          strokeWidth={2}
+                          dot={{ r: 4 }}
+                          connectNulls
+                        />
+                      );
+                    })}
+                </LineChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        )}
+    </div>
+  );
+};
 
 interface ContentGenerationViewProps {
   state: ContentGenerationState;
@@ -43,6 +1255,53 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
   const [qa2, setQa2] = useState("");
   const [qa3, setQa3] = useState<string[]>([]);
   const [qa4, setQa4] = useState("");
+
+  // Load website binding from localStorage on mount
+  React.useEffect(() => {
+    try {
+      const savedWebsite = localStorage.getItem("google_seo_bound_website");
+      if (savedWebsite) {
+        const website = JSON.parse(savedWebsite);
+        setState({
+          website,
+          onboardingStep: 5, // Set to bound state
+        });
+      }
+    } catch (error) {
+      console.error(
+        "[Content Generation] Failed to load saved website:",
+        error
+      );
+    }
+  }, []);
+
+  // Save website binding to localStorage whenever it changes
+  React.useEffect(() => {
+    if (state.website) {
+      try {
+        localStorage.setItem(
+          "google_seo_bound_website",
+          JSON.stringify(state.website)
+        );
+      } catch (error) {
+        console.error(
+          "[Content Generation] Failed to save website to localStorage:",
+          error
+        );
+      }
+    } else {
+      // Clear localStorage when website is unbound
+      localStorage.removeItem("google_seo_bound_website");
+    }
+  }, [state.website]);
+
+  // Preload screenshot image when article demo is displayed
+  React.useEffect(() => {
+    if (state.onboardingStep === 3 && state.demoContent?.screenshot) {
+      const img = new Image();
+      img.src = state.demoContent.screenshot;
+    }
+  }, [state.onboardingStep, state.demoContent?.screenshot]);
 
   // Random author information pool
   const randomAuthor = useMemo(() => {
@@ -303,11 +1562,22 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               } else {
                 throw new Error("Invalid demo response format");
               }
-            } catch (demoError) {
+            } catch (demoError: any) {
               console.error(
                 "[Content Generation] Error generating demo content:",
                 demoError
               );
+
+              // 处理网络错误
+              if (
+                demoError?.message?.includes("Failed to fetch") ||
+                demoError?.name === "TypeError"
+              ) {
+                console.warn(
+                  "[Content Generation] Network error during demo generation"
+                );
+              }
+
               // Still move to next step with default content
               console.log(
                 "[Content Generation] Moving to step 2 with default content"
@@ -330,11 +1600,22 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           } else {
             throw new Error("Invalid extract response format");
           }
-        } catch (extractError) {
+        } catch (extractError: any) {
           console.error(
             "[Content Generation] Error extracting keywords:",
             extractError
           );
+
+          // 处理网络错误
+          if (
+            extractError?.message?.includes("Failed to fetch") ||
+            extractError?.name === "TypeError"
+          ) {
+            console.warn(
+              "[Content Generation] Network error during keyword extraction"
+            );
+          }
+
           // Still move to next step, just without keywords
           console.log("[Content Generation] Moving to step 2 without keywords");
           const urlDomain2 = new URL(processedUrl).hostname;
@@ -355,13 +1636,28 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
       } else {
         throw new Error("No data returned from scrape");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[Content Generation] Error scraping website:", error);
-      alert(
+
+      // 处理网络错误
+      let errorMessage =
         uiLanguage === "zh"
           ? "抓取网站失败，请稍后重试"
-          : "Failed to scrape website, please try again later"
-      );
+          : "Failed to scrape website, please try again later";
+
+      if (
+        error?.message?.includes("Failed to fetch") ||
+        error?.name === "TypeError"
+      ) {
+        errorMessage =
+          uiLanguage === "zh"
+            ? "网络连接失败，请检查网络连接或稍后重试"
+            : "Network connection failed, please check your connection and try again";
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      alert(errorMessage);
       setState({ onboardingStep: 0 });
     }
   };
@@ -426,6 +1722,16 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           : "Are you sure you want to unbind? This will clear all binding data."
                       )
                     ) {
+                      // Clear localStorage
+                      try {
+                        localStorage.removeItem("google_seo_bound_website");
+                      } catch (error) {
+                        console.error(
+                          "[Content Generation] Failed to clear website from localStorage:",
+                          error
+                        );
+                      }
+
                       setState({
                         website: null,
                         onboardingStep: 0,
@@ -1171,6 +2477,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                                         : "Website screenshot")
                                     }
                                     className="w-full"
+                                    loading="eager"
+                                    decoding="async"
                                   />
                                   <p
                                     className={cn(
@@ -1548,19 +2856,94 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 </Button>
                 <Button
                   className="bg-emerald-500 hover:bg-emerald-600 text-white"
-                  onClick={() => {
+                  onClick={async () => {
                     if (!tempUrl) {
                       alert("URL not found. Please start over.");
                       return;
                     }
+
+                    // Save website data to database
+                    try {
+                      const saveResponse = await fetch(
+                        "/api/website-data/save",
+                        {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                          body: JSON.stringify({
+                            userId: 1, // TODO: Get from session/auth
+                            websiteUrl: tempUrl,
+                            websiteTitle:
+                              state.demoContent?.articleDemo?.article?.title ||
+                              "",
+                            websiteDescription: "",
+                            websiteScreenshot:
+                              state.demoContent?.screenshot || "",
+                            rawContent: state.websiteData?.rawContent || "",
+                            keywords:
+                              state.websiteData?.extractedKeywords || [],
+                            industry: state.website?.industry,
+                            monthlyVisits: state.website?.monthlyVisits,
+                            monthlyRevenue: qa2,
+                            marketingTools: qa3,
+                            additionalInfo: qa4,
+                          }),
+                        }
+                      );
+
+                      if (!saveResponse.ok) {
+                        const errorText = await saveResponse.text();
+                        console.error(
+                          "[Content Generation] Failed to save website data:",
+                          saveResponse.status,
+                          errorText
+                        );
+                      } else {
+                        console.log(
+                          "[Content Generation] Website data saved successfully"
+                        );
+                      }
+                    } catch (error: any) {
+                      console.error(
+                        "[Content Generation] Error saving website data:",
+                        error
+                      );
+
+                      // 处理网络错误
+                      if (
+                        error?.message?.includes("Failed to fetch") ||
+                        error?.name === "TypeError"
+                      ) {
+                        console.warn(
+                          "[Content Generation] Network error while saving website data"
+                        );
+                      }
+                    }
+
+                    const boundWebsite = {
+                      url: tempUrl,
+                      boundAt: new Date().toISOString(),
+                      monthlyRevenue: qa2,
+                      marketingTools: qa3,
+                      additionalInfo: qa4,
+                    };
+
+                    // Save to localStorage
+                    try {
+                      localStorage.setItem(
+                        "google_seo_bound_website",
+                        JSON.stringify(boundWebsite)
+                      );
+                    } catch (error) {
+                      console.error(
+                        "[Content Generation] Failed to save website to localStorage:",
+                        error
+                      );
+                    }
+
                     setState({
-                      website: {
-                        url: tempUrl,
-                        boundAt: new Date().toISOString(),
-                        monthlyRevenue: qa2,
-                        marketingTools: qa3,
-                        additionalInfo: qa4,
-                      },
+                      website: boundWebsite,
                       onboardingStep: 5, // Complete (bound state will show)
                     });
                   }}
@@ -1578,43 +2961,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
     }
   };
 
-  // Render Website Data Tab
-  const renderWebsiteData = () => {
-    return (
-      <div
-        className={cn(
-          "text-center py-16",
-          isDarkTheme ? "text-zinc-500" : "text-gray-500"
-        )}
-      >
-        <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
-        <p className="text-sm">
-          {uiLanguage === "zh"
-            ? "网站数据功能即将推出..."
-            : "Website data feature coming soon..."}
-        </p>
-      </div>
-    );
-  };
-
-  // Render Article Rankings Tab
-  const renderArticleRankings = () => {
-    return (
-      <div
-        className={cn(
-          "text-center py-16",
-          isDarkTheme ? "text-zinc-500" : "text-gray-500"
-        )}
-      >
-        <TrendingUp className="w-16 h-16 mx-auto mb-4 opacity-50" />
-        <p className="text-sm">
-          {uiLanguage === "zh"
-            ? "文章排名功能即将推出..."
-            : "Article rankings feature coming soon..."}
-        </p>
-      </div>
-    );
-  };
+  // Old functions removed - now using WebsiteDataTab and ArticleRankingsTab components
 
   // Render Publish Tab
   const renderPublish = () => {
@@ -1639,8 +2986,20 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
     <div className="max-w-7xl mx-auto">
       {/* Tab Content - No top tabs needed, they're in sidebar */}
       {state.activeTab === "my-website" && renderMyWebsite()}
-      {state.activeTab === "website-data" && renderWebsiteData()}
-      {state.activeTab === "article-rankings" && renderArticleRankings()}
+      {state.activeTab === "website-data" && (
+        <WebsiteDataTab
+          website={state.website}
+          isDarkTheme={isDarkTheme}
+          uiLanguage={uiLanguage}
+        />
+      )}
+      {state.activeTab === "article-rankings" && (
+        <ArticleRankingsTab
+          website={state.website}
+          isDarkTheme={isDarkTheme}
+          uiLanguage={uiLanguage}
+        />
+      )}
       {state.activeTab === "publish" && renderPublish()}
     </div>
   );

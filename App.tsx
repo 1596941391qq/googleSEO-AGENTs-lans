@@ -703,6 +703,261 @@ const SerpPreview = ({
   );
 };
 
+// Render agent data as formatted table or cards
+const renderAgentDataTable = (
+  data: any,
+  dataType: "keywords" | "analysis",
+  isDarkTheme: boolean = true
+) => {
+  if (dataType === "keywords") {
+    return (
+      <div className="overflow-x-auto mt-2">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr
+              className={`border-b ${
+                isDarkTheme
+                  ? "border-emerald-500/30 bg-black"
+                  : "border-emerald-200 bg-emerald-50"
+              }`}
+            >
+              <th
+                className={`py-2 px-3 text-left font-semibold ${
+                  isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                }`}
+              >
+                Keyword
+              </th>
+              <th
+                className={`py-2 px-3 text-left font-semibold ${
+                  isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                }`}
+              >
+                Translation
+              </th>
+              <th
+                className={`py-2 px-3 text-left font-semibold ${
+                  isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                }`}
+              >
+                Intent
+              </th>
+              <th
+                className={`py-2 px-3 text-left font-semibold ${
+                  isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                }`}
+              >
+                Volume
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item: any, i: number) => (
+              <tr
+                key={i}
+                className={`border-b ${
+                  isDarkTheme
+                    ? "border-emerald-500/20 hover:bg-emerald-500/5"
+                    : "border-gray-200 hover:bg-emerald-50"
+                }`}
+              >
+                <td
+                  className={`py-2 px-3 ${
+                    isDarkTheme ? "text-white" : "text-gray-800"
+                  }`}
+                >
+                  {item.keyword}
+                </td>
+                <td
+                  className={`py-2 px-3 ${
+                    isDarkTheme ? "text-white/80" : "text-gray-600"
+                  }`}
+                >
+                  {item.translation}
+                </td>
+                <td
+                  className={`py-2 px-3 ${
+                    isDarkTheme ? "text-white/80" : "text-gray-600"
+                  }`}
+                >
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs ${
+                      isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "bg-emerald-100 text-emerald-700"
+                    }`}
+                  >
+                    {item.intent}
+                  </span>
+                </td>
+                <td
+                  className={`py-2 px-3 font-mono ${
+                    isDarkTheme ? "text-white" : "text-gray-800"
+                  }`}
+                >
+                  {item.volume?.toLocaleString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (dataType === "analysis") {
+    // Single item or array of items
+    const items = Array.isArray(data) ? data : [data];
+    
+    return (
+      <div className="space-y-3 mt-2">
+        {items.map((data, idx) => (
+          <div key={idx} className="space-y-3">
+            {/* Analysis Result Cards */}
+            <div className="grid grid-cols-2 gap-2">
+              <div
+                className={`p-3 rounded-lg border ${
+                  isDarkTheme
+                    ? "bg-black border-emerald-500/30"
+                    : "bg-gray-50 border-gray-200"
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-bold mb-1 ${
+                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                  }`}
+                >
+                  PROBABILITY
+                </div>
+                <div
+                  className={`text-lg font-bold ${
+                    data.probability === "High"
+                      ? isDarkTheme
+                        ? "text-emerald-400"
+                        : "text-emerald-600"
+                      : data.probability === "Medium"
+                      ? isDarkTheme
+                        ? "text-yellow-400"
+                        : "text-yellow-600"
+                      : isDarkTheme
+                      ? "text-red-400"
+                      : "text-red-600"
+                  }`}
+                >
+                  {data.probability || "N/A"}
+                </div>
+              </div>
+              <div
+                className={`p-3 rounded-lg border ${
+                  isDarkTheme
+                    ? "bg-black border-emerald-500/30"
+                    : "bg-gray-50 border-gray-200"
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-bold mb-1 ${
+                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                  }`}
+                >
+                  DOMAIN TYPE
+                </div>
+                <div
+                  className={`text-sm ${
+                    isDarkTheme ? "text-white" : "text-gray-800"
+                  }`}
+                >
+                  {data.topDomainType || "Unknown"}
+                </div>
+              </div>
+            </div>
+
+            {/* SERP Results */}
+            {data.topSerpSnippets && data.topSerpSnippets.length > 0 && (
+              <div
+                className={`p-3 rounded-lg border ${
+                  isDarkTheme
+                    ? "bg-black border-emerald-500/30"
+                    : "bg-white border-gray-200"
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
+                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                  }`}
+                >
+                  🔍 TOP GOOGLE RESULTS ({data.serpResultCount || "N/A"} total)
+                </div>
+                <div className="space-y-2">
+                  {data.topSerpSnippets.map((snippet: any, i: number) => (
+                    <div
+                      key={i}
+                      className={`p-2 rounded border ${
+                        isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-gray-50 border-gray-200"
+                      }`}
+                    >
+                      <div
+                        className={`text-xs font-medium mb-1 ${
+                          isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                        }`}
+                      >
+                        {snippet.title}
+                      </div>
+                      <div
+                        className={`text-[10px] mb-1 ${
+                          isDarkTheme ? "text-emerald-500/70" : "text-gray-500"
+                        }`}
+                      >
+                        {snippet.url}
+                      </div>
+                      <div
+                        className={`text-xs line-clamp-2 ${
+                          isDarkTheme ? "text-white/90" : "text-gray-600"
+                        }`}
+                      >
+                        {snippet.snippet}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Reasoning */}
+            {data.reasoning && (
+              <div
+                className={`p-3 rounded-lg border ${
+                  isDarkTheme
+                    ? "bg-black border-emerald-500/20"
+                    : "bg-white border-gray-200"
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
+                    isDarkTheme ? "text-white/70" : "text-gray-600"
+                  }`}
+                >
+                  ANALYSIS REASONING
+                </div>
+                <div
+                  className={`text-xs leading-relaxed ${
+                    isDarkTheme ? "text-white" : "text-gray-700"
+                  }`}
+                >
+                  {data.reasoning}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+};
+
 const AgentStream = ({
   thoughts,
   t,
@@ -839,7 +1094,16 @@ const AgentStream = ({
             )}
 
             {/* Table Display */}
-            {thought.table && <div className="mt-2">{thought.table}</div>}
+            {/* {thought.table && <div className="mt-2">{thought.table}</div>} */}
+            {thought.data && thought.dataType && (
+              <div className="mt-2">
+                {renderAgentDataTable(
+                  thought.data,
+                  thought.dataType,
+                  isDarkTheme
+                )}
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -4143,253 +4407,7 @@ export default function App() {
     }
   };
 
-  // Render agent data as formatted table or cards
-  const renderAgentDataTable = (
-    data: any,
-    dataType: "keywords" | "analysis",
-    isDarkTheme: boolean = true
-  ) => {
-    if (dataType === "keywords") {
-      return (
-        <div className="overflow-x-auto mt-2">
-          <table className="w-full text-xs border-collapse">
-            <thead>
-              <tr
-                className={`border-b ${
-                  isDarkTheme
-                    ? "border-emerald-500/30 bg-black"
-                    : "border-emerald-200 bg-emerald-50"
-                }`}
-              >
-                <th
-                  className={`py-2 px-3 text-left font-semibold ${
-                    isDarkTheme ? "text-emerald-300" : "text-emerald-700"
-                  }`}
-                >
-                  Keyword
-                </th>
-                <th
-                  className={`py-2 px-3 text-left font-semibold ${
-                    isDarkTheme ? "text-emerald-300" : "text-emerald-700"
-                  }`}
-                >
-                  Translation
-                </th>
-                <th
-                  className={`py-2 px-3 text-left font-semibold ${
-                    isDarkTheme ? "text-emerald-300" : "text-emerald-700"
-                  }`}
-                >
-                  Intent
-                </th>
-                <th
-                  className={`py-2 px-3 text-left font-semibold ${
-                    isDarkTheme ? "text-emerald-300" : "text-emerald-700"
-                  }`}
-                >
-                  Volume
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((item: any, i: number) => (
-                <tr
-                  key={i}
-                  className={`border-b ${
-                    isDarkTheme
-                      ? "border-emerald-500/20 hover:bg-emerald-500/5"
-                      : "border-gray-200 hover:bg-emerald-50"
-                  }`}
-                >
-                  <td
-                    className={`py-2 px-3 ${
-                      isDarkTheme ? "text-white" : "text-gray-800"
-                    }`}
-                  >
-                    {item.keyword}
-                  </td>
-                  <td
-                    className={`py-2 px-3 ${
-                      isDarkTheme ? "text-white/80" : "text-gray-600"
-                    }`}
-                  >
-                    {item.translation}
-                  </td>
-                  <td
-                    className={`py-2 px-3 ${
-                      isDarkTheme ? "text-white/80" : "text-gray-600"
-                    }`}
-                  >
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs ${
-                        isDarkTheme
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                          : "bg-emerald-100 text-emerald-700"
-                      }`}
-                    >
-                      {item.intent}
-                    </span>
-                  </td>
-                  <td
-                    className={`py-2 px-3 font-mono ${
-                      isDarkTheme ? "text-white" : "text-gray-800"
-                    }`}
-                  >
-                    {item.volume?.toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      );
-    }
 
-    if (dataType === "analysis") {
-      return (
-        <div className="space-y-3 mt-2">
-          {/* Analysis Result Cards */}
-          <div className="grid grid-cols-2 gap-2">
-            <div
-              className={`p-3 rounded-lg border ${
-                isDarkTheme
-                  ? "bg-black border-emerald-500/30"
-                  : "bg-gray-50 border-gray-200"
-              }`}
-            >
-              <div
-                className={`text-[10px] font-bold mb-1 ${
-                  isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                }`}
-              >
-                PROBABILITY
-              </div>
-              <div
-                className={`text-lg font-bold ${
-                  data.probability === "High"
-                    ? isDarkTheme
-                      ? "text-emerald-400"
-                      : "text-emerald-600"
-                    : data.probability === "Medium"
-                    ? isDarkTheme
-                      ? "text-yellow-400"
-                      : "text-yellow-600"
-                    : isDarkTheme
-                    ? "text-red-400"
-                    : "text-red-600"
-                }`}
-              >
-                {data.probability || "N/A"}
-              </div>
-            </div>
-            <div
-              className={`p-3 rounded-lg border ${
-                isDarkTheme
-                  ? "bg-black border-emerald-500/30"
-                  : "bg-gray-50 border-gray-200"
-              }`}
-            >
-              <div
-                className={`text-[10px] font-bold mb-1 ${
-                  isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                }`}
-              >
-                DOMAIN TYPE
-              </div>
-              <div
-                className={`text-sm ${
-                  isDarkTheme ? "text-white" : "text-gray-800"
-                }`}
-              >
-                {data.topDomainType || "Unknown"}
-              </div>
-            </div>
-          </div>
-
-          {/* SERP Results */}
-          {data.topSerpSnippets && data.topSerpSnippets.length > 0 && (
-            <div
-              className={`p-3 rounded-lg border ${
-                isDarkTheme
-                  ? "bg-black border-emerald-500/30"
-                  : "bg-white border-gray-200"
-              }`}
-            >
-              <div
-                className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
-                  isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                }`}
-              >
-                🔍 TOP GOOGLE RESULTS ({data.serpResultCount || "N/A"} total)
-              </div>
-              <div className="space-y-2">
-                {data.topSerpSnippets.map((snippet: any, i: number) => (
-                  <div
-                    key={i}
-                    className={`p-2 rounded border ${
-                      isDarkTheme
-                        ? "bg-black border-emerald-500/20"
-                        : "bg-gray-50 border-gray-200"
-                    }`}
-                  >
-                    <div
-                      className={`text-xs font-medium mb-1 ${
-                        isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                      }`}
-                    >
-                      {snippet.title}
-                    </div>
-                    <div
-                      className={`text-[10px] mb-1 ${
-                        isDarkTheme ? "text-emerald-500/70" : "text-gray-500"
-                      }`}
-                    >
-                      {snippet.url}
-                    </div>
-                    <div
-                      className={`text-xs line-clamp-2 ${
-                        isDarkTheme ? "text-white/90" : "text-gray-600"
-                      }`}
-                    >
-                      {snippet.snippet}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Reasoning */}
-          {data.reasoning && (
-            <div
-              className={`p-3 rounded-lg border ${
-                isDarkTheme
-                  ? "bg-black border-emerald-500/20"
-                  : "bg-white border-gray-200"
-              }`}
-            >
-              <div
-                className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
-                  isDarkTheme ? "text-white/70" : "text-gray-600"
-                }`}
-              >
-                ANALYSIS REASONING
-              </div>
-              <div
-                className={`text-xs leading-relaxed ${
-                  isDarkTheme ? "text-white" : "text-gray-700"
-                }`}
-              >
-                {data.reasoning}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return null;
-  };
 
   const addLog = (
     message: string,
@@ -5668,11 +5686,8 @@ export default function App() {
           `Generated ${generatedKeywords.length} candidates.`,
           {
             keywords: generatedKeywords.map((k) => k.keyword),
-            table: renderAgentDataTable(
-              generatedKeywords,
-              "keywords",
-              isDarkTheme
-            ),
+            data: generatedKeywords,
+            dataType: "keywords",
           },
           taskId
         );
@@ -5817,15 +5832,9 @@ export default function App() {
           {
             stats: { high, medium, low },
             analyzedKeywords: analyzedBatch,
-            table: highProbKeywords.length > 0 ? (
-              <div className="space-y-3">
-                {highProbKeywords.map((kw, idx) => (
-                  <div key={idx}>
-                    {renderAgentDataTable(kw, "analysis", isDarkTheme)}
-                  </div>
-                ))}
-              </div>
-            ) : undefined,
+            table: undefined,
+            data: highProbKeywords,
+            dataType: "analysis",
           },
           taskId
         );

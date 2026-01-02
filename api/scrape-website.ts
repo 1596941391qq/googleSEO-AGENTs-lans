@@ -1,6 +1,6 @@
 // Website scraping API using Firecrawl
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { scrapeWebsite } from './_shared/firecrawl.js';
+import { scrapeWebsite } from './_shared/tools/firecrawl.js';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from './_shared/request-handler.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
