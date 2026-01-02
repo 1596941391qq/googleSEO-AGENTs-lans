@@ -637,12 +637,258 @@ export async function initArticleRankingsTable() {
   await articleRankingsTableInitPromise;
 }
 
+let userPreferencesTableInitialized = false;
+let userPreferencesTableInitPromise: Promise<void> | null = null;
+
+export async function initUserPreferencesTable() {
+  if (userPreferencesTableInitialized) return;
+  if (userPreferencesTableInitPromise) {
+    await userPreferencesTableInitPromise;
+    return;
+  }
+
+  userPreferencesTableInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS user_preferences (
+          user_id INTEGER PRIMARY KEY,
+          default_website_id UUID REFERENCES user_websites(id) ON DELETE SET NULL,
+          last_selected_website_id UUID REFERENCES user_websites(id) ON DELETE SET NULL,
+          ui_settings JSONB DEFAULT '{}'::jsonb,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_user_preferences_default_website ON user_preferences(default_website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_user_preferences_last_selected ON user_preferences(last_selected_website_id)`;
+
+      userPreferencesTableInitialized = true;
+    } catch (error) {
+      console.error('[initUserPreferencesTable] Error:', error);
+      userPreferencesTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await userPreferencesTableInitPromise;
+}
+
+let domainCacheTablesInitialized = false;
+let domainCacheTablesInitPromise: Promise<void> | null = null;
+
+export async function initDomainCacheTables() {
+  if (domainCacheTablesInitialized) return;
+  if (domainCacheTablesInitPromise) {
+    await domainCacheTablesInitPromise;
+    return;
+  }
+
+  domainCacheTablesInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS domain_overview_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          data_date DATE DEFAULT CURRENT_DATE,
+          organic_traffic INTEGER DEFAULT 0,
+          paid_traffic INTEGER DEFAULT 0,
+          total_traffic INTEGER DEFAULT 0,
+          total_keywords INTEGER DEFAULT 0,
+          new_keywords INTEGER DEFAULT 0,
+          lost_keywords INTEGER DEFAULT 0,
+          improved_keywords INTEGER DEFAULT 0,
+          declined_keywords INTEGER DEFAULT 0,
+          avg_position DECIMAL(10,2),
+          traffic_cost DECIMAL(15,2),
+          top3_count INTEGER DEFAULT 0,
+          top10_count INTEGER DEFAULT 0,
+          top50_count INTEGER DEFAULT 0,
+          top100_count INTEGER DEFAULT 0,
+          data_updated_at TIMESTAMP,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(website_id, data_date)
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_website ON domain_overview_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_date ON domain_overview_cache(data_date)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_expires ON domain_overview_cache(cache_expires_at)`;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS domain_keywords_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          keyword VARCHAR(500) NOT NULL,
+          current_position INTEGER,
+          previous_position INTEGER,
+          position_change INTEGER,
+          search_volume INTEGER,
+          cpc DECIMAL(10,2),
+          competition DECIMAL(5,2),
+          difficulty INTEGER,
+          traffic_percentage DECIMAL(5,2),
+          data_updated_at TIMESTAMP,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_website ON domain_keywords_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_keyword ON domain_keywords_cache(keyword)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_position ON domain_keywords_cache(current_position)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_expires ON domain_keywords_cache(cache_expires_at)`;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS domain_competitors_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          domain VARCHAR(255) NOT NULL,
+          title VARCHAR(500),
+          common_keywords INTEGER DEFAULT 0,
+          organic_traffic INTEGER DEFAULT 0,
+          total_keywords INTEGER DEFAULT 0,
+          gap_keywords INTEGER DEFAULT 0,
+          gap_traffic INTEGER DEFAULT 0,
+          data_updated_at TIMESTAMP,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '7 days',
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_website ON domain_competitors_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_domain ON domain_competitors_cache(domain)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_expires ON domain_competitors_cache(cache_expires_at)`;
+
+      domainCacheTablesInitialized = true;
+    } catch (error) {
+      console.error('[initDomainCacheTables] Error:', error);
+      domainCacheTablesInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await domainCacheTablesInitPromise;
+}
+
+let geoTablesInitialized = false;
+let geoTablesInitPromise: Promise<void> | null = null;
+
+export async function initGeoTables() {
+  if (geoTablesInitialized) return;
+  if (geoTablesInitPromise) {
+    await geoTablesInitPromise;
+    return;
+  }
+
+  geoTablesInitPromise = (async () => {
+    try {
+      // GEO 排名表
+      await sql`
+        CREATE TABLE IF NOT EXISTS geo_rankings (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          article_ranking_id UUID REFERENCES article_rankings(id) ON DELETE CASCADE,
+          website_id UUID REFERENCES user_websites(id) ON DELETE CASCADE,
+          keyword_id UUID REFERENCES website_keywords(id) ON DELETE CASCADE,
+
+          -- 地理位置
+          country_code VARCHAR(2) DEFAULT 'US',
+          region VARCHAR(100),
+          city VARCHAR(100),
+
+          -- 排名数据
+          current_position INTEGER,
+          previous_position INTEGER,
+          position_change INTEGER,
+
+          -- 流量估算
+          local_traffic INTEGER,
+
+          -- 追踪状态
+          is_tracking BOOLEAN DEFAULT true,
+          last_tracked_at TIMESTAMP,
+
+          -- 时间戳
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+
+          CONSTRAINT unique_geo_ranking UNIQUE (
+            article_ranking_id,
+            country_code,
+            region,
+            city
+          )
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_rankings_article ON geo_rankings(article_ranking_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_rankings_website ON geo_rankings(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_rankings_keyword ON geo_rankings(keyword_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_rankings_location ON geo_rankings(country_code, region, city)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_rankings_tracking ON geo_rankings(is_tracking, last_tracked_at)`;
+
+      // GEO 优化机会表
+      await sql`
+        CREATE TABLE IF NOT EXISTS geo_opportunities (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID REFERENCES user_websites(id) ON DELETE CASCADE,
+          keyword_id UUID REFERENCES website_keywords(id) ON DELETE CASCADE,
+
+          -- 地理位置
+          target_country VARCHAR(2),
+          target_region VARCHAR(100),
+          target_city VARCHAR(100),
+
+          -- 机会分析
+          current_position INTEGER,
+          potential_position INTEGER,
+          position_gap INTEGER,
+
+          estimated_traffic_gain INTEGER,
+
+          -- 难度评估
+          difficulty_score INTEGER,
+          effort_required VARCHAR(50),
+
+          -- 优化建议
+          optimization_suggestions TEXT,
+
+          -- 状态
+          status VARCHAR(50) DEFAULT 'pending',
+
+          -- 时间戳
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_opportunities_website ON geo_opportunities(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_opportunities_keyword ON geo_opportunities(keyword_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_opportunities_location ON geo_opportunities(target_country, target_region, target_city)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_opportunities_status ON geo_opportunities(status)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_geo_opportunities_score ON geo_opportunities(difficulty_score DESC)`;
+
+      geoTablesInitialized = true;
+    } catch (error) {
+      console.error('[initGeoTables] Error:', error);
+      geoTablesInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await geoTablesInitPromise;
+}
+
 // Initialize all website data tables
 export async function initWebsiteDataTables() {
   await initUserWebsitesTable();
   await initWebsitePagesTable();
   await initWebsiteKeywordsTable();
   await initArticleRankingsTable();
+  await initUserPreferencesTable();
+  await initDomainCacheTables();
+  await initGeoTables();
 }
 
 /**

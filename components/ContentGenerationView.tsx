@@ -33,6 +33,8 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { WebsiteManager } from "./WebsiteManager";
+import { WebsiteDataDashboard } from "./website-data";
 
 // Website Data Tab Component (独立组件，修复 hooks 问题)
 interface WebsiteDataTabProps {
@@ -46,111 +48,6 @@ const WebsiteDataTab: React.FC<WebsiteDataTabProps> = ({
   isDarkTheme,
   uiLanguage,
 }) => {
-  const [websiteData, setWebsiteData] = React.useState<any>(null);
-  const [loading, setLoading] = React.useState(false);
-  const [analyzing, setAnalyzing] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  // Load website data when component mounts or website changes
-  React.useEffect(() => {
-    if (website?.url) {
-      loadWebsiteData();
-    } else {
-      // Reset state when website is not available
-      setWebsiteData(null);
-      setError(null);
-    }
-  }, [website?.url]);
-
-  const loadWebsiteData = async () => {
-    if (!website?.url) return;
-
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/website-data/get", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteUrl: website.url,
-          userId: 1, // TODO: Get from session
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        setWebsiteData(result.data);
-      } else {
-        const errorText = await response.text();
-        setError(
-          uiLanguage === "zh"
-            ? "加载网站数据失败，请稍后重试"
-            : "Failed to load website data, please try again later"
-        );
-        console.error("[Website Data] API error:", errorText);
-      }
-    } catch (error: any) {
-      console.error("[Website Data] Failed to load:", error);
-
-      // 处理网络错误
-      let errorMessage =
-        uiLanguage === "zh"
-          ? "加载网站数据失败，请稍后重试"
-          : "Failed to load website data, please try again later";
-
-      if (
-        error?.message?.includes("Failed to fetch") ||
-        error?.name === "TypeError"
-      ) {
-        errorMessage =
-          uiLanguage === "zh"
-            ? "网络连接失败，请检查网络连接或稍后重试"
-            : "Network connection failed, please check your connection and try again";
-      }
-
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const analyzeOpportunities = async () => {
-    if (!websiteData || !website?.url) return;
-
-    setAnalyzing(true);
-    try {
-      const websiteId = websiteData.website.id;
-      const response = await fetch("/api/website-data/analyze-opportunities", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          uiLanguage,
-        }),
-      });
-
-      if (response.ok) {
-        // Reload data to get updated opportunities
-        await loadWebsiteData();
-      } else {
-        const errorText = await response.text();
-        console.error("[Website Data] Analyze API error:", errorText);
-      }
-    } catch (error: any) {
-      console.error("[Website Data] Failed to analyze:", error);
-
-      // 处理网络错误，但不显示错误（因为这是后台操作）
-      if (
-        error?.message?.includes("Failed to fetch") ||
-        error?.name === "TypeError"
-      ) {
-        console.warn("[Website Data] Network error during analysis");
-      }
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-
   if (!website) {
     return (
       <div
@@ -167,494 +64,13 @@ const WebsiteDataTab: React.FC<WebsiteDataTabProps> = ({
     );
   }
 
-  if (loading) {
-    return (
-      <div
-        className={cn(
-          "flex items-center justify-center py-16 min-h-[400px]",
-          isDarkTheme ? "bg-zinc-900" : "bg-white"
-        )}
-      >
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
-          <span
-            className={cn(
-              "block text-sm",
-              isDarkTheme ? "text-zinc-400" : "text-gray-600"
-            )}
-          >
-            {uiLanguage === "zh" ? "加载中..." : "Loading..."}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        className={cn(
-          "text-center py-16 min-h-[400px] flex items-center justify-center",
-          isDarkTheme ? "bg-zinc-900 text-zinc-400" : "bg-white text-gray-500"
-        )}
-      >
-        <div>
-          <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
-          <p className="text-sm mb-4">{error}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadWebsiteData}
-            className={cn(
-              isDarkTheme
-                ? "border-zinc-700 hover:bg-zinc-800"
-                : "border-gray-300 hover:bg-gray-100"
-            )}
-          >
-            {uiLanguage === "zh" ? "重试" : "Retry"}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!websiteData) {
-    return (
-      <div
-        className={cn(
-          "text-center py-16 min-h-[400px] flex items-center justify-center",
-          isDarkTheme ? "bg-zinc-900 text-zinc-500" : "bg-white text-gray-500"
-        )}
-      >
-        <div>
-          <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
-          <p className="text-sm">
-            {uiLanguage === "zh" ? "暂无数据" : "No data available"}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  // Use the new WebsiteDataDashboard component
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* Website Info Card */}
-      <Card
-        className={cn(
-          isDarkTheme
-            ? "bg-zinc-900 border-zinc-800"
-            : "bg-white border-gray-200"
-        )}
-      >
-        <CardHeader>
-          <CardTitle
-            className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
-          >
-            {uiLanguage === "zh" ? "网站信息" : "Website Information"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {websiteData.website.screenshot && (
-            <div className="rounded-lg overflow-hidden border-2 border-emerald-500/30">
-              <img
-                src={websiteData.website.screenshot}
-                alt={websiteData.website.title || "Website screenshot"}
-                className="w-full"
-              />
-            </div>
-          )}
-          <div>
-            <div
-              className={cn(
-                "text-xs mb-1",
-                isDarkTheme ? "text-zinc-500" : "text-gray-500"
-              )}
-            >
-              URL
-            </div>
-            <a
-              href={websiteData.website.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cn(
-                "text-sm font-medium flex items-center gap-1 hover:underline",
-                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-              )}
-            >
-              {websiteData.website.url}
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
-          {websiteData.website.title && (
-            <div>
-              <div
-                className={cn(
-                  "text-xs mb-1",
-                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                )}
-              >
-                {uiLanguage === "zh" ? "标题" : "Title"}
-              </div>
-              <div
-                className={cn(
-                  "text-sm",
-                  isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                )}
-              >
-                {websiteData.website.title}
-              </div>
-            </div>
-          )}
-          {websiteData.website.description && (
-            <div>
-              <div
-                className={cn(
-                  "text-xs mb-1",
-                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                )}
-              >
-                {uiLanguage === "zh" ? "描述" : "Description"}
-              </div>
-              <div
-                className={cn(
-                  "text-sm",
-                  isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                )}
-              >
-                {websiteData.website.description}
-              </div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-zinc-800">
-            <div>
-              <div
-                className={cn(
-                  "text-xs mb-1",
-                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                )}
-              >
-                {uiLanguage === "zh" ? "总关键词" : "Total Keywords"}
-              </div>
-              <div
-                className={cn(
-                  "text-lg font-semibold",
-                  isDarkTheme ? "text-white" : "text-gray-900"
-                )}
-              >
-                {websiteData.totalKeywords}
-              </div>
-            </div>
-            <div>
-              <div
-                className={cn(
-                  "text-xs mb-1",
-                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                )}
-              >
-                {uiLanguage === "zh" ? "总页面" : "Total Pages"}
-              </div>
-              <div
-                className={cn(
-                  "text-lg font-semibold",
-                  isDarkTheme ? "text-white" : "text-gray-900"
-                )}
-              >
-                {websiteData.totalPages}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Keywords List */}
-      <Card
-        className={cn(
-          isDarkTheme
-            ? "bg-zinc-900 border-zinc-800"
-            : "bg-white border-gray-200"
-        )}
-      >
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle
-            className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
-          >
-            {uiLanguage === "zh" ? "关键词列表" : "Keywords"}
-          </CardTitle>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={analyzeOpportunities}
-            disabled={analyzing}
-            className={cn(
-              isDarkTheme
-                ? "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-                : "border-gray-300 text-gray-700 hover:bg-gray-100"
-            )}
-          >
-            {analyzing ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {uiLanguage === "zh" ? "分析中..." : "Analyzing..."}
-              </>
-            ) : (
-              <>
-                <Target className="w-4 h-4 mr-2" />
-                {uiLanguage === "zh" ? "分析排名机会" : "Analyze Opportunities"}
-              </>
-            )}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {websiteData.keywords.length === 0 ? (
-              <div
-                className={cn(
-                  "text-center py-8 text-sm",
-                  isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                )}
-              >
-                {uiLanguage === "zh" ? "暂无关键词" : "No keywords found"}
-              </div>
-            ) : (
-              websiteData.keywords.map((keyword: any) => (
-                <div
-                  key={keyword.id}
-                  className={cn(
-                    "p-4 rounded-lg border",
-                    isDarkTheme
-                      ? "border-zinc-800 bg-zinc-950"
-                      : "border-gray-200 bg-gray-50"
-                  )}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <div
-                        className={cn(
-                          "font-medium",
-                          isDarkTheme ? "text-white" : "text-gray-900"
-                        )}
-                      >
-                        {keyword.keyword}
-                      </div>
-                      {keyword.translation && (
-                        <div
-                          className={cn(
-                            "text-xs mt-1",
-                            isDarkTheme ? "text-zinc-400" : "text-gray-600"
-                          )}
-                        >
-                          {keyword.translation}
-                        </div>
-                      )}
-                    </div>
-                    {keyword.rankingOpportunityScore !== null && (
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          keyword.rankingOpportunityScore >= 70
-                            ? "border-emerald-500 text-emerald-500 bg-emerald-500/10"
-                            : keyword.rankingOpportunityScore >= 50
-                            ? "border-yellow-500 text-yellow-500 bg-yellow-500/10"
-                            : "border-zinc-500 text-zinc-500 bg-zinc-500/10"
-                        )}
-                      >
-                        {keyword.rankingOpportunityScore}/100
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* SE-Ranking Data */}
-                  {keyword.serankingData && (
-                    <div className="grid grid-cols-4 gap-4 mt-3 pt-3 border-t border-zinc-800">
-                      <div>
-                        <div
-                          className={cn(
-                            "text-xs mb-1",
-                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                          )}
-                        >
-                          {uiLanguage === "zh" ? "搜索量" : "Volume"}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-sm font-medium",
-                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                          )}
-                        >
-                          {keyword.serankingData.volume?.toLocaleString() ||
-                            "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <div
-                          className={cn(
-                            "text-xs mb-1",
-                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                          )}
-                        >
-                          {uiLanguage === "zh" ? "难度" : "Difficulty"}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-sm font-medium",
-                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                          )}
-                        >
-                          {keyword.serankingData.difficulty || "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <div
-                          className={cn(
-                            "text-xs mb-1",
-                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                          )}
-                        >
-                          CPC
-                        </div>
-                        <div
-                          className={cn(
-                            "text-sm font-medium",
-                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                          )}
-                        >
-                          ${keyword.serankingData.cpc?.toFixed(2) || "N/A"}
-                        </div>
-                      </div>
-                      <div>
-                        <div
-                          className={cn(
-                            "text-xs mb-1",
-                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                          )}
-                        >
-                          {uiLanguage === "zh" ? "竞争度" : "Competition"}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-sm font-medium",
-                            isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                          )}
-                        >
-                          {keyword.serankingData.competition
-                            ? (keyword.serankingData.competition * 100).toFixed(
-                                1
-                              ) + "%"
-                            : "N/A"}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Opportunity Reasoning */}
-                  {keyword.opportunityReasoning && (
-                    <div className="mt-3 pt-3 border-t border-zinc-800">
-                      <div
-                        className={cn(
-                          "text-xs mb-1",
-                          isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                        )}
-                      >
-                        {uiLanguage === "zh"
-                          ? "排名机会"
-                          : "Ranking Opportunity"}
-                      </div>
-                      <div
-                        className={cn(
-                          "text-sm",
-                          isDarkTheme ? "text-zinc-300" : "text-gray-700"
-                        )}
-                      >
-                        {keyword.opportunityReasoning}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Optimization Suggestions */}
-                  {keyword.suggestedOptimization && (
-                    <div className="mt-2">
-                      <div
-                        className={cn(
-                          "text-xs mb-1",
-                          isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                        )}
-                      >
-                        {uiLanguage === "zh"
-                          ? "优化建议"
-                          : "Optimization Suggestions"}
-                      </div>
-                      <div
-                        className={cn(
-                          "text-sm",
-                          isDarkTheme ? "text-zinc-300" : "text-gray-700"
-                        )}
-                      >
-                        {keyword.suggestedOptimization}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Pages by Topic Cluster */}
-      {websiteData.pages.byCluster &&
-        Object.keys(websiteData.pages.byCluster).length > 0 && (
-          <Card
-            className={cn(
-              isDarkTheme
-                ? "bg-zinc-900 border-zinc-800"
-                : "bg-white border-gray-200"
-            )}
-          >
-            <CardHeader>
-              <CardTitle
-                className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
-              >
-                {uiLanguage === "zh" ? "主题集群" : "Topic Clusters"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {Object.entries(websiteData.pages.byCluster).map(
-                  ([clusterName, pages]: [string, any]) => (
-                    <div key={clusterName}>
-                      <div
-                        className={cn(
-                          "font-medium mb-2",
-                          isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-                        )}
-                      >
-                        {clusterName}
-                      </div>
-                      <div className="space-y-1">
-                        {pages.map((page: any) => (
-                          <a
-                            key={page.id}
-                            href={page.page_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={cn(
-                              "text-sm flex items-center gap-2 hover:underline",
-                              isDarkTheme ? "text-zinc-300" : "text-gray-700"
-                            )}
-                          >
-                            <ExternalLink className="w-3 h-3" />
-                            {page.page_title || page.page_url}
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-    </div>
+    <WebsiteDataDashboard
+      websiteId={website.id}
+      isDarkTheme={isDarkTheme}
+      uiLanguage={uiLanguage}
+    />
   );
 };
 
@@ -1256,23 +672,67 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
   const [qa3, setQa3] = useState<string[]>([]);
   const [qa4, setQa4] = useState("");
 
-  // Load website binding from localStorage on mount
+  // Load website binding from database first, then fallback to localStorage
   React.useEffect(() => {
-    try {
-      const savedWebsite = localStorage.getItem("google_seo_bound_website");
-      if (savedWebsite) {
-        const website = JSON.parse(savedWebsite);
-        setState({
-          website,
-          onboardingStep: 5, // Set to bound state
-        });
+    const loadWebsiteFromDatabase = async () => {
+      try {
+        // Try loading from database first
+        const response = await fetch(`/api/websites/list?user_id=1`);
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.data?.currentWebsite) {
+            console.log(
+              "[Content Generation] Loaded website from database:",
+              result.data.currentWebsite
+            );
+            setState({
+              website: result.data.currentWebsite,
+              onboardingStep: 5, // Set to bound state
+            });
+            return;
+          }
+        }
+
+        // Fallback to localStorage if database has no websites
+        const savedWebsite = localStorage.getItem("google_seo_bound_website");
+        if (savedWebsite) {
+          const website = JSON.parse(savedWebsite);
+          console.log(
+            "[Content Generation] Loaded website from localStorage:",
+            website
+          );
+          setState({
+            website,
+            onboardingStep: 5, // Set to bound state
+          });
+        }
+      } catch (error) {
+        console.error(
+          "[Content Generation] Failed to load website from database, trying localStorage:",
+          error
+        );
+
+        // Fallback to localStorage on error
+        try {
+          const savedWebsite = localStorage.getItem("google_seo_bound_website");
+          if (savedWebsite) {
+            const website = JSON.parse(savedWebsite);
+            setState({
+              website,
+              onboardingStep: 5, // Set to bound state
+            });
+          }
+        } catch (localError) {
+          console.error(
+            "[Content Generation] Failed to load saved website from localStorage:",
+            localError
+          );
+        }
       }
-    } catch (error) {
-      console.error(
-        "[Content Generation] Failed to load saved website:",
-        error
-      );
-    }
+    };
+
+    loadWebsiteFromDatabase();
   }, []);
 
   // Save website binding to localStorage whenever it changes
@@ -1670,18 +1130,11 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
   // Render My Website Tab
   const renderMyWebsite = () => {
-    // Debug logging
-    console.log("[renderMyWebsite] Current state:", {
-      hasWebsite: !!state.website,
-      onboardingStep: state.onboardingStep,
-      hasDemoContent: !!state.demoContent,
-      websiteUrl: state.website?.url,
-    });
-
     // If website is bound, show bound state
     if (state.website) {
       return (
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto space-y-6">
+          {/* Top: Website Info & Quick Actions */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Website Info Card */}
             <Card
@@ -1973,6 +1426,38 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               </Card>
             </div>
           </div>
+
+          {/* Bottom: Website Manager */}
+          <Card
+            className={cn(
+              isDarkTheme
+                ? "bg-zinc-900 border-zinc-800"
+                : "bg-white border-gray-200"
+            )}
+          >
+            <CardHeader>
+              <CardTitle
+                className={cn(
+                  "flex items-center gap-2",
+                  isDarkTheme ? "text-white" : "text-gray-900"
+                )}
+              >
+                <Hash className="w-5 h-5 text-emerald-500" />
+                {uiLanguage === "zh" ? "所有网站" : "All Websites"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <WebsiteManager
+                userId={1} // TODO: Get from session
+                isDarkTheme={isDarkTheme}
+                uiLanguage={uiLanguage}
+                onWebsiteSelect={(website) => {
+                  setState({ website });
+                }}
+                currentWebsiteId={state.website?.id}
+              />
+            </CardContent>
+          </Card>
         </div>
       );
     }
@@ -1982,66 +1467,78 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
       case 0:
         // Step 1: Enter URL
         return (
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="mb-8">
-              <div
-                className={cn(
-                  "w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center",
-                  isDarkTheme
-                    ? "bg-emerald-500/10 border-2 border-emerald-500/30"
-                    : "bg-emerald-50 border-2 border-emerald-500/30"
-                )}
-              >
-                <Globe className="w-10 h-10 text-emerald-500" />
+          <div className="flex items-center justify-center min-h-[calc(100vh-200px)] px-6">
+            <div className="w-full max-w-xl text-center space-y-8">
+              {/* Icon */}
+              <div className="flex justify-center">
+                <div
+                  className={cn(
+                    "w-20 h-20 rounded-2xl flex items-center justify-center",
+                    isDarkTheme
+                      ? "bg-emerald-500/10 border border-emerald-500/20"
+                      : "bg-emerald-50 border border-emerald-100"
+                  )}
+                >
+                  <Globe className="w-10 h-10 text-emerald-500" />
+                </div>
               </div>
-              <h2
-                className={cn(
-                  "text-3xl font-bold mb-3",
-                  isDarkTheme ? "text-white" : "text-gray-900"
-                )}
-              >
-                {t.bindWebsite}
-              </h2>
-              <p
-                className={cn(
-                  "text-sm mb-6",
-                  isDarkTheme ? "text-zinc-400" : "text-gray-600"
-                )}
-              >
-                {uiLanguage === "zh"
-                  ? "输入您的网站URL，我们将自动分析并生成SEO策略"
-                  : "Enter your website URL and we'll automatically analyze and generate SEO strategy"}
-              </p>
-            </div>
 
-            <div className="mb-6">
-              <Input
-                type="url"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder={t.enterUrlPlaceholder}
-                className={cn(
-                  "text-center h-12 text-lg",
-                  isDarkTheme
-                    ? "bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600"
-                    : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400"
-                )}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleUrlSubmit();
-                  }
-                }}
-              />
-            </div>
+              {/* Title */}
+              <div className="space-y-3">
+                <h2
+                  className={cn(
+                    "text-3xl font-semibold tracking-tight",
+                    isDarkTheme ? "text-white" : "text-gray-900"
+                  )}
+                >
+                  {t.bindWebsite}
+                </h2>
+                <p
+                  className={cn(
+                    "text-base leading-relaxed max-w-lg mx-auto",
+                    isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                  )}
+                >
+                  {uiLanguage === "zh"
+                    ? "输入您的网站URL，我们将自动分析并生成SEO策略"
+                    : "Enter your website URL and we'll automatically analyze and generate SEO strategy"}
+                </p>
+              </div>
 
-            <Button
-              size="lg"
-              className="bg-emerald-500 hover:bg-emerald-600 text-white px-8"
-              onClick={handleUrlSubmit}
-            >
-              {uiLanguage === "zh" ? "开始分析" : "Start Analysis"}
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
+              {/* Input and Button */}
+              <div className="space-y-4 max-w-md mx-auto">
+                <Input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder={t.enterUrlPlaceholder}
+                  className={cn(
+                    "h-12 text-base",
+                    isDarkTheme
+                      ? "bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                      : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+                  )}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleUrlSubmit();
+                    }
+                  }}
+                />
+
+                <Button
+                  size="lg"
+                  className={cn(
+                    "h-12 px-6 text-base font-medium",
+                    "bg-emerald-500 hover:bg-emerald-600 text-white",
+                    "transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:shadow-emerald-500/20"
+                  )}
+                  onClick={handleUrlSubmit}
+                >
+                  {uiLanguage === "zh" ? "开始分析" : "Start Analysis"}
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            </div>
           </div>
         );
 
@@ -2164,7 +1661,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                       isDarkTheme ? "text-zinc-400" : "text-gray-600"
                     )}
                   >
-                    ChatGPT 5.1
+                    ChatGPT 5.2
                   </span>
                 </div>
               </div>

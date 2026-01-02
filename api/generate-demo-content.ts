@@ -124,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 \`\`\`
 
 只返回JSON，不要其他内容。确保内容真实、详细、有说服力。`
-      : `You are a world-class AI assistant (similar to ChatGPT 5.1). Generate a perfect AI Q&A demo based on the following website information.
+      : `You are a world-class AI assistant (similar to ChatGPT 5.2). Generate a perfect AI Q&A demo based on the following website information.
 
 **Website Information:**
 - Domain: ${domain}

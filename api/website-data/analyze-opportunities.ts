@@ -1,7 +1,7 @@
 // Analyze ranking opportunities for keywords
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
-import { initWebsiteDataTables, sql } from '../lib/db.js';
+import { initWebsiteDataTables, sql } from '../lib/database.js';
 import { callGeminiAPI } from '../_shared/gemini.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -105,7 +105,7 @@ Return only JSON, nothing else.`;
 
     const aiResult = await callGeminiAPI(prompt, 'analyze-ranking-opportunities');
     const jsonMatch = aiResult.text.match(/\{[\s\S]*\}/);
-    
+
     if (!jsonMatch) {
       throw new Error('Failed to parse AI response');
     }

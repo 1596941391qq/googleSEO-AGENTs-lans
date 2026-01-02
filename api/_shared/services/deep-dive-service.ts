@@ -126,9 +126,18 @@ export async function generateSEOStrategyReport(
   keyword: KeywordData,
   uiLanguage: 'zh' | 'en',
   targetLanguage: TargetLanguage,
-  strategyPrompt?: string
+  strategyPrompt?: string,
+  searchPreferences?: SearchPreferencesResult,
+  competitorAnalysis?: CompetitorAnalysisResult
 ): Promise<SEOStrategyReport> {
-  return await generateDeepDiveStrategy(keyword, uiLanguage, targetLanguage, strategyPrompt);
+  return await generateDeepDiveStrategy(
+    keyword,
+    uiLanguage,
+    targetLanguage,
+    strategyPrompt,
+    searchPreferences,
+    competitorAnalysis
+  );
 }
 
 /**
@@ -509,7 +518,9 @@ export async function executeDeepDive(
       keyword,
       uiLanguage,
       targetLanguage,
-      strategyPrompt
+      strategyPrompt,
+      result.searchPreferences,
+      result.competitorAnalysis
     );
 
     // Step 4: 提取核心关键词

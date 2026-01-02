@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { getWebsiteMap } from '../_shared/tools/firecrawl.js';
-import { initWebsiteDataTables, sql } from '../lib/db.js';
+import { initWebsiteDataTables, sql } from '../lib/database.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);

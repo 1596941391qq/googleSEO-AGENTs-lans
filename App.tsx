@@ -15,6 +15,10 @@ import {
   BrainCircuit,
   Lightbulb,
   Download,
+  BookOpen, // Added
+  Sparkles, // Added
+  Copy, // Added
+  Bug, // Added
   Filter,
   ArrowUpDown,
   ChevronDown,
@@ -52,8 +56,16 @@ import { Input } from "./components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 import { cn } from "./lib/utils";
-import { WebsiteRenderer } from "./components/website/WebsiteRenderer";
 import { useAuth } from "./contexts/AuthContext";
+import { Sidebar } from './components/layout/Sidebar';
+import { TaskMenuModal } from './components/layout/TaskMenuModal';
+import { StrategyModal } from './components/workflow/StrategyModal';
+import { StepItem } from './components/layout/StepItem';
+import { TaskTab } from './components/layout/TaskTab';
+import { ArticleGeneratorLayout } from './components/article-generator/ArticleGeneratorLayout';
+import { KeywordTable } from './components/mining/KeywordTable';
+import { MarkdownContent } from './components/ui/MarkdownContent';
+import { TestAgentPanel } from "./components/TestAgentPanel";
 import { ContentGenerationView } from "./components/ContentGenerationView";
 import {
   KeywordMiningGuide,
@@ -82,7 +94,6 @@ import {
   TaskManagerState,
   CreateTaskParams,
   STORAGE_KEYS,
-  WebsiteMessage,
 } from "./types";
 import {
   generateKeywords,
@@ -104,107 +115,6 @@ import {
   createDefaultConfig,
 } from "./workflows";
 
-// --- Markdown Parser ---
-const parseMarkdown = (text: string, isDarkTheme: boolean = false): string => {
-  if (!text) return "";
-
-  let html = text;
-
-  const textColor = isDarkTheme ? "text-white" : "text-slate-900";
-  const textColorSecondary = isDarkTheme ? "text-gray-300" : "text-slate-700";
-  const codeBg = isDarkTheme ? "bg-slate-800" : "bg-slate-100";
-  const codeText = isDarkTheme ? "text-gray-200" : "text-slate-800";
-  const linkColor = isDarkTheme
-    ? "text-blue-400 hover:text-blue-300"
-    : "text-blue-600 hover:text-blue-800";
-
-  // Headers (### ## #)
-  html = html.replace(
-    /^### (.*$)/gim,
-    `<h3 class="text-sm font-bold ${textColor} mt-2 mb-1">$1</h3>`
-  );
-  html = html.replace(
-    /^## (.*$)/gim,
-    `<h2 class="text-base font-bold ${textColor} mt-2 mb-1">$1</h2>`
-  );
-  html = html.replace(
-    /^# (.*$)/gim,
-    `<h1 class="text-lg font-bold ${textColor} mt-3 mb-1">$1</h1>`
-  );
-
-  // Bold (**text** or __text__)
-  html = html.replace(
-    /\*\*(.+?)\*\*/g,
-    `<strong class="font-semibold ${textColor}">$1</strong>`
-  );
-  html = html.replace(
-    /__(.+?)__/g,
-    `<strong class="font-semibold ${textColor}">$1</strong>`
-  );
-
-  // Italic (*text* or _text_)
-  html = html.replace(
-    /\*(.+?)\*/g,
-    `<em class="italic ${textColorSecondary}">$1</em>`
-  );
-  html = html.replace(
-    /_(.+?)_/g,
-    `<em class="italic ${textColorSecondary}">$1</em>`
-  );
-
-  // Lists (- item or * item or 1. item)
-  html = html.replace(
-    /^\s*[-*]\s+(.+)$/gim,
-    `<li class="ml-4 mb-0.5 list-disc list-inside ${textColorSecondary}">$1</li>`
-  );
-  html = html.replace(
-    /^\s*\d+\.\s+(.+)$/gim,
-    `<li class="ml-4 mb-0.5 list-decimal list-inside ${textColorSecondary}">$1</li>`
-  );
-
-  // Wrap consecutive <li> tags in <ul>
-  html = html.replace(
-    /(<li class="ml-4 mb-0.5 list-disc[^>]*>.*?<\/li>\s*)+/gs,
-    '<ul class="my-1">$&</ul>'
-  );
-  html = html.replace(
-    /(<li class="ml-4 mb-0.5 list-decimal[^>]*>.*?<\/li>\s*)+/gs,
-    '<ol class="my-1">$&</ol>'
-  );
-
-  // Links [text](url)
-  html = html.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    `<a href="$2" target="_blank" rel="noopener noreferrer" class="${linkColor} underline">$1</a>`
-  );
-
-  // Inline code `code`
-  html = html.replace(
-    /`([^`]+)`/g,
-    `<code class="${codeBg} ${codeText} px-1 py-0.5 rounded text-xs font-mono">$1</code>`
-  );
-
-  // Line breaks
-  html = html.replace(/\n/g, "<br/>");
-
-  return html;
-};
-
-// Markdown display component
-const MarkdownContent: React.FC<{ content: string; isDarkTheme?: boolean }> = ({
-  content,
-  isDarkTheme = false,
-}) => {
-  return (
-    <div
-      className={cn(
-        "markdown-content text-sm leading-relaxed",
-        isDarkTheme ? "text-gray-200" : "text-slate-700"
-      )}
-      dangerouslySetInnerHTML={{ __html: parseMarkdown(content, isDarkTheme) }}
-    />
-  );
-};
 
 // --- Constants & Translations ---
 
@@ -212,7 +122,7 @@ const TEXT = {
   en: {
     title: "Google SEO Agent",
     step1: "1. Input",
-    step2: "2. Mining Loop",
+    step2: "2. process",
     step3: "3. Results",
     inputTitle: "Define Your Niche",
     inputDesc:
@@ -334,7 +244,7 @@ const TEXT = {
   zh: {
     title: "Google SEO 智能 Agent",
     step1: "1. 输入",
-    step2: "2. 挖掘循环",
+    step2: "2. 过程",
     step3: "3. 结果",
     inputTitle: "定义您的利基市场",
     inputDesc:
@@ -804,7 +714,6 @@ const renderAgentDataTable = (
       </div>
     );
   }
-
   if (dataType === "analysis") {
     // Single item or array of items
     const items = Array.isArray(data) ? data : [data];
@@ -2247,1314 +2156,6 @@ const WorkflowConfigPanel = ({
   );
 };
 
-// Modal for Deep Dive Strategy
-const StrategyModal = ({
-  report,
-  onClose,
-  title,
-  labels,
-}: {
-  report: SEOStrategyReport;
-  onClose: () => void;
-  title: string;
-  labels: any;
-}) => {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
-          <div className="flex items-center gap-2 text-emerald-600 font-bold">
-            <FileText className="w-5 h-5" />
-            <span>{title}</span>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 p-1 hover:bg-slate-200 rounded"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 overflow-y-auto custom-scrollbar space-y-6">
-          <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100 flex justify-between items-start">
-            <div>
-              <div className="text-xs text-emerald-600 uppercase font-bold mb-1">
-                Target Keyword
-              </div>
-              <div className="text-xl font-bold text-slate-900">
-                {report.targetKeyword}
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-emerald-600 uppercase font-bold mb-1">
-                URL Slug
-              </div>
-              <div className="font-mono text-sm text-emerald-600 bg-white px-2 py-1 rounded border border-emerald-200">
-                {report.urlSlug}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Left Column: Original */}
-            <div className="space-y-4">
-              <h4 className="font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>{" "}
-                Content (Target Lang)
-              </h4>
-
-              <div className="p-3 bg-slate-50 rounded border border-slate-100">
-                <div className="text-xs text-slate-500 uppercase font-bold mb-1">
-                  Page Title (H1)
-                </div>
-                <div className="font-medium text-slate-800">
-                  {report.pageTitleH1}
-                </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded border border-slate-100">
-                <div className="text-xs text-slate-500 uppercase font-bold mb-1">
-                  Meta Description
-                </div>
-                <div className="text-sm text-slate-700">
-                  {report.metaDescription}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="text-sm font-bold text-slate-700">
-                  Structure (Headers)
-                </div>
-                {report.contentStructure.map((item, idx) => (
-                  <div key={idx} className="border-l-2 border-slate-300 pl-3">
-                    <div className="font-bold text-slate-800 text-sm">
-                      {item.header}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      {item.description}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <div className="text-sm font-bold text-slate-700 mb-2">
-                  Long-tail Keywords
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {report.longTailKeywords.map((kw, i) => (
-                    <span
-                      key={i}
-                      className="px-2 py-1 bg-white border border-slate-200 rounded text-xs font-mono text-slate-600"
-                    >
-                      {kw}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Translation */}
-            <div className="space-y-4">
-              <h4 className="font-bold text-slate-800 border-b border-slate-200 pb-2 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>{" "}
-                Translation Reference
-              </h4>
-
-              <div className="p-3 bg-emerald-50/50 rounded border border-emerald-100">
-                <div className="text-xs text-emerald-500 uppercase font-bold mb-1">
-                  Translated Title
-                </div>
-                <div className="font-medium text-slate-800">
-                  {report.pageTitleH1_trans || "-"}
-                </div>
-              </div>
-
-              <div className="p-3 bg-emerald-50/50 rounded border border-emerald-100">
-                <div className="text-xs text-emerald-500 uppercase font-bold mb-1">
-                  Translated Description
-                </div>
-                <div className="text-sm text-slate-700">
-                  {report.metaDescription_trans || "-"}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="text-sm font-bold text-slate-700">
-                  Structure (Translated)
-                </div>
-                {report.contentStructure.map((item, idx) => (
-                  <div key={idx} className="border-l-2 border-emerald-200 pl-3">
-                    <div className="font-bold text-slate-800 text-sm">
-                      {item.header_trans || "-"}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-1">
-                      {item.description_trans || "-"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <div className="text-sm font-bold text-slate-700 mb-2">
-                  Translated Keywords
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {report.longTailKeywords_trans?.map((kw, i) => (
-                    <span
-                      key={i}
-                      className="px-2 py-1 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded text-xs font-medium"
-                    >
-                      {kw}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-50 p-4 rounded border border-slate-200">
-            <div className="text-sm font-bold text-slate-700 mb-2">
-              User Intent Summary
-            </div>
-            <p className="text-sm text-slate-600">{report.userIntentSummary}</p>
-          </div>
-
-          <div className="flex items-center gap-2 text-sm text-slate-500 pt-4 border-t border-slate-100">
-            <span>Recommended Length:</span>
-            <span className="font-bold text-slate-900">
-              {report.recommendedWordCount} words
-            </span>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-700 text-sm font-medium"
-          >
-            {labels.close}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// --- toUI-style Helper Components ---
-
-// StepItem Component (for header process indicators)
-const StepItem: React.FC<{
-  number: number;
-  label: string;
-  active: boolean;
-  isDarkTheme?: boolean;
-}> = ({ number, label, active, isDarkTheme = true }) => (
-  <div
-    className={`flex items-center space-x-3 transition-all ${
-      active ? "opacity-100" : "opacity-30"
-    }`}
-  >
-    <div
-      className={`text-xs font-black ${
-        active
-          ? "text-emerald-500"
-          : isDarkTheme
-          ? "text-neutral-500"
-          : "text-gray-500"
-      }`}
-    >
-      {number}.
-    </div>
-    <span
-      className={`text-xs font-bold tracking-widest uppercase ${
-        active
-          ? isDarkTheme
-            ? "text-white"
-            : "text-gray-900"
-          : isDarkTheme
-          ? "text-neutral-600"
-          : "text-gray-500"
-      }`}
-    >
-      {label}
-    </span>
-  </div>
-);
-
-// SidebarLink Component (for sidebar options)
-const SidebarLink: React.FC<{
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  active?: boolean;
-  isDarkTheme?: boolean;
-  showBadge?: boolean;
-}> = ({
-  icon,
-  label,
-  onClick,
-  active,
-  isDarkTheme = true,
-  showBadge = false,
-}) => (
-  <button
-    onClick={onClick}
-    className={`w-full flex items-center space-x-3 px-3 py-2 rounded transition-all text-xs font-bold uppercase tracking-wider relative ${
-      active
-        ? isDarkTheme
-          ? "text-white bg-white/5 border border-white/10"
-          : "text-gray-900 bg-emerald-50 border border-emerald-200"
-        : isDarkTheme
-        ? "text-neutral-500 hover:text-white hover:bg-white/5 border border-transparent"
-        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent"
-    }`}
-  >
-    <span
-      className={`shrink-0 relative ${active ? "opacity-100" : "opacity-60"}`}
-    >
-      {icon}
-      {showBadge && (
-        <>
-          {/* 外圈光晕 */}
-          <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-red-500/30 rounded-full animate-ping" />
-          {/* 主红点 */}
-          <span className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-gradient-to-br from-red-500 to-red-600 rounded-full border-2 border-white shadow-[0_0_10px_rgba(239,68,68,1),0_0_20px_rgba(239,68,68,0.6)] animate-pulse" />
-        </>
-      )}
-    </span>
-    <span className="flex-1">{label}</span>
-  </button>
-);
-
-// Sidebar Component (toUI-style left sidebar)
-interface SidebarProps {
-  tasks: TaskState[];
-  activeTaskId: string | null;
-  maxTasks: number;
-  onTaskSwitch: (taskId: string) => void;
-  onTaskAdd: () => void;
-  onTaskDelete: (taskId: string, e: React.MouseEvent) => void;
-  onWorkflowConfig: () => void;
-  onLanguageToggle: () => void;
-  onThemeToggle: () => void;
-  uiLanguage: UILanguage;
-  step: string;
-  isDarkTheme: boolean;
-  onContentGeneration?: (tab?: 'my-website' | 'website-data' | 'article-rankings' | 'publish') => void;
-  contentGenerationTab?: 'my-website' | 'website-data' | 'article-rankings' | 'publish';
-}
-
-// === Website Preview Modal ===
-
-interface WebsitePreviewModalProps {
-  code: { html: string; css: string; js: string };
-  onClose: () => void;
-  strategyReport: SEOStrategyReport;
-  isDarkTheme: boolean;
-}
-
-const WebsitePreviewModal: React.FC<WebsitePreviewModalProps> = ({
-  code,
-  onClose,
-  strategyReport,
-  isDarkTheme,
-}) => {
-  const [activeTab, setActiveTab] = useState<"preview" | "code">("preview");
-
-  // Combine code into single HTML file
-  const combinedHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${strategyReport.pageTitleH1}</title>
-  <meta name="description" content="${strategyReport.metaDescription}">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>${code.css}</style>
-</head>
-<body>
-  ${code.html}
-  <script>${code.js}</script>
-</body>
-</html>`;
-
-  const downloadHTML = () => {
-    const blob = new Blob([combinedHTML], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${strategyReport.urlSlug}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div
-        className={`w-full h-full max-w-7xl max-h-[90vh] m-4 rounded-lg overflow-hidden ${
-          isDarkTheme ? "bg-black" : "bg-white"
-        }`}
-      >
-        {/* Header */}
-        <div
-          className={`flex items-center justify-between px-6 py-4 border-b ${
-            isDarkTheme
-              ? "border-emerald-500/30 bg-black"
-              : "border-gray-200 bg-gray-50"
-          }`}
-        >
-          <h2
-            className={`text-xl font-bold ${
-              isDarkTheme ? "text-white" : "text-gray-900"
-            }`}
-          >
-            网站预览 - {strategyReport.targetKeyword}
-          </h2>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={downloadHTML}
-              className="px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors flex items-center gap-2"
-            >
-              <Download size={16} />
-              下载HTML
-            </button>
-            <button
-              onClick={onClose}
-              className={`p-2 rounded-lg transition-colors ${
-                isDarkTheme
-                  ? "hover:bg-emerald-500/20 text-white"
-                  : "hover:bg-gray-200 text-gray-600"
-              }`}
-            >
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-
-        {/* Tab Bar */}
-        <div
-          className={`flex border-b ${
-            isDarkTheme
-              ? "border-emerald-500/30 bg-black"
-              : "border-gray-200 bg-gray-50"
-          }`}
-        >
-          <button
-            onClick={() => setActiveTab("preview")}
-            className={`px-6 py-3 font-medium transition-colors ${
-              activeTab === "preview"
-                ? "border-b-2 border-emerald-500 text-emerald-500"
-                : isDarkTheme
-                ? "text-white/70 hover:text-white"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            预览
-          </button>
-          <button
-            onClick={() => setActiveTab("code")}
-            className={`px-6 py-3 font-medium transition-colors ${
-              activeTab === "code"
-                ? "border-b-2 border-emerald-500 text-emerald-500"
-                : isDarkTheme
-                ? "text-white/70 hover:text-white"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            代码
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="h-[calc(100%-8rem)] overflow-auto">
-          {activeTab === "preview" ? (
-            <SandpackProvider
-              template="static"
-              files={{
-                "/index.html": combinedHTML,
-              }}
-              theme={isDarkTheme ? "dark" : "light"}
-            >
-              <SandpackPreview
-                showNavigator={false}
-                showRefreshButton={true}
-                style={{ height: "100%" }}
-              />
-            </SandpackProvider>
-          ) : (
-            <SandpackProvider
-              template="static"
-              files={{
-                "/index.html": code.html,
-                "/styles.css": code.css,
-                "/script.js": code.js || "// No JavaScript",
-              }}
-              theme={isDarkTheme ? "dark" : "light"}
-            >
-              <SandpackCodeEditor
-                showTabs
-                showLineNumbers
-                showInlineErrors
-                wrapContent
-                style={{ height: "100%" }}
-              />
-            </SandpackProvider>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// === Website Builder Page (Bolt/V0 Style) ===
-
-interface WebsiteBuilderProps {
-  websiteData: WebsiteData | null; // ✅ v0-style: structured data instead of code
-  messages: WebsiteMessage[];
-  isOptimizing: boolean;
-  isGenerating: boolean;
-  progress: { current: number; total: number; currentFile: string } | null;
-  strategyReport: SEOStrategyReport;
-  targetLanguage: TargetLanguage;
-  onSendMessage: (message: string) => void;
-  onBack: () => void;
-  onWebsiteGenerated: (data: WebsiteData) => void; // ✅ Changed from onCodeGenerated
-  onProgressUpdate: (progress: {
-    current: number;
-    total: number;
-    currentFile: string;
-  }) => void;
-  isDarkTheme: boolean;
-}
-
-const WebsiteBuilder: React.FC<WebsiteBuilderProps> = ({
-  websiteData,
-  messages,
-  isOptimizing,
-  isGenerating,
-  progress,
-  strategyReport,
-  targetLanguage,
-  onSendMessage,
-  onBack,
-  onWebsiteGenerated,
-  onProgressUpdate,
-  isDarkTheme,
-}) => {
-  const [input, setInput] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // ✅ Generate website data on component mount
-  useEffect(() => {
-    if (!websiteData && isGenerating) {
-      generateWebsiteData();
-    }
-  }, []);
-
-  const generateWebsiteData = async () => {
-    try {
-      // ✅ Single API call - generate website data (JSON)
-      onProgressUpdate({
-        current: 1,
-        total: 1,
-        currentFile: "生成网站配置...",
-      });
-
-      const response = await fetch("/api/generate-app-component", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          strategyReport,
-          projectStructure: null, // Not needed anymore
-          targetLanguage,
-        }),
-      });
-
-      if (!response.ok) throw new Error("Failed to generate website");
-      const { data } = await response.json();
-
-      console.log("[WebsiteBuilder] Website data generated:", data);
-
-      // ✅ Success - update with structured data
-      onWebsiteGenerated(data);
-    } catch (error: any) {
-      console.error("[WebsiteBuilder] Generation failed:", error);
-      // Handle error (show error message in chat)
-    }
-  };
-
-  const handleSend = () => {
-    if (input.trim() && !isOptimizing && websiteData) {
-      onSendMessage(input);
-      setInput("");
-    }
-  };
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const downloadProject = () => {
-    if (!websiteData) return;
-
-    // ✅ Generate complete HTML file with all sections
-    const htmlContent = generateHTMLFromData(websiteData, strategyReport);
-
-    const blob = new Blob([htmlContent], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${strategyReport.urlSlug || "website"}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // ✅ Helper function to generate complete HTML
-  const generateHTMLFromData = (
-    data: WebsiteData,
-    strategy: SEOStrategyReport
-  ): string => {
-    // Import WebsiteRenderer component code and render to HTML string
-    // For now, return a simple HTML structure
-    return `<!DOCTYPE html>
-<html lang="${targetLanguage}">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${strategy.pageTitleH1}</title>
-  <meta name="description" content="${strategy.metaDescription}">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body>
-  <!-- Generated website data: ${JSON.stringify(data)} -->
-  <div id="root">
-    <!-- Website sections will be rendered here by WebsiteRenderer -->
-    <!-- This is a placeholder - actual rendering happens in React -->
-  </div>
-</body>
-</html>`;
-  };
-
-  return (
-    <div
-      className={`flex-1 flex flex-col h-full ${
-        isDarkTheme ? "bg-black" : "bg-gray-50"
-      }`}
-    >
-      {/* Header */}
-      <div
-        className={`flex items-center justify-between px-6 py-4 border-b ${
-          isDarkTheme
-            ? "border-emerald-500/30 bg-black"
-            : "border-gray-200 bg-white"
-        }`}
-      >
-        <div>
-          <h1
-            className={`text-2xl font-bold ${
-              isDarkTheme ? "text-white" : "text-gray-900"
-            }`}
-          >
-            网站生成器
-          </h1>
-          <p
-            className={`text-sm mt-1 ${
-              isDarkTheme ? "text-white/70" : "text-gray-600"
-            }`}
-          >
-            {strategyReport.targetKeyword}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={downloadProject}
-            disabled={!websiteData}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download size={16} />
-            下载HTML
-          </button>
-          <button
-            onClick={onBack}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
-              isDarkTheme
-                ? "bg-emerald-500/20 text-white hover:bg-emerald-500/30"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
-          >
-            <ArrowRight size={16} className="rotate-180" />
-            返回
-          </button>
-        </div>
-      </div>
-
-      {/* Split Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Chat Area (40%) */}
-        <div
-          className={`w-2/5 flex flex-col border-r ${
-            isDarkTheme
-              ? "border-emerald-500/30 bg-black"
-              : "border-gray-200 bg-white"
-          }`}
-        >
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[85%] rounded-lg px-4 py-3 ${
-                    msg.role === "user"
-                      ? isDarkTheme
-                        ? "bg-emerald-600 text-white"
-                        : "bg-emerald-500 text-white"
-                      : msg.role === "system"
-                      ? isDarkTheme
-                        ? "bg-black text-white border border-emerald-500/30"
-                        : "bg-gray-100 text-gray-700 border border-gray-200"
-                      : isDarkTheme
-                      ? "bg-black text-white border border-emerald-500/30"
-                      : "bg-gray-100 text-gray-900"
-                  }`}
-                >
-                  <div className="text-sm whitespace-pre-wrap">
-                    {msg.content}
-                  </div>
-                  {msg.code && (
-                    <div className="mt-2 pt-2 border-t border-white/10">
-                      <div className="text-xs opacity-70">代码已更新</div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-            {isOptimizing && (
-              <div className="flex justify-start">
-                <div
-                  className={`rounded-lg px-4 py-3 ${
-                    isDarkTheme
-                      ? "bg-black text-white border border-emerald-500/30"
-                      : "bg-gray-100 text-gray-900"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Loader2 size={16} className="animate-spin" />
-                    <span className="text-sm">正在优化网站...</span>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input Area */}
-          <div
-            className={`p-4 border-t ${
-              isDarkTheme
-                ? "border-emerald-500/30 bg-black"
-                : "border-gray-200 bg-gray-50"
-            }`}
-          >
-            <div className="flex gap-2">
-              <textarea
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="输入优化需求，例如：'改成蓝色主题'、'添加联系表单'..."
-                disabled={isOptimizing}
-                rows={3}
-                className={`flex-1 px-3 py-2 rounded-lg border resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30 text-white placeholder-white/50"
-                    : "bg-white border-gray-300 text-gray-900 placeholder-gray-400"
-                } disabled:opacity-50`}
-              />
-              <button
-                onClick={handleSend}
-                disabled={!input.trim() || isOptimizing}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-              >
-                {isOptimizing ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <ArrowRight size={20} />
-                )}
-              </button>
-            </div>
-            <p
-              className={`text-xs mt-2 ${
-                isDarkTheme ? "text-neutral-500" : "text-gray-500"
-              }`}
-            >
-              按 Enter 发送，Shift + Enter 换行
-            </p>
-          </div>
-        </div>
-
-        {/* Right: Preview Area (60%) */}
-        <div
-          className={`w-3/5 flex flex-col ${
-            isDarkTheme ? "bg-neutral-800" : "bg-gray-100"
-          }`}
-        >
-          {/* ✅ Show loading state while generating */}
-          {isGenerating && !websiteData && progress ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <Loader2
-                  size={48}
-                  className="animate-spin mx-auto mb-4 text-emerald-500"
-                />
-                <h3
-                  className={`text-xl font-bold mb-2 ${
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  }`}
-                >
-                  {progress.currentFile}
-                </h3>
-                <div className="w-64 bg-gray-200 rounded-full h-2 mb-2">
-                  <div
-                    className="bg-emerald-500 h-2 rounded-full transition-all duration-300"
-                    style={{
-                      width: `${(progress.current / progress.total) * 100}%`,
-                    }}
-                  />
-                </div>
-                <p
-                  className={`text-sm ${
-                    isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                  }`}
-                >
-                  {progress.current} / {progress.total}
-                </p>
-              </div>
-            </div>
-          ) : websiteData ? (
-            /* ✅ v0-style: Render using WebsiteRenderer component */
-            <div className="h-full w-full overflow-auto">
-              <WebsiteRenderer data={websiteData} />
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className={isDarkTheme ? "text-neutral-400" : "text-gray-600"}>
-                等待生成...
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const Sidebar: React.FC<SidebarProps> = ({
-  tasks,
-  activeTaskId,
-  maxTasks,
-  onTaskSwitch,
-  onTaskAdd,
-  onTaskDelete,
-  onWorkflowConfig,
-  onLanguageToggle,
-  onThemeToggle,
-  uiLanguage,
-  step,
-  isDarkTheme,
-  onContentGeneration,
-  contentGenerationTab,
-}) => {
-  const labels =
-    uiLanguage === "zh"
-      ? {
-          myWebsite: "我的网站",
-          websiteData: "网站数据",
-          articleRankings: "文章排名",
-          publish: "发布",
-          activeTasks: "进行中的任务",
-          options: "配置选项",
-          workflow: "工作流编排",
-          language: "中英切换",
-          theme: "日夜间主题",
-          version: "V2.8.5 System Online",
-        }
-      : {
-          myWebsite: "My Website",
-          websiteData: "Website Data",
-          articleRankings: "Article Rankings",
-          publish: "Publish",
-          activeTasks: "Active Tasks",
-          options: "Options",
-          workflow: "Workflow",
-          language: "Language",
-          theme: "Theme",
-          version: "V2.8.5 System Online",
-        };
-
-  // Get task icon and status indicator
-  const getTaskIcon = (task: TaskState) => {
-    const isBatchRunning =
-      task.batchState &&
-      task.batchState.batchCurrentIndex < task.batchState.batchTotalCount;
-
-    if (
-      task.miningState?.isMining ||
-      isBatchRunning ||
-      task.deepDiveState?.isDeepDiving
-    ) {
-      return <Loader2 size={14} className="animate-spin text-emerald-500" />;
-    }
-    if (task.miningState?.miningSuccess) {
-      return <CheckCircle size={14} className="text-emerald-500" />;
-    }
-    return (
-      <Search
-        size={14}
-        className={
-          activeTaskId === task.id ? "text-emerald-500" : "text-neutral-600"
-        }
-      />
-    );
-  };
-
-  return (
-    <aside
-      className={`w-64 border-r flex flex-col shrink-0 ${
-        isDarkTheme ? "border-white/5 bg-[#0a0a0a]" : "border-gray-200 bg-white"
-      }`}
-    >
-      {/* Logo Area */}
-      <div
-        className={`p-6 border-b ${
-          isDarkTheme ? "border-white/5" : "border-gray-200"
-        }`}
-      >
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 flex items-center justify-center">
-            <img
-              src="/logo.png"
-              alt="Logo"
-              className="w-8 h-8 object-contain"
-            />
-          </div>
-          <div>
-            <h1
-              className={`text-xs font-black tracking-widest leading-none ${
-                isDarkTheme ? "text-white" : "text-gray-900"
-              }`}
-            >
-              Niche Digger
-            </h1>
-            <p className="text-[9px] text-emerald-500 font-bold tracking-tight uppercase mt-1">
-              Google SEO Agent
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto py-6 px-3 space-y-6">
-        {/* Content Generation Section - 4 tabs without main title */}
-        {onContentGeneration && (
-          <div className="space-y-1">
-            <SidebarLink
-              icon={<Globe size={14} />}
-              label={labels.myWebsite}
-              onClick={() => onContentGeneration('my-website')}
-              active={step === "content-generation" && contentGenerationTab === 'my-website'}
-              isDarkTheme={isDarkTheme}
-            />
-            <SidebarLink
-              icon={<Hash size={14} />}
-              label={labels.websiteData}
-              onClick={() => onContentGeneration('website-data')}
-              active={step === "content-generation" && contentGenerationTab === 'website-data'}
-              isDarkTheme={isDarkTheme}
-            />
-            <SidebarLink
-              icon={<TrendingUp size={14} />}
-              label={labels.articleRankings}
-              onClick={() => onContentGeneration('article-rankings')}
-              active={step === "content-generation" && contentGenerationTab === 'article-rankings'}
-              isDarkTheme={isDarkTheme}
-            />
-            <SidebarLink
-              icon={<Send size={14} />}
-              label={labels.publish}
-              onClick={() => onContentGeneration('publish')}
-              active={step === "content-generation" && contentGenerationTab === 'publish'}
-              isDarkTheme={isDarkTheme}
-            />
-          </div>
-        )}
-
-        {/* Active Tasks Section */}
-        <div>
-          <div className="flex items-center justify-between px-3 mb-4">
-            <span
-              className={`text-[10px] font-black uppercase tracking-widest ${
-                isDarkTheme ? "text-neutral-500" : "text-gray-500"
-              }`}
-            >
-              {labels.activeTasks}
-            </span>
-            {tasks.length < maxTasks && (
-              <button
-                onClick={onTaskAdd}
-                className="text-emerald-500 hover:text-emerald-400 p-1 transition-colors"
-              >
-                <Plus size={14} />
-              </button>
-            )}
-          </div>
-          <div className="space-y-1">
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                className={`group flex items-center justify-between p-3 rounded transition-all border ${
-                  activeTaskId === task.id
-                    ? isDarkTheme
-                      ? "bg-white/5 border-white/10"
-                      : "bg-emerald-50 border-emerald-200"
-                    : isDarkTheme
-                    ? "border-transparent hover:bg-white/[0.02]"
-                    : "border-transparent hover:bg-gray-50"
-                }`}
-              >
-                <button
-                  onClick={() => onTaskSwitch(task.id)}
-                  className="flex items-center space-x-3 flex-1"
-                >
-                  {getTaskIcon(task)}
-                  <span
-                    className={`text-xs font-bold ${
-                      activeTaskId === task.id
-                        ? isDarkTheme
-                          ? "text-white"
-                          : "text-gray-900"
-                        : isDarkTheme
-                        ? "text-neutral-400"
-                        : "text-gray-600"
-                    }`}
-                  >
-                    {task.name}
-                  </span>
-                </button>
-                <div className="flex items-center space-x-2">
-                  {activeTaskId === task.id && (
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
-                  )}
-                  <button
-                    onClick={(e) => onTaskDelete(task.id, e)}
-                    className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${
-                      isDarkTheme
-                        ? "text-neutral-500 hover:text-red-400 hover:bg-red-500/10"
-                        : "text-gray-400 hover:text-red-500 hover:bg-red-50"
-                    }`}
-                    title={uiLanguage === "zh" ? "关闭任务" : "Close task"}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              </div>
-            ))}
-            {tasks.length === 0 && (
-              <div
-                className={`text-center py-4 text-xs ${
-                  isDarkTheme ? "text-neutral-600" : "text-gray-500"
-                }`}
-              >
-                {uiLanguage === "zh"
-                  ? "点击 + 创建任务"
-                  : "Click + to create task"}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Options Section */}
-        <div>
-          <span
-            className={`text-[10px] font-black uppercase tracking-widest px-3 block mb-4 ${
-              isDarkTheme ? "text-neutral-500" : "text-gray-500"
-            }`}
-          >
-            {labels.options}
-          </span>
-          <div className="space-y-1">
-            <SidebarLink
-              icon={<Workflow size={14} />}
-              label={labels.workflow}
-              onClick={onWorkflowConfig}
-              active={step === "workflow-config"}
-              isDarkTheme={isDarkTheme}
-              showBadge={true}
-            />
-            <SidebarLink
-              icon={<Languages size={14} />}
-              label={labels.language}
-              onClick={onLanguageToggle}
-              isDarkTheme={isDarkTheme}
-            />
-            <SidebarLink
-              icon={<SunMoon size={14} />}
-              label={labels.theme}
-              onClick={onThemeToggle}
-              isDarkTheme={isDarkTheme}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Status */}
-      <div
-        className={`p-4 border-t text-[10px] font-bold uppercase tracking-widest text-center ${
-          isDarkTheme
-            ? "border-white/5 text-neutral-600"
-            : "border-gray-200 text-gray-500"
-        }`}
-      >
-        {labels.version}
-      </div>
-    </aside>
-  );
-};
-
-// Task Tab Component
-interface TaskTabProps {
-  task: TaskState;
-  isActive: boolean;
-  onSwitch: () => void;
-  onClose: (e: React.MouseEvent) => void;
-  onRename: (name: string) => void;
-  uiLanguage: UILanguage;
-}
-
-const TaskTab: React.FC<TaskTabProps> = ({
-  task,
-  isActive,
-  onSwitch,
-  onClose,
-  onRename,
-  uiLanguage,
-}) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(task.name);
-
-  // Update editName when task name changes
-  useEffect(() => {
-    setEditName(task.name);
-  }, [task.name]);
-
-  const handleDoubleClick = () => {
-    if (isActive) {
-      setIsEditing(true);
-    }
-  };
-
-  const handleSaveName = () => {
-    if (editName.trim()) {
-      onRename(editName.trim());
-    }
-    setIsEditing(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSaveName();
-    } else if (e.key === "Escape") {
-      setEditName(task.name);
-      setIsEditing(false);
-    }
-  };
-
-  // Task status indicator - read from task object itself
-  const isRunning =
-    task.miningState?.isMining || task.deepDiveState?.isDeepDiving;
-  const hasResults =
-    (task.miningState?.keywords && task.miningState.keywords.length > 0) ||
-    (task.batchState?.batchKeywords &&
-      task.batchState.batchKeywords.length > 0) ||
-    (task.deepDiveState?.currentStrategyReport !== null &&
-      task.deepDiveState?.currentStrategyReport !== undefined);
-
-  // Task icon
-  const TaskIcon =
-    task.type === "mining"
-      ? Search
-      : task.type === "batch"
-      ? Languages
-      : FileText;
-
-  return (
-    <div
-      onClick={onSwitch}
-      onDoubleClick={handleDoubleClick}
-      className={`
-        flex items-center gap-2 px-3 py-2 rounded-t-md border-t border-x cursor-pointer
-        transition-all flex-shrink-0 max-w-[200px] group
-        ${
-          isActive
-            ? "bg-black/80 border-emerald-500/30 text-white"
-            : "bg-black/40 border-emerald-500/10 text-slate-400 hover:bg-black/60 hover:text-emerald-400"
-        }
-      `}
-    >
-      {/* Task Icon */}
-      <TaskIcon
-        className={`w-3.5 h-3.5 flex-shrink-0 ${
-          isRunning ? "animate-pulse text-emerald-400" : ""
-        }`}
-      />
-
-      {/* Task Name (editable) */}
-      {isEditing ? (
-        <input
-          type="text"
-          value={editName}
-          onChange={(e) => setEditName(e.target.value)}
-          onBlur={handleSaveName}
-          onKeyDown={handleKeyDown}
-          autoFocus
-          className="flex-1 bg-transparent outline-none text-xs font-medium border-b border-emerald-500/50 text-white"
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <span className="flex-1 text-xs font-medium truncate">{task.name}</span>
-      )}
-
-      {/* Status Indicator */}
-      {isRunning && (
-        <Loader2 className="w-3 h-3 animate-spin text-emerald-400 flex-shrink-0" />
-      )}
-      {!isRunning && hasResults && (
-        <CheckCircle className="w-3 h-3 text-emerald-500 flex-shrink-0" />
-      )}
-
-      {/* Close Button */}
-      <button
-        onClick={onClose}
-        className={`
-          p-0.5 rounded hover:bg-red-500/20 transition-colors flex-shrink-0
-          ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"}
-        `}
-      >
-        <X className="w-3 h-3 text-slate-400 hover:text-red-400" />
-      </button>
-    </div>
-  );
-};
-
-// Task Menu Modal Component
-interface TaskMenuModalProps {
-  show: boolean;
-  onClose: () => void;
-  onCreate: (type: TaskType) => void;
-  uiLanguage: UILanguage;
-}
-
-const TaskMenuModal: React.FC<TaskMenuModalProps> = ({
-  show,
-  onClose,
-  onCreate,
-  uiLanguage,
-}) => {
-  if (!show) return null;
-
-  const t = TEXT[uiLanguage];
-
-  return (
-    <div
-      className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center"
-      onClick={onClose}
-    >
-      <div
-        className="bg-black/90 border border-emerald-500/30 rounded-xl p-6 max-w-md w-full mx-4"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-bold text-white mb-4">
-          {uiLanguage === "zh" ? "创建新任务" : "Create New Task"}
-        </h3>
-
-        <div className="space-y-3">
-          <button
-            onClick={() => {
-              onCreate("mining");
-              onClose();
-            }}
-            className="w-full flex items-center gap-3 p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-colors"
-          >
-            <Search className="w-5 h-5 text-emerald-400" />
-            <div className="text-left">
-              <div className="font-semibold text-white">{t.tabMining}</div>
-              <div className="text-xs text-slate-400">
-                {uiLanguage === "zh"
-                  ? "基于种子关键词挖掘相关关键词"
-                  : "Mine keywords from seed keyword"}
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => {
-              onCreate("batch");
-              onClose();
-            }}
-            className="w-full flex items-center gap-3 p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-colors"
-          >
-            <Languages className="w-5 h-5 text-emerald-400" />
-            <div className="text-left">
-              <div className="font-semibold text-white">{t.tabBatch}</div>
-              <div className="text-xs text-slate-400">
-                {uiLanguage === "zh"
-                  ? "批量翻译和分析关键词"
-                  : "Batch translate and analyze keywords"}
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => {
-              onCreate("deep-dive");
-              onClose();
-            }}
-            className="w-full flex items-center gap-3 p-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg transition-colors"
-          >
-            <FileText className="w-5 h-5 text-emerald-400" />
-            <div className="text-left">
-              <div className="font-semibold text-white">{t.tabDeepDive}</div>
-              <div className="text-xs text-slate-400">
-                {uiLanguage === "zh"
-                  ? "为关键词生成详细内容策略"
-                  : "Generate detailed content strategy"}
-              </div>
-            </div>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export default function App() {
   const [state, setState] = useState<AppState>({
@@ -3586,44 +2187,52 @@ export default function App() {
     sortBy: "probability",
     expandedRowId: null,
 
-    // Deep Dive
-    showDeepDiveModal: false,
-    isDeepDiving: false,
-    currentStrategyReport: null,
-    deepDiveThoughts: [],
-    deepDiveKeyword: null,
-    showDetailedAnalysisModal: false,
-    deepDiveProgress: 0,
-    deepDiveCurrentStep: "",
-
-    uiLanguage: "zh",
-    genPrompt: DEFAULT_GEN_PROMPT_EN,
-    analyzePrompt: DEFAULT_ANALYZE_PROMPT_EN,
-    logs: [],
-    showPrompts: false,
-
-    showPromptTranslation: false,
-    translatedGenPrompt: null,
-    translatedAnalyzePrompt: null,
-
-    agentConfigs: [],
-    currentConfigId: null,
-
-    // Workflow Configuration System
-    workflowConfigs: [],
-    currentWorkflowConfigIds: {},
-
-    // Deep Dive Config (deprecated)
-    deepDiveConfigs: [],
-    currentDeepDiveConfigId: null,
-    deepDivePrompt: DEFAULT_DEEP_DIVE_PROMPT_EN,
-
     // Batch Analysis
     batchKeywords: [],
     batchThoughts: [],
     batchCurrentIndex: 0,
     batchTotalCount: 0,
     batchInputKeywords: "",
+
+    // Deep Dive
+    deepDiveThoughts: [],
+    logs: [],
+    isDeepDiving: false,
+    deepDiveProgress: 0,
+    deepDiveCurrentStep: "",
+    currentStrategyReport: null,
+    deepDiveKeyword: null,
+    showDeepDiveModal: false,
+    showDetailedAnalysisModal: false,
+
+    // Config
+    uiLanguage: "en" as UILanguage,
+    genPrompt: DEFAULT_GEN_PROMPT_EN,
+    analyzePrompt: DEFAULT_ANALYZE_PROMPT_EN,
+    showPrompts: false,
+    showPromptTranslation: false,
+    translatedGenPrompt: null,
+    translatedAnalyzePrompt: null,
+    agentConfigs: [],
+    currentConfigId: null,
+    workflowConfigs: [],
+    currentWorkflowConfigIds: {},
+    deepDiveConfigs: [],
+    currentDeepDiveConfigId: null,
+    deepDivePrompt: DEFAULT_DEEP_DIVE_PROMPT_EN,
+
+    // Article Generator
+    articleGeneratorState: {
+      keyword: '',
+      tone: 'professional',
+      targetAudience: 'beginner',
+      visualStyle: 'realistic',
+      isGenerating: false,
+      progress: 0,
+      currentStage: 'input',
+      streamEvents: [],
+      finalArticle: null,
+    },
 
     // Website Generator
     generatedWebsite: null,
@@ -3636,17 +2245,20 @@ export default function App() {
 
     // Content Generation
     contentGeneration: {
-      activeTab: 'my-website',
+      activeTab: 'my-website' as const,
       website: null,
       onboardingStep: 0,
       websiteData: null,
     },
+
+    // UI State
+    isSidebarCollapsed: false,
   });
 
   // Batch translate and analyze state
   const [batchInput, setBatchInput] = useState("");
-  const [deepDiveInput, setDeepDiveInput] = useState("");
-  const [activeTab, setActiveTab] = useState<"mining" | "batch" | "deepDive">(
+  const [articleGeneratorInput, setArticleGeneratorInput] = useState("");
+  const [activeTab, setActiveTab] = useState<"mining" | "batch" | "articleGenerator">(
     "mining"
   );
   const [showTaskMenu, setShowTaskMenu] = useState(false);
@@ -3839,8 +2451,12 @@ export default function App() {
       if (savedTheme) {
         setIsDarkTheme(savedTheme === "dark");
       }
+      const savedCollapsed = localStorage.getItem("sidebar_collapsed");
+      if (savedCollapsed) {
+        setState(prev => ({ ...prev, isSidebarCollapsed: savedCollapsed === "true" }));
+      }
     } catch (e) {
-      console.error("Error loading theme from localStorage:", e);
+      console.error("Error loading settings from localStorage:", e);
     }
   }, []);
 
@@ -4084,10 +2700,10 @@ export default function App() {
       );
       if (activeTask && state.step === "input") {
         // Map task type to activeTab value
-        const tabMap: Record<TaskType, "mining" | "batch" | "deepDive"> = {
+        const tabMap: Record<TaskType, "mining" | "batch" | "articleGenerator"> = {
           mining: "mining",
           batch: "batch",
-          "deep-dive": "deepDive",
+          "article-generator": "articleGenerator",
         };
         setActiveTab(tabMap[activeTask.type]);
       }
@@ -4511,7 +3127,7 @@ export default function App() {
     const names = {
       mining: state.uiLanguage === "zh" ? "挖掘" : "Mining",
       batch: state.uiLanguage === "zh" ? "批量" : "Batch",
-      "deep-dive": state.uiLanguage === "zh" ? "深度" : "Deep Dive",
+      "article-generator": state.uiLanguage === "zh" ? "图文" : "Article",
     };
     return `${names[type]} #${index + 1}`;
   };
@@ -4564,15 +3180,17 @@ export default function App() {
           logs: [],
         };
         break;
-      case "deep-dive":
-        baseTask.deepDiveState = {
-          deepDiveKeyword: params.keyword || null,
-          currentStrategyReport: null,
-          deepDiveThoughts: [],
-          isDeepDiving: false,
-          deepDiveProgress: 0,
-          deepDiveCurrentStep: "",
-          logs: [],
+      case "article-generator":
+        baseTask.articleGeneratorState = {
+          keyword: typeof params.keyword === 'string' ? params.keyword : (params.keyword?.keyword || ""),
+          tone: "professional",
+          targetAudience: "beginner",
+          visualStyle: "realistic",
+          isGenerating: false,
+          progress: 0,
+          currentStage: "input",
+          streamEvents: [],
+          finalArticle: null,
         };
         break;
     }
@@ -4618,17 +3236,10 @@ export default function App() {
           };
         }
         break;
-      case "deep-dive":
-        if (updated.deepDiveState) {
-          updated.deepDiveState = {
-            ...updated.deepDiveState,
-            deepDiveKeyword: currentState.deepDiveKeyword,
-            currentStrategyReport: currentState.currentStrategyReport,
-            deepDiveThoughts: currentState.deepDiveThoughts,
-            isDeepDiving: currentState.isDeepDiving,
-            deepDiveProgress: currentState.deepDiveProgress,
-            deepDiveCurrentStep: currentState.deepDiveCurrentStep,
-            logs: currentState.logs,
+      case "article-generator":
+        if (updated.articleGeneratorState) {
+          updated.articleGeneratorState = {
+            ...currentState.articleGeneratorState,
           };
         }
         break;
@@ -4727,26 +3338,12 @@ export default function App() {
             deepDiveProgress: 0,
             deepDiveCurrentStep: "",
           };
-        case "deep-dive":
-          let deepDiveStep: AppState["step"] = "input";
-          if (task.deepDiveState?.isDeepDiving) {
-            deepDiveStep = "deep-dive-analyzing";
-          } else if (task.deepDiveState?.currentStrategyReport) {
-            deepDiveStep = "deep-dive-results";
-          }
-
+        case "article-generator":
           return {
             ...prev,
             ...baseState,
-            step: deepDiveStep,
-            deepDiveKeyword: task.deepDiveState?.deepDiveKeyword || null,
-            currentStrategyReport:
-              task.deepDiveState?.currentStrategyReport || null,
-            deepDiveThoughts: task.deepDiveState?.deepDiveThoughts || [],
-            isDeepDiving: task.deepDiveState?.isDeepDiving || false,
-            deepDiveProgress: task.deepDiveState?.deepDiveProgress || 0,
-            deepDiveCurrentStep: task.deepDiveState?.deepDiveCurrentStep || "",
-            logs: task.deepDiveState?.logs || [],
+            step: "article-generator",
+            articleGeneratorState: task.articleGeneratorState || prev.articleGeneratorState,
             // Clear other task types' state
             seedKeyword: "",
             keywords: [],
@@ -4754,9 +3351,6 @@ export default function App() {
             agentThoughts: [],
             isMining: false,
             miningSuccess: false,
-            wordsPerRound: 10,
-            miningStrategy: "horizontal",
-            userSuggestion: "",
             batchKeywords: [],
             batchThoughts: [],
             batchInputKeywords: "",
@@ -6021,115 +4615,45 @@ export default function App() {
 
     setState((prev) => ({
       ...prev,
-      step: "deep-dive-analyzing",
-      deepDiveKeyword: keyword,
-      deepDiveThoughts: [],
-      currentStrategyReport: null,
-      isDeepDiving: true,
+      step: "article-generator",
+      articleGeneratorState: {
+        ...prev.articleGeneratorState,
+        keyword: keyword.keyword,
+        isGenerating: false,
+        currentStage: 'input',
+      },
       logs: [],
     }));
 
-    // Start the enhanced deep dive workflow
-    runEnhancedDeepDive(keyword, currentTaskId);
+    // Start the article generator flow
+    runArticleGenerator(keyword, currentTaskId);
+  };
+
+  const runArticleGenerator = async (keyword: KeywordData, taskId: string) => {
+    try {
+      // Direct jump to article-generator view for this task
+      setState(prev => ({
+          ...prev,
+          step: 'article-generator',
+          articleGeneratorState: {
+              ...prev.articleGeneratorState,
+              keyword: keyword.keyword,
+              isGenerating: false, // Wait for user to confirm in the view
+              currentStage: 'input'
+          }
+      }));
+
+      addLog(`Switching to Article Generator for "${keyword.keyword}"`, "info", taskId);
+    } catch (error: any) {
+      console.error("Failed to start article generator:", error);
+      addLog(`启动失败: ${error.message}`, "error", taskId);
+    }
   };
 
   const runEnhancedDeepDive = async (keyword: KeywordData, taskId: string) => {
     try {
-      // Step 1: Initialize
-      setState((prev) => {
-        const updatedTasks = prev.taskManager.tasks.map((task) => {
-          if (task.id === taskId && task.deepDiveState) {
-            return {
-              ...task,
-              deepDiveState: {
-                ...task.deepDiveState,
-                deepDiveProgress: 10,
-                deepDiveCurrentStep:
-                  state.uiLanguage === "zh"
-                    ? "正在生成内容策略..."
-                    : "Generating content strategy...",
-              },
-            };
-          }
-          return task;
-        });
-
-        // Only update global state if this is the active task
-        if (taskId === prev.taskManager.activeTaskId) {
-          return {
-            ...prev,
-            deepDiveProgress: 10,
-            deepDiveCurrentStep:
-              state.uiLanguage === "zh"
-                ? "正在生成内容策略..."
-                : "Generating content strategy...",
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        } else {
-          // Background task - only update task object
-          return {
-            ...prev,
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        }
-      });
-
-      addDeepDiveThought(
-        "content-generation",
-        `Generating comprehensive SEO content strategy for "${keyword.keyword}"...`,
-        undefined,
-        taskId
-      );
+      // Step 1: Generate strategy report using enhanced deep dive API
       addLog("Starting enhanced deep dive analysis...", "info", taskId);
-
-      setState((prev) => {
-        const updatedTasks = prev.taskManager.tasks.map((task) => {
-          if (task.id === taskId && task.deepDiveState) {
-            return {
-              ...task,
-              deepDiveState: {
-                ...task.deepDiveState,
-                deepDiveProgress: 25,
-                deepDiveCurrentStep:
-                  state.uiLanguage === "zh"
-                    ? "调用AI生成策略..."
-                    : "Calling AI to generate strategy...",
-              },
-            };
-          }
-          return task;
-        });
-
-        if (taskId === prev.taskManager.activeTaskId) {
-          return {
-            ...prev,
-            deepDiveProgress: 25,
-            deepDiveCurrentStep:
-              state.uiLanguage === "zh"
-                ? "调用AI生成策略..."
-                : "Calling AI to generate strategy...",
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        } else {
-          return {
-            ...prev,
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        }
-      });
-
       const report = await enhancedDeepDive(
         keyword,
         state.uiLanguage,
@@ -6432,117 +4956,7 @@ export default function App() {
     }
   };
 
-  // === Website Generator ===
 
-  const generateWebsite = async (
-    strategyReport: SEOStrategyReport,
-    targetLanguage: TargetLanguage
-  ) => {
-    // Check authentication
-    if (!authenticated) {
-      addLog("❌ 请先登录才能使用网站生成功能", "error");
-      setState((prev) => ({ ...prev, error: "请先登录才能使用网站生成功能" }));
-      return;
-    }
-
-    // ✅ Navigate to independent route using URL hash
-    setState((prev) => ({
-      ...prev,
-      currentStrategyReport: strategyReport,
-      targetLanguage: targetLanguage,
-      isGeneratingWebsite: true,
-      generatedWebsite: null,
-      websiteMessages: [
-        {
-          id: Date.now().toString(),
-          role: "system",
-          content: "正在初始化项目...",
-          timestamp: Date.now(),
-        },
-      ],
-      websiteGenerationProgress: {
-        current: 0,
-        total: 2,
-        currentFile: "准备中...",
-      },
-    }));
-
-    // Jump to independent website builder route
-    window.location.hash = "#/website";
-
-    addLog("🚀 开始生成网站...", "info");
-  };
-
-  // Optimize website based on user request
-  const optimizeWebsite = async (userRequest: string) => {
-    if (!state.generatedWebsite || !userRequest.trim()) return;
-
-    try {
-      setState((prev) => ({ ...prev, isOptimizing: true }));
-
-      // Add user message
-      const userMessage: WebsiteMessage = {
-        id: Date.now().toString(),
-        role: "user",
-        content: userRequest,
-        timestamp: Date.now(),
-      };
-
-      setState((prev) => ({
-        ...prev,
-        websiteMessages: [...prev.websiteMessages, userMessage],
-      }));
-
-      // ✅ Send WebsiteData to optimize API
-      const response = await fetch("/api/optimize-component", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          currentData: state.generatedWebsite,
-          userRequest,
-          chatHistory: state.websiteMessages,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Optimization failed");
-      }
-
-      const responseData = await response.json();
-
-      // Add assistant response
-      const assistantMessage: WebsiteMessage = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: responseData.message || "✅ 已根据您的要求优化网站",
-        timestamp: Date.now() + 1,
-      };
-
-      // ✅ Update with new WebsiteData
-      setState((prev) => ({
-        ...prev,
-        generatedWebsite: responseData.data,
-        websiteMessages: [...prev.websiteMessages, assistantMessage],
-        isOptimizing: false,
-      }));
-    } catch (error: any) {
-      console.error("[optimizeWebsite] Error:", error);
-
-      const errorMessage: WebsiteMessage = {
-        id: (Date.now() + 2).toString(),
-        role: "assistant",
-        content: `❌ 优化失败: ${error.message}`,
-        timestamp: Date.now() + 2,
-      };
-
-      setState((prev) => ({
-        ...prev,
-        websiteMessages: [...prev.websiteMessages, errorMessage],
-        isOptimizing: false,
-      }));
-    }
-  };
 
   // === Workflow Configuration Management ===
 
@@ -7552,71 +5966,16 @@ export default function App() {
     localStorage.setItem("theme", !isDarkTheme ? "dark" : "light");
   };
 
-  // ✅ Check if current route is /website (independent page)
-  const currentHash = typeof window !== "undefined" ? window.location.hash : "";
-  const isWebsiteBuilderRoute = currentHash === "#/website";
+  // Handler for sidebar collapse
+  const handleToggleSidebar = () => {
+    setState(prev => {
+        const newState = !prev.isSidebarCollapsed;
+        localStorage.setItem("sidebar_collapsed", String(newState));
+        return { ...prev, isSidebarCollapsed: newState };
+    });
+  };
 
-  // ✅ If on /website route, render full-screen WebsiteBuilder (no sidebar, no other UI)
-  if (isWebsiteBuilderRoute && state.currentStrategyReport) {
-    return (
-      <div
-        className={`h-screen w-screen ${
-          isDarkTheme
-            ? "bg-[#050505] text-[#e5e5e5]"
-            : "bg-gray-50 text-gray-900"
-        }`}
-      >
-        <WebsiteBuilder
-          websiteData={state.generatedWebsite}
-          messages={state.websiteMessages}
-          isOptimizing={state.isOptimizing}
-          isGenerating={state.isGeneratingWebsite}
-          progress={state.websiteGenerationProgress}
-          strategyReport={state.currentStrategyReport}
-          targetLanguage={state.targetLanguage}
-          onSendMessage={optimizeWebsite}
-          onBack={() => {
-            window.location.hash = "";
-            setState((prev) => ({ ...prev, step: "deep-dive-results" }));
-          }}
-          onWebsiteGenerated={(data) => {
-            setState((prev) => ({
-              ...prev,
-              generatedWebsite: data,
-              isGeneratingWebsite: false,
-              websiteGenerationProgress: null,
-              websiteMessages: [
-                ...prev.websiteMessages,
-                {
-                  id: Date.now().toString(),
-                  role: "assistant",
-                  content:
-                    "✅ 网站已生成！您可以在右侧预览效果。如需优化，请告诉我您的需求。",
-                  timestamp: Date.now(),
-                },
-              ],
-            }));
-          }}
-          onProgressUpdate={(progress) => {
-            setState((prev) => ({
-              ...prev,
-              websiteGenerationProgress: progress,
-              websiteMessages: [
-                ...prev.websiteMessages.slice(0, -1),
-                {
-                  id: Date.now().toString(),
-                  role: "system",
-                  content: progress.currentFile,
-                  timestamp: Date.now(),
-                },
-              ],
-            }));
-          }}
-          isDarkTheme={isDarkTheme}
-        />
-      </div>
-    );
-  }
+
 
   return (
     <div
@@ -7624,7 +5983,6 @@ export default function App() {
         isDarkTheme ? "bg-[#050505] text-[#e5e5e5]" : "bg-gray-50 text-gray-900"
       }`}
     >
-      {/* Sidebar */}
       <Sidebar
         tasks={state.taskManager.tasks}
         activeTaskId={state.taskManager.activeTaskId}
@@ -7656,12 +6014,17 @@ export default function App() {
           }))
         }
         contentGenerationTab={state.contentGeneration.activeTab}
+        onTestAgents={() => setState(prev => ({ ...prev, step: 'test-agents' }))}
+        onDeepDive={() => setState(prev => ({ ...prev, step: 'article-generator' }))}
+        isCollapsed={state.isSidebarCollapsed}
+        onToggleCollapse={handleToggleSidebar}
       />
 
       {/* Main Container */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header: Process Indicators & User Info */}
-        <header
+        {state.step !== 'article-generator' && (
+          <header
           className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-8 shrink-0 ${
             isDarkTheme
               ? "border-white/5 bg-[#0a0a0a]/50"
@@ -7705,6 +6068,7 @@ export default function App() {
               isDarkTheme={isDarkTheme}
             />
           </div>
+
 
           {/* Right: Credits + User Info */}
           <div className="flex items-center space-x-6">
@@ -7858,10 +6222,28 @@ export default function App() {
             )}
           </div>
         </header>
+      )}
 
-        {/* Content Area */}
+      {/* Content Area */}
         <main className="flex-1 overflow-y-auto bg-grid-40 px-8 py-6">
+          {state.step === 'article-generator' && (
+            <ArticleGeneratorLayout onBack={() => setState(prev => ({ ...prev, step: 'input' }))} />
+          )}
+
+          {state.step === 'content-generation' && (
+            <ContentGenerationView
+              state={state.contentGeneration}
+              setState={(update) => setState(prev => ({
+                ...prev,
+                contentGeneration: { ...prev.contentGeneration, ...update }
+              }))}
+              isDarkTheme={isDarkTheme}
+              uiLanguage={state.uiLanguage}
+            />
+          )}
+
           {state.error && (
+
             <div
               className={`mb-6 p-4 rounded-lg flex items-center ${
                 isDarkTheme
@@ -9142,18 +7524,11 @@ export default function App() {
             </div>
           )}
 
-          {/* CONTENT GENERATION PAGE */}
-          {state.step === "content-generation" && (
-            <ContentGenerationView
-              state={state.contentGeneration}
-              setState={(update) =>
-                setState((prev) => ({
-                  ...prev,
-                  contentGeneration: { ...prev.contentGeneration, ...update },
-                }))
-              }
+          {/* Test Agent Mode */}
+          {state.step === "test-agents" && (
+            <TestAgentPanel
               isDarkTheme={isDarkTheme}
-              uiLanguage={state.uiLanguage}
+              onClose={() => setState((prev) => ({ ...prev, step: "input" }))}
             />
           )}
 
@@ -11280,836 +9655,16 @@ export default function App() {
                     : "bg-white border-emerald-200"
                 }`}
               >
-                <div className="overflow-x-auto custom-scrollbar">
-                  <table
-                    className={`w-full text-left text-sm ${
-                      isDarkTheme ? "text-slate-300" : "text-gray-700"
-                    }`}
-                  >
-                    <thead
-                      className={`text-xs uppercase font-semibold border-b ${
-                        isDarkTheme
-                          ? "bg-black/60 text-slate-400 border-emerald-500/20"
-                          : "bg-gray-100 text-gray-700 border-gray-200"
-                      }`}
-                    >
-                      <tr>
-                        <th className="px-4 py-4 w-10"></th>
-                        <th className="px-4 py-4">{t.colKw}</th>
-                        <th className="px-4 py-4">{t.colTrans}</th>
-                        <th className="px-4 py-4">{t.colVol}</th>
-                        <th className="px-4 py-4">{t.colType}</th>
-                        <th className="px-4 py-4 text-center">{t.colProb}</th>
-                        <th className="px-4 py-4 text-right">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-emerald-500/10">
-                      {getProcessedKeywords().map((item) => {
-                        const isExpanded = state.expandedRowId === item.id;
-
-                        return (
-                          <React.Fragment key={item.id}>
-                            <tr
-                              className={`transition-colors ${
-                                isExpanded
-                                  ? "bg-emerald-500/10"
-                                  : "hover:bg-emerald-500/5"
-                              }`}
-                            >
-                              <td
-                                className="px-4 py-4 text-center cursor-pointer"
-                                onClick={() =>
-                                  setState((prev) => ({
-                                    ...prev,
-                                    expandedRowId: isExpanded ? null : item.id,
-                                  }))
-                                }
-                              >
-                                {isExpanded ? (
-                                  <ChevronUp className="w-4 h-4 text-emerald-400" />
-                                ) : (
-                                  <ChevronDown className="w-4 h-4 text-emerald-400" />
-                                )}
-                              </td>
-                              <td
-                                className={`px-4 py-4 font-medium ${
-                                  isDarkTheme ? "text-white" : "text-gray-900"
-                                }`}
-                                onClick={() =>
-                                  setState((prev) => ({
-                                    ...prev,
-                                    expandedRowId: isExpanded ? null : item.id,
-                                  }))
-                                }
-                              >
-                                <div className="cursor-pointer">
-                                  {item.keyword}
-                                </div>
-                              </td>
-                              <td
-                                className={`px-4 py-4 ${
-                                  isDarkTheme
-                                    ? "text-slate-400"
-                                    : "text-gray-600"
-                                }`}
-                              >
-                                {item.translation}
-                              </td>
-                              <td
-                                className={`px-4 py-4 font-mono ${
-                                  isDarkTheme ? "text-white" : "text-gray-900"
-                                }`}
-                              >
-                                {item.volume.toLocaleString()}
-                              </td>
-                              <td className="px-4 py-4">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                  {item.topDomainType || "-"}
-                                </span>
-                              </td>
-                              <td className="px-4 py-4 text-center">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                                    item.probability === ProbabilityLevel.HIGH
-                                      ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
-                                      : item.probability ===
-                                        ProbabilityLevel.MEDIUM
-                                      ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
-                                      : "bg-red-500/30 text-red-400 border-red-500/50"
-                                  }`}
-                                >
-                                  {item.probability}
-                                </span>
-                              </td>
-                              <td className="px-4 py-4 text-right">
-                                <div className="flex items-center justify-end gap-3">
-                                  {/* Google Verify Button in Table */}
-                                  <a
-                                    href={`https://www.google.com/search?q=${encodeURIComponent(
-                                      item.keyword
-                                    )}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium border border-emerald-500/30"
-                                    title={t.verifyBtn}
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <ExternalLink className="w-3 h-3" />
-                                    {t.verifyBtn}
-                                  </a>
-
-                                  <button
-                                    className={`text-xs flex items-center gap-1 transition-colors ${
-                                      isDarkTheme
-                                        ? "text-white/70 hover:text-emerald-400"
-                                        : "text-gray-600 hover:text-emerald-600"
-                                    }`}
-                                    onClick={() =>
-                                      setState((prev) => ({
-                                        ...prev,
-                                        expandedRowId: isExpanded
-                                          ? null
-                                          : item.id,
-                                      }))
-                                    }
-                                  >
-                                    Details
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeepDive(item);
-                                    }}
-                                    className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium"
-                                    title={t.deepDive}
-                                  >
-                                    <FileText className="w-3 h-3" />
-                                    {t.deepDive}
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-
-                            {/* Expanded Detail View */}
-                            {isExpanded && (
-                              <tr
-                                className={`animate-fade-in border-b ${
-                                  isDarkTheme
-                                    ? "bg-black border-emerald-500/20"
-                                    : "bg-gray-50 border-gray-200"
-                                }`}
-                              >
-                                <td colSpan={7} className="px-4 py-6">
-                                  <div className="flex flex-col md:flex-row gap-6">
-                                    <div className="flex-1 space-y-4">
-                                      {/* Search Intent Section */}
-                                      {(item.searchIntent ||
-                                        item.intentAnalysis) && (
-                                        <Card
-                                          className={cn(
-                                            isDarkTheme
-                                              ? "bg-black border-emerald-500/30"
-                                              : "bg-white border-slate-200"
-                                          )}
-                                        >
-                                          <CardHeader className="pb-3">
-                                            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                              <BrainCircuit className="w-4 h-4 text-emerald-500" />
-                                              <span
-                                                className={cn(
-                                                  isDarkTheme
-                                                    ? "text-white"
-                                                    : "text-slate-900"
-                                                )}
-                                              >
-                                                Search Intent Analysis
-                                              </span>
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="space-y-3">
-                                            {item.searchIntent && (
-                                              <Card
-                                                className={cn(
-                                                  isDarkTheme
-                                                    ? "bg-black border-emerald-500/30"
-                                                    : "bg-emerald-50 border-emerald-200"
-                                                )}
-                                              >
-                                                <CardContent className="p-4">
-                                                  <div
-                                                    className={cn(
-                                                      "text-xs font-semibold mb-2",
-                                                      isDarkTheme
-                                                        ? "text-emerald-400"
-                                                        : "text-emerald-700"
-                                                    )}
-                                                  >
-                                                    USER INTENT
-                                                  </div>
-                                                  <p
-                                                    className={cn(
-                                                      "text-sm leading-relaxed",
-                                                      isDarkTheme
-                                                        ? "text-white"
-                                                        : "text-slate-700"
-                                                    )}
-                                                  >
-                                                    {item.searchIntent}
-                                                  </p>
-                                                </CardContent>
-                                              </Card>
-                                            )}
-                                            {item.intentAnalysis && (
-                                              <Card
-                                                className={cn(
-                                                  isDarkTheme
-                                                    ? "bg-black border-emerald-500/30"
-                                                    : "bg-emerald-50 border-emerald-200"
-                                                )}
-                                              >
-                                                <CardContent className="p-4">
-                                                  <div
-                                                    className={cn(
-                                                      "text-xs font-semibold mb-2",
-                                                      isDarkTheme
-                                                        ? "text-emerald-400"
-                                                        : "text-emerald-700"
-                                                    )}
-                                                  >
-                                                    INTENT vs SERP MATCH
-                                                  </div>
-                                                  <p
-                                                    className={cn(
-                                                      "text-sm leading-relaxed",
-                                                      isDarkTheme
-                                                        ? "text-white"
-                                                        : "text-slate-700"
-                                                    )}
-                                                  >
-                                                    {item.intentAnalysis}
-                                                  </p>
-                                                </CardContent>
-                                              </Card>
-                                            )}
-                                          </CardContent>
-                                        </Card>
-                                      )}
-
-                                      {/* SE Ranking Data Section */}
-                                      {item.serankingData &&
-                                        item.serankingData.is_data_found && (
-                                          <Card
-                                            className={cn(
-                                              isDarkTheme
-                                                ? "bg-black border-emerald-500/30"
-                                                : "bg-white border-slate-200"
-                                            )}
-                                          >
-                                            <CardHeader className="pb-3">
-                                              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                                <TrendingUp className="w-4 h-4 text-emerald-500" />
-                                                <span
-                                                  className={cn(
-                                                    isDarkTheme
-                                                      ? "text-white"
-                                                      : "text-slate-900"
-                                                  )}
-                                                >
-                                                  SEO词研究工具 (SE Ranking
-                                                  Data)
-                                                </span>
-                                              </CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="space-y-4">
-                                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                                {/* Search Volume */}
-                                                <Card
-                                                  className={cn(
-                                                    isDarkTheme
-                                                      ? "bg-black border-emerald-500/20"
-                                                      : "bg-slate-50 border-slate-200"
-                                                  )}
-                                                >
-                                                  <CardContent className="p-4">
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs font-medium mb-1.5",
-                                                        isDarkTheme
-                                                          ? "text-white/70"
-                                                          : "text-slate-600"
-                                                      )}
-                                                    >
-                                                      SEARCH VOLUME
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xl font-bold",
-                                                        isDarkTheme
-                                                          ? "text-emerald-400"
-                                                          : "text-emerald-600"
-                                                      )}
-                                                    >
-                                                      {item.serankingData.volume?.toLocaleString() ||
-                                                        "N/A"}
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs mt-1",
-                                                        isDarkTheme
-                                                          ? "text-white/60"
-                                                          : "text-slate-500"
-                                                      )}
-                                                    >
-                                                      monthly searches
-                                                    </div>
-                                                  </CardContent>
-                                                </Card>
-
-                                                {/* Keyword Difficulty */}
-                                                <Card
-                                                  className={cn(
-                                                    isDarkTheme
-                                                      ? "bg-black border-emerald-500/20"
-                                                      : "bg-emerald-50 border-emerald-200"
-                                                  )}
-                                                >
-                                                  <CardContent className="p-4">
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs font-medium mb-1.5",
-                                                        isDarkTheme
-                                                          ? "text-white/70"
-                                                          : "text-emerald-700"
-                                                      )}
-                                                    >
-                                                      KEYWORD DIFFICULTY
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xl font-bold",
-                                                        (item.serankingData
-                                                          .difficulty || 0) <=
-                                                          40
-                                                          ? isDarkTheme
-                                                            ? "text-emerald-400"
-                                                            : "text-emerald-600"
-                                                          : (item.serankingData
-                                                              .difficulty ||
-                                                              0) <= 60
-                                                          ? isDarkTheme
-                                                            ? "text-yellow-400"
-                                                            : "text-yellow-600"
-                                                          : isDarkTheme
-                                                          ? "text-red-400"
-                                                          : "text-red-600"
-                                                      )}
-                                                    >
-                                                      {item.serankingData
-                                                        .difficulty || "N/A"}
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs mt-1",
-                                                        isDarkTheme
-                                                          ? "text-white/60"
-                                                          : "text-emerald-600/70"
-                                                      )}
-                                                    >
-                                                      {(item.serankingData
-                                                        .difficulty || 0) <= 40
-                                                        ? "Low competition"
-                                                        : (item.serankingData
-                                                            .difficulty || 0) <=
-                                                          60
-                                                        ? "Medium competition"
-                                                        : "High competition"}
-                                                    </div>
-                                                  </CardContent>
-                                                </Card>
-
-                                                {/* CPC */}
-                                                <Card
-                                                  className={cn(
-                                                    isDarkTheme
-                                                      ? "bg-black border-emerald-500/20"
-                                                      : "bg-emerald-50 border-emerald-200"
-                                                  )}
-                                                >
-                                                  <CardContent className="p-4">
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs font-medium mb-1.5",
-                                                        isDarkTheme
-                                                          ? "text-white/70"
-                                                          : "text-emerald-700"
-                                                      )}
-                                                    >
-                                                      CPC
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xl font-bold",
-                                                        isDarkTheme
-                                                          ? "text-emerald-400"
-                                                          : "text-emerald-600"
-                                                      )}
-                                                    >
-                                                      $
-                                                      {item.serankingData.cpc?.toFixed(
-                                                        2
-                                                      ) || "N/A"}
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs mt-1",
-                                                        isDarkTheme
-                                                          ? "text-white/60"
-                                                          : "text-emerald-600/70"
-                                                      )}
-                                                    >
-                                                      cost per click
-                                                    </div>
-                                                  </CardContent>
-                                                </Card>
-
-                                                {/* Competition */}
-                                                <Card
-                                                  className={cn(
-                                                    isDarkTheme
-                                                      ? "bg-black border-emerald-500/20"
-                                                      : "bg-emerald-50 border-emerald-200"
-                                                  )}
-                                                >
-                                                  <CardContent className="p-4">
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs font-medium mb-1.5",
-                                                        isDarkTheme
-                                                          ? "text-white/70"
-                                                          : "text-emerald-700"
-                                                      )}
-                                                    >
-                                                      COMPETITION
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xl font-bold",
-                                                        isDarkTheme
-                                                          ? "text-emerald-400"
-                                                          : "text-emerald-600"
-                                                      )}
-                                                    >
-                                                      {item.serankingData
-                                                        .competition
-                                                        ? typeof item
-                                                            .serankingData
-                                                            .competition ===
-                                                          "number"
-                                                          ? (
-                                                              item.serankingData
-                                                                .competition *
-                                                              100
-                                                            ).toFixed(1) + "%"
-                                                          : item.serankingData
-                                                              .competition
-                                                        : "N/A"}
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs mt-1",
-                                                        isDarkTheme
-                                                          ? "text-white/60"
-                                                          : "text-emerald-600/70"
-                                                      )}
-                                                    >
-                                                      advertiser competition
-                                                    </div>
-                                                  </CardContent>
-                                                </Card>
-                                              </div>
-
-                                              {/* History Trend - Full Width Below */}
-                                              {item.serankingData
-                                                .history_trend &&
-                                                Object.keys(
-                                                  item.serankingData
-                                                    .history_trend
-                                                ).length > 0 && (
-                                                  <Card
-                                                    className={cn(
-                                                      isDarkTheme
-                                                        ? "bg-black border-emerald-500/20"
-                                                        : "bg-emerald-50 border-emerald-200"
-                                                    )}
-                                                  >
-                                                    <CardContent className="p-4">
-                                                      <div
-                                                        className={cn(
-                                                          "text-xs font-semibold mb-3 flex items-center gap-2",
-                                                          isDarkTheme
-                                                            ? "text-white/70"
-                                                            : "text-emerald-700"
-                                                        )}
-                                                      >
-                                                        <TrendingUp
-                                                          className={cn(
-                                                            "w-4 h-4",
-                                                            isDarkTheme
-                                                              ? "text-emerald-400"
-                                                              : "text-emerald-600"
-                                                          )}
-                                                        />
-                                                        SEARCH VOLUME TREND
-                                                        (Last 12 Months)
-                                                      </div>
-                                                      <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                                                        {Object.entries(
-                                                          item.serankingData
-                                                            .history_trend
-                                                        )
-                                                          .sort(
-                                                            (
-                                                              [dateA],
-                                                              [dateB]
-                                                            ) =>
-                                                              dateA.localeCompare(
-                                                                dateB
-                                                              )
-                                                          )
-                                                          .map(
-                                                            ([
-                                                              date,
-                                                              volume,
-                                                            ]) => {
-                                                              const monthYear =
-                                                                new Date(
-                                                                  date
-                                                                ).toLocaleDateString(
-                                                                  "en-US",
-                                                                  {
-                                                                    month:
-                                                                      "short",
-                                                                    year: "2-digit",
-                                                                  }
-                                                                );
-                                                              return (
-                                                                <Card
-                                                                  key={date}
-                                                                  className={cn(
-                                                                    "text-center",
-                                                                    isDarkTheme
-                                                                      ? "bg-black border-emerald-500/20"
-                                                                      : "bg-white border-emerald-200"
-                                                                  )}
-                                                                >
-                                                                  <CardContent className="p-2">
-                                                                    <div
-                                                                      className={cn(
-                                                                        "text-xs font-medium mb-1",
-                                                                        isDarkTheme
-                                                                          ? "text-white/60"
-                                                                          : "text-emerald-600/80"
-                                                                      )}
-                                                                    >
-                                                                      {
-                                                                        monthYear
-                                                                      }
-                                                                    </div>
-                                                                    <div
-                                                                      className={cn(
-                                                                        "text-sm font-bold",
-                                                                        isDarkTheme
-                                                                          ? "text-white"
-                                                                          : "text-emerald-600"
-                                                                      )}
-                                                                    >
-                                                                      {typeof volume ===
-                                                                      "number"
-                                                                        ? volume.toLocaleString()
-                                                                        : volume}
-                                                                    </div>
-                                                                  </CardContent>
-                                                                </Card>
-                                                              );
-                                                            }
-                                                          )}
-                                                      </div>
-                                                    </CardContent>
-                                                  </Card>
-                                                )}
-                                            </CardContent>
-                                          </Card>
-                                        )}
-
-                                      {/* Analysis Reasoning */}
-                                      <Card
-                                        className={cn(
-                                          isDarkTheme
-                                            ? "bg-black border-emerald-500/20"
-                                            : "bg-white border-slate-200"
-                                        )}
-                                      >
-                                        <CardHeader className="pb-3">
-                                          <CardTitle
-                                            className={cn(
-                                              "text-sm font-semibold",
-                                              isDarkTheme
-                                                ? "text-white"
-                                                : "text-slate-900"
-                                            )}
-                                          >
-                                            Analysis Reasoning
-                                          </CardTitle>
-                                        </CardHeader>
-                                        <CardContent>
-                                          <div
-                                            className={cn(
-                                              "prose prose-sm max-w-none",
-                                              isDarkTheme
-                                                ? "prose-invert prose-emerald prose-headings:text-white prose-p:text-white prose-strong:text-white prose-li:text-white"
-                                                : "prose-slate"
-                                            )}
-                                          >
-                                            <MarkdownContent
-                                              content={
-                                                item.reasoning ||
-                                                "No reasoning provided"
-                                              }
-                                              isDarkTheme={isDarkTheme}
-                                            />
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-
-                                      {/* Summary Stats */}
-                                      <Card
-                                        className={cn(
-                                          isDarkTheme
-                                            ? "bg-black border-emerald-500/20"
-                                            : "bg-white border-slate-200"
-                                        )}
-                                      >
-                                        <CardContent className="p-4">
-                                          <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                              <span
-                                                className={cn(
-                                                  "text-xs block mb-1",
-                                                  isDarkTheme
-                                                    ? "text-white/70"
-                                                    : "text-slate-600"
-                                                )}
-                                              >
-                                                Reference SERP Count
-                                              </span>
-                                              <span
-                                                className={cn(
-                                                  "text-sm font-semibold",
-                                                  isDarkTheme
-                                                    ? "text-white"
-                                                    : "text-slate-900"
-                                                )}
-                                              >
-                                                {item.serpResultCount === -1
-                                                  ? "Unknown (Many)"
-                                                  : item.serpResultCount ??
-                                                    "Unknown"}
-                                              </span>
-                                            </div>
-                                            <div>
-                                              <span
-                                                className={cn(
-                                                  "text-xs block mb-1",
-                                                  isDarkTheme
-                                                    ? "text-white/70"
-                                                    : "text-slate-600"
-                                                )}
-                                              >
-                                                Top Competitor Type
-                                              </span>
-                                              <Badge
-                                                variant="outline"
-                                                className={cn(
-                                                  "text-xs",
-                                                  isDarkTheme
-                                                    ? "border-emerald-500/30 text-white"
-                                                    : "border-slate-300 text-slate-700"
-                                                )}
-                                              >
-                                                {item.topDomainType ?? "-"}
-                                              </Badge>
-                                            </div>
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-
-                                      {/* SERP EVIDENCE IN DETAILS - Conditional Rendering */}
-                                      {item.serpResultCount === 0 ? (
-                                        <Card
-                                          className={cn(
-                                            "border-amber-200 dark:border-amber-800/50",
-                                            isDarkTheme
-                                              ? "bg-amber-950/20"
-                                              : "bg-amber-50"
-                                          )}
-                                        >
-                                          <CardContent className="p-4">
-                                            <div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300">
-                                              <Lightbulb className="w-4 h-4" />
-                                              No direct competitors found in
-                                              search.
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-                                      ) : (
-                                        item.topSerpSnippets &&
-                                        item.topSerpSnippets.length > 0 && (
-                                          <Card
-                                            className={cn(
-                                              isDarkTheme
-                                                ? "bg-slate-900/50 border-slate-800"
-                                                : "bg-white border-slate-200"
-                                            )}
-                                          >
-                                            <CardHeader className="pb-3">
-                                              <div className="flex justify-between items-center">
-                                                <CardTitle
-                                                  className={cn(
-                                                    "text-sm font-semibold",
-                                                    isDarkTheme
-                                                      ? "text-slate-200"
-                                                      : "text-slate-900"
-                                                  )}
-                                                >
-                                                  {t.serpEvidence}
-                                                </CardTitle>
-                                                <Badge
-                                                  variant="outline"
-                                                  className={cn(
-                                                    "text-[10px]",
-                                                    isDarkTheme
-                                                      ? "border-amber-800/50 text-amber-400"
-                                                      : "border-amber-200 text-amber-700"
-                                                  )}
-                                                >
-                                                  {t.serpEvidenceDisclaimer}
-                                                </Badge>
-                                              </div>
-                                            </CardHeader>
-                                            <CardContent>
-                                              <div className="space-y-3">
-                                                {item.topSerpSnippets
-                                                  .slice(0, 3)
-                                                  .map((snip, i) => (
-                                                    <Card
-                                                      key={i}
-                                                      className={cn(
-                                                        isDarkTheme
-                                                          ? "bg-slate-800/50 border-slate-700"
-                                                          : "bg-slate-50 border-slate-200"
-                                                      )}
-                                                    >
-                                                      <CardContent className="p-3">
-                                                        <div
-                                                          className={cn(
-                                                            "text-sm font-semibold mb-1 truncate",
-                                                            isDarkTheme
-                                                              ? "text-emerald-400"
-                                                              : "text-emerald-700"
-                                                          )}
-                                                        >
-                                                          {snip.title}
-                                                        </div>
-                                                        <div
-                                                          className={cn(
-                                                            "text-xs mb-2 truncate",
-                                                            isDarkTheme
-                                                              ? "text-emerald-400"
-                                                              : "text-emerald-700"
-                                                          )}
-                                                        >
-                                                          {snip.url}
-                                                        </div>
-                                                        <div
-                                                          className={cn(
-                                                            "text-xs line-clamp-2 leading-relaxed",
-                                                            isDarkTheme
-                                                              ? "text-slate-400"
-                                                              : "text-slate-600"
-                                                          )}
-                                                        >
-                                                          {snip.snippet}
-                                                        </div>
-                                                      </CardContent>
-                                                    </Card>
-                                                  ))}
-                                              </div>
-                                            </CardContent>
-                                          </Card>
-                                        )
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-
-                      {getProcessedKeywords().length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={7}
-                            className="text-center py-12 text-slate-400"
-                          >
-                            No keywords match the current filter.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                <KeywordTable 
+                  keywords={getProcessedKeywords()}
+                  expandedRowId={state.expandedRowId}
+                  onToggleExpand={(id) => setState(prev => ({ ...prev, expandedRowId: id }))}
+                  onDeepDive={handleDeepDive}
+                  isDarkTheme={isDarkTheme}
+                  uiLanguage={state.uiLanguage}
+                  t={t}
+                  MarkdownContent={MarkdownContent}
+                />
               </div>
             </div>
           )}

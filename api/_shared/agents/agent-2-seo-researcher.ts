@@ -153,10 +153,29 @@ Please provide detailed search engine preference analysis and optimization recom
   }
 }
 
+import { scrapeWebsite } from '../tools/firecrawl.js';
+
+// Helper to truncate content and extract headers
+function processScrapedContent(markdown: string, maxLength: number = 8000): string {
+  if (!markdown) return '';
+
+  // Simple truncation for now, can be smarter later
+  let content = markdown.substring(0, maxLength);
+
+  // Make sure we don't cut in the middle of a line
+  const lastNewline = content.lastIndexOf('\n');
+  if (lastNewline > 0) {
+    content = content.substring(0, lastNewline);
+  }
+
+  return content;
+}
+
 /**
  * 分析竞争对手
  * 
  * 通过分析SERP结果，识别Top 10竞争对手的内容结构、弱点和机会
+ * 升级：使用 Firecrawl 抓取 Top 3 页面的实际内容进行深度分析
  * 
  * @param keyword - 目标关键词
  * @param serpData - SERP搜索结果数据（可选，如果不提供会自动获取）
@@ -181,33 +200,88 @@ export async function analyzeCompetitors(
     // 获取 SEO Researcher prompt
     const systemInstruction = getSEOResearcherPrompt('competitorAnalysis', language);
 
-    // 构建 SERP 结果上下文
-    const serpContext = serpResults.results && serpResults.results.length > 0
+    // 1. 构建 SERP 结果上下文 (Snippet based)
+    const serpSnippetsContext = serpResults.results && serpResults.results.length > 0
       ? serpResults.results.slice(0, 10).map((r, i) =>
-        `${i + 1}. ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.snippet}`
+        `${i + 1}. [${r.title}](${r.url})\n   Snippet: ${r.snippet}`
       ).join('\n\n')
       : 'No SERP results available.';
+
+    // 2. Firecrawl: 抓取 Top 3 页面的深度内容
+    let deepContentContext = '';
+    const topResults = serpResults.results?.slice(0, 3) || [];
+
+    if (topResults.length > 0) {
+      console.log(`[Agent 2] Scraping Top ${topResults.length} competitors for deep analysis...`);
+
+      try {
+        const scrapePromises = topResults.map(async (r, index) => {
+          if (!r.url) return null;
+          try {
+            // Limit fetch time and allow failure without breaking everything
+            const result = await scrapeWebsite(r.url, false);
+            const processedContent = processScrapedContent(result.markdown || '');
+            return {
+              rank: index + 1,
+              title: r.title,
+              url: r.url,
+              content: processedContent
+            };
+          } catch (e: any) {
+            console.warn(`[Agent 2] Failed to scrape ${r.url}:`, e.message);
+            return null;
+          }
+        });
+
+        const scrapedData = (await Promise.all(scrapePromises)).filter(item => item !== null);
+
+        if (scrapedData.length > 0) {
+          deepContentContext = `\n\n=== DEEP DIVE: TOP COMPETITOR CONTENT ===\nI have scraped the full content of the top ${scrapedData.length} ranking pages. Use this for structural analysis:\n\n` +
+            scrapedData.map(page =>
+              `--- COMPETITOR #${page!.rank}: ${page!.title} ---\nURL: ${page!.url}\nCONTENT START:\n${page!.content}\nCONTENT END\n`
+            ).join('\n\n');
+        }
+      } catch (err) {
+        console.error('[Agent 2] Firecrawl scraping failed, falling back to snippets only', err);
+      }
+    }
 
     // 构建分析提示
     const prompt = language === 'zh'
       ? `请分析关键词 "${keyword}" 的 Top 10 竞争对手。
+由于我已经为你抓取了前几名竞争对手的详细网页内容，请根据这些详细内容进行深度的结构化分析。
 
 关键词：${keyword}
 目标语言：${targetLanguage}
 
-SERP 搜索结果：
-${serpContext}
+=== SERP 概览 (Top 10) ===
+${serpSnippetsContext}
+${deepContentContext}
 
-请提供详细的竞争对手分析和内容优化建议。`
+任务要求：
+1. **结构分析**：基于抓取的详细内容，分析 Top 页面的 H2/H3 结构。
+2. **内容缺口 (Content Gap)**：找出他们遗漏了什么关键话题。
+3. **字数与类型**：预估他们的字数和页面类型（博客、产品页、工具等）。
+4. **制胜策略**：总结他们为什么能排在第一。
+
+请提供详细的 JSON 输出。`
       : `Please analyze the Top 10 competitors for the keyword "${keyword}".
+I have scraped the detailed web content of the top competitors for you. Please use this valid data for deep structural analysis.
 
 Keyword: ${keyword}
 Target Language: ${targetLanguage}
 
-SERP Search Results:
-${serpContext}
+=== SERP OVERVIEW (Top 10) ===
+${serpSnippetsContext}
+${deepContentContext}
 
-Please provide detailed competitor analysis and content optimization recommendations.`;
+Task Requirements:
+1. **Structure Analysis**: Analyze the H2/H3 structure based on the scraped deep content.
+2. **Content Gap**: Identify key topics they are missing.
+3. **Word Count & Type**: Estimate word count and page type (Blog, Product, Tool, etc.).
+4. **Winning Formula**: Summarize why they are ranking #1.
+
+Please provide detailed JSON output.`;
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
@@ -590,14 +664,35 @@ export const generateDeepDiveStrategy = async (
   keyword: KeywordData,
   uiLanguage: 'zh' | 'en',
   targetLanguage: TargetLanguage,
-  customPrompt?: string
+  customPrompt?: string,
+  searchPreferences?: SearchPreferencesResult,
+  competitorAnalysis?: CompetitorAnalysisResult
 ): Promise<SEOStrategyReport> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const targetLangName = getLanguageName(targetLanguage);
 
-  const systemInstruction = customPrompt || `
+  // Construct context from analysis results
+  let analysisContext = '';
+
+  if (searchPreferences) {
+    analysisContext += `\n\n=== SEARCH ENGINE PREFERENCES ===\n${JSON.stringify(searchPreferences, null, 2)}`;
+  }
+
+  if (competitorAnalysis) {
+    analysisContext += `\n\n=== COMPETITOR ANALYSIS (Based on Deep Scrape) ===\n${JSON.stringify(competitorAnalysis, null, 2)}`;
+
+    if (competitorAnalysis.winning_formula) {
+      analysisContext += `\n\nWINNING FORMULA: ${competitorAnalysis.winning_formula}`;
+    }
+
+    if (competitorAnalysis.competitorAnalysis?.contentGaps) {
+      analysisContext += `\n\nCONTENT GAPS TO FILL: ${competitorAnalysis.competitorAnalysis.contentGaps.join(', ')}`;
+    }
+  }
+
+  const systemInstruction = (customPrompt || `
 You are a Strategic SEO Content Manager for Google ${targetLangName}.
-Your mission: Design a comprehensive content strategy for this keyword.
+Your mission: Design a comprehensive content strategy that BEATS the competition.
 
 Content Strategy Requirements:
 1. **Page Title (H1)**: Compelling, keyword-rich title that matches search intent
@@ -608,11 +703,13 @@ Content Strategy Requirements:
 6. **Long-tail Keywords**: Semantic variations and related queries to include
 7. **Recommended Word Count**: Based on SERP analysis and topic complexity
 
-Focus on creating content that:
-- Directly answers user search intent
-- Covers the topic more thoroughly than current top-ranking pages
-- Includes natural keyword variations
-- Provides genuine value to readers`;
+STRATEGIC INSTRUCTIONS:
+- Review the provided COMPETITOR ANALYSIS carefully.
+- Identify CONTENT GAPS and ensure your structure covers them.
+- If competitors have weak content, outline a "Skyscraper" strategy.
+- If competitors are strong, find a unique angle or "Blue Ocean" sub-topic.
+- Your goal is to be 10x better than the current top result.
+`) + analysisContext;
 
   const prompt = `
 Create a detailed Content Strategy Report for the keyword: "${keyword.keyword}".
@@ -620,7 +717,7 @@ Create a detailed Content Strategy Report for the keyword: "${keyword.keyword}".
 Target Language: ${targetLangName}
 User Interface Language: ${uiLangName}
 
-Your goal is to outline a page that WILL rank #1 on Google.
+Your goal is to outline a page that WILL rank #1 on Google by exploiting competitor weaknesses found in the analysis.
 
 CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON object.
 

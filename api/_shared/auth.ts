@@ -1,6 +1,6 @@
 import type { VercelRequest } from '@vercel/node';
 import { verifyToken } from '../lib/auth.js';
-import { getApiKeyByHash, updateApiKeyLastUsed, getUserById } from '../lib/db.js';
+import { getApiKeyByHash, updateApiKeyLastUsed, getUserById } from '../lib/database.js';
 import { createHash } from 'crypto';
 
 /**

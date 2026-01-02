@@ -8,7 +8,7 @@ import {
   getWorkflowConfigById,
   updateWorkflowConfig,
   deleteWorkflowConfig,
-} from './lib/db.js';
+} from './lib/database.js';
 /**
  * Workflow Configuration Management API
  * 

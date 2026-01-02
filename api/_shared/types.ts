@@ -74,6 +74,20 @@ export interface SEOStrategyReport {
   longTailKeywords: string[];
   longTailKeywords_trans?: string[];
   recommendedWordCount: number;
+
+  // New fields for deep dive analysis
+  coreKeywords?: string[];
+  htmlContent?: string;
+  rankingProbability?: ProbabilityLevel;
+  rankingAnalysis?: string;
+  searchIntent?: string;
+  intentMatch?: string;
+  serpCompetitionData?: {
+    keyword: string;
+    serpResults: SerpSnippet[];
+    analysis: string;
+    serankingData?: SErankingData;
+  }[];
 }
 
 export type TargetLanguage = 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar' | 'zh';

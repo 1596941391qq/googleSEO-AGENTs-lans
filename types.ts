@@ -81,6 +81,7 @@ export interface SEOStrategyReport {
     keyword: string;
     serpResults: SerpSnippet[];
     analysis: string;
+    serankingData?: SErankingData;
   }[];
 }
 
@@ -203,7 +204,7 @@ export interface AgentThought {
   analyzedKeywords?: KeywordData[];
   data?: any; // Raw data for structured display (replaces table)
   dataType?: 'keywords' | 'analysis'; // Type of data to render
-  table?: React.ReactNode; // @deprecated - Table data for structured display (JSX not serializable)
+  table?: any; // @deprecated - Table data for structured display (JSX not serializable)
 }
 
 export interface BatchAnalysisThought {
@@ -232,27 +233,10 @@ export interface BatchAnalysisThought {
   };
 }
 
-export interface DeepDiveThought {
-  id: string;
-  type: 'content-generation' | 'keyword-extraction' | 'serp-verification' | 'probability-analysis';
-  content: string;
-  data?: {
-    keywords?: string[];
-    serpResults?: SerpSnippet[];
-    analysis?: string;
-    probability?: ProbabilityLevel;
-    serankingData?: {
-      volume?: number;
-      difficulty?: number;
-      cpc?: number;
-      competition?: number;
-    };
-  };
-}
 
 // === Task Management System ===
 
-export type TaskType = 'mining' | 'batch' | 'deep-dive';
+export type TaskType = 'mining' | 'batch' | 'article-generator';
 
 export interface TaskState {
   // Common fields
@@ -287,16 +271,11 @@ export interface TaskState {
     logs: LogEntry[];
   };
 
-  // DeepDive-specific state
-  deepDiveState?: {
-    deepDiveKeyword: KeywordData | null;
-    currentStrategyReport: SEOStrategyReport | null;
-    deepDiveThoughts: DeepDiveThought[];
-    isDeepDiving: boolean;
-    deepDiveProgress: number;
-    deepDiveCurrentStep: string;
-    logs: LogEntry[];
-  };
+  // Article Generator specific state
+  articleGeneratorState?: ArticleGeneratorState;
+
+  // Backward compatibility
+  deepDiveState?: any;
 
   // Shared state
   targetLanguage: TargetLanguage;
@@ -332,7 +311,7 @@ export interface AppState {
   // Task Management
   taskManager: TaskManagerState;
 
-  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'website-builder' | 'content-generation';
+  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'test-agents' | 'article-generator' | 'content-generation';
   seedKeyword: string;
   targetLanguage: TargetLanguage;
   keywords: KeywordData[];
@@ -408,75 +387,62 @@ export interface AppState {
   batchTotalCount: number;
   batchInputKeywords: string; // Store original input for archiving
 
-  // Website Generator State
-  generatedWebsite: WebsiteData | null;
-  isGeneratingWebsite: boolean;
-  showWebsitePreview: boolean;
-  websiteMessages: WebsiteMessage[];
-  isOptimizing: boolean;
-  websiteGenerationProgress: {
-    current: number;
-    total: number;
-    currentFile: string;
-  } | null;
 
   // Success Prompt UI
   showSuccessPrompt: boolean; // Controls whether to show the success prompt overlay
 
+  // Website Generator
+  generatedWebsite: any | null;
+  isGeneratingWebsite: boolean;
+  showWebsitePreview: boolean;
+  websiteMessages: any[];
+  isOptimizing: boolean;
+  websiteGenerationProgress: any | null;
+
   // Content Generation
-  contentGeneration: ContentGenerationState;
-}
-
-// Content Generation State
-export interface ContentGenerationState {
-  activeTab: 'my-website' | 'website-data' | 'article-rankings' | 'publish';
-  website: WebsiteBinding | null;
-  onboardingStep: number; // 0-4 for 5-step flow
-  websiteData: {
-    rawContent: string;
-    extractedKeywords: string[];
-    rankingOpportunities: KeywordData[];
-  } | null;
-  demoContent?: {
-    chatGPTDemo: any;
-    articleDemo: any;
-    domain: string;
-    brandName: string;
-    screenshot?: string;
-  } | null;
-}
-
-// Website Binding
-export interface WebsiteBinding {
-  url: string;
-  boundAt: string;
-  industry?: string;
-  monthlyVisits?: number;
-  monthlyRevenue?: string;
-  marketingTools?: string[];
-  additionalInfo?: string;
-}
-
-// Website Data Structure (v0 style)
-export interface WebsiteData {
-  theme: 'blue' | 'green' | 'purple' | 'orange' | 'red';
-  sections: WebsiteSection[];
-}
-
-export interface WebsiteSection {
-  type: 'hero' | 'features' | 'content' | 'testimonials' | 'faq' | 'cta';
-  props: any; // Section-specific props
-}
-
-// Website Builder Chat Message
-export interface WebsiteMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: number;
-  code?: {
-    html: string;
-    css: string;
-    js: string;
+  contentGeneration: {
+    activeTab: 'my-website' | 'website-data' | 'article-rankings' | 'publish';
+    website: any | null;
+    onboardingStep: number;
+    websiteData: any | null;
   };
+
+  // Article Generator State
+  articleGeneratorState: ArticleGeneratorState;
+
+  // UI State
+  isSidebarCollapsed: boolean;
+}
+
+export interface ArticleGeneratorState {
+  keyword: string;
+  tone: string;
+  targetAudience: string;
+  visualStyle: string;
+
+  isGenerating: boolean;
+  progress: number; // 0-100
+  currentStage: 'input' | 'research' | 'strategy' | 'writing' | 'visualizing' | 'complete';
+
+  // Visual Stream Feed
+  streamEvents: AgentStreamEvent[];
+
+  // Results
+  finalArticle: {
+    title: string;
+    content: string; // HTML/Markdown
+    images: { url: string; prompt: string; placement: string }[];
+  } | null;
+}
+
+export interface AgentStreamEvent {
+  id: string;
+  agentId: 'tracker' | 'researcher' | 'strategist' | 'writer' | 'artist';
+  type: 'log' | 'card' | 'error';
+  timestamp: number;
+  message?: string;
+
+  // For 'card' type
+  cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' | 'image-gen';
+  data?: any;
 }
