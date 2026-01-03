@@ -103,7 +103,9 @@ Return in JSON format:
 
 Return only JSON, nothing else.`;
 
-    const aiResult = await callGeminiAPI(prompt, 'analyze-ranking-opportunities');
+    const aiResult = await callGeminiAPI(prompt, 'analyze-ranking-opportunities', {
+      enableGoogleSearch: true  // 启用联网搜索以获取最新SEO趋势和排名机会
+    });
     const jsonMatch = aiResult.text.match(/\{[\s\S]*\}/);
 
     if (!jsonMatch) {

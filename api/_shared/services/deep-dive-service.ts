@@ -261,7 +261,9 @@ Return ONLY valid JSON without markdown formatting:
   "analysis": "detailed ranking probability explanation"
 }`;
 
-  const probabilityResponse = await callGeminiAPI(intentAndProbabilityPrompt);
+  const probabilityResponse = await callGeminiAPI(intentAndProbabilityPrompt, undefined, {
+    enableGoogleSearch: true  // 启用联网搜索以获取最新搜索意图和排名趋势
+  });
   let jsonText = probabilityResponse.text;
   const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
   if (jsonMatch) {

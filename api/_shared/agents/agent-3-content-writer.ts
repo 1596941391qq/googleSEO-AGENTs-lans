@@ -7,7 +7,7 @@
 
 import { callGeminiAPI } from '../gemini.js';
 import { getContentWriterPrompt } from '../../../services/prompts/index.js';
-import { SEOStrategyReport } from '../types.js';
+import { SEOStrategyReport, TargetLanguage } from '../types.js';
 import { SearchPreferencesResult, CompetitorAnalysisResult } from './agent-2-seo-researcher.js';
 
 /**
@@ -61,12 +61,15 @@ export async function generateContent(
   seoStrategyReport: SEOStrategyReport,
   searchPreferences?: SearchPreferencesResult,
   competitorAnalysis?: CompetitorAnalysisResult,
-  language: 'zh' | 'en' = 'en',
-  targetMarket: string = 'global'
+  uiLanguage: 'zh' | 'en' = 'en',
+  targetMarket: string = 'global',
+  targetLanguage: TargetLanguage = 'en'
 ): Promise<ContentGenerationResult> {
   try {
-    // 获取 Content Writer prompt
-    const systemInstruction = getContentWriterPrompt(language);
+    // 获取 Content Writer prompt - 使用 targetLanguage 来确定生成内容的语言
+    // uiLanguage 仅用于UI显示，targetLanguage 用于实际内容生成
+    const contentLanguage = targetLanguage === 'zh' ? 'zh' : 'en';
+    const systemInstruction = getContentWriterPrompt(contentLanguage);
 
     // 构建SEO研究上下文
     const seoContext = `
@@ -88,7 +91,7 @@ ${seoStrategyReport.contentStructure.map((section, i) =>
     // 添加搜索引擎偏好分析上下文（如果提供）
     let searchPreferencesContext = '';
     if (searchPreferences) {
-      if (language === 'zh') {
+      if (contentLanguage === 'zh') {
         searchPreferencesContext = `
 搜索引擎偏好分析：
 ${searchPreferences.semantic_landscape ? `- 语义分布：${searchPreferences.semantic_landscape}\n` : ''}
@@ -106,7 +109,7 @@ ${searchPreferences.searchPreferences ? JSON.stringify(searchPreferences.searchP
     // 添加竞争对手分析上下文（如果提供）
     let competitorContext = '';
     if (competitorAnalysis) {
-      if (language === 'zh') {
+      if (contentLanguage === 'zh') {
         competitorContext = `
 竞争对手分析：
 ${competitorAnalysis.winning_formula ? `- 制胜公式：${competitorAnalysis.winning_formula}\n` : ''}
@@ -123,10 +126,10 @@ ${competitorAnalysis.competitorAnalysis ? JSON.stringify(competitorAnalysis.comp
 
     // 构建生成提示
     const marketLabel = targetMarket === 'global' 
-      ? (language === 'zh' ? '全球市场' : 'Global Market')
+      ? (contentLanguage === 'zh' ? '全球市场' : 'Global Market')
       : targetMarket.toUpperCase();
     
-    const prompt = language === 'zh'
+    const prompt = contentLanguage === 'zh'
       ? `基于以下SEO研究结果，为 ${marketLabel} 市场撰写一篇高质量的文章内容。
 
 ${seoContext}${searchPreferencesContext}${competitorContext}
@@ -156,7 +159,8 @@ Please output the complete article in Markdown format.`;
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',
+      enableGoogleSearch: true  // 启用联网搜索以获取最新内容和事实信息
     });
 
     let text = response.text || '{}';

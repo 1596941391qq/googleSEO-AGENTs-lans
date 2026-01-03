@@ -143,7 +143,9 @@ JSON format:
 Please return only the JSON, nothing else.`;
 
       // Call Gemini API
-      const result = await callGeminiAPI(prompt, 'extract-keywords');
+      const result = await callGeminiAPI(prompt, 'extract-keywords', {
+        enableGoogleSearch: true  // 启用联网搜索以获取最新关键词趋势
+      });
 
       // Parse the response
       try {

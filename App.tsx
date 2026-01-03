@@ -68,6 +68,7 @@ import { MarkdownContent } from "./components/ui/MarkdownContent";
 import { TestAgentPanel } from "./components/TestAgentPanel";
 import { ContentGenerationView } from "./components/ContentGenerationView";
 import { WebsiteSelector } from "./components/WebsiteSelector";
+import { GoogleSearchResults } from "./components/article-generator/GoogleSearchResults";
 import {
   KeywordMiningGuide,
   MiningConfig,
@@ -157,6 +158,7 @@ const TEXT = {
     filterHigh: "High Only",
     downloadCSV: "Export CSV",
     deepDive: "Deep Dive Strategy",
+    btnGenerateArticle: "Generate Article",
     viewReport: "Generate SEO Report",
     generatingReport: "Generating Strategy...",
     modalTitle: "SEO Content Strategy",
@@ -302,6 +304,7 @@ const TEXT = {
     filterHigh: "仅看 HIGH (推荐)",
     downloadCSV: "下载表格",
     deepDive: "深度挖掘",
+    btnGenerateArticle: "生成图文",
     viewReport: "生成网站策略报告",
     generatingReport: "正在生成策略报告...",
     modalTitle: "SEO 网站内容策略",
@@ -662,9 +665,211 @@ const SerpPreview = ({
 // Render agent data as formatted table or cards
 const renderAgentDataTable = (
   data: any,
-  dataType: "keywords" | "analysis",
+  dataType: "keywords" | "analysis" | "website-content" | "competitor-analysis",
   isDarkTheme: boolean = true
 ) => {
+  // 网站内容分析显示
+  if (
+    dataType === "website-content" ||
+    (dataType === "analysis" && data.analysisType === "website-content")
+  ) {
+    return (
+      <div
+        className={`mt-2 p-4 rounded-lg border ${
+          isDarkTheme
+            ? "bg-black/40 border-blue-500/30"
+            : "bg-blue-50 border-blue-200"
+        }`}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <Globe
+            className={`w-4 h-4 ${
+              isDarkTheme ? "text-blue-400" : "text-blue-600"
+            }`}
+          />
+          <h4
+            className={`text-sm font-bold ${
+              isDarkTheme ? "text-blue-400" : "text-blue-700"
+            }`}
+          >
+            {isDarkTheme ? "网站内容分析" : "Website Content Analysis"}
+          </h4>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <div
+              className={`text-xs font-semibold mb-1 ${
+                isDarkTheme ? "text-white/70" : "text-gray-600"
+              }`}
+            >
+              {isDarkTheme ? "网站URL" : "Website URL"}
+            </div>
+            <a
+              href={data.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-xs break-all hover:underline ${
+                isDarkTheme ? "text-blue-400" : "text-blue-600"
+              }`}
+            >
+              {data.url}
+            </a>
+          </div>
+          <div>
+            <div
+              className={`text-xs font-semibold mb-1 ${
+                isDarkTheme ? "text-white/70" : "text-gray-600"
+              }`}
+            >
+              {isDarkTheme ? "域名" : "Domain"}
+            </div>
+            <div
+              className={`text-xs ${
+                isDarkTheme ? "text-white" : "text-gray-800"
+              }`}
+            >
+              {data.domain}
+            </div>
+          </div>
+          <div>
+            <div
+              className={`text-xs font-semibold mb-1 ${
+                isDarkTheme ? "text-white/70" : "text-gray-600"
+              }`}
+            >
+              {isDarkTheme ? "内容长度" : "Content Length"}
+            </div>
+            <div
+              className={`text-sm font-mono ${
+                isDarkTheme ? "text-white" : "text-gray-800"
+              }`}
+            >
+              {data.contentLength?.toLocaleString()}{" "}
+              {isDarkTheme ? "字符" : "chars"}
+            </div>
+          </div>
+          {data.summary && (
+            <div>
+              <div
+                className={`text-xs font-semibold mb-2 ${
+                  isDarkTheme ? "text-white/70" : "text-gray-600"
+                }`}
+              >
+                {isDarkTheme ? "内容摘要" : "Content Summary"}
+              </div>
+              <div
+                className={`text-xs leading-relaxed p-3 rounded border ${
+                  isDarkTheme
+                    ? "bg-black/60 border-blue-500/20 text-white/90"
+                    : "bg-white border-blue-200 text-gray-700"
+                }`}
+              >
+                {data.summary}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 竞争对手分析显示
+  if (
+    dataType === "competitor-analysis" ||
+    (dataType === "analysis" && data.analysisType === "competitor-analysis")
+  ) {
+    return (
+      <div
+        className={`mt-2 p-4 rounded-lg border ${
+          isDarkTheme
+            ? "bg-black/40 border-amber-500/30"
+            : "bg-amber-50 border-amber-200"
+        }`}
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <Network
+            className={`w-4 h-4 ${
+              isDarkTheme ? "text-amber-400" : "text-amber-600"
+            }`}
+          />
+          <h4
+            className={`text-sm font-bold ${
+              isDarkTheme ? "text-amber-400" : "text-amber-700"
+            }`}
+          >
+            {isDarkTheme ? "竞争对手分析" : "Competitor Analysis"}
+          </h4>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div
+            className={`p-3 rounded-lg border ${
+              isDarkTheme
+                ? "bg-black/60 border-amber-500/20"
+                : "bg-white border-amber-200"
+            }`}
+          >
+            <div
+              className={`text-xs font-semibold mb-1 ${
+                isDarkTheme ? "text-amber-400" : "text-amber-700"
+              }`}
+            >
+              {isDarkTheme ? "竞争对手关键词数" : "Competitor Keywords"}
+            </div>
+            <div
+              className={`text-2xl font-bold ${
+                isDarkTheme ? "text-white" : "text-gray-800"
+              }`}
+            >
+              {data.competitorKeywordsCount?.toLocaleString() || 0}
+            </div>
+          </div>
+          <div
+            className={`p-3 rounded-lg border ${
+              isDarkTheme
+                ? "bg-black/60 border-amber-500/20"
+                : "bg-white border-amber-200"
+            }`}
+          >
+            <div
+              className={`text-xs font-semibold mb-1 ${
+                isDarkTheme ? "text-amber-400" : "text-amber-700"
+              }`}
+            >
+              {isDarkTheme ? "发现的机会" : "Opportunities Found"}
+            </div>
+            <div
+              className={`text-2xl font-bold ${
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              }`}
+            >
+              {data.opportunitiesFound?.toLocaleString() || 0}
+            </div>
+          </div>
+        </div>
+        {data.websiteUrl && (
+          <div className="mt-3 pt-3 border-t border-amber-500/20">
+            <div
+              className={`text-xs font-semibold mb-1 ${
+                isDarkTheme ? "text-white/70" : "text-gray-600"
+              }`}
+            >
+              {isDarkTheme ? "分析网站" : "Analyzed Website"}
+            </div>
+            <a
+              href={data.websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-xs break-all hover:underline ${
+                isDarkTheme ? "text-amber-400" : "text-amber-600"
+              }`}
+            >
+              {data.websiteUrl}
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  }
   if (dataType === "keywords") {
     return (
       <div className="overflow-x-auto mt-2">
@@ -917,10 +1122,12 @@ const AgentStream = ({
   thoughts,
   t,
   isDarkTheme = true,
+  uiLanguage = "en",
 }: {
   thoughts: AgentThought[];
   t: any;
   isDarkTheme?: boolean;
+  uiLanguage?: "zh" | "en";
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -1048,13 +1255,25 @@ const AgentStream = ({
               />
             )}
 
+            {/* 联网搜索结果 */}
+            {thought.searchResults && thought.searchResults.length > 0 && (
+              <div className="mt-2">
+                <GoogleSearchResults
+                  results={thought.searchResults}
+                  isDarkTheme={isDarkTheme}
+                  uiLanguage={uiLanguage}
+                />
+              </div>
+            )}
+
             {/* Table Display */}
             {/* {thought.table && <div className="mt-2">{thought.table}</div>} */}
             {thought.data && thought.dataType && (
               <div className="mt-2">
                 {renderAgentDataTable(
                   thought.data,
-                  thought.dataType,
+                  // 如果 data 中有 analysisType，使用它作为 dataType
+                  thought.data.analysisType || thought.dataType,
                   isDarkTheme
                 )}
               </div>
@@ -2853,6 +3072,12 @@ export default function App() {
   const saveToArchive = (currentState: AppState) => {
     if (currentState.keywords.length === 0) return;
 
+    // 获取当前任务的网站信息（如果是存量拓新模式）
+    const currentTask = currentState.taskManager.tasks.find(
+      (t) => t.id === currentState.taskManager.activeTaskId
+    );
+    const miningState = currentTask?.miningState;
+
     const newEntry: ArchiveEntry = {
       id: `arc-${Date.now()}`,
       timestamp: Date.now(),
@@ -2860,6 +3085,14 @@ export default function App() {
       keywords: currentState.keywords,
       miningRound: currentState.miningRound,
       targetLanguage: currentState.targetLanguage,
+      // 保存存量拓新模式的数据
+      miningMode: miningState?.miningMode,
+      websiteId: miningState?.websiteId,
+      websiteUrl: miningState?.websiteUrl,
+      websiteDomain: miningState?.websiteDomain,
+      websiteAnalysis: miningState?.websiteAnalysis,
+      competitorAnalysis: miningState?.competitorAnalysis,
+      agentThoughts: currentState.agentThoughts, // 保存思维流
     };
 
     const updatedArchives = [newEntry, ...currentState.archives].slice(0, 20);
@@ -2872,17 +3105,45 @@ export default function App() {
   };
 
   const loadArchive = (entry: ArchiveEntry) => {
-    setState((prev) => ({
-      ...prev,
-      seedKeyword: entry.seedKeyword,
-      targetLanguage: entry.targetLanguage || "en",
-      keywords: entry.keywords,
-      miningRound: entry.miningRound,
-      step: "results",
-      agentThoughts: [],
-      logs: [],
-      filterLevel: ProbabilityLevel.HIGH,
-    }));
+    setState((prev) => {
+      const updatedState = {
+        ...prev,
+        seedKeyword: entry.seedKeyword,
+        targetLanguage: entry.targetLanguage || "en",
+        keywords: entry.keywords,
+        miningRound: entry.miningRound,
+        step: "results" as const,
+        agentThoughts: entry.agentThoughts || [], // 加载思维流
+        logs: [],
+        filterLevel: ProbabilityLevel.HIGH,
+      };
+
+      // 如果是存量拓新模式，恢复网站信息到当前任务
+      if (entry.miningMode === "existing-website-audit" && entry.websiteUrl) {
+        const currentTask = prev.taskManager.tasks.find(
+          (t) => t.id === prev.taskManager.activeTaskId
+        );
+        if (currentTask && currentTask.miningState) {
+          const updatedTasks = updatedState.taskManager.tasks.map((task) => {
+            if (task.id === prev.taskManager.activeTaskId && task.miningState) {
+              task.miningState.websiteId = entry.websiteId;
+              task.miningState.websiteUrl = entry.websiteUrl;
+              task.miningState.websiteDomain = entry.websiteDomain;
+              task.miningState.miningMode = entry.miningMode;
+              task.miningState.websiteAnalysis = entry.websiteAnalysis;
+              task.miningState.competitorAnalysis = entry.competitorAnalysis;
+            }
+            return task;
+          });
+          updatedState.taskManager = {
+            ...updatedState.taskManager,
+            tasks: updatedTasks,
+          };
+        }
+      }
+
+      return updatedState;
+    });
   };
 
   const deleteArchive = (id: string, e: React.MouseEvent) => {
@@ -3383,6 +3644,13 @@ export default function App() {
             miningStrategy: currentState.miningStrategy,
             userSuggestion: currentState.userSuggestion,
             logs: currentState.logs,
+            // 保留网站信息和分析数据
+            websiteId: updated.miningState.websiteId,
+            websiteUrl: updated.miningState.websiteUrl,
+            websiteDomain: updated.miningState.websiteDomain,
+            miningMode: updated.miningState.miningMode,
+            websiteAnalysis: updated.miningState.websiteAnalysis,
+            competitorAnalysis: updated.miningState.competitorAnalysis,
           };
         }
         break;
@@ -4310,7 +4578,7 @@ export default function App() {
 
     // Handle existing-website-audit mode
     if (miningMode === "existing-website-audit") {
-      await startWebsiteAudit();
+      await startWebsiteAudit(continueExisting);
       return;
     }
 
@@ -4367,8 +4635,26 @@ export default function App() {
   };
 
   // Start Website Audit (存量拓新)
-  const startWebsiteAudit = async () => {
-    if (!selectedWebsite) {
+  const startWebsiteAudit = async (continueExisting = false) => {
+    // 获取当前任务的网站信息（如果是继续挖掘）
+    const currentTask = state.taskManager.tasks.find(
+      (t) => t.id === state.taskManager.activeTaskId
+    );
+    const taskWebsiteId = currentTask?.miningState?.websiteId;
+    const taskWebsiteUrl = currentTask?.miningState?.websiteUrl;
+    const taskMiningMode = currentTask?.miningState?.miningMode;
+
+    // 确定要使用的网站：优先使用任务中保存的网站，否则使用当前选择的网站
+    const websiteToUse =
+      continueExisting && taskWebsiteUrl
+        ? {
+            id: taskWebsiteId,
+            url: taskWebsiteUrl,
+            domain: currentTask?.miningState?.websiteDomain || undefined,
+          }
+        : selectedWebsite;
+
+    if (!websiteToUse) {
       setState((prev) => ({
         ...prev,
         error:
@@ -4395,7 +4681,7 @@ export default function App() {
     if (!state.taskManager.activeTaskId) {
       addTask({
         type: "mining",
-        seedKeyword: `Website Audit: ${selectedWebsite.url}`,
+        seedKeyword: `Website Audit: ${websiteToUse.url}`,
         targetLanguage: state.targetLanguage,
       });
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -4405,37 +4691,121 @@ export default function App() {
     const currentTaskId = state.taskManager.activeTaskId;
     stopMiningRef.current = false;
 
+    // 如果是继续挖掘，保留之前的思维流、关键词、轮次等
+    const existingMiningState = currentTask?.miningState;
+    const shouldContinue =
+      continueExisting &&
+      existingMiningState &&
+      existingMiningState.miningMode === "existing-website-audit" &&
+      existingMiningState.websiteUrl === websiteToUse.url;
+
     setState((prev) => ({
       ...prev,
       step: "mining",
       isMining: true,
       miningSuccess: false,
       error: null,
-      logs: [],
-      agentThoughts: [],
-      miningRound: 0,
-      keywords: [],
+      logs: shouldContinue ? existingMiningState?.logs || [] : [],
+      agentThoughts: shouldContinue
+        ? existingMiningState?.agentThoughts || []
+        : [],
+      miningRound: shouldContinue ? existingMiningState?.miningRound || 0 : 0,
+      keywords: shouldContinue ? existingMiningState?.keywords || [] : [],
     }));
+
+    // 保存网站信息到任务状态
+    const websiteId = websiteToUse.id?.startsWith("manual-")
+      ? `temp-${Date.now()}`
+      : websiteToUse.id;
+    const websiteDomain =
+      websiteToUse.domain ||
+      new URL(websiteToUse.url).hostname.replace(/^www\./, "");
+
+    // 更新任务状态，保存网站信息
+    setState((prev) => {
+      const updatedTasks = prev.taskManager.tasks.map((task) => {
+        if (task.id === currentTaskId) {
+          if (!task.miningState) {
+            task.miningState = {
+              seedKeyword: `Website Audit: ${websiteToUse.url}`,
+              keywords: [],
+              miningRound: 0,
+              agentThoughts: [],
+              isMining: false,
+              miningSuccess: false,
+              wordsPerRound: 10,
+              miningStrategy: "horizontal",
+              userSuggestion: "",
+              logs: [],
+            };
+          }
+          task.miningState.websiteId = websiteId;
+          task.miningState.websiteUrl = websiteToUse.url;
+          task.miningState.websiteDomain = websiteDomain;
+          task.miningState.miningMode = "existing-website-audit";
+        }
+        return task;
+      });
+      return {
+        ...prev,
+        taskManager: {
+          ...prev.taskManager,
+          tasks: updatedTasks,
+        },
+      };
+    });
+
+    // 如果是继续挖掘且已经分析过网站，跳过网站分析，直接进行关键词挖掘
+    if (
+      shouldContinue &&
+      existingMiningState?.websiteAnalysis &&
+      existingMiningState?.competitorAnalysis
+    ) {
+      addLog(
+        state.uiLanguage === "zh"
+          ? `继续挖掘关键词... Round ${
+              (existingMiningState.miningRound || 0) + 1
+            }`
+          : `Continuing keyword mining... Round ${
+              (existingMiningState.miningRound || 0) + 1
+            }`,
+        "info",
+        currentTaskId
+      );
+
+      // 直接调用关键词生成逻辑（类似 runMiningLoop 但针对存量拓新）
+      // 这里需要实现一个类似 runMiningLoop 的函数，但针对存量拓新模式
+      // 暂时先调用网站分析API，但后续应该优化为直接生成关键词
+    }
 
     addLog(
       state.uiLanguage === "zh"
-        ? `开始分析网站: ${selectedWebsite.url}`
-        : `Starting website audit: ${selectedWebsite.url}`,
+        ? `开始分析网站: ${websiteToUse.url}`
+        : `Starting website audit: ${websiteToUse.url}`,
       "info",
       currentTaskId
     );
 
-    // Step 1: 网站分析（存量拓新）- 可视化开始
-    addThought(
-      "generation",
-      state.uiLanguage === "zh"
-        ? `开始分析网站: ${selectedWebsite.url}`
-        : `Starting website audit: ${selectedWebsite.url}`,
-      undefined,
-      currentTaskId
-    );
+    // Step 1: 网站分析（存量拓新）- 可视化开始（仅在首次分析时显示）
+    if (!shouldContinue || !existingMiningState?.websiteAnalysis) {
+      addThought(
+        "generation",
+        state.uiLanguage === "zh"
+          ? `开始分析网站: ${websiteToUse.url}`
+          : `Starting website audit: ${websiteToUse.url}`,
+        undefined,
+        currentTaskId
+      );
+    }
 
     try {
+      // 如果是继续挖掘且已经分析过，跳过网站分析步骤
+      if (shouldContinue && existingMiningState?.websiteAnalysis) {
+        // 直接进行关键词生成，跳过网站分析
+        // 这里需要实现关键词生成逻辑
+        return;
+      }
+
       // Step 1.1: 获取网站内容
       addLog(
         state.uiLanguage === "zh"
@@ -4455,20 +4825,13 @@ export default function App() {
       );
 
       // Call website audit API
-      // For manually entered URLs, use a temporary ID
-      const websiteId = selectedWebsite.id?.startsWith("manual-")
-        ? `temp-${Date.now()}`
-        : selectedWebsite.id;
-
       const response = await fetch("/api/website-audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           websiteId: websiteId,
-          websiteUrl: selectedWebsite.url,
-          websiteDomain:
-            selectedWebsite.domain ||
-            new URL(selectedWebsite.url).hostname.replace(/^www\./, ""),
+          websiteUrl: websiteToUse.url,
+          websiteDomain: websiteDomain,
           targetLanguage: state.targetLanguage,
           uiLanguage: state.uiLanguage,
           wordsPerRound: state.wordsPerRound || 10,
@@ -4500,10 +4863,8 @@ export default function App() {
             {
               data: {
                 summary: result.analysis.websiteContentSummary,
-                url: selectedWebsite.url,
-                domain:
-                  selectedWebsite.domain ||
-                  new URL(selectedWebsite.url).hostname.replace(/^www\./, ""),
+                url: websiteToUse.url,
+                domain: websiteDomain,
                 contentLength: result.analysis.websiteContentSummary.length,
                 analysisType: "website-content",
               },
@@ -4511,6 +4872,28 @@ export default function App() {
             },
             currentTaskId
           );
+
+          // 保存网站分析数据到任务状态
+          setState((prev) => {
+            const updatedTasks = prev.taskManager.tasks.map((task) => {
+              if (task.id === currentTaskId && task.miningState) {
+                task.miningState.websiteAnalysis = {
+                  websiteContentSummary: result.analysis.websiteContentSummary,
+                  contentLength: result.analysis.websiteContentSummary.length,
+                  url: websiteToUse.url,
+                  domain: websiteDomain,
+                };
+              }
+              return task;
+            });
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          });
         }
 
         // Step 1.3: 显示竞争对手分析结果（更详细的显示）
@@ -4543,12 +4926,36 @@ export default function App() {
                 opportunitiesFound:
                   result.analysis.opportunitiesFound || result.keywords.length,
                 analysisType: "competitor-analysis",
-                websiteUrl: selectedWebsite.url,
+                websiteUrl: websiteToUse.url,
               },
               dataType: "analysis",
             },
             currentTaskId
           );
+
+          // 保存竞争对手分析数据到任务状态
+          setState((prev) => {
+            const updatedTasks = prev.taskManager.tasks.map((task) => {
+              if (task.id === currentTaskId && task.miningState) {
+                task.miningState.competitorAnalysis = {
+                  competitorKeywordsCount:
+                    result.analysis.competitorKeywordsCount,
+                  opportunitiesFound:
+                    result.analysis.opportunitiesFound ||
+                    result.keywords.length,
+                  websiteUrl: websiteToUse.url,
+                };
+              }
+              return task;
+            });
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          });
         }
 
         // Step 1.4: 显示 AI 分析结果（初始关键词列表）
@@ -5351,19 +5758,25 @@ export default function App() {
   const handleDeepDive = async (keyword: KeywordData) => {
     // Check authentication
     if (!authenticated) {
-      setState((prev) => ({ ...prev, error: "请先登录才能使用Deep Dive功能" }));
+      setState((prev) => ({
+        ...prev,
+        error:
+          state.uiLanguage === "zh"
+            ? "请先登录才能使用生成图文功能"
+            : "Please login to use article generation",
+      }));
       return;
     }
 
     // Auto-create task if no active task exists
     if (!state.taskManager.activeTaskId) {
       addTask({
-        type: "deep-dive",
+        type: "article-generator",
         keyword: keyword,
         targetLanguage: state.targetLanguage,
       });
       await new Promise((resolve) => setTimeout(resolve, 100));
-      return; // Exit and let user start deep dive in the new task
+      return; // Exit and let user start article generator in the new task
     }
 
     // Capture taskId at the start for isolation
@@ -9003,10 +9416,10 @@ export default function App() {
                                       handleDeepDive(item);
                                     }}
                                     className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium"
-                                    title={t.deepDive}
+                                    title={t.btnGenerateArticle || t.deepDive}
                                   >
                                     <FileText className="w-3 h-3" />
-                                    {t.deepDive}
+                                    {t.btnGenerateArticle || t.deepDive}
                                   </button>
                                 </div>
                               </td>

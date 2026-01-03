@@ -304,7 +304,9 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
     // Call Gemini API for ChatGPT demo
     let chatGPTData;
     try {
-      const chatGPTResult = await callGeminiAPI(chatGPTPrompt, 'generate-chatgpt-demo');
+      const chatGPTResult = await callGeminiAPI(chatGPTPrompt, 'generate-chatgpt-demo', {
+        enableGoogleSearch: true  // 启用联网搜索以获取最新内容趋势
+      });
       const jsonMatch = chatGPTResult.text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         chatGPTData = JSON.parse(jsonMatch[0]);
@@ -320,7 +322,9 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
     // Call Gemini API for Article demo
     let articleData;
     try {
-      const articleResult = await callGeminiAPI(articlePrompt, 'generate-article-demo');
+      const articleResult = await callGeminiAPI(articlePrompt, 'generate-article-demo', {
+        enableGoogleSearch: true  // 启用联网搜索以获取最新内容趋势
+      });
       const jsonMatch = articleResult.text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         articleData = JSON.parse(jsonMatch[0]);

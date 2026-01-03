@@ -132,7 +132,9 @@ export async function auditWebsiteForKeywords(
 
     // Step 4: 调用 AI 分析
     console.log(`[Website Audit] Step 4: Calling AI for analysis...`);
-    const aiResponse = await callGeminiAPI(prompt, 'website-audit');
+    const aiResponse = await callGeminiAPI(prompt, 'website-audit', {
+      enableGoogleSearch: true  // 启用联网搜索以获取最新SEO最佳实践
+    });
 
     // Step 5: 解析 AI 响应
     console.log(`[Website Audit] Step 5: Parsing AI response...`);

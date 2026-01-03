@@ -91,7 +91,8 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   // 测试功能状态（仅本地可见）
   const [showTestPanel, setShowTestPanel] = useState(false);
   const [testUrl, setTestUrl] = useState("");
-  const [testEndpoint, setTestEndpoint] = useState<"overview" | "keywords" | "keyword-data">("overview");
+  const [testEndpoint, setTestEndpoint] = useState<"overview" | "keywords" | "keyword-data" | "whois-overview" | "custom">("whois-overview");
+  const [testCustomEndpoint, setTestCustomEndpoint] = useState("");
   const [testLoading, setTestLoading] = useState(false);
   const [testResult, setTestResult] = useState<any>(null);
   const [testError, setTestError] = useState<string | null>(null);
@@ -201,25 +202,26 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     // 等待所有请求完成
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // 检查是否需要触发数据更新（使用最新的 data 状态）
+    // 检查是否需要触发数据更新（仅一次，不轮询）
     setData((currentData) => {
       const hasAnyData = currentData?.overview || (currentData?.topKeywords?.length ?? 0) > 0 || (currentData?.competitors?.length ?? 0) > 0;
 
       if (!hasAnyData) {
-        console.log("[Dashboard] ⚠️ No cached data found, triggering background update...");
-        // 异步触发数据更新（不阻塞）
+        console.log("[Dashboard] ⚠️ No cached data found, triggering one-time update...");
+        // 异步触发数据更新（不阻塞，仅一次）
         fetch("/api/website-data/update-metrics", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(baseRequest),
         })
           .then(() => {
-            console.log("[Dashboard] Background update completed, reloading...");
-            // 更新完成后重新加载
-            setTimeout(() => loadDataParallel(), 2000);
+            console.log("[Dashboard] Update completed, reloading once...");
+            // 更新完成后仅重新加载一次
+            loadDataParallel();
           })
           .catch((error) => {
-            console.error("[Dashboard] Background update failed:", error);
+            console.error("[Dashboard] Update failed:", error);
+            setError(uiLanguage === "zh" ? "获取数据失败，请手动刷新" : "Failed to fetch data, please refresh manually");
           });
       }
 
@@ -273,14 +275,24 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     setTestResult(null);
 
     try {
+      const requestBody: any = {
+        url: testUrl,
+        endpoint: testEndpoint,
+        locationCode: 2840,
+      };
+
+      if (testEndpoint === "custom" && testCustomEndpoint) {
+        requestBody.customEndpoint = testCustomEndpoint;
+        requestBody.requestBody = [{
+          target: testUrl.replace(/^https?:\/\//, '').split('/')[0],
+          location_code: 2840,
+        }];
+      }
+
       const response = await fetch("/api/website-data/test-dataforseo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: testUrl,
-          endpoint: testEndpoint,
-          locationCode: 2840,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await response.json();
@@ -392,10 +404,24 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
                       isDarkTheme ? "bg-zinc-800 border-zinc-700 text-white" : "bg-white border-gray-300"
                     )}
                   >
-                    <option value="overview">Overview</option>
-                    <option value="keywords">Keywords</option>
+                    <option value="whois-overview">Whois Overview (推荐 - 包含 SEO 指标)</option>
+                    <option value="overview">Overview (使用 target 参数)</option>
+                    <option value="keywords">Keywords (尝试多个端点)</option>
                     <option value="keyword-data">Keyword Data</option>
+                    <option value="custom">Custom (自定义端点)</option>
                   </select>
+                  {testEndpoint === "custom" && (
+                    <Input
+                      type="text"
+                      placeholder={uiLanguage === "zh" ? "端点路径，如: /dataforseo_labs/google/domain_analytics/live" : "Endpoint path, e.g.: /dataforseo_labs/google/domain_analytics/live"}
+                      value={testCustomEndpoint}
+                      onChange={(e) => setTestCustomEndpoint(e.target.value)}
+                      className={cn(
+                        "flex-1",
+                        isDarkTheme ? "bg-zinc-800 border-zinc-700" : "bg-white"
+                      )}
+                    />
+                  )}
                   <Button
                     onClick={testDataForSEO}
                     disabled={testLoading || !testUrl.trim()}

@@ -168,7 +168,8 @@ Return a JSON array with objects containing:
 
   try {
     const response = await callGeminiAPI(promptContext, systemInstruction, {
-      responseMimeType: "application/json"
+      responseMimeType: "application/json",
+      enableGoogleSearch: true  // 启用联网搜索以获取最新关键词趋势
     });
 
     let text = response.text || "[]";

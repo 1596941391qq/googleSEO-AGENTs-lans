@@ -16,8 +16,10 @@ const DATAFORSEO_BASE_URL = 'https://api.dataforseo.com/v3';
 
 interface TestRequestBody {
   url: string; // 要测试的网址
-  endpoint?: string; // 可选：要测试的端点类型 ('overview' | 'keywords' | 'keyword-data')
+  endpoint?: string; // 可选：要测试的端点类型 ('overview' | 'keywords' | 'keyword-data' | 'custom')
+  customEndpoint?: string; // 可选：自定义端点路径（当 endpoint 为 'custom' 时使用）
   locationCode?: number; // 可选：位置代码，默认 2840 (United States)
+  requestBody?: any; // 可选：自定义请求体（当 endpoint 为 'custom' 时使用）
 }
 
 /**
@@ -63,19 +65,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 根据端点类型构建请求
     switch (endpoint) {
       case 'overview':
-        url = `${DATAFORSEO_BASE_URL}/domain_analytics/google/overview/live`;
+        // 使用正确的端点：/domain_analytics/whois/overview/live
+        // 根据用户提供的示例，这个端点返回域名的 SEO 指标
+        url = `${DATAFORSEO_BASE_URL}/domain_analytics/whois/overview/live`;
+        // 尝试使用 target 参数查询特定域名
         requestBody = [{
           target: cleanDomain,
-          location_code: locationCode,
+          limit: 1,
         }];
         break;
 
       case 'keywords':
-        url = `${DATAFORSEO_BASE_URL}/domain_analytics/google/keywords/live`;
+        // 尝试多个可能的关键词端点
+        const possibleKeywordsEndpoints = [
+          '/dataforseo_labs/google/domain_keywords/live',
+          '/domain_analytics/google/keywords/live',
+          '/backlinks/domain_keywords/live',
+        ];
+        
+        url = `${DATAFORSEO_BASE_URL}${possibleKeywordsEndpoints[0]}`;
         requestBody = [{
           target: cleanDomain,
           location_code: locationCode,
           limit: 10,
+        }];
+        break;
+
+      case 'whois-overview':
+        // 使用 whois/overview 端点（用户提供的示例）
+        url = `${DATAFORSEO_BASE_URL}/domain_analytics/whois/overview/live`;
+        // 尝试使用 filters 查询特定域名
+        requestBody = [{
+          limit: 1,
+          filters: [
+            [
+              "domain",
+              "=",
+              cleanDomain
+            ]
+          ]
+        }];
+        break;
+
+      case 'custom':
+        if (!body.customEndpoint) {
+          return res.status(400).json({ error: 'customEndpoint is required when endpoint is "custom"' });
+        }
+        url = body.customEndpoint.startsWith('http') 
+          ? body.customEndpoint 
+          : `${DATAFORSEO_BASE_URL}${body.customEndpoint.startsWith('/') ? body.customEndpoint : '/' + body.customEndpoint}`;
+        requestBody = body.requestBody || [{
+          target: cleanDomain,
+          location_code: locationCode,
         }];
         break;
 
@@ -148,7 +189,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         break;
 
       default:
-        return res.status(400).json({ error: `Invalid endpoint: ${endpoint}. Must be 'overview', 'keywords', or 'keyword-data'` });
+        return res.status(400).json({ error: `Invalid endpoint: ${endpoint}. Must be 'overview', 'keywords', 'keyword-data', 'whois-overview', or 'custom'` });
     }
 
     console.log(`[test-dataforseo] Request URL: ${url}`);

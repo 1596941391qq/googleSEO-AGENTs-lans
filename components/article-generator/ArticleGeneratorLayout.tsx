@@ -8,22 +8,50 @@ import { AgentStreamEvent, TargetLanguage } from '../../types';
 import { cn } from '../../lib/utils';
 
 /**
- * 根据目标市场获取对应的输出语言
+ * 检测关键词的语言（中文或英文）
  */
-function getTargetLanguageFromMarket(targetMarket: string): TargetLanguage {
-  const marketToLanguage: Record<string, TargetLanguage> = {
-    'global': 'en',
-    'us': 'en',
-    'uk': 'en',
-    'ca': 'en',
-    'au': 'en',
-    'de': 'de', // German
-    'fr': 'fr', // French
-    'jp': 'ja', // Japanese
-    'cn': 'zh', // Chinese
-  };
+function detectKeywordLanguage(keyword: string): 'zh' | 'en' {
+  // 检测中文字符
+  const chineseCharCount = (keyword.match(/[\u4e00-\u9fa5]/g) || []).length;
+  // 检测英文单词
+  const englishWordCount = (keyword.match(/[a-zA-Z]+/g) || []).length;
   
-  return marketToLanguage[targetMarket] || 'en';
+  // 如果中文字符数量大于英文单词数量的30%，则认为是中文
+  // 否则默认为英文
+  return chineseCharCount > englishWordCount * 0.3 ? 'zh' : 'en';
+}
+
+/**
+ * 根据目标市场获取对应的输出语言
+ * 如果没有设置目标市场，则根据关键词语言推断
+ */
+function getTargetLanguageFromMarket(targetMarket: string, keyword?: string): TargetLanguage {
+  // 如果设置了目标市场，优先使用目标市场对应的语言
+  if (targetMarket && targetMarket !== 'global') {
+    const marketToLanguage: Record<string, TargetLanguage> = {
+      'us': 'en',
+      'uk': 'en',
+      'ca': 'en',
+      'au': 'en',
+      'de': 'de', // German
+      'fr': 'fr', // French
+      'jp': 'ja', // Japanese
+      'cn': 'zh', // Chinese
+    };
+    
+    if (marketToLanguage[targetMarket]) {
+      return marketToLanguage[targetMarket];
+    }
+  }
+  
+  // 如果没有设置目标市场或目标市场是global，则根据关键词语言推断
+  if (keyword) {
+    const detectedLang = detectKeywordLanguage(keyword);
+    return detectedLang === 'zh' ? 'zh' : 'en';
+  }
+  
+  // 默认返回英文
+  return 'en';
 }
 
 // Redefine interface locally to match strict type checking or import properly
@@ -115,7 +143,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
             body: JSON.stringify({
                 ...config,
                 uiLanguage: uiLanguage || 'en',
-                targetLanguage: getTargetLanguageFromMarket(config.targetMarket)
+                targetLanguage: getTargetLanguageFromMarket(config.targetMarket, config.keyword)
             })
         });
 

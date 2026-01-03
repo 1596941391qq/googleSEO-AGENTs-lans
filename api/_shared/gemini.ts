@@ -9,6 +9,11 @@ interface GeminiConfig {
   model?: string;
   responseMimeType?: string;
   responseSchema?: any;
+  /**
+   * 启用 Google 搜索检索工具（联网搜索）
+   * 当设置为 true 时，Gemini 可以调用 Google 搜索来获取实时信息
+   */
+  enableGoogleSearch?: boolean;
 }
 
 export async function callGeminiAPI(prompt: string, systemInstruction?: string, config?: GeminiConfig) {
@@ -41,6 +46,17 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
       maxOutputTokens: 8192
     }
   };
+
+  // 配置工具：启用 Google 搜索检索（联网搜索）
+  if (config?.enableGoogleSearch) {
+    requestBody.tools = [
+      {
+        googleSearchRetrieval: {
+          // disableAttribution: true  // 可选：禁用来源归属
+        }
+      }
+    ];
+  }
 
   if (config?.responseMimeType === 'application/json') {
     if (!prompt.includes('JSON') && !prompt.includes('json')) {
@@ -91,10 +107,37 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
       throw new Error(`API 错误: ${data.error}`);
     }
 
+    // 提取联网搜索结果（groundingMetadata）
+    let searchResults: Array<{ title: string; url: string; snippet?: string }> = [];
+    
     if (data.candidates && data.candidates.length > 0) {
       const candidate = data.candidates[0];
+      
+      // 提取文本内容
       if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
         content = candidate.content.parts[0].text || '';
+      }
+      
+      // 提取联网搜索结果（groundingMetadata）
+      if (candidate.groundingMetadata && candidate.groundingMetadata.groundingChunks) {
+        const chunks = candidate.groundingMetadata.groundingChunks;
+        searchResults = chunks
+          .filter((chunk: any) => chunk.web && chunk.web.uri)
+          .map((chunk: any) => ({
+            title: chunk.web?.title || chunk.web?.uri || 'Untitled',
+            url: chunk.web.uri,
+            snippet: chunk.web?.snippet || undefined,
+          }));
+        
+        // 去重（基于 URL）
+        const seenUrls = new Set<string>();
+        searchResults = searchResults.filter((result) => {
+          if (seenUrls.has(result.url)) {
+            return false;
+          }
+          seenUrls.add(result.url);
+          return true;
+        });
       }
     }
 
@@ -110,6 +153,7 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
     return {
       text: content,
       raw: data,
+      searchResults: searchResults.length > 0 ? searchResults : undefined,
     };
   } catch (error: any) {
     console.error('调用 Gemini API 失败:', error);

@@ -128,7 +128,8 @@ Please provide detailed review results and improvement suggestions.`;
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',
+      enableGoogleSearch: true  // 启用联网搜索以验证事实和检查信息准确性
     });
 
     let text = response.text || '{}';

@@ -95,6 +95,23 @@ export interface ArchiveEntry {
   keywords: KeywordData[];
   miningRound: number;
   targetLanguage: TargetLanguage;
+  // 存量拓新模式相关字段
+  miningMode?: 'blue-ocean' | 'existing-website-audit';
+  websiteId?: string | null;
+  websiteUrl?: string | null;
+  websiteDomain?: string | null;
+  websiteAnalysis?: {
+    websiteContentSummary?: string;
+    contentLength?: number;
+    url?: string;
+    domain?: string;
+  };
+  competitorAnalysis?: {
+    competitorKeywordsCount?: number;
+    opportunitiesFound?: number;
+    websiteUrl?: string;
+  };
+  agentThoughts?: AgentThought[]; // 保存思维流
 }
 
 export interface BatchArchiveEntry {
@@ -206,8 +223,9 @@ export interface AgentThought {
   };
   analyzedKeywords?: KeywordData[];
   data?: any; // Raw data for structured display (replaces table)
-  dataType?: 'keywords' | 'analysis'; // Type of data to render
+  dataType?: 'keywords' | 'analysis' | 'website-content' | 'competitor-analysis'; // Type of data to render
   table?: any; // @deprecated - Table data for structured display (JSX not serializable)
+  searchResults?: Array<{ title: string; url: string; snippet?: string }>; // 联网搜索结果
 }
 
 export interface BatchAnalysisThought {
@@ -262,6 +280,23 @@ export interface TaskState {
     miningStrategy: 'horizontal' | 'vertical';
     userSuggestion: string;
     logs: LogEntry[];
+    // 存量拓新模式相关字段
+    websiteId?: string | null;
+    websiteUrl?: string | null;
+    websiteDomain?: string | null;
+    miningMode?: 'blue-ocean' | 'existing-website-audit';
+    // 网站分析和竞争对手分析数据
+    websiteAnalysis?: {
+      websiteContentSummary?: string;
+      contentLength?: number;
+      url?: string;
+      domain?: string;
+    };
+    competitorAnalysis?: {
+      competitorKeywordsCount?: number;
+      opportunitiesFound?: number;
+      websiteUrl?: string;
+    };
   };
 
   // Batch-specific state

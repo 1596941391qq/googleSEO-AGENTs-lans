@@ -36,6 +36,12 @@ export interface DataForSEODomainOverview {
   totalKeywords?: number;
   avgPosition?: number;
   topKeywords?: string[];
+  rankingDistribution?: {
+    top3: number;
+    top10: number;
+    top50: number;
+    top100: number;
+  };
 }
 
 // ============================================
@@ -292,13 +298,20 @@ export async function getDomainOverview(
 
     const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0];
 
-    // 使用 domain_analytics API
-    // 注意：可能需要使用不同的端点，如 backlinks/domain_analytics 或 dataforseo_labs
-    const url = `${DATAFORSEO_BASE_URL}/domain_analytics/google/overview/live`;
+    // 使用 whois/overview 端点（根据用户提供的示例，这个端点返回域名的 SEO 指标）
+    // 端点路径：/domain_analytics/whois/overview/live
+    const url = `${DATAFORSEO_BASE_URL}/domain_analytics/whois/overview/live`;
 
+    // 使用 filters 查询特定域名
     const requestBody = [{
-      target: cleanDomain,
-      location_code: locationCode,
+      limit: 1,
+      filters: [
+        [
+          "domain",
+          "=",
+          cleanDomain
+        ]
+      ]
     }];
 
     console.log(`[DataForSEO] Request URL: ${url}`);
@@ -359,74 +372,139 @@ export async function getDomainOverview(
       });
 
       // 解析响应数据
-      // DataForSEO API 响应格式通常是: [{ tasks: [{ status_code: 20000, result: [...] }] }]
+      // DataForSEO API 响应格式: { version, status_code, tasks: [{ result: [{ items: [...] }] }] }
       // status_code: 20000 = 成功, 其他值 = 错误
-      if (Array.isArray(data) && data.length > 0) {
-        const firstItem = data[0];
+      if (data && data.status_code === 20000 && data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
+        const firstTask = data.tasks[0];
         
-        // 检查是否有 tasks
-        if (firstItem.tasks && Array.isArray(firstItem.tasks) && firstItem.tasks.length > 0) {
-          const firstTask = firstItem.tasks[0];
+        // 检查任务状态码
+        if (firstTask.status_code !== 20000) {
+          console.error(`[DataForSEO] Task failed with status_code: ${firstTask.status_code}`, {
+            status_message: firstTask.status_message,
+          });
+          return null;
+        }
+        
+        // 解析 result 字段（whois/overview 端点的格式）
+        if (firstTask.result && Array.isArray(firstTask.result) && firstTask.result.length > 0) {
+          const resultItem = firstTask.result[0];
           
-          // 检查状态码
-          const statusCode = firstTask.status_code;
-          console.log(`[DataForSEO] Task status_code: ${statusCode}`);
-          
-          if (statusCode !== 20000) {
-            console.error(`[DataForSEO] Task failed with status_code: ${statusCode}`, {
-              status_message: firstTask.status_message,
-              result: firstTask.result,
+          // 检查是否有 items
+          if (resultItem.items && Array.isArray(resultItem.items) && resultItem.items.length > 0) {
+            const domainItem = resultItem.items[0];
+            
+            // 从 metrics.organic 中提取数据
+            const organicMetrics = domainItem.metrics?.organic || {};
+            const paidMetrics = domainItem.metrics?.paid || {};
+            
+            console.log(`[DataForSEO] Parsed domain item:`, {
+              domain: domainItem.domain,
+              organic_count: organicMetrics.count,
+              organic_etv: organicMetrics.etv,
             });
-            return null;
-          }
-          
-          // 检查 result 字段
-          if (firstTask.result && Array.isArray(firstTask.result) && firstTask.result.length > 0) {
-            const taskResult = firstTask.result[0];
-            console.log(`[DataForSEO] Parsed result keys:`, Object.keys(taskResult));
-            console.log(`[DataForSEO] Result values:`, {
-              organic_traffic: taskResult.organic_traffic,
-              total_keywords: taskResult.total_keywords,
-              avg_position: taskResult.avg_position,
-            });
+            
+            // 计算总关键词数（有机关键词数）
+            const totalKeywords = organicMetrics.count || 0;
+            
+            // 计算平均位置（基于排名分布）
+            // 使用加权平均：pos_1*1 + pos_2_3*2.5 + pos_4_10*7 + ... / total
+            let totalPositions = 0;
+            let totalKeywordsForAvg = 0;
+            
+            if (organicMetrics.pos_1) {
+              totalPositions += organicMetrics.pos_1 * 1;
+              totalKeywordsForAvg += organicMetrics.pos_1;
+            }
+            if (organicMetrics.pos_2_3) {
+              totalPositions += organicMetrics.pos_2_3 * 2.5;
+              totalKeywordsForAvg += organicMetrics.pos_2_3;
+            }
+            if (organicMetrics.pos_4_10) {
+              totalPositions += organicMetrics.pos_4_10 * 7;
+              totalKeywordsForAvg += organicMetrics.pos_4_10;
+            }
+            if (organicMetrics.pos_11_20) {
+              totalPositions += organicMetrics.pos_11_20 * 15.5;
+              totalKeywordsForAvg += organicMetrics.pos_11_20;
+            }
+            if (organicMetrics.pos_21_30) {
+              totalPositions += organicMetrics.pos_21_30 * 25.5;
+              totalKeywordsForAvg += organicMetrics.pos_21_30;
+            }
+            if (organicMetrics.pos_31_40) {
+              totalPositions += organicMetrics.pos_31_40 * 35.5;
+              totalKeywordsForAvg += organicMetrics.pos_31_40;
+            }
+            if (organicMetrics.pos_41_50) {
+              totalPositions += organicMetrics.pos_41_50 * 45.5;
+              totalKeywordsForAvg += organicMetrics.pos_41_50;
+            }
+            
+            const avgPosition = totalKeywordsForAvg > 0 ? totalPositions / totalKeywordsForAvg : 0;
+            
+            // 计算排名分布（根据新的响应格式）
+            const pos1 = organicMetrics.pos_1 || 0;
+            const pos2_3 = organicMetrics.pos_2_3 || 0;
+            const pos4_10 = organicMetrics.pos_4_10 || 0;
+            const pos11_20 = organicMetrics.pos_11_20 || 0;
+            const pos21_30 = organicMetrics.pos_21_30 || 0;
+            const pos31_40 = organicMetrics.pos_31_40 || 0;
+            const pos41_50 = organicMetrics.pos_41_50 || 0;
+            const pos51_60 = organicMetrics.pos_51_60 || 0;
+            const pos61_70 = organicMetrics.pos_61_70 || 0;
+            const pos71_80 = organicMetrics.pos_71_80 || 0;
+            const pos81_90 = organicMetrics.pos_81_90 || 0;
+            const pos91_100 = organicMetrics.pos_91_100 || 0;
+            
+            // 计算排名分布
+            const top3 = pos1 + pos2_3;
+            const top10 = pos1 + pos2_3 + pos4_10;
+            const top50 = pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50;
+            const top100 = pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50 + 
+                          pos51_60 + pos61_70 + pos71_80 + pos81_90 + pos91_100;
             
             return {
               domain: cleanDomain,
-              organicTraffic: taskResult.organic_traffic || taskResult.organicTraffic || 0,
-              totalKeywords: taskResult.total_keywords || taskResult.totalKeywords || 0,
-              avgPosition: taskResult.avg_position || taskResult.avgPosition || 0,
-              topKeywords: taskResult.top_keywords || taskResult.topKeywords || [],
-            };
-          } else if (firstTask.result && typeof firstTask.result === 'object' && !Array.isArray(firstTask.result)) {
-            // 如果 result 是对象而不是数组
-            const taskResult = firstTask.result;
-            console.log(`[DataForSEO] Result is object, keys:`, Object.keys(taskResult));
-            console.log(`[DataForSEO] Result values:`, {
-              organic_traffic: taskResult.organic_traffic,
-              total_keywords: taskResult.total_keywords,
-              avg_position: taskResult.avg_position,
-            });
-            
-            return {
-              domain: cleanDomain,
-              organicTraffic: taskResult.organic_traffic || taskResult.organicTraffic || 0,
-              totalKeywords: taskResult.total_keywords || taskResult.totalKeywords || 0,
-              avgPosition: taskResult.avg_position || taskResult.avgPosition || 0,
-              topKeywords: taskResult.top_keywords || taskResult.topKeywords || [],
+              organicTraffic: Math.round(organicMetrics.etv || 0), // 使用 ETV (Estimated Traffic Value) 作为流量估算
+              totalKeywords: totalKeywords,
+              avgPosition: Math.round(avgPosition * 10) / 10, // 保留一位小数
+              topKeywords: [], // whois/overview 端点不返回关键词列表
+              rankingDistribution: {
+                top3: top3,
+                top10: top10,
+                top50: top50,
+                top100: top100,
+              },
             };
           } else {
-            console.log(`[DataForSEO] No result found in task:`, {
-              hasResult: !!firstTask.result,
-              resultType: typeof firstTask.result,
-              resultIsArray: Array.isArray(firstTask.result),
-              resultValue: firstTask.result,
-            });
+            console.log(`[DataForSEO] No items found in result`);
           }
         } else {
-          console.log(`[DataForSEO] No tasks found or tasks is empty`);
+          console.log(`[DataForSEO] No result found in task`);
         }
       } else {
-        console.log(`[DataForSEO] Response is not an array or is empty`);
+        // 兼容旧的响应格式（如果 API 返回数组格式）
+        if (Array.isArray(data) && data.length > 0) {
+          const firstItem = data[0];
+          
+          if (firstItem.tasks && Array.isArray(firstItem.tasks) && firstItem.tasks.length > 0) {
+            const firstTask = firstItem.tasks[0];
+            
+            if (firstTask.status_code === 20000 && firstTask.result && Array.isArray(firstTask.result) && firstTask.result.length > 0) {
+              const taskResult = firstTask.result[0];
+              
+              return {
+                domain: cleanDomain,
+                organicTraffic: taskResult.organic_traffic || taskResult.organicTraffic || 0,
+                totalKeywords: taskResult.total_keywords || taskResult.totalKeywords || 0,
+                avgPosition: taskResult.avg_position || taskResult.avgPosition || 0,
+                topKeywords: taskResult.top_keywords || taskResult.topKeywords || [],
+              };
+            }
+          }
+        }
+        
+        console.log(`[DataForSEO] Response format not recognized or empty`);
       }
 
       return null;

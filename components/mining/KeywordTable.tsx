@@ -90,9 +90,9 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                       <button className={`text-xs flex items-center gap-1 transition-colors ${isDarkTheme ? "text-white/70 hover:text-emerald-400" : "text-gray-600 hover:text-emerald-600"}`} onClick={() => onToggleExpand(isExpanded ? null : item.id)}>
                         Details
                       </button>
-                      <button onClick={(e) => { e.stopPropagation(); onDeepDive(item); }} className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium" title={t.deepDive}>
+                      <button onClick={(e) => { e.stopPropagation(); onDeepDive(item); }} className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium" title={t.btnGenerateArticle || t.deepDive}>
                         <FileText className="w-3 h-3" />
-                        {t.deepDive}
+                        {t.btnGenerateArticle || t.deepDive}
                       </button>
                     </div>
                   </td>

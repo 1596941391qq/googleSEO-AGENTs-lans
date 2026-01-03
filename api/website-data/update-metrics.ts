@@ -171,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           declinedKeywords: 0,
           avgPosition: dataForSEODomainOverview.avgPosition || 0,
           trafficCost: 0,
-          rankingDistribution: {
+          rankingDistribution: dataForSEODomainOverview.rankingDistribution || {
             top3: 0,
             top10: 0,
             top50: 0,

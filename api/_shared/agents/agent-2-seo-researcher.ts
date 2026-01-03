@@ -134,7 +134,8 @@ Please provide detailed search engine preference analysis and optimization recom
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',
+      enableGoogleSearch: true  // 启用联网搜索以获取最新搜索引擎策略
     });
 
     let text = response.text || '{}';
@@ -314,7 +315,8 @@ Please provide detailed JSON output.`;
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',
+      enableGoogleSearch: true  // 启用联网搜索以获取最新搜索引擎策略
     });
 
     let text = response.text || '{}';
@@ -525,7 +527,10 @@ Return a JSON object:
       const response = await callGeminiAPI(
         `Analyze SEO competition for: ${keywordData.keyword}`,
         fullSystemInstruction,
-        { responseMimeType: "application/json" }
+        {
+          responseMimeType: "application/json",
+          enableGoogleSearch: true  // 启用联网搜索以获取最新竞争分析
+        }
       );
 
       let text = response.text || "{}";
@@ -670,7 +675,9 @@ Focus on:
 CRITICAL: Return ONLY the JSON array, nothing else. No explanations.`;
 
   try {
-    const response = await callGeminiAPI(prompt);
+    const response = await callGeminiAPI(prompt, undefined, {
+      enableGoogleSearch: true  // 启用联网搜索以获取最新关键词信息
+    });
     const text = response.text.trim();
     const jsonMatch = text.match(/\[.*?\]/s);
     if (jsonMatch) {
@@ -774,7 +781,8 @@ Return a JSON object:
 
   try {
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: "application/json"
+      responseMimeType: "application/json",
+      enableGoogleSearch: true  // 启用联网搜索以获取最新SEO策略
     });
 
     let text = response.text || "{}";

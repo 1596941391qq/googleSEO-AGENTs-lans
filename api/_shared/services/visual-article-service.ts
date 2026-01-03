@@ -203,7 +203,8 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       searchPrefs,
       competitorAnalysis,
       uiLanguage,
-      targetMarket
+      targetMarket,
+      targetLanguage
     );
 
     // Update streaming text with final content
