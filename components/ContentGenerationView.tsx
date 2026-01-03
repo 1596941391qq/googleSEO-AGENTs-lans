@@ -16,6 +16,7 @@ import {
   Hash,
   User,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -64,14 +65,62 @@ const WebsiteDataTab: React.FC<WebsiteDataTabProps> = ({
     );
   }
 
-  // Use the new WebsiteDataDashboard component
-  return (
-    <WebsiteDataDashboard
-      websiteId={website.id}
-      isDarkTheme={isDarkTheme}
-      uiLanguage={uiLanguage}
-    />
-  );
+  if (!website.id) {
+    return (
+      <div
+        className={cn(
+          "text-center py-16",
+          isDarkTheme ? "text-zinc-500" : "text-gray-500"
+        )}
+      >
+        <Hash className="w-16 h-16 mx-auto mb-4 opacity-50" />
+        <p className="text-sm">
+          {uiLanguage === "zh" ? "网站ID无效" : "Invalid website ID"}
+        </p>
+      </div>
+    );
+  }
+
+  // Use the new WebsiteDataDashboard component with error boundary
+  try {
+    return (
+      <WebsiteDataDashboard
+        websiteId={website.id}
+        isDarkTheme={isDarkTheme}
+        uiLanguage={uiLanguage}
+      />
+    );
+  } catch (error: any) {
+    console.error("[WebsiteDataTab] Render error:", error);
+    return (
+      <div
+        className={cn(
+          "text-center py-16",
+          isDarkTheme ? "bg-zinc-900" : "bg-white"
+        )}
+      >
+        <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
+        <p
+          className={cn(
+            "text-sm",
+            isDarkTheme ? "text-zinc-400" : "text-gray-600"
+          )}
+        >
+          {uiLanguage === "zh"
+            ? "加载网站数据时出错，请刷新页面重试"
+            : "Error loading website data, please refresh and try again"}
+        </p>
+        <p
+          className={cn(
+            "text-xs mt-2",
+            isDarkTheme ? "text-zinc-500" : "text-gray-500"
+          )}
+        >
+          {error?.message || "Unknown error"}
+        </p>
+      </div>
+    );
+  }
 };
 
 // Article Rankings Tab Component (独立组件，修复 hooks 问题)
@@ -652,6 +701,264 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
   );
 };
 
+// Publish Tab Component (独立组件，修复 hooks 问题)
+interface PublishTabProps {
+  isDarkTheme: boolean;
+  uiLanguage: "en" | "zh";
+}
+
+const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
+  const [articles, setArticles] = React.useState<any[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [updatingStatus, setUpdatingStatus] = React.useState<string | null>(
+    null
+  );
+
+  const loadArticles = React.useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch(`/api/articles/list?userId=1`);
+      if (response.ok) {
+        const result = await response.json();
+        setArticles(result.data?.articles || []);
+      }
+    } catch (error) {
+      console.error("Error loading articles:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const updateArticleStatus = React.useCallback(
+    async (articleId: string, newStatus: "draft" | "published") => {
+      setUpdatingStatus(articleId);
+      try {
+        const response = await fetch("/api/articles/update-status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            articleId,
+            status: newStatus,
+            userId: 1, // TODO: Get from session/auth
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to update article status");
+        }
+
+        // 刷新列表
+        await loadArticles();
+      } catch (error) {
+        console.error("Error updating article status:", error);
+        alert(
+          uiLanguage === "zh"
+            ? "更新状态失败，请重试"
+            : "Failed to update status. Please try again."
+        );
+      } finally {
+        setUpdatingStatus(null);
+      }
+    },
+    [loadArticles, uiLanguage]
+  );
+
+  React.useEffect(() => {
+    loadArticles();
+
+    // 监听文章保存事件，自动刷新列表
+    const handleArticleSaved = () => {
+      console.log("[PublishTab] Article saved, refreshing list...");
+      loadArticles();
+    };
+
+    window.addEventListener("article-saved", handleArticleSaved);
+
+    return () => {
+      window.removeEventListener("article-saved", handleArticleSaved);
+    };
+  }, [loadArticles]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+      </div>
+    );
+  }
+
+  if (articles.length === 0) {
+    return (
+      <div
+        className={cn(
+          "text-center py-16",
+          isDarkTheme ? "text-zinc-500" : "text-gray-500"
+        )}
+      >
+        <Send className="w-16 h-16 mx-auto mb-4 opacity-50" />
+        <p className="text-sm">
+          {uiLanguage === "zh"
+            ? "还没有保存的文章，去AI图文工厂生成一篇吧！"
+            : "No saved articles yet. Generate one in AI Visual Article Factory!"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto py-8 px-4">
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold mb-2">
+          {uiLanguage === "zh" ? "已保存的文章" : "Saved Articles"}
+        </h2>
+        <p
+          className={cn(
+            "text-sm",
+            isDarkTheme ? "text-zinc-400" : "text-gray-600"
+          )}
+        >
+          {uiLanguage === "zh"
+            ? `共 ${articles.length} 篇文章`
+            : `${articles.length} article${articles.length > 1 ? "s" : ""}`}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {articles.map((article) => (
+          <Card
+            key={article.id}
+            className={cn(
+              "hover:shadow-lg transition-all cursor-pointer group",
+              isDarkTheme
+                ? "bg-zinc-900 border-zinc-800 hover:border-emerald-500/50"
+                : "bg-white border-gray-200 hover:border-emerald-500"
+            )}
+          >
+            <CardHeader>
+              <div className="flex items-start justify-between mb-2">
+                <CardTitle className="text-lg line-clamp-2 group-hover:text-emerald-500 transition-colors">
+                  {article.title}
+                </CardTitle>
+              </div>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {article.keyword && (
+                  <Badge variant="outline" className="text-xs">
+                    <Hash className="w-3 h-3 mr-1" />
+                    {article.keyword}
+                  </Badge>
+                )}
+                {article.tone && (
+                  <Badge variant="outline" className="text-xs">
+                    {article.tone}
+                  </Badge>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {article.images && article.images.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2">
+                    {article.images.slice(0, 2).map((img: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="aspect-video rounded-lg overflow-hidden bg-zinc-800"
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.prompt || "Article image"}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p
+                  className={cn(
+                    "text-sm line-clamp-3",
+                    isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                  )}
+                  dangerouslySetInnerHTML={{
+                    __html: article.content.substring(0, 150) + "...",
+                  }}
+                />
+                <div className="space-y-2 pt-2 border-t border-zinc-800">
+                  <div className="flex items-center justify-between text-xs">
+                    <span
+                      className={cn(
+                        isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                      )}
+                    >
+                      {new Date(article.createdAt).toLocaleDateString(
+                        uiLanguage === "zh" ? "zh-CN" : "en-US"
+                      )}
+                    </span>
+                    <Badge
+                      className={cn(
+                        article.status === "draft"
+                          ? "bg-yellow-500/20 text-yellow-400"
+                          : "bg-emerald-500/20 text-emerald-400"
+                      )}
+                    >
+                      {article.status === "draft"
+                        ? uiLanguage === "zh"
+                          ? "草稿"
+                          : "Draft"
+                        : uiLanguage === "zh"
+                        ? "已发布"
+                        : "Published"}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2">
+                    {article.status === "draft" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs h-7"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateArticleStatus(article.id, "published");
+                        }}
+                        disabled={updatingStatus === article.id}
+                      >
+                        {updatingStatus === article.id ? (
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        ) : (
+                          <Send className="w-3 h-3 mr-1" />
+                        )}
+                        {uiLanguage === "zh" ? "发布" : "Publish"}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="flex-1 text-xs h-7"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          updateArticleStatus(article.id, "draft");
+                        }}
+                        disabled={updatingStatus === article.id}
+                      >
+                        {updatingStatus === article.id ? (
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                        ) : (
+                          <FileText className="w-3 h-3 mr-1" />
+                        )}
+                        {uiLanguage === "zh" ? "取消发布" : "Unpublish"}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 interface ContentGenerationViewProps {
   state: ContentGenerationState;
   setState: (update: Partial<ContentGenerationState>) => void;
@@ -671,10 +978,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
   const [qa2, setQa2] = useState("");
   const [qa3, setQa3] = useState<string[]>([]);
   const [qa4, setQa4] = useState("");
+  const [isCheckingWebsite, setIsCheckingWebsite] = useState(true); // Loading state for website check
 
   // Load website binding from database first, then fallback to localStorage
   React.useEffect(() => {
     const loadWebsiteFromDatabase = async () => {
+      setIsCheckingWebsite(true); // Start checking
       try {
         // Try loading from database first
         const response = await fetch(`/api/websites/list?user_id=1`);
@@ -690,6 +999,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               website: result.data.currentWebsite,
               onboardingStep: 5, // Set to bound state
             });
+            setIsCheckingWebsite(false); // Finished checking
             return;
           }
         }
@@ -706,7 +1016,34 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             website,
             onboardingStep: 5, // Set to bound state
           });
+          setIsCheckingWebsite(false); // Finished checking
+          return;
         }
+
+        // If no website is bound, default to showing demo steps (step 2: ChatGPT demo)
+        // This ensures users always see the demo steps by default
+        // Note: We check if onboardingStep is undefined or 0 to avoid overwriting existing state
+        setState((prevState) => {
+          if (
+            !prevState.website &&
+            (prevState.onboardingStep === 0 ||
+              prevState.onboardingStep === undefined)
+          ) {
+            return {
+              ...prevState,
+              onboardingStep: 2, // Start with ChatGPT demo
+              demoContent: prevState.demoContent || {
+                chatGPTDemo: null,
+                articleDemo: null,
+                domain: "example.com",
+                brandName: "Example",
+                screenshot: null,
+              },
+            };
+          }
+          return prevState;
+        });
+        setIsCheckingWebsite(false); // Finished checking
       } catch (error) {
         console.error(
           "[Content Generation] Failed to load website from database, trying localStorage:",
@@ -722,12 +1059,37 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               website,
               onboardingStep: 5, // Set to bound state
             });
+            setIsCheckingWebsite(false); // Finished checking
+          } else {
+            // If no website is bound, default to showing demo steps
+            setState((prevState) => {
+              if (
+                !prevState.website &&
+                (prevState.onboardingStep === 0 ||
+                  prevState.onboardingStep === undefined)
+              ) {
+                return {
+                  ...prevState,
+                  onboardingStep: 2, // Start with ChatGPT demo
+                  demoContent: prevState.demoContent || {
+                    chatGPTDemo: null,
+                    articleDemo: null,
+                    domain: "example.com",
+                    brandName: "Example",
+                    screenshot: null,
+                  },
+                };
+              }
+              return prevState;
+            });
+            setIsCheckingWebsite(false); // Finished checking
           }
         } catch (localError) {
           console.error(
             "[Content Generation] Failed to load saved website from localStorage:",
             localError
           );
+          setIsCheckingWebsite(false); // Finished checking even on error
         }
       }
     };
@@ -951,7 +1313,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             body: JSON.stringify({
               content: data.data.markdown,
               url: processedUrl,
-              targetLanguage: "en", // Can be made configurable
+              targetLanguage: uiLanguage === "zh" ? "zh" : "en",
+              uiLanguage: uiLanguage,
             }),
           });
 
@@ -1130,6 +1493,54 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
   // Render My Website Tab
   const renderMyWebsite = () => {
+    // Debug logging
+    console.log("[renderMyWebsite] Current state:", {
+      hasWebsite: !!state.website,
+      onboardingStep: state.onboardingStep,
+      hasDemoContent: !!state.demoContent,
+      websiteUrl: state.website?.url,
+    });
+
+    // Show loading state while checking website binding
+    if (isCheckingWebsite) {
+      return (
+        <div className="max-w-2xl mx-auto text-center py-20">
+          <div className="mb-8">
+            <div
+              className={cn(
+                "w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center",
+                isDarkTheme
+                  ? "bg-emerald-500/10 border-2 border-emerald-500/30"
+                  : "bg-emerald-50 border-2 border-emerald-500/30"
+              )}
+            >
+              <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+            </div>
+            <h2
+              className={cn(
+                "text-3xl font-bold mb-3",
+                isDarkTheme ? "text-white" : "text-gray-900"
+              )}
+            >
+              {uiLanguage === "zh"
+                ? "人们开始害怕你的网站无处不在"
+                : "People are starting to fear your website is everywhere"}
+            </h2>
+            <p
+              className={cn(
+                "text-sm",
+                isDarkTheme ? "text-zinc-400" : "text-gray-600"
+              )}
+            >
+              {uiLanguage === "zh"
+                ? "正在检查网站绑定状态..."
+                : "Checking website binding status..."}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     // If website is bound, show bound state
     if (state.website) {
       return (
@@ -1157,52 +1568,6 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Unbind Button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "w-full mb-4",
-                    isDarkTheme
-                      ? "border-red-500/30 text-red-400 hover:bg-red-500/10"
-                      : "border-red-500/30 text-red-600 hover:bg-red-50"
-                  )}
-                  onClick={() => {
-                    if (
-                      confirm(
-                        uiLanguage === "zh"
-                          ? "确定要解绑网站吗？这将清除所有绑定数据。"
-                          : "Are you sure you want to unbind? This will clear all binding data."
-                      )
-                    ) {
-                      // Clear localStorage
-                      try {
-                        localStorage.removeItem("google_seo_bound_website");
-                      } catch (error) {
-                        console.error(
-                          "[Content Generation] Failed to clear website from localStorage:",
-                          error
-                        );
-                      }
-
-                      setState({
-                        website: null,
-                        onboardingStep: 0,
-                        websiteData: null,
-                        demoContent: null,
-                      });
-                      setUrlInput("");
-                      setTempUrl("");
-                      setQa1("");
-                      setQa2("");
-                      setQa3([]);
-                      setQa4("");
-                    }
-                  }}
-                >
-                  {uiLanguage === "zh" ? "解绑网站" : "Unbind"}
-                </Button>
-
                 <div>
                   <div
                     className={cn(
@@ -1226,97 +1591,18 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   </a>
                 </div>
 
-                {state.website.industry && (
-                  <div>
-                    <div
+                {state.website.screenshot && (
+                  <div className="mt-4">
+                    <img
+                      src={state.website.screenshot}
+                      alt={state.website.title || "Website screenshot"}
                       className={cn(
-                        "text-xs mb-1",
-                        isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                        "w-full rounded-lg border",
+                        isDarkTheme ? "border-zinc-800" : "border-gray-200"
                       )}
-                    >
-                      Industry
-                    </div>
-                    <div
-                      className={cn(
-                        "text-sm",
-                        isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                      )}
-                    >
-                      {state.website.industry}
-                    </div>
+                    />
                   </div>
                 )}
-
-                {state.website.monthlyVisits && (
-                  <div>
-                    <div
-                      className={cn(
-                        "text-xs mb-1",
-                        isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                      )}
-                    >
-                      {t.monthlyVisits}
-                    </div>
-                    <div
-                      className={cn(
-                        "text-sm font-semibold",
-                        isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                      )}
-                    >
-                      {state.website.monthlyVisits.toLocaleString()}
-                    </div>
-                  </div>
-                )}
-
-                {state.website.monthlyRevenue && (
-                  <div>
-                    <div
-                      className={cn(
-                        "text-xs mb-1",
-                        isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                      )}
-                    >
-                      {t.monthlyRevenue}
-                    </div>
-                    <div
-                      className={cn(
-                        "text-sm font-semibold",
-                        isDarkTheme ? "text-zinc-200" : "text-gray-900"
-                      )}
-                    >
-                      {state.website.monthlyRevenue}
-                    </div>
-                  </div>
-                )}
-
-                {state.website.marketingTools &&
-                  state.website.marketingTools.length > 0 && (
-                    <div>
-                      <div
-                        className={cn(
-                          "text-xs mb-2",
-                          isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                        )}
-                      >
-                        {t.features}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {state.website.marketingTools.map((tool, idx) => (
-                          <Badge
-                            key={idx}
-                            variant="outline"
-                            className={cn(
-                              isDarkTheme
-                                ? "border-zinc-700 text-zinc-300"
-                                : "border-gray-300 text-gray-700"
-                            )}
-                          >
-                            {tool}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
               </CardContent>
             </Card>
 
@@ -1454,6 +1740,65 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 onWebsiteSelect={(website) => {
                   setState({ website });
                 }}
+                onWebsiteBind={(website) => {
+                  // Bind website and set to bound state
+                  setState({
+                    website: {
+                      id: website.id,
+                      url: website.url,
+                      domain: website.domain,
+                      title: website.title,
+                      description: website.description,
+                      screenshot: website.screenshot,
+                      industry: website.industry || null,
+                      monthlyVisits: website.monthlyVisits || null,
+                      monthlyRevenue: website.monthlyRevenue || null,
+                      marketingTools: website.marketingTools || [],
+                    },
+                    onboardingStep: 5, // Set to bound state
+                  });
+                  // Update user preferences to set this as current website
+                  fetch("/api/websites/set-default", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      websiteId: website.id,
+                      userId: 1,
+                    }),
+                  }).catch((error) => {
+                    console.error(
+                      "[Content Generation] Failed to set default website:",
+                      error
+                    );
+                  });
+                }}
+                onWebsiteUnbind={(websiteId) => {
+                  // Only unbind if this is the current website
+                  if (state.website?.id === websiteId) {
+                    // Clear localStorage
+                    try {
+                      localStorage.removeItem("google_seo_bound_website");
+                    } catch (error) {
+                      console.error(
+                        "[Content Generation] Failed to clear website from localStorage:",
+                        error
+                      );
+                    }
+
+                    setState({
+                      website: null,
+                      onboardingStep: 0,
+                      websiteData: null,
+                      demoContent: null,
+                    });
+                    setUrlInput("");
+                    setTempUrl("");
+                    setQa1("");
+                    setQa2("");
+                    setQa3([]);
+                    setQa4("");
+                  }
+                }}
                 currentWebsiteId={state.website?.id}
               />
             </CardContent>
@@ -1467,78 +1812,66 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
       case 0:
         // Step 1: Enter URL
         return (
-          <div className="flex items-center justify-center min-h-[calc(100vh-200px)] px-6">
-            <div className="w-full max-w-xl text-center space-y-8">
-              {/* Icon */}
-              <div className="flex justify-center">
-                <div
-                  className={cn(
-                    "w-20 h-20 rounded-2xl flex items-center justify-center",
-                    isDarkTheme
-                      ? "bg-emerald-500/10 border border-emerald-500/20"
-                      : "bg-emerald-50 border border-emerald-100"
-                  )}
-                >
-                  <Globe className="w-10 h-10 text-emerald-500" />
-                </div>
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="mb-8">
+              <div
+                className={cn(
+                  "w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center",
+                  isDarkTheme
+                    ? "bg-emerald-500/10 border-2 border-emerald-500/30"
+                    : "bg-emerald-50 border-2 border-emerald-500/30"
+                )}
+              >
+                <Globe className="w-10 h-10 text-emerald-500" />
               </div>
-
-              {/* Title */}
-              <div className="space-y-3">
-                <h2
-                  className={cn(
-                    "text-3xl font-semibold tracking-tight",
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  )}
-                >
-                  {t.bindWebsite}
-                </h2>
-                <p
-                  className={cn(
-                    "text-base leading-relaxed max-w-lg mx-auto",
-                    isDarkTheme ? "text-zinc-400" : "text-gray-600"
-                  )}
-                >
-                  {uiLanguage === "zh"
-                    ? "输入您的网站URL，我们将自动分析并生成SEO策略"
-                    : "Enter your website URL and we'll automatically analyze and generate SEO strategy"}
-                </p>
-              </div>
-
-              {/* Input and Button */}
-              <div className="space-y-4 max-w-md mx-auto">
-                <Input
-                  type="url"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder={t.enterUrlPlaceholder}
-                  className={cn(
-                    "h-12 text-base",
-                    isDarkTheme
-                      ? "bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                      : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
-                  )}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      handleUrlSubmit();
-                    }
-                  }}
-                />
-
-                <Button
-                  size="lg"
-                  className={cn(
-                    "h-12 px-6 text-base font-medium",
-                    "bg-emerald-500 hover:bg-emerald-600 text-white",
-                    "transition-all duration-200 hover:scale-[1.02] hover:shadow-md hover:shadow-emerald-500/20"
-                  )}
-                  onClick={handleUrlSubmit}
-                >
-                  {uiLanguage === "zh" ? "开始分析" : "Start Analysis"}
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
+              <h2
+                className={cn(
+                  "text-3xl font-bold mb-3",
+                  isDarkTheme ? "text-white" : "text-gray-900"
+                )}
+              >
+                {t.bindWebsite}
+              </h2>
+              <p
+                className={cn(
+                  "text-sm mb-6",
+                  isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                )}
+              >
+                {uiLanguage === "zh"
+                  ? "输入您的网站URL，我们将自动分析并生成SEO策略"
+                  : "Enter your website URL and we'll automatically analyze and generate SEO strategy"}
+              </p>
             </div>
+
+            <div className="mb-6">
+              <Input
+                type="url"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder={t.enterUrlPlaceholder}
+                className={cn(
+                  "text-center h-12 text-lg",
+                  isDarkTheme
+                    ? "bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600"
+                    : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400"
+                )}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleUrlSubmit();
+                  }
+                }}
+              />
+            </div>
+
+            <Button
+              size="lg"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-8"
+              onClick={handleUrlSubmit}
+            >
+              {uiLanguage === "zh" ? "开始分析" : "Start Analysis"}
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
           </div>
         );
 
@@ -2458,29 +2791,10 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
     }
   };
 
-  // Old functions removed - now using WebsiteDataTab and ArticleRankingsTab components
-
-  // Render Publish Tab
-  const renderPublish = () => {
-    return (
-      <div
-        className={cn(
-          "text-center py-16",
-          isDarkTheme ? "text-zinc-500" : "text-gray-500"
-        )}
-      >
-        <Send className="w-16 h-16 mx-auto mb-4 opacity-50" />
-        <p className="text-sm">
-          {uiLanguage === "zh"
-            ? "发布功能即将推出..."
-            : "Publish feature coming soon..."}
-        </p>
-      </div>
-    );
-  };
+  // Old functions removed - now using WebsiteDataTab, ArticleRankingsTab, and PublishTab components
 
   return (
-    <div className="max-w-7xl mx-auto">
+    <div className="max-w-7xl mx-auto mt-16">
       {/* Tab Content - No top tabs needed, they're in sidebar */}
       {state.activeTab === "my-website" && renderMyWebsite()}
       {state.activeTab === "website-data" && (
@@ -2497,7 +2811,9 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           uiLanguage={uiLanguage}
         />
       )}
-      {state.activeTab === "publish" && renderPublish()}
+      {state.activeTab === "publish" && (
+        <PublishTab isDarkTheme={isDarkTheme} uiLanguage={uiLanguage} />
+      )}
     </div>
   );
 };

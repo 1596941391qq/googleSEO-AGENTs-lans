@@ -3,28 +3,109 @@ import React, { useState } from 'react';
 import { AgentStreamFeed } from './AgentStreamFeed';
 import { ArticleInputConfig, ArticleConfig } from './ArticleInputConfig';
 import { ArticlePreview } from './ArticlePreview';
-import { AgentStreamEvent } from '../../types';
-import { X, ArrowLeft } from 'lucide-react';
+import { AgentStreamEvent, TargetLanguage } from '../../types';
 import { cn } from '../../lib/utils';
+
+/**
+ * 根据目标市场获取对应的输出语言
+ */
+function getTargetLanguageFromMarket(targetMarket: string): TargetLanguage {
+  const marketToLanguage: Record<string, TargetLanguage> = {
+    'global': 'en',
+    'us': 'en',
+    'uk': 'en',
+    'ca': 'en',
+    'au': 'en',
+    'de': 'de', // German
+    'fr': 'fr', // French
+    'jp': 'ja', // Japanese
+    'cn': 'zh', // Chinese
+  };
+  
+  return marketToLanguage[targetMarket] || 'en';
+}
 
 // Redefine interface locally to match strict type checking or import properly
 // We'll trust the types pass through, but for now mocking the state logic here for UI demo
 
 interface ArticleGeneratorLayoutProps {
   onBack: () => void;
-  // In a real implementation, these would be passed down from AppState
-  // For now, we manage local state for the UI demo flow
+  uiLanguage?: 'en' | 'zh';
+  articleGeneratorState?: {
+    keyword: string;
+    tone: string;
+    targetAudience: string;
+    visualStyle: string;
+    isGenerating: boolean;
+    progress: number;
+    currentStage: 'input' | 'research' | 'strategy' | 'writing' | 'visualizing' | 'complete';
+    streamEvents: AgentStreamEvent[];
+    finalArticle: {
+      title: string;
+      content: string;
+      images: { url: string; prompt: string; placement: string }[];
+    } | null;
+  };
+  onStateChange?: (state: Partial<{
+    keyword: string;
+    tone: string;
+    targetAudience: string;
+    visualStyle: string;
+    isGenerating: boolean;
+    progress: number;
+    currentStage: 'input' | 'research' | 'strategy' | 'writing' | 'visualizing' | 'complete';
+    streamEvents: AgentStreamEvent[];
+    finalArticle: {
+      title: string;
+      content: string;
+      images: { url: string; prompt: string; placement: string }[];
+    } | null;
+  }>) => void;
 }
 
-export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({ onBack }) => {
-  const [stage, setStage] = useState<'input' | 'generating' | 'preview'>('input');
-  const [events, setEvents] = useState<AgentStreamEvent[]>([]);
-  const [finalArticle, setFinalArticle] = useState<any>(null);
+export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({ 
+  onBack, 
+  uiLanguage = 'en',
+  articleGeneratorState,
+  onStateChange
+}) => {
+  // Use global state if provided, otherwise fallback to local state
+  const defaultState = {
+    currentStage: 'input' as const,
+    streamEvents: [] as AgentStreamEvent[],
+    finalArticle: null as any,
+  };
+  
+  const state = articleGeneratorState || defaultState;
+  // Determine stage based on state: if generating -> generating, if has finalArticle -> preview, else -> input
+  const stage = state.isGenerating ? 'generating' : 
+                state.finalArticle ? 'preview' : 
+                'input';
+  
+  const events = state.streamEvents || [];
+  const finalArticle = state.finalArticle;
+  
+  const updateState = (updates: Partial<typeof state>) => {
+    if (onStateChange) {
+      onStateChange(updates);
+    }
+  };
 
   const startGeneration = async (config: ArticleConfig) => {
-    setStage('generating');
-    setEvents([]);
-    setFinalArticle(null);
+    updateState({
+      currentStage: 'research', // Use a valid stage from the type
+      streamEvents: [],
+      finalArticle: null,
+      isGenerating: true,
+      keyword: config.keyword,
+      tone: config.tone,
+      targetAudience: config.targetAudience,
+      visualStyle: config.visualStyle,
+      targetMarket: config.targetMarket,
+    });
+    
+    // Track events locally for this generation session
+    let currentEvents: AgentStreamEvent[] = [];
     
     try {
         const response = await fetch('/api/visual-article', {
@@ -32,8 +113,8 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({ 
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 ...config,
-                uiLanguage: 'zh', // or from state
-                targetLanguage: 'en' // or from state
+                uiLanguage: uiLanguage || 'en',
+                targetLanguage: getTargetLanguageFromMarket(config.targetMarket)
             })
         });
 
@@ -60,19 +141,28 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({ 
                     const json = JSON.parse(line.replace('data: ', ''));
                     
                     if (json.type === 'event') {
-                        setEvents(prev => [...prev, json.data]);
+                        currentEvents = [...currentEvents, json.data];
+                        updateState({
+                            streamEvents: currentEvents,
+                        });
                     } else if (json.type === 'done') {
-                        setFinalArticle(json.data);
-                        // Delay transition slightly to let user see final logs
-                        setTimeout(() => setStage('preview'), 1500);
+                        updateState({
+                            finalArticle: json.data,
+                            isGenerating: false,
+                            currentStage: 'complete',
+                        });
                     } else if (json.type === 'error') {
-                        setEvents(prev => [...prev, {
+                        const errorEvent: AgentStreamEvent = {
                             id: Math.random().toString(),
                             agentId: 'tracker',
                             type: 'error',
                             timestamp: Date.now(),
                             message: json.message
-                        } as AgentStreamEvent]);
+                        };
+                        currentEvents = [...currentEvents, errorEvent];
+                        updateState({
+                            streamEvents: currentEvents,
+                        });
                     }
                 } catch (e) {
                     console.error('Error parsing stream line:', e);
@@ -80,13 +170,18 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({ 
             }
         }
     } catch (error: any) {
-        setEvents(prev => [...prev, {
+        const errorEvent: AgentStreamEvent = {
             id: Math.random().toString(),
             agentId: 'tracker',
             type: 'error',
             timestamp: Date.now(),
             message: `Connection Error: ${error.message}`
-        } as AgentStreamEvent]);
+        };
+        currentEvents = [...currentEvents, errorEvent];
+        updateState({
+            streamEvents: currentEvents,
+            isGenerating: false,
+        });
     }
   };
 
@@ -100,41 +195,36 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({ 
         </div>
 
         {/* Content Container (Center Stage) */}
-        <div className="relative z-10 w-full h-full flex flex-col max-w-5xl mx-auto border-x border-white/5 bg-[#050505]/50 backdrop-blur-sm shadow-2xl">
+        <div className="relative z-10 w-full h-full flex flex-col max-w-5xl mx-auto bg-[#050505]/50 backdrop-blur-sm shadow-2xl">
             
-            {/* Top Bar (Navigation) */}
-            <div className="h-16 border-b border-white/5 flex items-center justify-between px-6 shrink-0">
-                <div className="flex items-center space-x-4">
-                    <button 
-                       onClick={onBack}
-                       className="p-2 -ml-2 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
-                    >
-                        <ArrowLeft size={18} />
-                    </button>
-                    {(stage === 'generating' || stage === 'preview') ? (
-                       <span className="text-sm font-bold text-gray-400">Mission Active</span>
-                    ) : (
-                       <span className="text-sm font-bold text-white tracking-wide">AI Visual Article</span>
-                    )}
-                </div>
-            </div>
-
             {/* Stage Content */}
             <div className="flex-1 overflow-hidden relative">
                 {stage === 'input' && (
-                    <ArticleInputConfig onStart={startGeneration} />
+                    <ArticleInputConfig onStart={startGeneration} uiLanguage={uiLanguage} />
                 )}
                 
                 {stage === 'generating' && (
                     <div className="h-full flex flex-col">
-                        <AgentStreamFeed events={events} />
+                        <AgentStreamFeed events={events} uiLanguage={uiLanguage} />
                     </div>
                 )}
                 
                 {stage === 'preview' && finalArticle && (
                     <ArticlePreview 
                        finalArticle={finalArticle} 
-                       onClose={() => setStage('input')} 
+                       onClose={() => updateState({ 
+                         currentStage: 'input', 
+                         finalArticle: null,
+                         isGenerating: false,
+                       })}
+                       articleConfig={{
+                         keyword: state.keyword,
+                         tone: state.tone,
+                         visualStyle: state.visualStyle,
+                         targetAudience: state.targetAudience,
+                         targetMarket: state.targetMarket,
+                       }}
+                       uiLanguage={uiLanguage}
                     />
                 )}
             </div>

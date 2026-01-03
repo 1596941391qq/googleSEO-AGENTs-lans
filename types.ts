@@ -294,6 +294,7 @@ export interface CreateTaskParams {
   type: TaskType;
   name?: string; // Auto-generated if not provided
   targetLanguage?: TargetLanguage;
+  targetMarket?: string; // For article-generator tasks
   seedKeyword?: string; // For mining tasks
   inputKeywords?: string; // For batch tasks
   keyword?: KeywordData; // For deep-dive tasks
@@ -419,6 +420,7 @@ export interface ArticleGeneratorState {
   tone: string;
   targetAudience: string;
   visualStyle: string;
+  targetMarket: string;
 
   isGenerating: boolean;
   progress: number; // 0-100
@@ -443,6 +445,6 @@ export interface AgentStreamEvent {
   message?: string;
 
   // For 'card' type
-  cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' | 'image-gen';
+  cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' | 'image-gen' | 'competitor-analysis';
   data?: any;
 }

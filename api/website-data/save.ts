@@ -97,6 +97,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // ==========================================
+    // Step: 管理 user_preferences 记录
+    // ==========================================
+    // 检查这是否是用户的第一个网站
+    const websiteCountResult = await sql`
+      SELECT COUNT(*) as count
+      FROM user_websites
+      WHERE user_id = ${userId} AND is_active = true
+    `;
+    const websiteCount = parseInt(websiteCountResult.rows[0].count || '0', 10);
+    const isFirstWebsite = websiteCount === 1;
+
+    // 检查 user_preferences 是否存在
+    const preferencesCheck = await sql`
+      SELECT user_id FROM user_preferences WHERE user_id = ${userId}
+    `;
+    const hasPreferences = preferencesCheck.rows.length > 0;
+
+    if (isFirstWebsite) {
+      // 如果是第一个网站，自动设为默认网站并创建 user_preferences 记录
+      await sql`
+        UPDATE user_websites
+        SET is_default = true, updated_at = NOW()
+        WHERE id = ${websiteId}
+      `;
+
+      await sql`
+        INSERT INTO user_preferences (user_id, default_website_id, last_selected_website_id, updated_at)
+        VALUES (${userId}, ${websiteId}, ${websiteId}, NOW())
+        ON CONFLICT (user_id) DO UPDATE SET
+          default_website_id = EXCLUDED.default_website_id,
+          last_selected_website_id = EXCLUDED.last_selected_website_id,
+          updated_at = NOW()
+      `;
+    } else if (!hasPreferences) {
+      // 如果不是第一个网站，但 user_preferences 不存在，创建记录（不设为默认）
+      await sql`
+        INSERT INTO user_preferences (user_id, default_website_id, last_selected_website_id, updated_at)
+        VALUES (${userId}, NULL, NULL, NOW())
+        ON CONFLICT (user_id) DO NOTHING
+      `;
+    }
+
     return res.json({
       success: true,
       data: {

@@ -6,6 +6,7 @@ import {
   ExternalLink,
   TrendingUp,
   TrendingDown,
+  Loader2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -26,15 +27,63 @@ interface DomainKeyword {
 
 interface TopKeywordsTableProps {
   keywords: DomainKeyword[];
+  isLoading?: boolean;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
+  websiteId?: string;
+  totalKeywordsCount?: number;
 }
 
 export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
   keywords,
+  isLoading = false,
   isDarkTheme,
   uiLanguage,
+  websiteId,
+  totalKeywordsCount,
 }) => {
+  const [allKeywords, setAllKeywords] = React.useState<DomainKeyword[]>(keywords);
+  const [loadingMore, setLoadingMore] = React.useState(false);
+  const [showAll, setShowAll] = React.useState(false);
+  
+  const hasMore = totalKeywordsCount && totalKeywordsCount > 20;
+  const displayedKeywords = showAll ? allKeywords : allKeywords.slice(0, 20);
+  
+  const loadMoreKeywords = async () => {
+    if (!websiteId || loadingMore) return;
+    
+    setLoadingMore(true);
+    try {
+      // 调用 API 获取剩余的关键词（从 SE-Ranking API 直接获取，不缓存）
+      const response = await fetch("/api/website-data/keywords", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteId,
+          offset: allKeywords.length, // 从当前已加载的数量开始
+          limit: 100, // 获取最多100个剩余关键词
+        }),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.data && result.data.keywords) {
+          setAllKeywords([...allKeywords, ...result.data.keywords]);
+          setShowAll(true);
+        }
+      }
+    } catch (error) {
+      console.error("[TopKeywordsTable] Failed to load more keywords:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+  
+  // 当 keywords prop 变化时，更新 state
+  React.useEffect(() => {
+    setAllKeywords(keywords);
+    setShowAll(false);
+  }, [keywords]);
   const formatNumber = (num: number): string => {
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toString();
@@ -77,14 +126,51 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
             )}
           >
             {uiLanguage === "zh" ? "Top 关键词" : "Top Keywords"}
+            {totalKeywordsCount && (
+              <span className={cn(
+                "ml-2 text-xs font-normal",
+                isDarkTheme ? "text-zinc-400" : "text-gray-500"
+              )}>
+                ({totalKeywordsCount})
+              </span>
+            )}
           </CardTitle>
-          <Button variant="outline" size="sm">
-            {uiLanguage === "zh" ? "查看全部" : "View All"}
-          </Button>
+          {hasMore && !showAll && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={loadMoreKeywords}
+              disabled={loadingMore}
+            >
+              {loadingMore ? (
+                <>
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  {uiLanguage === "zh" ? "加载中..." : "Loading..."}
+                </>
+              ) : (
+                <>
+                  {uiLanguage === "zh" ? `加载更多 (${totalKeywordsCount! - 20})` : `Load More (${totalKeywordsCount! - 20})`}
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
-        {keywords.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className={cn(
+              "w-6 h-6 animate-spin",
+              isDarkTheme ? "text-emerald-400" : "text-emerald-500"
+            )} />
+            <span className={cn(
+              "ml-2 text-sm",
+              isDarkTheme ? "text-zinc-400" : "text-gray-500"
+            )}>
+              {uiLanguage === "zh" ? "加载中..." : "Loading..."}
+            </span>
+          </div>
+        ) : keywords.length === 0 ? (
           <div
             className={cn(
               "text-center py-8 text-sm",
@@ -128,7 +214,7 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {keywords.map((kw, index) => (
+                {displayedKeywords.map((kw, index) => (
                   <tr
                     key={index}
                     className={cn(

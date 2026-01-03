@@ -1,5 +1,5 @@
 import React from "react";
-import { Globe, TrendingUp, ArrowUpRight, ExternalLink } from "lucide-react";
+import { Globe, TrendingUp, ArrowUpRight, ExternalLink, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
@@ -16,12 +16,14 @@ interface DomainCompetitor {
 
 interface CompetitorsComparisonProps {
   competitors: DomainCompetitor[];
+  isLoading?: boolean;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
 }
 
 export const CompetitorsComparison: React.FC<CompetitorsComparisonProps> = ({
   competitors,
+  isLoading = false,
   isDarkTheme,
   uiLanguage,
 }) => {
@@ -49,7 +51,20 @@ export const CompetitorsComparison: React.FC<CompetitorsComparisonProps> = ({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {competitors.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className={cn(
+              "w-6 h-6 animate-spin",
+              isDarkTheme ? "text-emerald-400" : "text-emerald-500"
+            )} />
+            <span className={cn(
+              "ml-2 text-sm",
+              isDarkTheme ? "text-zinc-400" : "text-gray-500"
+            )}>
+              {uiLanguage === "zh" ? "加载中..." : "Loading..."}
+            </span>
+          </div>
+        ) : competitors.length === 0 ? (
           <div
             className={cn(
               "text-center py-8 text-sm",

@@ -61,7 +61,8 @@ export async function generateContent(
   seoStrategyReport: SEOStrategyReport,
   searchPreferences?: SearchPreferencesResult,
   competitorAnalysis?: CompetitorAnalysisResult,
-  language: 'zh' | 'en' = 'en'
+  language: 'zh' | 'en' = 'en',
+  targetMarket: string = 'global'
 ): Promise<ContentGenerationResult> {
   try {
     // 获取 Content Writer prompt
@@ -121,30 +122,34 @@ ${competitorAnalysis.competitorAnalysis ? JSON.stringify(competitorAnalysis.comp
     }
 
     // 构建生成提示
+    const marketLabel = targetMarket === 'global' 
+      ? (language === 'zh' ? '全球市场' : 'Global Market')
+      : targetMarket.toUpperCase();
+    
     const prompt = language === 'zh'
-      ? `基于以下SEO研究结果，撰写一篇高质量的文章内容。
+      ? `基于以下SEO研究结果，为 ${marketLabel} 市场撰写一篇高质量的文章内容。
 
 ${seoContext}${searchPreferencesContext}${competitorContext}
 
 要求：
-1. 严格按照推荐的内容结构撰写
-2. 自然融入目标关键词和长尾关键词（关键词密度1-2%）
-3. 前100字必须直接击中用户搜索痛点
+1. 严格按照推荐的内容结构撰写，特别关注 ${marketLabel} 市场的本地化需求
+2. 自然融入目标关键词和长尾关键词（关键词密度1-2%），使用适合 ${marketLabel} 市场的表达方式
+3. 前100字必须直接击中 ${marketLabel} 市场用户的搜索痛点
 4. 每段不超过3行，多使用列表、粗体和引言
-5. 确保内容流畅自然，有价值
+5. 确保内容流畅自然，有价值，符合 ${marketLabel} 市场的文化和习惯
 6. 字数约 ${seoStrategyReport.recommendedWordCount} 字
 
 请以Markdown格式输出完整文章。`
-      : `Generate a high-quality article based on the following SEO research findings.
+      : `Generate a high-quality article based on the following SEO research findings for the ${marketLabel} market.
 
 ${seoContext}${searchPreferencesContext}${competitorContext}
 
 Requirements:
-1. Follow the recommended content structure strictly
-2. Naturally integrate target keyword and long-tail keywords (1-2% density)
-3. First 100 words must directly address user search pain points
+1. Follow the recommended content structure strictly, with special attention to localization needs for ${marketLabel} market
+2. Naturally integrate target keyword and long-tail keywords (1-2% density), using expressions appropriate for ${marketLabel} market
+3. First 100 words must directly address search pain points of users in ${marketLabel} market
 4. Keep paragraphs under 3 lines, use lists, bold, and quotes
-5. Ensure content flows naturally and provides value
+5. Ensure content flows naturally and provides value, aligned with ${marketLabel} market culture and habits
 6. Target word count: approximately ${seoStrategyReport.recommendedWordCount} words
 
 Please output the complete article in Markdown format.`;

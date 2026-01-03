@@ -85,16 +85,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       LIMIT 1
     `;
 
-    const needsRefresh =
-      body.forceRefresh ||
-      cacheCheck.rows.length === 0 ||
-      new Date(cacheCheck.rows[0].cache_expires_at) < new Date();
+    const hasCache = cacheCheck.rows.length > 0;
+    const cacheExpired = hasCache && new Date(cacheCheck.rows[0].cache_expires_at) < new Date();
+    const needsRefresh = body.forceRefresh || !hasCache || cacheExpired;
 
-    // 如果需要刷新，触发后台更新
-    if (needsRefresh) {
-      console.log('[overview] Cache expired or missing, triggering refresh...');
+    // 如果没有缓存，同步等待第一次数据获取
+    if (!hasCache) {
+      console.log('[overview] No cache found, fetching data from SE-Ranking...');
 
       // 构建完整 URL
+      const baseUrl = process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : process.env.NODE_ENV === 'production'
+          ? 'https://google-seo-agent.vercel.app'
+          : 'http://localhost:3002';
+
+      try {
+        // 同步等待第一次数据获取完成（最多等待25秒）
+        const updateResponse = await fetch(`${baseUrl}/api/website-data/update-metrics`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            websiteId: body.websiteId,
+            userId,
+          }),
+        });
+
+        if (!updateResponse.ok) {
+          console.error('[overview] Failed to fetch initial data:', await updateResponse.text());
+        } else {
+          console.log('[overview] Initial data fetched successfully');
+        }
+      } catch (error) {
+        console.error('[overview] Failed to fetch initial data:', error);
+        // 即使失败也继续，返回空数据让用户知道需要手动刷新
+      }
+    } else if (cacheExpired && !body.forceRefresh) {
+      // 如果缓存过期但不强制刷新，异步触发后台更新
+      console.log('[overview] Cache expired, triggering background refresh...');
+
       const baseUrl = process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : process.env.NODE_ENV === 'production'
@@ -154,7 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     // ==========================================
-    // Step 5: 获取 Top 关键词（前 10 个）
+    // Step 5: 获取 Top 关键词（前 20 个）
     // ==========================================
     const keywordsResult = await sql`
       SELECT
@@ -171,7 +200,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       WHERE website_id = ${body.websiteId}
         AND cache_expires_at > NOW()
       ORDER BY search_volume DESC
-      LIMIT 10
+      LIMIT 20
     `;
 
     const topKeywords = keywordsResult.rows.map((row: any) => ({

@@ -23,10 +23,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       content,
       url,
       keywords,
-      targetLanguage = 'en',
+      targetLanguage,
       uiLanguage = 'en',
       websiteTitle = ''
     } = parseRequestBody(req);
+    // Use uiLanguage as default if targetLanguage is not provided
+    const finalTargetLanguage = targetLanguage || (uiLanguage === 'zh' ? 'zh' : 'en');
 
     // Validate required fields
     if (!content || typeof content !== 'string') {

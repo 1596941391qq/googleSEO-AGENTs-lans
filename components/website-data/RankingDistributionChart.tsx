@@ -1,5 +1,6 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import { Loader2 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
 interface RankingDistribution {
@@ -10,22 +11,23 @@ interface RankingDistribution {
 }
 
 interface RankingDistributionChartProps {
-  distribution: RankingDistribution;
-  totalKeywords: number;
+  distribution?: RankingDistribution;
+  totalKeywords?: number;
+  isLoading?: boolean;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
 }
 
 export const RankingDistributionChart: React.FC<
   RankingDistributionChartProps
-> = ({ distribution, totalKeywords, isDarkTheme, uiLanguage }) => {
+> = ({ distribution, totalKeywords = 0, isLoading = false, isDarkTheme, uiLanguage }) => {
   // Calculate percentages
   const getPercentage = (value: number): number => {
     if (totalKeywords === 0) return 0;
     return Math.round((value / totalKeywords) * 100);
   };
 
-  const data = [
+  const data = distribution ? [
     {
       label: "Top 3",
       count: distribution.top3,
@@ -54,7 +56,7 @@ export const RankingDistributionChart: React.FC<
       color: "bg-gray-500",
       bgColor: isDarkTheme ? "bg-gray-500/20" : "bg-gray-100",
     },
-  ];
+  ] : [];
 
   return (
     <Card
@@ -74,7 +76,21 @@ export const RankingDistributionChart: React.FC<
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {data.map((item) => (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className={cn(
+              "w-6 h-6 animate-spin",
+              isDarkTheme ? "text-emerald-400" : "text-emerald-500"
+            )} />
+            <span className={cn(
+              "ml-2 text-sm",
+              isDarkTheme ? "text-zinc-400" : "text-gray-500"
+            )}>
+              {uiLanguage === "zh" ? "加载中..." : "Loading..."}
+            </span>
+          </div>
+        ) : data.length > 0 ? (
+          data.map((item) => (
           <div key={item.label} className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span
@@ -114,9 +130,8 @@ export const RankingDistributionChart: React.FC<
               />
             </div>
           </div>
-        ))}
-
-        {totalKeywords === 0 && (
+          ))
+        ) : (
           <div
             className={cn(
               "text-center py-8 text-sm",

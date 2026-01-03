@@ -7,8 +7,11 @@ import {
   Plus,
   Loader2,
   AlertCircle,
+  X,
+  Link2,
 } from "lucide-react";
 import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
@@ -20,6 +23,10 @@ export interface Website {
   title: string | null;
   description: string | null;
   screenshot: string | null;
+  industry: string | null;
+  monthlyVisits: number | null;
+  monthlyRevenue: string | null;
+  marketingTools: string[];
   isDefault: boolean;
   lastAccessedAt: Date | null;
   boundAt: Date;
@@ -43,6 +50,8 @@ interface WebsiteManagerProps {
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
   onWebsiteSelect?: (website: Website) => void;
+  onWebsiteBind?: (website: Website) => void;
+  onWebsiteUnbind?: (websiteId: string) => void;
   currentWebsiteId?: string | null;
 }
 
@@ -51,6 +60,8 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
   isDarkTheme,
   uiLanguage,
   onWebsiteSelect,
+  onWebsiteBind,
+  onWebsiteUnbind,
   currentWebsiteId,
 }) => {
   const [data, setData] = useState<WebsitesListData | null>(null);
@@ -58,6 +69,9 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [deletingWebsiteId, setDeletingWebsiteId] = useState<string | null>(null);
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
+  const [showAddWebsite, setShowAddWebsite] = useState(false);
+  const [newWebsiteUrl, setNewWebsiteUrl] = useState("");
+  const [addingWebsite, setAddingWebsite] = useState(false);
 
   // Load websites list
   const loadWebsites = async () => {
@@ -159,6 +173,83 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
     }
   };
 
+  // Add website
+  const handleAddWebsite = async () => {
+    if (!newWebsiteUrl || newWebsiteUrl.trim() === "") {
+      alert(uiLanguage === "zh" ? "请输入网站URL" : "Please enter a website URL");
+      return;
+    }
+
+    let processedUrl = newWebsiteUrl.trim();
+    if (!processedUrl.startsWith("http://") && !processedUrl.startsWith("https://")) {
+      processedUrl = "https://" + processedUrl;
+    }
+
+    try {
+      new URL(processedUrl);
+    } catch {
+      alert(uiLanguage === "zh" ? "无效的URL格式" : "Invalid URL format");
+      return;
+    }
+
+    setAddingWebsite(true);
+
+    try {
+      // Step 1: Scrape website
+      const scrapeResponse = await fetch("/api/scrape-website", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: processedUrl }),
+      });
+
+      if (!scrapeResponse.ok) {
+        throw new Error("Failed to scrape website");
+      }
+
+      const scrapeData = await scrapeResponse.json();
+      if (!scrapeData.success || !scrapeData.data) {
+        throw new Error("Invalid scrape response");
+      }
+
+      // Step 2: Save website
+      const saveResponse = await fetch("/api/website-data/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          websiteUrl: processedUrl,
+          websiteTitle: scrapeData.data.title || null,
+          websiteDescription: scrapeData.data.description || null,
+          websiteScreenshot: scrapeData.data.screenshot || null,
+          rawContent: scrapeData.data.content || null,
+        }),
+      });
+
+      if (!saveResponse.ok) {
+        throw new Error("Failed to save website");
+      }
+
+      const saveData = await saveResponse.json();
+      if (!saveData.success) {
+        throw new Error("Invalid save response");
+      }
+
+      // Reload list
+      await loadWebsites();
+      setNewWebsiteUrl("");
+      setShowAddWebsite(false);
+    } catch (error: any) {
+      console.error("[WebsiteManager] Failed to add website:", error);
+      alert(
+        uiLanguage === "zh"
+          ? `添加网站失败: ${error.message}`
+          : `Failed to add website: ${error.message}`
+      );
+    } finally {
+      setAddingWebsite(false);
+    }
+  };
+
   useEffect(() => {
     loadWebsites();
   }, [userId]);
@@ -217,10 +308,74 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
         <p className="text-sm mb-4">
           {uiLanguage === "zh" ? "还没有绑定网站" : "No websites bound yet"}
         </p>
-        <Button variant="outline" size="sm">
-          <Plus className="w-4 h-4 mr-2" />
-          {uiLanguage === "zh" ? "添加网站" : "Add Website"}
-        </Button>
+        {!showAddWebsite ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddWebsite(true)}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            {uiLanguage === "zh" ? "添加网站" : "Add Website"}
+          </Button>
+        ) : (
+          <div className="max-w-md mx-auto space-y-3">
+            <Input
+              type="url"
+              value={newWebsiteUrl}
+              onChange={(e) => setNewWebsiteUrl(e.target.value)}
+              placeholder={
+                uiLanguage === "zh"
+                  ? "输入网站URL (例如: example.com)"
+                  : "Enter website URL (e.g., example.com)"
+              }
+              className={cn(
+                isDarkTheme
+                  ? "bg-zinc-900 border-zinc-700 text-white"
+                  : "bg-white border-gray-300"
+              )}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleAddWebsite();
+                } else if (e.key === "Escape") {
+                  setShowAddWebsite(false);
+                  setNewWebsiteUrl("");
+                }
+              }}
+              disabled={addingWebsite}
+            />
+            <div className="flex gap-2 justify-center">
+              <Button
+                size="sm"
+                onClick={handleAddWebsite}
+                disabled={addingWebsite}
+              >
+                {addingWebsite ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {uiLanguage === "zh" ? "添加中..." : "Adding..."}
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    {uiLanguage === "zh" ? "添加" : "Add"}
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowAddWebsite(false);
+                  setNewWebsiteUrl("");
+                }}
+                disabled={addingWebsite}
+              >
+                <X className="w-4 h-4 mr-2" />
+                {uiLanguage === "zh" ? "取消" : "Cancel"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -249,10 +404,66 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
               : `${data.websites.length} website${data.websites.length > 1 ? "s" : ""}`}
           </p>
         </div>
-        <Button variant="outline" size="sm">
-          <Plus className="w-4 h-4 mr-2" />
-          {uiLanguage === "zh" ? "添加网站" : "Add Website"}
-        </Button>
+        {!showAddWebsite ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAddWebsite(true)}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            {uiLanguage === "zh" ? "添加网站" : "Add Website"}
+          </Button>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Input
+              type="url"
+              value={newWebsiteUrl}
+              onChange={(e) => setNewWebsiteUrl(e.target.value)}
+              placeholder={
+                uiLanguage === "zh"
+                  ? "输入网站URL"
+                  : "Enter website URL"
+              }
+              className={cn(
+                "w-64 h-8",
+                isDarkTheme
+                  ? "bg-zinc-900 border-zinc-700 text-white"
+                  : "bg-white border-gray-300"
+              )}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleAddWebsite();
+                } else if (e.key === "Escape") {
+                  setShowAddWebsite(false);
+                  setNewWebsiteUrl("");
+                }
+              }}
+              disabled={addingWebsite}
+            />
+            <Button
+              size="sm"
+              onClick={handleAddWebsite}
+              disabled={addingWebsite}
+            >
+              {addingWebsite ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Plus className="w-4 h-4" />
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setShowAddWebsite(false);
+                setNewWebsiteUrl("");
+              }}
+              disabled={addingWebsite}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Websites List */}
@@ -265,6 +476,8 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
             uiLanguage={uiLanguage}
             isCurrent={website.id === currentWebsiteId}
             onSelect={() => onWebsiteSelect?.(website)}
+            onBind={() => onWebsiteBind?.(website)}
+            onUnbind={() => onWebsiteUnbind?.(website.id)}
             onSetDefault={() => setDefaultWebsite(website.id)}
             onDelete={() => deleteWebsite(website.id)}
             isSettingDefault={settingDefaultId === website.id}
@@ -282,6 +495,8 @@ interface WebsiteCardProps {
   uiLanguage: "en" | "zh";
   isCurrent: boolean;
   onSelect: () => void;
+  onBind?: () => void;
+  onUnbind?: () => void;
   onSetDefault: () => void;
   onDelete: () => void;
   isSettingDefault: boolean;
@@ -294,6 +509,8 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
   uiLanguage,
   isCurrent,
   onSelect,
+  onBind,
+  onUnbind,
   onSetDefault,
   onDelete,
   isSettingDefault,
@@ -402,6 +619,47 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
 
           {/* Right: Actions */}
           <div className="flex items-center space-x-2 flex-shrink-0 ml-4">
+            {!isCurrent && onBind && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onBind();
+                }}
+              >
+                <Link2 className="w-3 h-3 mr-1" />
+                {uiLanguage === "zh" ? "绑定" : "Bind"}
+              </Button>
+            )}
+            {isCurrent && onUnbind && (
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "text-xs",
+                  isDarkTheme
+                    ? "border-red-500/30 text-red-400 hover:bg-red-500/10"
+                    : "border-red-500/30 text-red-600 hover:bg-red-50"
+                )}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (
+                    confirm(
+                      uiLanguage === "zh"
+                        ? "确定要解绑这个网站吗？"
+                        : "Are you sure you want to unbind this website?"
+                    )
+                  ) {
+                    onUnbind();
+                  }
+                }}
+              >
+                <X className="w-3 h-3 mr-1" />
+                {uiLanguage === "zh" ? "解绑" : "Unbind"}
+              </Button>
+            )}
             {!website.isDefault && (
               <Button
                 variant="ghost"

@@ -57,14 +57,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "./components/ui/card";
 import { Badge } from "./components/ui/badge";
 import { cn } from "./lib/utils";
 import { useAuth } from "./contexts/AuthContext";
-import { Sidebar } from './components/layout/Sidebar';
-import { TaskMenuModal } from './components/layout/TaskMenuModal';
-import { StrategyModal } from './components/workflow/StrategyModal';
-import { StepItem } from './components/layout/StepItem';
-import { TaskTab } from './components/layout/TaskTab';
-import { ArticleGeneratorLayout } from './components/article-generator/ArticleGeneratorLayout';
-import { KeywordTable } from './components/mining/KeywordTable';
-import { MarkdownContent } from './components/ui/MarkdownContent';
+import { Sidebar } from "./components/layout/Sidebar";
+import { TaskMenuModal } from "./components/layout/TaskMenuModal";
+import { StrategyModal } from "./components/workflow/StrategyModal";
+import { StepItem } from "./components/layout/StepItem";
+import { TaskTab } from "./components/layout/TaskTab";
+import { ArticleGeneratorLayout } from "./components/article-generator/ArticleGeneratorLayout";
+import { KeywordTable } from "./components/mining/KeywordTable";
+import { MarkdownContent } from "./components/ui/MarkdownContent";
 import { TestAgentPanel } from "./components/TestAgentPanel";
 import { ContentGenerationView } from "./components/ContentGenerationView";
 import {
@@ -114,7 +114,6 @@ import {
   DEEP_DIVE_WORKFLOW,
   createDefaultConfig,
 } from "./workflows";
-
 
 // --- Constants & Translations ---
 
@@ -240,6 +239,29 @@ const TEXT = {
     suggestionPlaceholder:
       "Enter suggestions for next round (e.g., focus on low competition niches)...",
     applyNextRound: "Will apply in next round",
+    // Article Generator Agent Visualization
+    agentTracker: "Tracker",
+    agentResearcher: "Researcher",
+    agentStrategist: "Strategist",
+    agentWriter: "Writer",
+    agentArtist: "Artist",
+    agentSystem: "System",
+    agentTrackerDesc: "Checking requirements and validating input...",
+    agentResearcherDesc: "Analyzing competitors and collecting SEO data...",
+    agentStrategistDesc: "Creating content strategy and outline...",
+    agentWriterDesc: "Writing article content...",
+    agentArtistDesc: "Generating visual assets...",
+    cardTopCompetitors: "Top Competitors",
+    cardStrategicOutline: "Strategic Outline",
+    cardCompetitorAnalysis: "Competitor Analysis",
+    cardGeneratingVisual: "Generating Visual",
+    cardWinningFormula: "Winning Formula",
+    cardContentGaps: "Content Gaps",
+    cardTopCompetitorsBenchmark: "Top Competitors Benchmark",
+    cardVolume: "Vol",
+    cardDifficulty: "KD",
+    cardAngle: "Angle",
+    cardWeakness: "Weakness",
   },
   zh: {
     title: "Google SEO 智能 Agent",
@@ -361,6 +383,29 @@ const TEXT = {
     userSuggestion: "您的建议",
     suggestionPlaceholder: "输入下一轮的建议（例如：关注低竞争细分市场）...",
     applyNextRound: "将在下一轮生效",
+    // Article Generator Agent Visualization
+    agentTracker: "追踪器",
+    agentResearcher: "研究员",
+    agentStrategist: "策略师",
+    agentWriter: "写手",
+    agentArtist: "艺术家",
+    agentSystem: "系统",
+    agentTrackerDesc: "正在检查需求并验证输入...",
+    agentResearcherDesc: "正在分析竞争对手并收集SEO数据...",
+    agentStrategistDesc: "正在创建内容策略和大纲...",
+    agentWriterDesc: "正在撰写文章内容...",
+    agentArtistDesc: "正在生成视觉素材...",
+    cardTopCompetitors: "顶级竞争对手",
+    cardStrategicOutline: "策略大纲",
+    cardCompetitorAnalysis: "竞争对手分析",
+    cardGeneratingVisual: "正在生成视觉",
+    cardWinningFormula: "制胜公式",
+    cardContentGaps: "内容缺口",
+    cardTopCompetitorsBenchmark: "顶级竞争对手基准",
+    cardVolume: "搜索量",
+    cardDifficulty: "难度",
+    cardAngle: "角度",
+    cardWeakness: "弱点",
   },
 };
 
@@ -717,7 +762,7 @@ const renderAgentDataTable = (
   if (dataType === "analysis") {
     // Single item or array of items
     const items = Array.isArray(data) ? data : [data];
-    
+
     return (
       <div className="space-y-3 mt-2">
         {items.map((data, idx) => (
@@ -2156,7 +2201,6 @@ const WorkflowConfigPanel = ({
   );
 };
 
-
 export default function App() {
   const [state, setState] = useState<AppState>({
     // Task Management
@@ -2223,13 +2267,14 @@ export default function App() {
 
     // Article Generator
     articleGeneratorState: {
-      keyword: '',
-      tone: 'professional',
-      targetAudience: 'beginner',
-      visualStyle: 'realistic',
+      keyword: "",
+      tone: "professional",
+      targetAudience: "beginner",
+      visualStyle: "realistic",
+      targetMarket: "global",
       isGenerating: false,
       progress: 0,
-      currentStage: 'input',
+      currentStage: "input",
       streamEvents: [],
       finalArticle: null,
     },
@@ -2245,7 +2290,7 @@ export default function App() {
 
     // Content Generation
     contentGeneration: {
-      activeTab: 'my-website' as const,
+      activeTab: "my-website" as const,
       website: null,
       onboardingStep: 0,
       websiteData: null,
@@ -2258,9 +2303,9 @@ export default function App() {
   // Batch translate and analyze state
   const [batchInput, setBatchInput] = useState("");
   const [articleGeneratorInput, setArticleGeneratorInput] = useState("");
-  const [activeTab, setActiveTab] = useState<"mining" | "batch" | "articleGenerator">(
-    "mining"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "mining" | "batch" | "articleGenerator"
+  >("mining");
   const [showTaskMenu, setShowTaskMenu] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true); // Theme toggle state
   const [showMiningGuide, setShowMiningGuide] = useState(false); // 挖词引导模态框
@@ -2444,7 +2489,7 @@ export default function App() {
     }
   }, [authenticated]);
 
-  // Load theme from localStorage on mount
+  // Load theme and UI language from localStorage on mount
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem("theme");
@@ -2453,7 +2498,14 @@ export default function App() {
       }
       const savedCollapsed = localStorage.getItem("sidebar_collapsed");
       if (savedCollapsed) {
-        setState(prev => ({ ...prev, isSidebarCollapsed: savedCollapsed === "true" }));
+        setState((prev) => ({
+          ...prev,
+          isSidebarCollapsed: savedCollapsed === "true",
+        }));
+      }
+      const savedUiLanguage = localStorage.getItem("ui_language");
+      if (savedUiLanguage === "zh" || savedUiLanguage === "en") {
+        setState((prev) => ({ ...prev, uiLanguage: savedUiLanguage }));
       }
     } catch (e) {
       console.error("Error loading settings from localStorage:", e);
@@ -2690,6 +2742,10 @@ export default function App() {
     state.isDeepDiving,
     state.miningSuccess,
     state.step,
+    state.articleGeneratorState.isGenerating,
+    state.articleGeneratorState.streamEvents.length,
+    state.articleGeneratorState.finalArticle,
+    state.articleGeneratorState.currentStage,
   ]);
 
   // Sync activeTab with current task type when switching tasks
@@ -2700,7 +2756,10 @@ export default function App() {
       );
       if (activeTask && state.step === "input") {
         // Map task type to activeTab value
-        const tabMap: Record<TaskType, "mining" | "batch" | "articleGenerator"> = {
+        const tabMap: Record<
+          TaskType,
+          "mining" | "batch" | "articleGenerator"
+        > = {
           mining: "mining",
           batch: "batch",
           "article-generator": "articleGenerator",
@@ -3023,8 +3082,6 @@ export default function App() {
     }
   };
 
-
-
   const addLog = (
     message: string,
     type: LogEntry["type"] = "info",
@@ -3181,11 +3238,37 @@ export default function App() {
         };
         break;
       case "article-generator":
+        // 根据targetMarket自动设置targetLanguage
+        const getTargetLanguageFromMarket = (
+          market: string
+        ): TargetLanguage => {
+          const marketToLanguage: Record<string, TargetLanguage> = {
+            global: "en",
+            us: "en",
+            uk: "en",
+            ca: "en",
+            au: "en",
+            de: "de",
+            fr: "fr",
+            jp: "ja",
+            cn: "zh",
+          };
+          return marketToLanguage[market] || "en";
+        };
+
+        const articleTargetMarket = params.targetMarket || "global";
+        baseTask.targetLanguage =
+          getTargetLanguageFromMarket(articleTargetMarket);
+
         baseTask.articleGeneratorState = {
-          keyword: typeof params.keyword === 'string' ? params.keyword : (params.keyword?.keyword || ""),
+          keyword:
+            typeof params.keyword === "string"
+              ? params.keyword
+              : params.keyword?.keyword || "",
           tone: "professional",
           targetAudience: "beginner",
           visualStyle: "realistic",
+          targetMarket: articleTargetMarket,
           isGenerating: false,
           progress: 0,
           currentStage: "input",
@@ -3343,7 +3426,8 @@ export default function App() {
             ...prev,
             ...baseState,
             step: "article-generator",
-            articleGeneratorState: task.articleGeneratorState || prev.articleGeneratorState,
+            articleGeneratorState:
+              task.articleGeneratorState || prev.articleGeneratorState,
             // Clear other task types' state
             seedKeyword: "",
             keywords: [],
@@ -3385,21 +3469,26 @@ export default function App() {
       const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
       if (savedTasks) {
         const tasks: TaskState[] = JSON.parse(savedTasks);
-        const activeTask = tasks.find((t) => t.isActive) || tasks[0];
+        // 确保所有任务都不是active，默认显示"我的网站"
+        const tasksWithNoActive = tasks.map((t) => ({
+          ...t,
+          isActive: false,
+        }));
 
         setState((prev) => ({
           ...prev,
           taskManager: {
             ...prev.taskManager,
-            tasks,
-            activeTaskId: activeTask?.id || null,
+            tasks: tasksWithNoActive,
+            activeTaskId: null, // 确保没有active任务
+          },
+          // 确保显示"我的网站"页面
+          step: "content-generation",
+          contentGeneration: {
+            ...prev.contentGeneration,
+            activeTab: "my-website",
           },
         }));
-
-        // Hydrate active task
-        if (activeTask) {
-          setTimeout(() => hydrateTask(activeTask.id), 0);
-        }
       }
     } catch (e) {
       console.error("Failed to load tasks", e);
@@ -3612,6 +3701,45 @@ export default function App() {
             batchInputKeywords: "",
             batchCurrentIndex: 0,
             batchTotalCount: 0,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+              activeTaskId: taskId,
+            },
+          };
+          break;
+
+        case "article-generator":
+          // Determine step based on article generator state
+          let articleStep: AppState["step"] = "article-generator";
+
+          newState = {
+            ...prev,
+            ...baseState,
+            step: articleStep,
+            articleGeneratorState:
+              targetTask.articleGeneratorState || prev.articleGeneratorState,
+            // Clear other task types
+            seedKeyword: "",
+            keywords: [],
+            miningRound: 0,
+            agentThoughts: [],
+            isMining: false,
+            miningSuccess: false,
+            wordsPerRound: 10,
+            miningStrategy: "horizontal",
+            userSuggestion: "",
+            batchKeywords: [],
+            batchThoughts: [],
+            batchInputKeywords: "",
+            batchCurrentIndex: 0,
+            batchTotalCount: 0,
+            deepDiveKeyword: null,
+            currentStrategyReport: null,
+            deepDiveThoughts: [],
+            isDeepDiving: false,
+            deepDiveProgress: 0,
+            deepDiveCurrentStep: "",
             taskManager: {
               ...prev.taskManager,
               tasks: updatedTasks,
@@ -4620,7 +4748,7 @@ export default function App() {
         ...prev.articleGeneratorState,
         keyword: keyword.keyword,
         isGenerating: false,
-        currentStage: 'input',
+        currentStage: "input",
       },
       logs: [],
     }));
@@ -4632,18 +4760,22 @@ export default function App() {
   const runArticleGenerator = async (keyword: KeywordData, taskId: string) => {
     try {
       // Direct jump to article-generator view for this task
-      setState(prev => ({
-          ...prev,
-          step: 'article-generator',
-          articleGeneratorState: {
-              ...prev.articleGeneratorState,
-              keyword: keyword.keyword,
-              isGenerating: false, // Wait for user to confirm in the view
-              currentStage: 'input'
-          }
+      setState((prev) => ({
+        ...prev,
+        step: "article-generator",
+        articleGeneratorState: {
+          ...prev.articleGeneratorState,
+          keyword: keyword.keyword,
+          isGenerating: false, // Wait for user to confirm in the view
+          currentStage: "input",
+        },
       }));
 
-      addLog(`Switching to Article Generator for "${keyword.keyword}"`, "info", taskId);
+      addLog(
+        `Switching to Article Generator for "${keyword.keyword}"`,
+        "info",
+        taskId
+      );
     } catch (error: any) {
       console.error("Failed to start article generator:", error);
       addLog(`启动失败: ${error.message}`, "error", taskId);
@@ -4955,8 +5087,6 @@ export default function App() {
       }));
     }
   };
-
-
 
   // === Workflow Configuration Management ===
 
@@ -5968,14 +6098,12 @@ export default function App() {
 
   // Handler for sidebar collapse
   const handleToggleSidebar = () => {
-    setState(prev => {
-        const newState = !prev.isSidebarCollapsed;
-        localStorage.setItem("sidebar_collapsed", String(newState));
-        return { ...prev, isSidebarCollapsed: newState };
+    setState((prev) => {
+      const newState = !prev.isSidebarCollapsed;
+      localStorage.setItem("sidebar_collapsed", String(newState));
+      return { ...prev, isSidebarCollapsed: newState };
     });
   };
-
-
 
   return (
     <div
@@ -5993,12 +6121,21 @@ export default function App() {
         onWorkflowConfig={() =>
           setState((prev) => ({ ...prev, step: "workflow-config" }))
         }
-        onLanguageToggle={() =>
-          setState((prev) => ({
-            ...prev,
-            uiLanguage: prev.uiLanguage === "en" ? "zh" : "en",
-          }))
-        }
+        onLanguageToggle={() => {
+          setState((prev) => {
+            const newLanguage = prev.uiLanguage === "en" ? "zh" : "en";
+            // Save to localStorage
+            try {
+              localStorage.setItem("ui_language", newLanguage);
+            } catch (e) {
+              console.error("Failed to save UI language to localStorage:", e);
+            }
+            return {
+              ...prev,
+              uiLanguage: newLanguage,
+            };
+          });
+        }}
         onThemeToggle={handleThemeToggle}
         uiLanguage={state.uiLanguage}
         step={state.step}
@@ -6007,6 +6144,16 @@ export default function App() {
           setState((prev) => ({
             ...prev,
             step: "content-generation",
+            // 切换到"我的网站"时，清除activeTaskId，确保任务不是active
+            taskManager: {
+              ...prev.taskManager,
+              activeTaskId: null,
+              // 确保所有任务都不是active
+              tasks: prev.taskManager.tasks.map((t) => ({
+                ...t,
+                isActive: false,
+              })),
+            },
             contentGeneration: {
               ...prev.contentGeneration,
               activeTab: tab || prev.contentGeneration.activeTab,
@@ -6014,8 +6161,12 @@ export default function App() {
           }))
         }
         contentGenerationTab={state.contentGeneration.activeTab}
-        onTestAgents={() => setState(prev => ({ ...prev, step: 'test-agents' }))}
-        onDeepDive={() => setState(prev => ({ ...prev, step: 'article-generator' }))}
+        onTestAgents={() =>
+          setState((prev) => ({ ...prev, step: "test-agents" }))
+        }
+        onDeepDive={() =>
+          setState((prev) => ({ ...prev, step: "article-generator" }))
+        }
         isCollapsed={state.isSidebarCollapsed}
         onToggleCollapse={handleToggleSidebar}
       />
@@ -6023,227 +6174,315 @@ export default function App() {
       {/* Main Container */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header: Process Indicators & User Info */}
-        {state.step !== 'article-generator' && (
+        {state.step !== "article-generator" && (
           <header
-          className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-8 shrink-0 ${
-            isDarkTheme
-              ? "border-white/5 bg-[#0a0a0a]/50"
-              : "border-gray-200 bg-white/80"
-          }`}
-        >
-          {/* Left: Step Indicators */}
-          <div className="flex items-center space-x-8">
-            <StepItem
-              number={1}
-              label={t.step1}
-              active={state.step === "input"}
-              isDarkTheme={isDarkTheme}
-            />
-            <ChevronRight
-              size={14}
-              className={isDarkTheme ? "text-neutral-800" : "text-gray-300"}
-            />
-            <StepItem
-              number={2}
-              label={t.step2}
-              active={
-                state.step === "mining" ||
-                state.step === "batch-analyzing" ||
-                state.step === "deep-dive-analyzing"
-              }
-              isDarkTheme={isDarkTheme}
-            />
-            <ChevronRight
-              size={14}
-              className={isDarkTheme ? "text-neutral-800" : "text-gray-300"}
-            />
-            <StepItem
-              number={3}
-              label={t.step3}
-              active={
-                state.step === "results" ||
-                state.step === "batch-results" ||
-                state.step === "deep-dive-results"
-              }
-              isDarkTheme={isDarkTheme}
-            />
-          </div>
+            className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-8 shrink-0 ${
+              isDarkTheme
+                ? "border-white/5 bg-[#0a0a0a]/50"
+                : "border-gray-200 bg-white/80"
+            }`}
+          >
+            {/* Left: Step Indicators */}
+            <div className="flex items-center space-x-8">
+              <StepItem
+                number={1}
+                label={t.step1}
+                active={state.step === "input"}
+                isDarkTheme={isDarkTheme}
+              />
+              <ChevronRight
+                size={14}
+                className={isDarkTheme ? "text-neutral-800" : "text-gray-300"}
+              />
+              <StepItem
+                number={2}
+                label={t.step2}
+                active={
+                  state.step === "mining" ||
+                  state.step === "batch-analyzing" ||
+                  state.step === "deep-dive-analyzing"
+                }
+                isDarkTheme={isDarkTheme}
+              />
+              <ChevronRight
+                size={14}
+                className={isDarkTheme ? "text-neutral-800" : "text-gray-300"}
+              />
+              <StepItem
+                number={3}
+                label={t.step3}
+                active={
+                  state.step === "results" ||
+                  state.step === "batch-results" ||
+                  state.step === "deep-dive-results"
+                }
+                isDarkTheme={isDarkTheme}
+              />
+            </div>
 
-
-          {/* Right: Credits + User Info */}
-          <div className="flex items-center space-x-6">
-            {/* Credits */}
-            {(authenticated || (import.meta.env.DEV && credits)) && (
-              <div className="flex items-center space-x-3 bg-emerald-500/5 border border-emerald-500/10 px-4 py-2 rounded">
-                {creditsLoading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
-                    <span
-                      className={`text-[9px] font-black uppercase tracking-widest ${
-                        isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                      }`}
-                    >
-                      {state.uiLanguage === "zh" ? "加载中..." : "Loading..."}
-                    </span>
-                  </>
-                ) : credits !== null ? (
-                  <>
-                    <div className="p-1 bg-emerald-500/10 rounded">
-                      <CreditCard size={14} className="text-emerald-500" />
-                    </div>
-                    <div className="flex flex-col">
+            {/* Right: Credits + User Info */}
+            <div className="flex items-center space-x-6">
+              {/* Credits */}
+              {(authenticated || (import.meta.env.DEV && credits)) && (
+                <div className="flex items-center space-x-3 bg-emerald-500/5 border border-emerald-500/10 px-4 py-2 rounded">
+                  {creditsLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
                       <span
-                        className={`text-xs font-black mono leading-none tracking-tight ${
-                          isDarkTheme ? "text-white" : "text-gray-900"
+                        className={`text-[9px] font-black uppercase tracking-widest ${
+                          isDarkTheme ? "text-neutral-400" : "text-gray-600"
                         }`}
                       >
-                        {credits.remaining.toLocaleString()}
+                        {state.uiLanguage === "zh" ? "加载中..." : "Loading..."}
                       </span>
-                      <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter mt-0.5">
-                        {state.uiLanguage === "zh" ? "可用点数" : "Credits"}
-                      </span>
-                    </div>
-                    <div
-                      className={`w-[1px] h-6 mx-2 ${
-                        isDarkTheme ? "bg-white/10" : "bg-gray-300"
-                      }`}
-                    />
-                    <button
-                      className={`text-[9px] font-black uppercase tracking-widest transition-colors ${
-                        isDarkTheme
-                          ? "text-neutral-400 hover:text-white"
-                          : "text-gray-600 hover:text-gray-900"
-                      }`}
-                      onClick={() => window.open(MAIN_APP_URL, "_blank")}
-                    >
-                      {state.uiLanguage === "zh" ? "充值" : "Recharge"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div
-                      className={`p-1 rounded ${
-                        isDarkTheme ? "bg-white/5" : "bg-gray-100"
-                      }`}
-                    >
-                      <Coins
-                        size={14}
-                        className={
-                          isDarkTheme ? "text-neutral-600" : "text-gray-400"
-                        }
+                    </>
+                  ) : credits !== null ? (
+                    <>
+                      <div className="p-1 bg-emerald-500/10 rounded">
+                        <CreditCard size={14} className="text-emerald-500" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span
+                          className={`text-xs font-black mono leading-none tracking-tight ${
+                            isDarkTheme ? "text-white" : "text-gray-900"
+                          }`}
+                        >
+                          {credits.remaining.toLocaleString()}
+                        </span>
+                        <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter mt-0.5">
+                          {state.uiLanguage === "zh" ? "可用点数" : "Credits"}
+                        </span>
+                      </div>
+                      <div
+                        className={`w-[1px] h-6 mx-2 ${
+                          isDarkTheme ? "bg-white/10" : "bg-gray-300"
+                        }`}
                       />
-                    </div>
-                    <span
-                      className={`text-xs font-bold ${
-                        isDarkTheme ? "text-neutral-600" : "text-gray-500"
-                      }`}
-                    >
-                      --
-                    </span>
-                  </>
-                )}
-              </div>
-            )}
+                      <button
+                        className={`text-[9px] font-black uppercase tracking-widest transition-colors ${
+                          isDarkTheme
+                            ? "text-neutral-400 hover:text-white"
+                            : "text-gray-600 hover:text-gray-900"
+                        }`}
+                        onClick={() => window.open(MAIN_APP_URL, "_blank")}
+                      >
+                        {state.uiLanguage === "zh" ? "充值" : "Recharge"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        className={`p-1 rounded ${
+                          isDarkTheme ? "bg-white/5" : "bg-gray-100"
+                        }`}
+                      >
+                        <Coins
+                          size={14}
+                          className={
+                            isDarkTheme ? "text-neutral-600" : "text-gray-400"
+                          }
+                        />
+                      </div>
+                      <span
+                        className={`text-xs font-bold ${
+                          isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                        }`}
+                      >
+                        --
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
 
-            {/* User Profile */}
-            {authLoading ? (
-              <div className="flex items-center space-x-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
-                <span
-                  className={`text-xs font-bold ${
-                    isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                  }`}
-                >
-                  {state.uiLanguage === "zh" ? "验证中..." : "Verifying..."}
-                </span>
-              </div>
-            ) : authenticated ? (
-              <div
-                className={`flex items-center space-x-4 border-l pl-6 ${
-                  isDarkTheme ? "border-white/5" : "border-gray-200"
-                }`}
-              >
-                <div className="text-right">
-                  <p
-                    className={`text-xs font-bold leading-none ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
+              {/* User Profile */}
+              {authLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
+                  <span
+                    className={`text-xs font-bold ${
+                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
                     }`}
                   >
-                    {user?.name || user?.email}
-                  </p>
-                  <p className="text-[9px] font-bold text-emerald-500/60 uppercase tracking-widest mt-1">
-                    {state.uiLanguage === "zh" ? "已登录" : "Logged In"}
-                  </p>
+                    {state.uiLanguage === "zh" ? "验证中..." : "Verifying..."}
+                  </span>
                 </div>
-                {user?.picture && (
-                  <img
-                    src={user.picture}
-                    className={`w-8 h-8 rounded border ${
-                      isDarkTheme ? "border-white/10" : "border-gray-200"
+              ) : authenticated ? (
+                <div
+                  className={`flex items-center space-x-4 border-l pl-6 ${
+                    isDarkTheme ? "border-white/5" : "border-gray-200"
+                  }`}
+                >
+                  <div className="text-right">
+                    <p
+                      className={`text-xs font-bold leading-none ${
+                        isDarkTheme ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      {user?.name || user?.email}
+                    </p>
+                    <p className="text-[9px] font-bold text-emerald-500/60 uppercase tracking-widest mt-1">
+                      {state.uiLanguage === "zh" ? "已登录" : "Logged In"}
+                    </p>
+                  </div>
+                  {user?.picture && (
+                    <img
+                      src={user.picture}
+                      className={`w-8 h-8 rounded border ${
+                        isDarkTheme ? "border-white/10" : "border-gray-200"
+                      }`}
+                      alt="avatar"
+                    />
+                  )}
+                  <button
+                    onClick={logout}
+                    className={`p-2 transition-colors ${
+                      isDarkTheme
+                        ? "text-neutral-500 hover:text-white"
+                        : "text-gray-500 hover:text-gray-900"
                     }`}
-                    alt="avatar"
+                    title={state.uiLanguage === "zh" ? "登出" : "Logout"}
+                  >
+                    <LogOut size={16} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-3">
+                  <User
+                    className={`w-4 h-4 ${
+                      isDarkTheme ? "text-neutral-500" : "text-gray-500"
+                    }`}
                   />
-                )}
-                <button
-                  onClick={logout}
-                  className={`p-2 transition-colors ${
-                    isDarkTheme
-                      ? "text-neutral-500 hover:text-white"
-                      : "text-gray-500 hover:text-gray-900"
-                  }`}
-                  title={state.uiLanguage === "zh" ? "登出" : "Logout"}
-                >
-                  <LogOut size={16} />
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-3">
-                <User
-                  className={`w-4 h-4 ${
-                    isDarkTheme ? "text-neutral-500" : "text-gray-500"
-                  }`}
-                />
-                <span
-                  className={`text-xs font-bold ${
-                    isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                  }`}
-                >
-                  {state.uiLanguage === "zh" ? "未登录" : "Not Logged In"}
-                </span>
-                <a
-                  href={MAIN_APP_URL}
-                  className="text-emerald-500 hover:text-emerald-400 text-xs font-bold uppercase tracking-widest transition-colors"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  {state.uiLanguage === "zh" ? "前往主应用" : "Go to Main App"}
-                </a>
-              </div>
-            )}
-          </div>
-        </header>
-      )}
+                  <span
+                    className={`text-xs font-bold ${
+                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                    }`}
+                  >
+                    {state.uiLanguage === "zh" ? "未登录" : "Not Logged In"}
+                  </span>
+                  <a
+                    href={MAIN_APP_URL}
+                    className="text-emerald-500 hover:text-emerald-400 text-xs font-bold uppercase tracking-widest transition-colors"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {state.uiLanguage === "zh"
+                      ? "前往主应用"
+                      : "Go to Main App"}
+                  </a>
+                </div>
+              )}
+            </div>
+          </header>
+        )}
 
-      {/* Content Area */}
+        {/* Content Area */}
         <main className="flex-1 overflow-y-auto bg-grid-40 px-8 py-6">
-          {state.step === 'article-generator' && (
-            <ArticleGeneratorLayout onBack={() => setState(prev => ({ ...prev, step: 'input' }))} />
+          {state.step === "article-generator" && (
+            <ArticleGeneratorLayout
+              onBack={() => {
+                // Switch to a different task or go back to input
+                const activeTask = state.taskManager.tasks.find(
+                  (t) => t.id === state.taskManager.activeTaskId
+                );
+                if (activeTask && activeTask.type === "article-generator") {
+                  // Save current state before going back
+                  setState((prev) => {
+                    const updatedTasks = prev.taskManager.tasks.map((task) => {
+                      if (task.id === prev.taskManager.activeTaskId) {
+                        return {
+                          ...task,
+                          articleGeneratorState: {
+                            ...prev.articleGeneratorState,
+                            currentStage: "input",
+                          },
+                        };
+                      }
+                      return task;
+                    });
+                    return {
+                      ...prev,
+                      taskManager: {
+                        ...prev.taskManager,
+                        tasks: updatedTasks,
+                      },
+                    };
+                  });
+                } else {
+                  setState((prev) => ({ ...prev, step: "input" }));
+                }
+              }}
+              uiLanguage={state.uiLanguage}
+              articleGeneratorState={{
+                keyword: state.articleGeneratorState.keyword,
+                tone: state.articleGeneratorState.tone,
+                targetAudience: state.articleGeneratorState.targetAudience,
+                visualStyle: state.articleGeneratorState.visualStyle,
+                targetMarket: state.articleGeneratorState.targetMarket,
+                isGenerating: state.articleGeneratorState.isGenerating,
+                progress: state.articleGeneratorState.progress,
+                currentStage: state.articleGeneratorState.currentStage,
+                streamEvents: state.articleGeneratorState.streamEvents,
+                finalArticle: state.articleGeneratorState.finalArticle,
+              }}
+              onStateChange={(updates) => {
+                setState((prev) => ({
+                  ...prev,
+                  articleGeneratorState: {
+                    ...prev.articleGeneratorState,
+                    ...updates,
+                  },
+                }));
+                // Also update the task state
+                const activeTask = state.taskManager.tasks.find(
+                  (t) => t.id === state.taskManager.activeTaskId
+                );
+                if (activeTask && activeTask.type === "article-generator") {
+                  setTimeout(() => {
+                    setState((prev) => {
+                      const updatedTasks = prev.taskManager.tasks.map(
+                        (task) => {
+                          if (task.id === prev.taskManager.activeTaskId) {
+                            return {
+                              ...task,
+                              articleGeneratorState: {
+                                ...prev.articleGeneratorState,
+                                ...updates,
+                              },
+                            };
+                          }
+                          return task;
+                        }
+                      );
+                      return {
+                        ...prev,
+                        taskManager: {
+                          ...prev.taskManager,
+                          tasks: updatedTasks,
+                        },
+                      };
+                    });
+                  }, 0);
+                }
+              }}
+            />
           )}
 
-          {state.step === 'content-generation' && (
+          {state.step === "content-generation" && (
             <ContentGenerationView
               state={state.contentGeneration}
-              setState={(update) => setState(prev => ({
-                ...prev,
-                contentGeneration: { ...prev.contentGeneration, ...update }
-              }))}
+              setState={(update) =>
+                setState((prev) => ({
+                  ...prev,
+                  contentGeneration: { ...prev.contentGeneration, ...update },
+                }))
+              }
               isDarkTheme={isDarkTheme}
               uiLanguage={state.uiLanguage}
             />
           )}
 
           {state.error && (
-
             <div
               className={`mb-6 p-4 rounded-lg flex items-center ${
                 isDarkTheme
@@ -6314,21 +6553,6 @@ export default function App() {
                       <div className="flex items-center gap-2">
                         <Languages className="w-4 h-4" />
                         {t.tabBatch}
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("deepDive")}
-                      className={`px-5 py-2 rounded-md font-medium text-sm transition-all ${
-                        activeTab === "deepDive"
-                          ? "bg-emerald-500 text-white shadow-sm"
-                          : isDarkTheme
-                          ? "text-slate-400 hover:text-emerald-400"
-                          : "text-gray-600 hover:text-emerald-600"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4" />
-                        {t.tabDeepDive}
                       </div>
                     </button>
                   </div>
@@ -6877,172 +7101,6 @@ export default function App() {
                       </div>
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Deep Dive Tab Content */}
-              {activeTab === "deepDive" && (
-                <div className="max-w-3xl mx-auto">
-                  <div
-                    className={`backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
-                      isDarkTheme
-                        ? "bg-black/40 border-emerald-500/20"
-                        : "bg-white border-emerald-200"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-3">
-                      <FileText className="w-5 h-5 text-emerald-400" />
-                      <h3
-                        className={`text-lg font-bold ${
-                          isDarkTheme ? "text-white" : "text-gray-900"
-                        }`}
-                      >
-                        {t.deepDiveTitle}
-                      </h3>
-                    </div>
-                    <p
-                      className={`text-sm mb-4 ${
-                        isDarkTheme ? "text-slate-400" : "text-gray-600"
-                      }`}
-                    >
-                      {t.deepDiveDesc}
-                    </p>
-
-                    <div className="space-y-4">
-                      {/* Deep Dive Input */}
-                      <div>
-                        <input
-                          type="text"
-                          value={deepDiveInput}
-                          onChange={(e) => setDeepDiveInput(e.target.value)}
-                          placeholder={t.deepDiveInputPlaceholder}
-                          className={`w-full px-4 py-3 border rounded-lg text-sm outline-none focus:ring-2 ${
-                            isDarkTheme
-                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                          }`}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && deepDiveInput.trim()) {
-                              const keywordData: KeywordData = {
-                                id: `dd-${Date.now()}`,
-                                keyword: deepDiveInput.trim(),
-                                intent: IntentType.INFORMATIONAL,
-                                volume: 0,
-                              };
-                              handleDeepDive(keywordData);
-                            }
-                          }}
-                        />
-                      </div>
-
-                      {/* Deep Dive Button */}
-                      <button
-                        onClick={() => {
-                          if (deepDiveInput.trim()) {
-                            const keywordData: KeywordData = {
-                              id: `dd-${Date.now()}`,
-                              keyword: deepDiveInput.trim(),
-                              intent: IntentType.INFORMATIONAL,
-                              volume: 0,
-                            };
-                            handleDeepDive(keywordData);
-                          }
-                        }}
-                        disabled={!deepDiveInput.trim()}
-                        className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-black px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <FileText className="w-5 h-5" />
-                        {t.btnDeepDive}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Deep Dive Archive List */}
-                  {state.deepDiveArchives &&
-                    state.deepDiveArchives.length > 0 && (
-                      <div className="mt-12">
-                        <h3
-                          className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${
-                            isDarkTheme ? "text-slate-400" : "text-gray-600"
-                          }`}
-                        >
-                          <History className="w-4 h-4" /> {t.deepDiveArchives}
-                        </h3>
-                        <div
-                          className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
-                            isDarkTheme
-                              ? "bg-black/40 border-emerald-500/20"
-                              : "bg-white border-emerald-200"
-                          }`}
-                        >
-                          <div
-                            className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
-                              isDarkTheme
-                                ? "divide-emerald-500/10"
-                                : "divide-gray-200"
-                            }`}
-                          >
-                            {state.deepDiveArchives.map((arch) => (
-                              <div
-                                key={arch.id}
-                                onClick={() => loadDeepDiveArchive(arch)}
-                                className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
-                                  isDarkTheme
-                                    ? "hover:bg-emerald-500/10"
-                                    : "hover:bg-emerald-50"
-                                }`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <div
-                                    className={`p-2 rounded text-emerald-400 transition-colors ${
-                                      isDarkTheme
-                                        ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
-                                        : "bg-emerald-100 group-hover:bg-emerald-200"
-                                    }`}
-                                  >
-                                    <FileText className="w-4 h-4" />
-                                  </div>
-                                  <div>
-                                    <div
-                                      className={`font-medium ${
-                                        isDarkTheme
-                                          ? "text-white"
-                                          : "text-gray-900"
-                                      }`}
-                                    >
-                                      {arch.keyword}
-                                    </div>
-                                    <div
-                                      className={`text-xs ${
-                                        isDarkTheme
-                                          ? "text-slate-500"
-                                          : "text-gray-500"
-                                      }`}
-                                    >
-                                      {new Date(
-                                        arch.timestamp
-                                      ).toLocaleString()}
-                                    </div>
-                                  </div>
-                                </div>
-                                <button
-                                  onClick={(e) =>
-                                    deleteDeepDiveArchive(arch.id, e)
-                                  }
-                                  className={`p-2 transition-colors ${
-                                    isDarkTheme
-                                      ? "text-slate-600 hover:text-red-400"
-                                      : "text-gray-500 hover:text-red-600"
-                                  }`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
                 </div>
               )}
 
@@ -9655,10 +9713,12 @@ export default function App() {
                     : "bg-white border-emerald-200"
                 }`}
               >
-                <KeywordTable 
+                <KeywordTable
                   keywords={getProcessedKeywords()}
                   expandedRowId={state.expandedRowId}
-                  onToggleExpand={(id) => setState(prev => ({ ...prev, expandedRowId: id }))}
+                  onToggleExpand={(id) =>
+                    setState((prev) => ({ ...prev, expandedRowId: id }))
+                  }
                   onDeepDive={handleDeepDive}
                   isDarkTheme={isDarkTheme}
                   uiLanguage={state.uiLanguage}

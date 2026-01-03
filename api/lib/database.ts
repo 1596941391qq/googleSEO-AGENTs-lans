@@ -1,4 +1,4 @@
-import { Client, QueryResultRow } from 'pg';
+import { Pool, QueryResultRow } from 'pg';
 
 // 数据库连接字符串
 const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
@@ -11,43 +11,71 @@ if (!connectionString) {
   }
 }
 
+// 安全地检查 SSL 配置
+const needsSSL = connectionString && (
+  connectionString.includes('sslmode=require') ||
+  connectionString.includes('ssl=true') ||
+  connectionString.includes('vercel')
+);
+
+// 创建连接池（复用连接，提高性能）
+// 连接池配置优化：
+// - max: 最大连接数（根据服务器资源调整）
+// - min: 最小保持连接数
+// - idleTimeoutMillis: 空闲连接超时时间
+// - connectionTimeoutMillis: 连接超时时间
+const pool = connectionString ? new Pool({
+  connectionString,
+  ssl: needsSSL ? {
+    rejectUnauthorized: false
+  } : undefined,
+  // 连接池配置
+  max: parseInt(process.env.DB_POOL_MAX || '10', 10), // 最大连接数
+  min: parseInt(process.env.DB_POOL_MIN || '2', 10),  // 最小连接数
+  idleTimeoutMillis: 30000, // 30秒空闲超时
+  connectionTimeoutMillis: 10000, // 10秒连接超时
+  // 对于海外数据库，可以增加连接超时时间
+  ...(process.env.DB_CONNECTION_TIMEOUT ? {
+    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT, 10)
+  } : {})
+}) : null;
+
+// 监听连接池错误
+if (pool) {
+  pool.on('error', (err) => {
+    console.error('[db] Unexpected error on idle client', err);
+  });
+}
+
 // 导出 SQL 查询函数 (tagged template 语法)
+// 使用连接池而不是每次创建新连接，大大提高性能
 export const sql = async <T extends QueryResultRow = any>(
   strings: TemplateStringsArray,
   ...values: any[]
 ): Promise<{ rows: T[]; rowCount: number }> => {
-  if (!connectionString) {
+  if (!pool || !connectionString) {
     const error = new Error('Database connection string not configured. Please set POSTGRES_URL or DATABASE_URL environment variable.');
     console.error('[sql]', error.message);
     throw error;
   }
 
-  const client = new Client({
-    connectionString,
-    ssl: connectionString.includes('sslmode=require') || connectionString.includes('ssl=true') || connectionString.includes('vercel') ? {
-      rejectUnauthorized: false
-    } : undefined
-  });
+  // 构建参数化查询
+  let queryText = '';
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  for (let i = 0; i < strings.length; i++) {
+    queryText += strings[i];
+    if (i < values.length) {
+      queryText += `$${paramIndex}`;
+      params.push(values[i]);
+      paramIndex++;
+    }
+  }
 
   try {
-    await client.connect();
-
-    // 构建参数化查询
-    let queryText = '';
-    const params: any[] = [];
-    let paramIndex = 1;
-
-    for (let i = 0; i < strings.length; i++) {
-      queryText += strings[i];
-      if (i < values.length) {
-        queryText += `$${paramIndex}`;
-        params.push(values[i]);
-        paramIndex++;
-      }
-    }
-
-    // 执行查询
-    const result = await client.query<T>(queryText, params);
+    // 使用连接池执行查询（自动管理连接）
+    const result = await pool.query<T>(queryText, params);
 
     return {
       rows: result.rows,
@@ -63,8 +91,6 @@ export const sql = async <T extends QueryResultRow = any>(
       position: error.position
     });
     throw error;
-  } finally {
-    await client.end();
   }
 };
 
@@ -77,6 +103,14 @@ export async function testConnection() {
   } catch (error) {
     console.error('Database connection failed:', error);
     return false;
+  }
+}
+
+// 关闭连接池（在应用关闭时调用）
+export async function closePool() {
+  if (pool) {
+    await pool.end();
+    console.log('[db] Connection pool closed');
   }
 }
 
@@ -757,6 +791,31 @@ export async function initDomainCacheTables() {
         )
       `;
 
+      // Ensure domain column exists (for existing tables that might not have it)
+      // This handles the case where the table was created before the domain column was added
+      try {
+        // Check if column exists by trying to add it (will fail silently if it exists)
+        await sql`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'domain_competitors_cache' AND column_name = 'domain'
+            ) THEN
+              ALTER TABLE domain_competitors_cache ADD COLUMN domain VARCHAR(255);
+              UPDATE domain_competitors_cache SET domain = '' WHERE domain IS NULL;
+              ALTER TABLE domain_competitors_cache ALTER COLUMN domain SET NOT NULL;
+            END IF;
+          END $$;
+        `;
+      } catch (error: any) {
+        // If the table doesn't exist yet, that's fine - it will be created above
+        // Ignore other errors related to column already existing
+        if (error?.code !== '42P01') {
+          console.warn('[initDomainCacheTables] Warning adding domain column:', error);
+        }
+      }
+
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_website ON domain_competitors_cache(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_domain ON domain_competitors_cache(domain)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_expires ON domain_competitors_cache(cache_expires_at)`;
@@ -880,6 +939,67 @@ export async function initGeoTables() {
   await geoTablesInitPromise;
 }
 
+// Published Articles Table
+let publishedArticlesTableInitialized = false;
+let publishedArticlesTableInitPromise: Promise<void> | null = null;
+
+export async function initPublishedArticlesTable() {
+  if (publishedArticlesTableInitialized) return;
+  if (publishedArticlesTableInitPromise) {
+    await publishedArticlesTableInitPromise;
+    return;
+  }
+
+  publishedArticlesTableInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS published_articles (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id INTEGER NOT NULL,
+          title VARCHAR(500) NOT NULL,
+          content TEXT NOT NULL,
+          images JSONB DEFAULT '[]'::jsonb,
+          keyword VARCHAR(255),
+          tone VARCHAR(50),
+          visual_style VARCHAR(50),
+          target_audience VARCHAR(50),
+          target_market VARCHAR(50),
+          status VARCHAR(50) DEFAULT 'draft',
+          published_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      // 添加 published_at 字段（如果表已存在但没有这个字段）
+      await sql`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'published_articles' 
+            AND column_name = 'published_at'
+          ) THEN
+            ALTER TABLE published_articles ADD COLUMN published_at TIMESTAMP;
+          END IF;
+        END $$;
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_user ON published_articles(user_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_status ON published_articles(status)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_created ON published_articles(created_at DESC)`;
+
+      publishedArticlesTableInitialized = true;
+    } catch (error) {
+      console.error('[initPublishedArticlesTable] Error:', error);
+      publishedArticlesTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await publishedArticlesTableInitPromise;
+}
+
 // Initialize all website data tables
 export async function initWebsiteDataTables() {
   await initUserWebsitesTable();
@@ -889,6 +1009,7 @@ export async function initWebsiteDataTables() {
   await initUserPreferencesTable();
   await initDomainCacheTables();
   await initGeoTables();
+  await initPublishedArticlesTable();
 }
 
 /**

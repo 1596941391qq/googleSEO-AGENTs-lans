@@ -8,15 +8,15 @@
  */
 
 // SE Ranking API工具
-export * from './se-ranking';
+export * from './se-ranking.js';
 
 // SE Ranking Domain API工具
-export * from './se-ranking-domain';
+export * from './se-ranking-domain.js';
 
 // SERP搜索工具
-export * from './serp-search';
+export * from './serp-search.js';
 
 // Firecrawl API工具
-export * from './firecrawl';
+export * from './firecrawl.js';
 
 

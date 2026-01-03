@@ -181,54 +181,131 @@ export async function generateImagePrompts(
 }
 
 /**
- * 生成图像（可选 - 需要Nano Banana 2 API配置）
+ * 生成图像（使用 302.ai Gemini 3 Pro Image Preview API）
  * 
- * 调用Nano Banana 2 API生成图像
+ * 调用 302.ai 的 Gemini 3 Pro Image Preview API 生成图像
+ * 文档: https://doc.302.ai/379863519e0
  * 
  * @param prompts - 图像提示词列表
+ * @param aspectRatio - 图像宽高比，默认为 '4:3'
  * @returns 生成的图像URL列表
  */
 export async function generateImages(
-  prompts: ImagePromptResult[]
+  prompts: ImagePromptResult[],
+  aspectRatio: '1:1' | '2.3' | '3:2' | '3:4' | '4.3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9' = '4:3'
 ): Promise<Array<{ theme: string; imageUrl?: string; error?: string }>> {
-  const NANO_BANANA_API_URL = process.env.NANO_BANANA_API_URL || 'https://api.nanobanana.com/v2/images';
-  const NANO_BANANA_API_KEY = process.env.NANO_BANANA_API_KEY;
+  // 使用 302.ai 的 API endpoint
+  const API_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
+  const API_KEY = process.env.GEMINI_API_KEY;
 
-  if (!NANO_BANANA_API_KEY) {
-    console.warn('NANO_BANANA_API_KEY is not configured. Skipping image generation.');
+  if (!API_KEY) {
+    console.warn('GEMINI_API_KEY is not configured. Skipping image generation.');
     return prompts.map(p => ({
       theme: p.theme,
-      error: 'Nano Banana 2 API key not configured'
+      error: '302.ai API key not configured'
     }));
   }
+
+  const API_URL = `${API_BASE_URL}/google/v1/models/gemini-3-pro-image-preview?response_format=url`;
 
   const results: Array<{ theme: string; imageUrl?: string; error?: string }> = [];
 
   for (const promptResult of prompts) {
     try {
-      const response = await fetch(NANO_BANANA_API_URL, {
+      // 根据文档构建请求体
+      const requestBody = {
+        contents: [
+          {
+            parts: [
+              {
+                text: promptResult.prompt
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseModalities: ['TEXT', 'IMAGE'],
+          imageConfig: {
+            aspectRatio: aspectRatio
+          }
+        }
+      };
+
+      const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${NANO_BANANA_API_KEY}`
+          'Authorization': `Bearer ${API_KEY}`
         },
-        body: JSON.stringify({
-          prompt: promptResult.prompt,
-          width: 1024,
-          height: 1024,
-          quality: 'high'
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        throw new Error(`Nano Banana API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`302.ai API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
-      results.push({
-        theme: promptResult.theme,
-        imageUrl: data.imageUrl || data.url
-      });
+      
+      // 处理错误响应
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // 优先处理 Gemini 标准的 candidates 格式
+      if (data.candidates && data.candidates.length > 0) {
+        const candidate = data.candidates[0];
+        if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+          // 从 parts 中查找包含 url 的部分（过滤掉 thought 过程）
+          for (const part of candidate.content.parts) {
+            if (part.url && typeof part.url === 'string') {
+              // 找到图片 URL
+              results.push({
+                theme: promptResult.theme,
+                imageUrl: part.url
+              });
+              break; // 找到第一个 URL 就退出
+            }
+          }
+          
+          // 如果没有找到 url，检查是否所有 parts 都是 thought 过程
+          const hasUrl = candidate.content.parts.some(part => part.url);
+          if (!hasUrl) {
+            console.warn(`Image generation for theme "${promptResult.theme}" returned candidates but no URL found in parts`);
+            results.push({
+              theme: promptResult.theme,
+              error: 'Image URL not found in response candidates'
+            });
+          }
+        } else {
+          throw new Error(`Invalid candidates format: missing content.parts`);
+        }
+      }
+      // 回退处理：根据文档，响应可能包含 status 和 output 字段（异步处理格式）
+      else if (data.status === 'completed' && data.output) {
+        // 直接返回图片 URL
+        results.push({
+          theme: promptResult.theme,
+          imageUrl: data.output
+        });
+      } else if (data.status === 'processing' || data.status === 'pending') {
+        // 如果 API 返回异步处理状态，记录警告
+        // 实际使用时可能需要根据 API 文档实现轮询逻辑
+        console.warn(`Image generation for theme "${promptResult.theme}" returned status: ${data.status}`);
+        results.push({
+          theme: promptResult.theme,
+          error: `Image generation status: ${data.status}. May need polling.`
+        });
+      } else if (data.output) {
+        // 尝试直接使用 output 字段（某些情况下可能直接返回）
+        results.push({
+          theme: promptResult.theme,
+          imageUrl: data.output
+        });
+      } else {
+        // 如果都不匹配，抛出错误
+        throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 500)}`);
+      }
     } catch (error: any) {
       console.error(`Failed to generate image for theme "${promptResult.theme}":`, error);
       results.push({

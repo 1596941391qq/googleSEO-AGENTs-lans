@@ -15,11 +15,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = parseRequestBody(req);
-  const { keyword, tone, visualStyle, targetAudience, uiLanguage, targetLanguage } = body;
+  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage } = body;
 
   if (!keyword) {
     return res.status(400).json({ error: 'Missing keyword' });
   }
+
+  // 根据目标市场自动设置输出语言（如果未提供）
+  const getTargetLanguageFromMarket = (market: string): string => {
+    const marketToLanguage: Record<string, string> = {
+      'global': 'en',
+      'us': 'en',
+      'uk': 'en',
+      'ca': 'en',
+      'au': 'en',
+      'de': 'de',
+      'fr': 'fr',
+      'jp': 'ja',
+      'cn': 'zh',
+    };
+    return marketToLanguage[market] || 'en';
+  };
+
+  const finalTargetLanguage = targetLanguage || (targetMarket ? getTargetLanguageFromMarket(targetMarket) : 'en');
 
   // Set up Server-Sent Events or multi-part like response for streaming
   // For simplicity but effectiveness, we'll use a custom newline-delimited JSON stream
@@ -37,8 +55,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tone: tone || 'professional',
       visualStyle: visualStyle || 'realistic',
       targetAudience: targetAudience || 'beginner',
+      targetMarket: targetMarket || 'global',
       uiLanguage: uiLanguage || 'en',
-      targetLanguage: targetLanguage || 'en',
+      targetLanguage: finalTargetLanguage,
       onEvent: (event) => {
         sendEvent({ type: 'event', data: event });
       }

@@ -76,11 +76,11 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   uiLanguage,
 }) => {
   const [data, setData] = useState<WebsiteData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // 初始为 true，显示加载状态
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load website data
+  // Load website data (异步，不阻塞渲染)
   const loadData = async () => {
     setLoading(true);
     setError(null);
@@ -97,15 +97,35 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
       if (response.ok) {
         const result = await response.json();
-        setData(result.data);
+        if (result.success && result.data) {
+          setData(result.data);
+        } else {
+          setError(
+            uiLanguage === "zh"
+              ? "数据格式错误"
+              : "Invalid data format"
+          );
+          console.error("[Dashboard] Invalid response:", result);
+        }
       } else {
         const errorText = await response.text();
-        setError(
-          uiLanguage === "zh"
-            ? "加载网站数据失败"
-            : "Failed to load website data"
-        );
-        console.error("[Dashboard] API error:", errorText);
+        let errorMessage = uiLanguage === "zh"
+          ? "加载网站数据失败"
+          : "Failed to load website data";
+        
+        // 根据状态码提供更具体的错误信息
+        if (response.status === 404) {
+          errorMessage = uiLanguage === "zh"
+            ? "网站不存在"
+            : "Website not found";
+        } else if (response.status === 403) {
+          errorMessage = uiLanguage === "zh"
+            ? "无权访问此网站"
+            : "No permission to access this website";
+        }
+        
+        setError(errorMessage);
+        console.error("[Dashboard] API error:", response.status, errorText);
       }
     } catch (error: any) {
       console.error("[Dashboard] Failed to load:", error);
@@ -147,84 +167,29 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
   useEffect(() => {
     if (websiteId) {
+      // 异步加载数据
       loadData();
+    } else {
+      // 如果没有 websiteId，重置状态
+      setData(null);
+      setLoading(false);
+      setError(uiLanguage === "zh" ? "缺少网站ID" : "Missing website ID");
     }
-  }, [websiteId]);
+  }, [websiteId, uiLanguage]);
 
-  if (loading) {
-    return (
-      <div
-        className={cn(
-          "flex items-center justify-center py-16",
-          isDarkTheme ? "bg-zinc-900" : "bg-white"
-        )}
-      >
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-emerald-500 mx-auto mb-3" />
-          <span
-            className={cn(
-              "block text-sm",
-              isDarkTheme ? "text-zinc-400" : "text-gray-600"
-            )}
-          >
-            {uiLanguage === "zh" ? "加载中..." : "Loading..."}
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        className={cn(
-          "flex items-center justify-center py-16",
-          isDarkTheme ? "bg-zinc-900 text-zinc-400" : "bg-white text-gray-500"
-        )}
-      >
-        <div className="text-center">
-          <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
-          <p className="text-sm mb-3">{error}</p>
-          <Button variant="outline" size="sm" onClick={loadData}>
-            {uiLanguage === "zh" ? "重试" : "Retry"}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data || !data.hasData) {
+  // 如果没有 websiteId，显示错误
+  if (!websiteId) {
     return (
       <div
         className={cn(
           "text-center py-16",
-          isDarkTheme ? "bg-zinc-900 text-zinc-500" : "bg-white text-gray-500"
+          isDarkTheme ? "text-zinc-500" : "text-gray-500"
         )}
       >
-        <div className="max-w-md mx-auto">
-          <p className="text-sm mb-4">
-            {uiLanguage === "zh"
-              ? "还没有网站数据。请先从 SE-Ranking 获取数据。"
-              : "No website data yet. Please fetch data from SE-Ranking first."}
-          </p>
-          <Button
-            onClick={updateMetrics}
-            disabled={updating}
-            className="bg-emerald-500 hover:bg-emerald-600"
-          >
-            {updating ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {uiLanguage === "zh" ? "获取数据中..." : "Fetching..."}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                {uiLanguage === "zh" ? "获取数据" : "Fetch Data"}
-              </>
-            )}
-          </Button>
-        </div>
+        <AlertCircle className="w-16 h-16 mx-auto mb-4 opacity-50" />
+        <p className="text-sm">
+          {uiLanguage === "zh" ? "缺少网站ID" : "Missing website ID"}
+        </p>
       </div>
     );
   }
@@ -242,7 +207,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           >
             {uiLanguage === "zh" ? "网站数据概览" : "Website Data Overview"}
           </h2>
-          {data.overview && (
+          {data?.overview && (
             <p
               className={cn(
                 "text-xs mt-1",
@@ -268,47 +233,109 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
         </Button>
       </div>
 
-      {/* Overview Cards */}
-      {data.overview && (
-        <OverviewCards
-          metrics={{
-            organicTraffic: data.overview.organicTraffic,
-            totalKeywords: data.overview.totalKeywords,
-            avgPosition: data.overview.avgPosition,
-            improvedKeywords: data.overview.improvedKeywords,
-            newKeywords: data.overview.newKeywords,
-          }}
+      {/* Overview Cards - 始终显示，加载时显示骨架屏 */}
+      <OverviewCards
+        metrics={data?.overview ? {
+          organicTraffic: data.overview.organicTraffic,
+          totalKeywords: data.overview.totalKeywords,
+          avgPosition: data.overview.avgPosition,
+          improvedKeywords: data.overview.improvedKeywords,
+          newKeywords: data.overview.newKeywords,
+        } : undefined}
+        isLoading={loading || !data}
+        isDarkTheme={isDarkTheme}
+        uiLanguage={uiLanguage}
+      />
+
+      {/* Charts and Tables - 始终显示，加载时显示加载状态 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Ranking Distribution */}
+        <RankingDistributionChart
+          distribution={data?.overview?.rankingDistribution}
+          totalKeywords={data?.overview?.totalKeywords}
+          isLoading={loading || !data?.overview}
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
         />
-      )}
-
-      {/* Charts and Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Ranking Distribution */}
-        {data.overview && (
-          <RankingDistributionChart
-            distribution={data.overview.rankingDistribution}
-            totalKeywords={data.overview.totalKeywords}
-            isDarkTheme={isDarkTheme}
-            uiLanguage={uiLanguage}
-          />
-        )}
 
         {/* Top Keywords Table */}
         <TopKeywordsTable
-          keywords={data.topKeywords}
+          keywords={data?.topKeywords || []}
+          isLoading={loading || !data}
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
+          websiteId={websiteId}
+          totalKeywordsCount={data?.overview?.totalKeywords}
         />
 
         {/* Competitors Comparison */}
         <CompetitorsComparison
-          competitors={data.competitors}
+          competitors={data?.competitors || []}
+          isLoading={loading || !data}
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
         />
       </div>
+
+      {/* 错误提示 - 显示在底部，不阻塞页面 */}
+      {error && (
+        <div
+          className={cn(
+            "p-4 rounded-lg border",
+            isDarkTheme
+              ? "bg-red-500/10 border-red-500/20 text-red-400"
+              : "bg-red-50 border-red-200 text-red-600"
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            <span className="text-sm">{error}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadData}
+              className="ml-auto"
+            >
+              {uiLanguage === "zh" ? "重试" : "Retry"}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* 无数据提示 - 只在没有数据且不在加载时显示 */}
+      {!loading && (!data || !data.hasData) && (
+        <div
+          className={cn(
+            "text-center py-8 rounded-lg border",
+            isDarkTheme
+              ? "bg-zinc-900/50 border-zinc-800 text-zinc-400"
+              : "bg-gray-50 border-gray-200 text-gray-500"
+          )}
+        >
+          <p className="text-sm mb-4">
+            {uiLanguage === "zh"
+              ? "还没有网站数据。请先从 SE-Ranking 获取数据。"
+              : "No website data yet. Please fetch data from SE-Ranking first."}
+          </p>
+          <Button
+            onClick={updateMetrics}
+            disabled={updating}
+            className="bg-emerald-500 hover:bg-emerald-600"
+          >
+            {updating ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                {uiLanguage === "zh" ? "获取数据中..." : "Fetching..."}
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                {uiLanguage === "zh" ? "获取数据" : "Fetch Data"}
+              </>
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

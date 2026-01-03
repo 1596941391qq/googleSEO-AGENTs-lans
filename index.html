@@ -26,22 +26,22 @@
         background-size: 40px 40px;
         background-position: 0 0, 0 0;
       }
-      /* Custom scrollbar for dark theme */
+      /* Hide all scrollbars while maintaining scroll functionality */
+      * {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
+      *::-webkit-scrollbar {
+        display: none;  /* Chrome, Safari and Opera */
+      }
+      
+      /* Legacy custom-scrollbar class - now also hidden */
+      .custom-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
+      }
       .custom-scrollbar::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
-      }
-      .custom-scrollbar::-webkit-scrollbar-track {
-        background: #1a1a1a;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #22c55e;
-        border-radius: 3px;
-        opacity: 0.3;
-      }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #22c55e;
-        opacity: 0.5;
+        display: none;  /* Chrome, Safari and Opera */
       }
     </style>
     <script type="importmap">

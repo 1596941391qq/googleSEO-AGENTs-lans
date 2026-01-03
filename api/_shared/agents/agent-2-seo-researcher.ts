@@ -104,26 +104,33 @@ function extractJSON(text: string): string {
 export async function analyzeSearchPreferences(
   keyword: string,
   language: 'zh' | 'en' = 'en',
-  targetLanguage: TargetLanguage = 'en'
+  targetLanguage: TargetLanguage = 'en',
+  targetMarket: string = 'global'
 ): Promise<SearchPreferencesResult> {
   try {
     // 获取 SEO Researcher prompt
     const systemInstruction = getSEOResearcherPrompt('searchPreferences', language);
 
     // 构建分析提示
+    const marketLabel = targetMarket === 'global' 
+      ? (language === 'zh' ? '全球市场' : 'Global Market')
+      : targetMarket.toUpperCase();
+    
     const prompt = language === 'zh'
-      ? `请分析关键词 "${keyword}" 在不同搜索引擎中的优化策略。
+      ? `请分析关键词 "${keyword}" 在目标市场 ${marketLabel} 的不同搜索引擎中的优化策略。
 
 关键词：${keyword}
 目标语言：${targetLanguage}
+目标市场：${marketLabel}
 
-请提供详细的搜索引擎偏好分析和优化建议。`
-      : `Please analyze optimization strategies for the keyword "${keyword}" across different search engines.
+请提供详细的搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。`
+      : `Please analyze optimization strategies for the keyword "${keyword}" across different search engines for the ${marketLabel} market.
 
 Keyword: ${keyword}
 Target Language: ${targetLanguage}
+Target Market: ${marketLabel}
 
-Please provide detailed search engine preference analysis and optimization recommendations.`;
+Please provide detailed search engine preference analysis and optimization recommendations, with special attention to localization needs for the target market.`;
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
@@ -187,7 +194,8 @@ export async function analyzeCompetitors(
   keyword: string,
   serpData?: SerpData,
   language: 'zh' | 'en' = 'en',
-  targetLanguage: TargetLanguage = 'en'
+  targetLanguage: TargetLanguage = 'en',
+  targetMarket: string = 'global'
 ): Promise<CompetitorAnalysisResult> {
   try {
     // 如果没有提供 SERP 数据，则获取
@@ -247,12 +255,17 @@ export async function analyzeCompetitors(
     }
 
     // 构建分析提示
+    const marketLabel = targetMarket === 'global' 
+      ? (language === 'zh' ? '全球市场' : 'Global Market')
+      : targetMarket.toUpperCase();
+    
     const prompt = language === 'zh'
-      ? `请分析关键词 "${keyword}" 的 Top 10 竞争对手。
+      ? `请分析关键词 "${keyword}" 在目标市场 ${marketLabel} 的 Top 10 竞争对手。
 由于我已经为你抓取了前几名竞争对手的详细网页内容，请根据这些详细内容进行深度的结构化分析。
 
 关键词：${keyword}
 目标语言：${targetLanguage}
+目标市场：${marketLabel}
 
 === SERP 概览 (Top 10) ===
 ${serpSnippetsContext}
@@ -260,16 +273,17 @@ ${deepContentContext}
 
 任务要求：
 1. **结构分析**：基于抓取的详细内容，分析 Top 页面的 H2/H3 结构。
-2. **内容缺口 (Content Gap)**：找出他们遗漏了什么关键话题。
+2. **内容缺口 (Content Gap)**：找出他们遗漏了什么关键话题，特别关注目标市场的本地化需求。
 3. **字数与类型**：预估他们的字数和页面类型（博客、产品页、工具等）。
-4. **制胜策略**：总结他们为什么能排在第一。
+4. **制胜策略**：总结他们为什么能排在第一，分析目标市场的竞争特点。
 
 请提供详细的 JSON 输出。`
-      : `Please analyze the Top 10 competitors for the keyword "${keyword}".
+      : `Please analyze the Top 10 competitors for the keyword "${keyword}" in the ${marketLabel} market.
 I have scraped the detailed web content of the top competitors for you. Please use this valid data for deep structural analysis.
 
 Keyword: ${keyword}
 Target Language: ${targetLanguage}
+Target Market: ${marketLabel}
 
 === SERP OVERVIEW (Top 10) ===
 ${serpSnippetsContext}
@@ -277,9 +291,9 @@ ${deepContentContext}
 
 Task Requirements:
 1. **Structure Analysis**: Analyze the H2/H3 structure based on the scraped deep content.
-2. **Content Gap**: Identify key topics they are missing.
+2. **Content Gap**: Identify key topics they are missing, with special attention to localization needs for the target market.
 3. **Word Count & Type**: Estimate word count and page type (Blog, Product, Tool, etc.).
-4. **Winning Formula**: Summarize why they are ranking #1.
+4. **Winning Formula**: Summarize why they are ranking #1, analyzing competitive characteristics of the target market.
 
 Please provide detailed JSON output.`;
 
@@ -666,7 +680,8 @@ export const generateDeepDiveStrategy = async (
   targetLanguage: TargetLanguage,
   customPrompt?: string,
   searchPreferences?: SearchPreferencesResult,
-  competitorAnalysis?: CompetitorAnalysisResult
+  competitorAnalysis?: CompetitorAnalysisResult,
+  targetMarket: string = 'global'
 ): Promise<SEOStrategyReport> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const targetLangName = getLanguageName(targetLanguage);
@@ -690,25 +705,29 @@ export const generateDeepDiveStrategy = async (
     }
   }
 
+  const marketLabel = targetMarket === 'global' 
+    ? 'Global'
+    : targetMarket.toUpperCase();
+  
   const systemInstruction = (customPrompt || `
-You are a Strategic SEO Content Manager for Google ${targetLangName}.
-Your mission: Design a comprehensive content strategy that BEATS the competition.
+You are a Strategic SEO Content Manager for Google ${targetLangName}, targeting the ${marketLabel} market.
+Your mission: Design a comprehensive content strategy that BEATS the competition in the ${marketLabel} market.
 
 Content Strategy Requirements:
-1. **Page Title (H1)**: Compelling, keyword-rich title that matches search intent
-2. **Meta Description**: 150-160 characters, persuasive, includes target keyword
+1. **Page Title (H1)**: Compelling, keyword-rich title that matches search intent for ${marketLabel} market
+2. **Meta Description**: 150-160 characters, persuasive, includes target keyword, localized for ${marketLabel}
 3. **URL Slug**: Clean, readable, keyword-focused URL structure
-4. **User Intent**: Detailed analysis of what users expect when searching this keyword
-5. **Content Structure**: Logical H2 sections that cover the topic comprehensively
-6. **Long-tail Keywords**: Semantic variations and related queries to include
-7. **Recommended Word Count**: Based on SERP analysis and topic complexity
+4. **User Intent**: Detailed analysis of what users in ${marketLabel} market expect when searching this keyword
+5. **Content Structure**: Logical H2 sections that cover the topic comprehensively, with ${marketLabel} market-specific considerations
+6. **Long-tail Keywords**: Semantic variations and related queries relevant to ${marketLabel} market
+7. **Recommended Word Count**: Based on SERP analysis and topic complexity for ${marketLabel} market
 
 STRATEGIC INSTRUCTIONS:
-- Review the provided COMPETITOR ANALYSIS carefully.
-- Identify CONTENT GAPS and ensure your structure covers them.
-- If competitors have weak content, outline a "Skyscraper" strategy.
-- If competitors are strong, find a unique angle or "Blue Ocean" sub-topic.
-- Your goal is to be 10x better than the current top result.
+- Review the provided COMPETITOR ANALYSIS carefully, focusing on ${marketLabel} market competitors.
+- Identify CONTENT GAPS and ensure your structure covers them, with special attention to ${marketLabel} market localization needs.
+- If competitors have weak content, outline a "Skyscraper" strategy tailored for ${marketLabel}.
+- If competitors are strong, find a unique angle or "Blue Ocean" sub-topic specific to ${marketLabel} market.
+- Your goal is to be 10x better than the current top result in the ${marketLabel} market.
 `) + analysisContext;
 
   const prompt = `

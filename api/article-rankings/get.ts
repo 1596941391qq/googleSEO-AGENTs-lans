@@ -26,19 +26,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Get website ID
     let website;
     if (websiteId) {
-      const result = await sql`
-        SELECT id FROM user_websites WHERE id = ${websiteId}
-        ${userId ? sql`AND user_id = ${userId}` : sql``}
-      `;
+      const result = userId
+        ? await sql`
+            SELECT id FROM user_websites 
+            WHERE id = ${websiteId} AND user_id = ${userId}
+          `
+        : await sql`
+            SELECT id FROM user_websites 
+            WHERE id = ${websiteId}
+          `;
       if (result.rows.length === 0) {
         return sendErrorResponse(res, null, 'Website not found', 404);
       }
       website = result.rows[0];
     } else if (websiteUrl) {
-      const result = await sql`
-        SELECT id FROM user_websites WHERE website_url = ${websiteUrl}
-        ${userId ? sql`AND user_id = ${userId}` : sql``}
-      `;
+      const result = userId
+        ? await sql`
+            SELECT id FROM user_websites 
+            WHERE website_url = ${websiteUrl} AND user_id = ${userId}
+          `
+        : await sql`
+            SELECT id FROM user_websites 
+            WHERE website_url = ${websiteUrl}
+          `;
       if (result.rows.length === 0) {
         return sendErrorResponse(res, null, 'Website not found', 404);
       }
