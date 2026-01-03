@@ -4,9 +4,12 @@ import {
   Loader2,
   AlertCircle,
   ChevronRight,
+  TestTube,
+  X,
 } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import { OverviewCards } from "./OverviewCards";
 import { RankingDistributionChart } from "./RankingDistributionChart";
 import { TopKeywordsTable } from "./TopKeywordsTable";
@@ -79,63 +82,156 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   const [loading, setLoading] = useState(true); // 初始为 true，显示加载状态
   const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadingParts, setLoadingParts] = useState({
+    overview: true,
+    keywords: true,
+    competitors: true,
+  });
 
-  // Load website data (异步，不阻塞渲染)
-  const loadData = async () => {
+  // 测试功能状态（仅本地可见）
+  const [showTestPanel, setShowTestPanel] = useState(false);
+  const [testUrl, setTestUrl] = useState("");
+  const [testEndpoint, setTestEndpoint] = useState<"overview" | "keywords" | "keyword-data">("overview");
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState<any>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+
+  // 检查是否为本地环境
+  const isLocal = typeof window !== "undefined" && (
+    window.location.hostname === "localhost" ||
+    window.location.hostname === "127.0.0.1" ||
+    window.location.hostname === ""
+  );
+
+  // 并行加载数据 - 哪个先返回就先显示哪个
+  const loadDataParallel = async () => {
     setLoading(true);
     setError(null);
+    setLoadingParts({ overview: true, keywords: true, competitors: true });
 
-    try {
-      const response = await fetch("/api/website-data/overview", {
+    // 初始化数据结构
+    const initialData: WebsiteData = {
+      hasData: false,
+      overview: null,
+      topKeywords: [],
+      competitors: [],
+      needsRefresh: false,
+    };
+    setData(initialData);
+
+    const baseRequest = {
+      websiteId,
+      userId: 1, // TODO: Get from session
+    };
+
+    console.log("[Dashboard] 🚀 Starting parallel data loading for websiteId:", websiteId);
+
+    // 并行发起所有请求
+    const requests = {
+      overview: fetch("/api/website-data/overview-only", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          userId: 1, // TODO: Get from session
-        }),
-      });
+        body: JSON.stringify(baseRequest),
+      }),
+      keywords: fetch("/api/website-data/keywords-only", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...baseRequest, limit: 20 }),
+      }),
+      competitors: fetch("/api/website-data/competitors-only", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...baseRequest, limit: 5 }),
+      }),
+    };
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.data) {
-          setData(result.data);
+    // 处理每个请求，哪个先返回就先更新
+    const handleResponse = async (
+      key: 'overview' | 'keywords' | 'competitors',
+      responsePromise: Promise<Response>
+    ) => {
+      try {
+        const startTime = Date.now();
+        const response = await responsePromise;
+        const loadTime = Date.now() - startTime;
+
+        if (response.ok) {
+          const result = await response.json();
+          console.log(`[Dashboard] ✅ ${key} loaded in ${loadTime}ms:`, {
+            success: result.success,
+            cached: result.cached,
+            dataLength: Array.isArray(result.data) ? result.data.length : result.data ? 1 : 0,
+          });
+
+          // 增量更新数据
+          setData((prev) => {
+            if (!prev) return prev;
+            const updated = { ...prev };
+
+            if (key === 'overview' && result.data) {
+              updated.overview = result.data;
+              updated.hasData = true;
+            } else if (key === 'keywords' && Array.isArray(result.data)) {
+              updated.topKeywords = result.data;
+            } else if (key === 'competitors' && Array.isArray(result.data)) {
+              updated.competitors = result.data;
+            }
+
+            return updated;
+          });
+
+          setLoadingParts((prev) => ({ ...prev, [key]: false }));
         } else {
-          setError(
-            uiLanguage === "zh"
-              ? "数据格式错误"
-              : "Invalid data format"
-          );
-          console.error("[Dashboard] Invalid response:", result);
+          console.error(`[Dashboard] ❌ ${key} API error:`, response.status);
+          setLoadingParts((prev) => ({ ...prev, [key]: false }));
         }
-      } else {
-        const errorText = await response.text();
-        let errorMessage = uiLanguage === "zh"
-          ? "加载网站数据失败"
-          : "Failed to load website data";
-        
-        // 根据状态码提供更具体的错误信息
-        if (response.status === 404) {
-          errorMessage = uiLanguage === "zh"
-            ? "网站不存在"
-            : "Website not found";
-        } else if (response.status === 403) {
-          errorMessage = uiLanguage === "zh"
-            ? "无权访问此网站"
-            : "No permission to access this website";
-        }
-        
-        setError(errorMessage);
-        console.error("[Dashboard] API error:", response.status, errorText);
+      } catch (error: any) {
+        console.error(`[Dashboard] ❌ ${key} failed:`, error.message);
+        setLoadingParts((prev) => ({ ...prev, [key]: false }));
       }
-    } catch (error: any) {
-      console.error("[Dashboard] Failed to load:", error);
-      setError(
-        uiLanguage === "zh" ? "网络连接失败" : "Network connection failed"
-      );
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    // 并行处理所有请求
+    await Promise.allSettled([
+      handleResponse('overview', requests.overview),
+      handleResponse('keywords', requests.keywords),
+      handleResponse('competitors', requests.competitors),
+    ]);
+
+    // 等待所有请求完成
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // 检查是否需要触发数据更新（使用最新的 data 状态）
+    setData((currentData) => {
+      const hasAnyData = currentData?.overview || (currentData?.topKeywords?.length ?? 0) > 0 || (currentData?.competitors?.length ?? 0) > 0;
+
+      if (!hasAnyData) {
+        console.log("[Dashboard] ⚠️ No cached data found, triggering background update...");
+        // 异步触发数据更新（不阻塞）
+        fetch("/api/website-data/update-metrics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(baseRequest),
+        })
+          .then(() => {
+            console.log("[Dashboard] Background update completed, reloading...");
+            // 更新完成后重新加载
+            setTimeout(() => loadDataParallel(), 2000);
+          })
+          .catch((error) => {
+            console.error("[Dashboard] Background update failed:", error);
+          });
+      }
+
+      return currentData;
+    });
+
+    setLoading(false);
+    console.log("[Dashboard] ✅ Parallel loading completed");
   };
+
+  // 保持向后兼容的 loadData 方法
+  const loadData = loadDataParallel;
 
   // Update metrics (refresh from SE-Ranking)
   const updateMetrics = async () => {
@@ -162,6 +258,42 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
       console.error("[Dashboard] Failed to update:", error);
     } finally {
       setUpdating(false);
+    }
+  };
+
+  // 测试 DataForSEO API
+  const testDataForSEO = async () => {
+    if (!testUrl.trim()) {
+      setTestError(uiLanguage === "zh" ? "请输入网址" : "Please enter a URL");
+      return;
+    }
+
+    setTestLoading(true);
+    setTestError(null);
+    setTestResult(null);
+
+    try {
+      const response = await fetch("/api/website-data/test-dataforseo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: testUrl,
+          endpoint: testEndpoint,
+          locationCode: 2840,
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        setTestResult(result);
+      } else {
+        setTestError(result.error || result.details || "Unknown error");
+      }
+    } catch (error: any) {
+      setTestError(error.message || "Network error");
+    } finally {
+      setTestLoading(false);
     }
   };
 
@@ -196,6 +328,120 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* 测试面板 - 仅本地可见 */}
+      {isLocal && (
+        <Card className={cn(
+          isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-yellow-50 border-yellow-200"
+        )}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <TestTube className={cn(
+                  "w-5 h-5",
+                  isDarkTheme ? "text-yellow-400" : "text-yellow-600"
+                )} />
+                <h3 className={cn(
+                  "font-semibold",
+                  isDarkTheme ? "text-yellow-400" : "text-yellow-700"
+                )}>
+                  {uiLanguage === "zh" ? "DataForSEO API 测试（仅本地）" : "DataForSEO API Test (Local Only)"}
+                </h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowTestPanel(!showTestPanel);
+                  if (showTestPanel) {
+                    setTestResult(null);
+                    setTestError(null);
+                  }
+                }}
+              >
+                {showTestPanel ? (
+                  <X className="w-4 h-4" />
+                ) : (
+                  <TestTube className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+
+            {showTestPanel && (
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder={uiLanguage === "zh" ? "输入网址，例如: example.com" : "Enter URL, e.g.: example.com"}
+                    value={testUrl}
+                    onChange={(e) => setTestUrl(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter") {
+                        testDataForSEO();
+                      }
+                    }}
+                    className={cn(
+                      "flex-1",
+                      isDarkTheme ? "bg-zinc-800 border-zinc-700" : "bg-white"
+                    )}
+                  />
+                  <select
+                    value={testEndpoint}
+                    onChange={(e) => setTestEndpoint(e.target.value as any)}
+                    className={cn(
+                      "px-3 py-2 rounded-md border",
+                      isDarkTheme ? "bg-zinc-800 border-zinc-700 text-white" : "bg-white border-gray-300"
+                    )}
+                  >
+                    <option value="overview">Overview</option>
+                    <option value="keywords">Keywords</option>
+                    <option value="keyword-data">Keyword Data</option>
+                  </select>
+                  <Button
+                    onClick={testDataForSEO}
+                    disabled={testLoading || !testUrl.trim()}
+                    className="bg-emerald-500 hover:bg-emerald-600"
+                  >
+                    {testLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      uiLanguage === "zh" ? "测试" : "Test"
+                    )}
+                  </Button>
+                </div>
+
+                {testError && (
+                  <div className={cn(
+                    "p-3 rounded-md",
+                    isDarkTheme ? "bg-red-500/10 text-red-400" : "bg-red-50 text-red-600"
+                  )}>
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      <span className="text-sm">{testError}</span>
+                    </div>
+                  </div>
+                )}
+
+                {testResult && (
+                  <div className="space-y-2">
+                    <div className={cn(
+                      "p-3 rounded-md text-sm font-mono overflow-auto max-h-96",
+                      isDarkTheme ? "bg-zinc-800 text-zinc-300" : "bg-gray-100 text-gray-800"
+                    )}>
+                      <div className="mb-2 font-semibold">
+                        {uiLanguage === "zh" ? "响应内容：" : "Response:"}
+                      </div>
+                      <pre className="whitespace-pre-wrap break-words">
+                        {JSON.stringify(testResult, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

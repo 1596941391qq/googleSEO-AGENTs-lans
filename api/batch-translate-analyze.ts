@@ -18,57 +18,110 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const body = parseRequestBody(req);
-    const { keywords, targetLanguage, systemInstruction, uiLanguage } = body;
+    const { keywords, keywordsFromAudit, targetLanguage, systemInstruction, uiLanguage } = body;
 
-    if (!keywords || typeof keywords !== 'string' || !targetLanguage) {
-      return res.status(400).json({ error: 'Missing required fields: keywords, targetLanguage' });
+    // 支持两种输入方式：
+    // 1. keywords (字符串): 手动输入的关键词，需要翻译
+    // 2. keywordsFromAudit (数组): 来自存量拓新的关键词，已经是目标语言，跳过翻译
+    let keywordList: string[] = [];
+    let source: 'manual' | 'website-audit' = 'manual';
+
+    if (keywordsFromAudit && Array.isArray(keywordsFromAudit) && keywordsFromAudit.length > 0) {
+      // 方式1：来自存量拓新的关键词（已经是目标语言）
+      keywordList = keywordsFromAudit.map((k: any) => {
+        // 支持字符串或对象格式
+        if (typeof k === 'string') return k.trim();
+        if (k && typeof k === 'object' && k.keyword) return k.keyword.trim();
+        return '';
+      }).filter((k: string) => k.length > 0);
+      source = 'website-audit';
+      console.log(`[Batch Translate-Analyze] Processing ${keywordList.length} keywords from website audit (already in target language, skipping translation)`);
+    } else if (keywords && typeof keywords === 'string') {
+      // 方式2：手动输入的关键词（需要翻译）
+      keywordList = keywords
+        .split(',')
+        .map((k: string) => k.trim())
+        .filter((k: string) => k.length > 0);
+      source = 'manual';
+      console.log(`[Batch Translate-Analyze] Processing ${keywordList.length} manually entered keywords (will translate to ${targetLanguage})`);
+    } else {
+      return res.status(400).json({ 
+        error: 'Missing required fields', 
+        message: 'Either "keywords" (string) or "keywordsFromAudit" (array) must be provided, along with "targetLanguage"'
+      });
     }
-
-    // Parse comma-separated keywords
-    const keywordList = keywords
-      .split(',')
-      .map((k: string) => k.trim())
-      .filter((k: string) => k.length > 0);
 
     if (keywordList.length === 0) {
       return res.status(400).json({ error: 'No valid keywords provided' });
     }
 
-    console.log(`Processing ${keywordList.length} keywords for translation and analysis`);
+    // Step 1: 翻译处理
+    // 如果关键词来自存量拓新（已经是目标语言）→ 跳过翻译
+    // 如果是手动输入 → 批量翻译这些关键词
+    let keywordsForAnalysis: KeywordData[] = [];
+    let translatedResults: Array<{ original: string; translated: string; translationBack: string }> = [];
 
-    // Step 1: Translate all keywords in parallel (with small batches to avoid rate limits)
-    const TRANSLATION_BATCH_SIZE = 5;
-    const translatedResults: Array<{ original: string; translated: string; translationBack: string }> = [];
-
-    for (let i = 0; i < keywordList.length; i += TRANSLATION_BATCH_SIZE) {
-      const batch = keywordList.slice(i, i + TRANSLATION_BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map((keyword: string) => translateKeywordToTarget(keyword, targetLanguage))
-      );
-      translatedResults.push(...batchResults);
-
-      // Small delay between translation batches
-      if (i + TRANSLATION_BATCH_SIZE < keywordList.length) {
-        await new Promise(resolve => setTimeout(resolve, 200));
+    if (source === 'website-audit') {
+      // 存量拓新：关键词已经是目标语言，跳过翻译
+      console.log(`[Batch Translate-Analyze] Step 1: Skipping translation (keywords already in target language)`);
+      
+      // 如果 keywordsFromAudit 是对象数组，提取更多信息
+      if (Array.isArray(keywordsFromAudit) && keywordsFromAudit[0] && typeof keywordsFromAudit[0] === 'object') {
+        keywordsForAnalysis = keywordsFromAudit.map((kw: any, index: number) => ({
+          id: kw.id || `audit-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          keyword: kw.keyword || '',
+          translation: kw.translation || kw.keyword,
+          intent: (kw.intent || IntentType.INFORMATIONAL) as IntentType,
+          volume: kw.volume || 0,
+          reasoning: kw.reasoning || '',
+          source: 'website-audit' as const,
+        })).filter((kw: KeywordData) => kw.keyword && kw.keyword.trim() !== '');
+      } else {
+        // 如果只是字符串数组
+        keywordsForAnalysis = keywordList.map((keyword, index) => ({
+          id: `audit-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          keyword: keyword,
+          translation: keyword, // 已经是目标语言，translation 等于 keyword
+          intent: IntentType.INFORMATIONAL,
+          volume: 0,
+          source: 'website-audit' as const,
+        }));
       }
+    } else {
+      // 手动输入：需要翻译
+      console.log(`[Batch Translate-Analyze] Step 1: Translating ${keywordList.length} keywords to ${targetLanguage}...`);
+      
+      const TRANSLATION_BATCH_SIZE = 5;
+
+      for (let i = 0; i < keywordList.length; i += TRANSLATION_BATCH_SIZE) {
+        const batch = keywordList.slice(i, i + TRANSLATION_BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map((keyword: string) => translateKeywordToTarget(keyword, targetLanguage))
+        );
+        translatedResults.push(...batchResults);
+
+        // Small delay between translation batches
+        if (i + TRANSLATION_BATCH_SIZE < keywordList.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+
+      console.log(`[Batch Translate-Analyze] Translated ${translatedResults.length} keywords`);
+
+      // Convert translated keywords to KeywordData format
+      keywordsForAnalysis = translatedResults.map((result, index) => ({
+        id: `bt-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+        keyword: result.translated,
+        translation: result.original, // Store original as translation for reference
+        intent: IntentType.INFORMATIONAL,
+        volume: 0,
+        source: 'manual' as const,
+      }));
     }
 
-    console.log(`Translated ${translatedResults.length} keywords`);
-
-    // Step 2: Convert translated keywords to KeywordData format for analysis
-    // For batch translation, translation field stores the original keyword meaning
-    // We'll translate it to UI language if needed (simplified: just use original for now)
-    // The translation will be handled on the frontend based on uiLanguage
-    const keywordsForAnalysis: KeywordData[] = translatedResults.map((result, index) => ({
-      id: `bt-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`, // Ensure unique IDs
-      keyword: result.translated,
-      translation: result.original, // Store original as translation for reference
-      intent: IntentType.INFORMATIONAL, // Default intent
-      volume: 0, // Volume will be estimated during analysis
-    }));
-
-    // Step 2.5: Call SE Ranking API to get keyword difficulty data (before SERP analysis)
-    console.log(`[SEO词研究工具] Fetching SE Ranking data for ${keywordsForAnalysis.length} keywords`);
+    // Step 2: SE Ranking 数据获取
+    // 与手动输入模式相同，批量获取搜索量、难度、CPC 等数据
+    console.log(`[Batch Translate-Analyze] Step 2: Fetching SE Ranking data for ${keywordsForAnalysis.length} keywords`);
 
     let serankingDataMap = new Map<string, any>();
     const keywordsToAnalyze: KeywordData[] = [];
@@ -141,9 +194,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       keywordsToAnalyze.push(...keywordsForAnalysis);
     }
 
-    // Step 3: Analyze ranking probability using existing function (with SERP search)
-    // Only analyze keywords that weren't skipped by SE Ranking
-    console.log(`Starting SERP analysis for ${keywordsToAnalyze.length} keywords`);
+    // Step 3: 排名概率分析
+    // 与手动输入模式相同，使用 analyzeRankingProbability 分析每个关键词
+    console.log(`[Batch Translate-Analyze] Step 3: Starting ranking probability analysis for ${keywordsToAnalyze.length} keywords`);
 
     let analyzedKeywords: KeywordData[] = [];
 
@@ -159,12 +212,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Combine analyzed keywords with skipped keywords
     const allKeywords = [...analyzedKeywords, ...skippedKeywords];
 
-    console.log(`Analysis complete for ${allKeywords.length} keywords (${analyzedKeywords.length} analyzed, ${skippedKeywords.length} skipped)`);
+    console.log(`[Batch Translate-Analyze] Analysis complete for ${allKeywords.length} keywords (${analyzedKeywords.length} analyzed, ${skippedKeywords.length} skipped)`);
+    console.log(`[Batch Translate-Analyze] Source breakdown: ${allKeywords.filter(k => k.source === 'website-audit').length} from website-audit, ${allKeywords.filter(k => k.source === 'manual').length} from manual input`);
 
     return res.json({
       success: true,
       total: allKeywords.length,
       keywords: allKeywords,
+      // 保留 translationResults 以兼容旧代码（仅手动输入模式）
       translationResults: translatedResults,
     });
 

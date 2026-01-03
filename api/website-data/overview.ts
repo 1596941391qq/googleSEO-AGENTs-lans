@@ -1,10 +1,15 @@
 /**
- * API: 获取网站概览仪表盘数据
+ * API: 获取网站概览仪表盘数据（仅读取缓存）
  *
  * 功能：
  * - 从数据库缓存读取网站概览数据
- * - 如果缓存过期或不存在，触发更新
  * - 返回完整的仪表盘数据
+ * - 不负责数据更新（由前端自动触发或用户手动刷新）
+ *
+ * 数据更新机制：
+ * - 前端检测到无缓存时，会自动触发后台更新（不阻塞用户）
+ * - 用户可以通过刷新按钮手动触发更新
+ * - 更新由 /api/website-data/update-metrics 处理
  *
  * 方法: POST
  * 端点: /api/website-data/overview
@@ -73,7 +78,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ==========================================
-    // Step 2: 检查缓存是否需要刷新
+    // Step 2: 检查缓存状态
     // ==========================================
     const cacheCheck = await sql`
       SELECT
@@ -89,58 +94,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cacheExpired = hasCache && new Date(cacheCheck.rows[0].cache_expires_at) < new Date();
     const needsRefresh = body.forceRefresh || !hasCache || cacheExpired;
 
-    // 如果没有缓存，同步等待第一次数据获取
+    // 注意：不再在这里调用 update-metrics
+    // 原因：
+    // 1. 前端会自动检测并触发后台更新（不阻塞用户）
+    // 2. 用户可以通过刷新按钮手动触发更新
+    // 3. 避免重复调用和服务器负载
     if (!hasCache) {
-      console.log('[overview] No cache found, fetching data from SE-Ranking...');
-
-      // 构建完整 URL
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NODE_ENV === 'production'
-          ? 'https://google-seo-agent.vercel.app'
-          : 'http://localhost:3002';
-
-      try {
-        // 同步等待第一次数据获取完成（最多等待25秒）
-        const updateResponse = await fetch(`${baseUrl}/api/website-data/update-metrics`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            websiteId: body.websiteId,
-            userId,
-          }),
-        });
-
-        if (!updateResponse.ok) {
-          console.error('[overview] Failed to fetch initial data:', await updateResponse.text());
-        } else {
-          console.log('[overview] Initial data fetched successfully');
-        }
-      } catch (error) {
-        console.error('[overview] Failed to fetch initial data:', error);
-        // 即使失败也继续，返回空数据让用户知道需要手动刷新
-      }
-    } else if (cacheExpired && !body.forceRefresh) {
-      // 如果缓存过期但不强制刷新，异步触发后台更新
-      console.log('[overview] Cache expired, triggering background refresh...');
-
-      const baseUrl = process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : process.env.NODE_ENV === 'production'
-          ? 'https://google-seo-agent.vercel.app'
-          : 'http://localhost:3002';
-
-      // 异步触发更新（不等待完成）
-      fetch(`${baseUrl}/api/website-data/update-metrics`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          websiteId: body.websiteId,
-          userId,
-        }),
-      }).catch((error) => {
-        console.error('[overview] Failed to trigger refresh:', error);
-      });
+      console.log('[overview] ⚠️ No cache found - frontend will trigger background update');
+    } else if (cacheExpired) {
+      console.log('[overview] ⚠️ Cache expired - frontend will trigger background update');
     }
 
     // ==========================================
@@ -171,6 +133,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `;
 
     const overview = overviewResult.rows[0];
+    
+    // 添加日志
+    if (overview) {
+      console.log('[overview] ✅ Found cached overview data:', {
+        totalKeywords: overview.total_keywords,
+        totalTraffic: overview.total_traffic,
+        updatedAt: overview.data_updated_at,
+      });
+    } else {
+      console.log('[overview] ⚠️ No cached overview data found');
+    }
 
     // ==========================================
     // Step 4: 获取排名分布数据（用于图表）
@@ -249,35 +222,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ==========================================
     const hasData = !!overview;
 
+    // 构建响应数据
+    const responseData = {
+      hasData,
+      website: {
+        id: website.id,
+        url: website.website_url,
+        domain: website.website_domain,
+        title: website.website_title,
+      },
+      overview: overview ? {
+        organicTraffic: overview.organic_traffic || 0,
+        paidTraffic: overview.paid_traffic || 0,
+        totalTraffic: overview.total_traffic || 0,
+        totalKeywords: overview.total_keywords || 0,
+        newKeywords: overview.new_keywords || 0,
+        lostKeywords: overview.lost_keywords || 0,
+        improvedKeywords: overview.improved_keywords || 0,
+        declinedKeywords: overview.declined_keywords || 0,
+        avgPosition: overview.avg_position || 0,
+        trafficCost: overview.traffic_cost || 0,
+        rankingDistribution,
+        updatedAt: overview.data_updated_at,
+        expiresAt: overview.cache_expires_at,
+      } : null,
+      topKeywords: topKeywords || [],
+      competitors: competitors || [],
+      needsRefresh,
+    };
+
+    console.log('[overview] 📊 Response summary:', {
+      hasData,
+      hasOverview: !!responseData.overview,
+      keywordsCount: responseData.topKeywords.length,
+      competitorsCount: responseData.competitors.length,
+    });
+
     return res.status(200).json({
       success: true,
-      data: {
-        hasData,
-        website: {
-          id: website.id,
-          url: website.website_url,
-          domain: website.website_domain,
-          title: website.website_title,
-        },
-        overview: overview ? {
-          organicTraffic: overview.organic_traffic,
-          paidTraffic: overview.paid_traffic,
-          totalTraffic: overview.total_traffic,
-          totalKeywords: overview.total_keywords,
-          newKeywords: overview.new_keywords,
-          lostKeywords: overview.lost_keywords,
-          improvedKeywords: overview.improved_keywords,
-          declinedKeywords: overview.declined_keywords,
-          avgPosition: overview.avg_position,
-          trafficCost: overview.traffic_cost,
-          rankingDistribution,
-          updatedAt: overview.data_updated_at,
-          expiresAt: overview.cache_expires_at,
-        } : null,
-        topKeywords,
-        competitors,
-        needsRefresh,
-      }
+      data: responseData,
     });
 
   } catch (error: any) {

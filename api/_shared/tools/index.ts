@@ -19,4 +19,7 @@ export * from './serp-search.js';
 // Firecrawl API工具
 export * from './firecrawl.js';
 
+// DataForSEO API工具
+export * from './dataforseo.js';
+
 

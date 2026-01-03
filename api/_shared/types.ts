@@ -36,6 +36,9 @@ export interface KeywordData {
   intent: IntentType;
   volume: number;
 
+  // Source tracking
+  source?: 'manual' | 'website-audit'; // 标记关键词来源：手动输入 或 存量拓新
+
   // SE Ranking API Data
   serankingData?: SErankingData;
 

@@ -1,8 +1,12 @@
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { AgentStreamEvent, UILanguage } from '../../types';
-import { CheckCircle, Search, FileText, PenTool, Image as ImageIcon, Loader2, Target, TrendingUp } from 'lucide-react';
+import { CheckCircle, Search, FileText, PenTool, Image as ImageIcon, Loader2, Target, TrendingUp, Minus, Square, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { EnhancedImageGenCard, ImageGenerationStatus } from './EnhancedImageGenCard';
+import { StreamingTextCard } from './StreamingTextCard';
+import { ErrorCard, ErrorType } from './ErrorCard';
+import { ImageLightbox } from './ImageLightbox';
 
 // Import TEXT from App.tsx - we'll need to pass it as a prop or create a separate translations file
 // For now, we'll define it locally to avoid circular dependencies
@@ -183,7 +187,11 @@ const CompetitorAnalysisCard: React.FC<{ data: any; uiLanguage: UILanguage }> = 
   );
 };
 
-const StreamEventDetails: React.FC<{ event: AgentStreamEvent; uiLanguage: UILanguage }> = ({ event, uiLanguage }) => {
+const StreamEventDetails: React.FC<{ 
+  event: AgentStreamEvent; 
+  uiLanguage: UILanguage;
+  onImageFullscreen?: (url: string, prompt?: string, theme?: string) => void;
+}> = ({ event, uiLanguage, onImageFullscreen }) => {
     const t = AGENT_TEXT[uiLanguage];
     switch (event.cardType) {
         case 'serp': return <SerpCard data={event.data} uiLanguage={uiLanguage} />;
@@ -191,19 +199,38 @@ const StreamEventDetails: React.FC<{ event: AgentStreamEvent; uiLanguage: UILang
         case 'outline': return <OutlineCard data={event.data} uiLanguage={uiLanguage} />;
         case 'competitor-analysis': return <CompetitorAnalysisCard data={event.data} uiLanguage={uiLanguage} />;
         case 'image-gen': 
+            // Determine status from event data
+            const imageStatus: ImageGenerationStatus = event.data.status || 
+                (event.data.imageUrl ? 'completed' : 
+                 event.data.error ? 'failed' : 'generating');
+            
             return (
-                <div className="mt-2 bg-purple-500/5 border border-purple-500/20 rounded-lg p-2 flex items-center space-x-3">
-                    <div className="w-16 h-16 bg-black/50 rounded flex items-center justify-center overflow-hidden">
-                       {event.data.imageUrl ? (
-                           <img src={event.data.imageUrl} alt="Generated" className="w-full h-full object-cover" />
-                       ) : (
-                           <Loader2 className="animate-spin text-purple-500" size={20} />
-                       )}
-                    </div>
-                    <div>
-                        <div className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">{t.cardGeneratingVisual}</div>
-                        <div className="text-xs text-purple-200 italic">"{event.data.prompt}"</div>
-                    </div>
+                <div className="mt-2">
+                    <EnhancedImageGenCard
+                        theme={event.data.theme || 'Image'}
+                        prompt={event.data.prompt || ''}
+                        status={imageStatus}
+                        progress={event.data.progress}
+                        imageUrl={event.data.imageUrl}
+                        error={event.data.error}
+                        estimatedTime={event.data.estimatedTime}
+                        onRegenerate={event.data.onRegenerate}
+                        onDownload={event.data.onDownload}
+                        onViewFullscreen={onImageFullscreen ? () => onImageFullscreen(event.data.imageUrl, event.data.prompt, event.data.theme) : event.data.onViewFullscreen}
+                        uiLanguage={uiLanguage}
+                    />
+                </div>
+            );
+        case 'streaming-text':
+            return (
+                <div className="mt-2">
+                    <StreamingTextCard
+                        content={event.data.content || ''}
+                        speed={event.data.speed}
+                        interval={event.data.interval}
+                        onComplete={event.data.onComplete}
+                        uiLanguage={uiLanguage}
+                    />
                 </div>
             );
         default: return null;
@@ -245,6 +272,135 @@ const getAgentDescription = (id: string, uiLanguage: UILanguage): string | null 
     }
 }
 
+// Terminal Window Frame Component
+const TerminalWindow: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg overflow-hidden shadow-2xl h-full flex flex-col">
+      {/* Terminal Header */}
+      <div className="bg-[#1a1a1a] border-b border-gray-800 px-4 py-2 flex items-center justify-between shrink-0">
+        {/* Window Controls */}
+        <div className="flex items-center space-x-2">
+          <button className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center group">
+            <X size={8} className="text-red-900 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
+          <button className="w-3 h-3 rounded-full bg-yellow-500 hover:bg-yellow-600 transition-colors flex items-center justify-center group">
+            <Minus size={8} className="text-yellow-900 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
+          <button className="w-3 h-3 rounded-full bg-green-500 hover:bg-green-600 transition-colors flex items-center justify-center group">
+            <Square size={6} className="text-green-900 opacity-0 group-hover:opacity-100 transition-opacity" />
+          </button>
+        </div>
+        
+        {/* Terminal Title */}
+        <div className="flex-1 text-center">
+          <span className="text-xs text-gray-400 font-mono">agent-terminal</span>
+        </div>
+        
+        {/* Spacer for symmetry */}
+        <div className="w-12"></div>
+      </div>
+      
+      {/* Terminal Content - Scrollable */}
+      <div className="bg-[#0a0a0a] flex-1 overflow-y-auto min-h-0">
+        {children}
+      </div>
+    </div>
+  );
+};
+
+// Typing Effect Component
+const TypingText: React.FC<{ text: string; speed?: number; onComplete?: () => void }> = ({ 
+  text, 
+  speed = 30,
+  onComplete 
+}) => {
+  const [displayedText, setDisplayedText] = useState('');
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    if (text.length === 0) {
+      setIsComplete(true);
+      onComplete?.();
+      return;
+    }
+
+    setDisplayedText('');
+    setIsComplete(false);
+    let currentIndex = 0;
+
+    const interval = setInterval(() => {
+      if (currentIndex < text.length) {
+        setDisplayedText(text.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        setIsComplete(true);
+        onComplete?.();
+        clearInterval(interval);
+      }
+    }, speed);
+
+    return () => clearInterval(interval);
+  }, [text, speed, onComplete]);
+
+  return (
+    <span>
+      {displayedText}
+      {!isComplete && <Cursor />}
+    </span>
+  );
+};
+
+// Blinking Cursor Component
+const Cursor: React.FC = () => {
+  return (
+    <span className="inline-block w-2 h-4 bg-emerald-400 ml-0.5 animate-pulse" />
+  );
+};
+
+// Terminal Prompt Component
+const TerminalPrompt: React.FC<{ agentName: string }> = ({ agentName }) => {
+  return (
+    <span className="text-emerald-400 font-mono">
+      <span className="text-gray-500">$</span>{' '}
+      <span className="text-blue-400">{agentName.toLowerCase()}</span>
+      <span className="text-gray-500">:</span>
+      <span className="text-emerald-400">~</span>
+      <span className="text-gray-500">$</span>{' '}
+    </span>
+  );
+};
+
+// Code Highlight Component
+const CodeHighlight: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <span className="bg-black/30 text-emerald-300 font-mono text-xs px-1.5 py-0.5 rounded border border-emerald-500/20">
+      {children}
+    </span>
+  );
+};
+
+// Loading Animation Component
+const LoadingDots: React.FC = () => {
+  return (
+    <span className="inline-flex items-center space-x-1 ml-1">
+      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+    </span>
+  );
+};
+
+// Agent Working Animation
+const AgentWorkingIndicator: React.FC<{ agentName: string }> = ({ agentName }) => {
+  return (
+    <div className="flex items-center space-x-2 text-gray-400 text-xs italic">
+      <Loader2 className="animate-spin text-emerald-400" size={12} />
+      <span>{agentName} is working</span>
+      <LoadingDots />
+    </div>
+  );
+};
+
 interface AgentStreamFeedProps {
   events: AgentStreamEvent[];
   uiLanguage?: UILanguage;
@@ -252,58 +408,176 @@ interface AgentStreamFeedProps {
 
 export const AgentStreamFeed: React.FC<AgentStreamFeedProps> = ({ events, uiLanguage = 'en' }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const [typingStates, setTypingStates] = useState<Record<string, boolean>>({});
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; prompt?: string; theme?: string } | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [events]);
 
-  return (
-    <div className="flex-1 overflow-y-auto p-8 space-y-6">
-      {events.map((event) => {
-        const agentDesc = getAgentDescription(event.agentId, uiLanguage);
-        return (
-          <div key={event.id} className="flex space-x-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className={cn(
-               "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-lg border border-white/5",
-               "bg-[#111]"
-            )}>
-              {getAgentIcon(event.agentId)}
-            </div>
-            
-            <div className="flex-1 max-w-2xl">
-               <div className="flex items-center space-x-2 mb-1">
-                   <span className="text-xs font-bold text-white/90">{getAgentName(event.agentId, uiLanguage)}</span>
-                   <span className="text-[10px] text-white/30">{new Date(event.timestamp).toLocaleTimeString()}</span>
-               </div>
-               
-               {/* Agent Description - Show when no message and no card */}
-               {!event.message && !event.cardType && agentDesc && (
-                   <div className="text-xs text-gray-400 italic mb-2">
-                       {agentDesc}
-                   </div>
-               )}
-               
-               {/* Message Bubble */}
-               {event.message && (
-                   <div className={cn(
-                       "text-sm leading-relaxed p-3 rounded-tr-xl rounded-br-xl rounded-bl-xl inline-block",
-                       event.type === 'error' ? "bg-red-500/10 text-red-200" : "bg-white/5 text-gray-300"
-                   )}>
-                      {event.message}
-                   </div>
-               )}
+  // Handle image fullscreen view
+  const handleImageFullscreen = (imageUrl: string, prompt?: string, theme?: string) => {
+    setLightboxImage({ url: imageUrl, prompt, theme });
+  };
 
-               {/* Functional Cards */}
-               {event.type === 'card' && (
-                   <div className="w-full">
-                       <StreamEventDetails event={event} uiLanguage={uiLanguage} />
-                   </div>
-               )}
-            </div>
+  const handleTypingComplete = (eventId: string) => {
+    setTypingStates(prev => ({ ...prev, [eventId]: true }));
+  };
+
+  // Check if message contains code-like patterns for highlighting
+  const highlightCodeInText = (text: string) => {
+    // Match code patterns: backticks, file paths, URLs, commands
+    const codePatterns = [
+      /`([^`]+)`/g,  // Backtick code
+      /(\/[^\s]+)/g,  // File paths
+      /(https?:\/\/[^\s]+)/g,  // URLs
+      /(\$ [^\n]+)/g,  // Commands
+      /([A-Z_]+_[A-Z_]+)/g,  // CONSTANTS
+    ];
+
+    let parts: Array<{ text: string; isCode: boolean }> = [{ text, isCode: false }];
+
+    codePatterns.forEach(pattern => {
+      const newParts: Array<{ text: string; isCode: boolean }> = [];
+      parts.forEach(part => {
+        if (part.isCode) {
+          newParts.push(part);
+        } else {
+          let lastIndex = 0;
+          let match;
+          while ((match = pattern.exec(part.text)) !== null) {
+            if (match.index > lastIndex) {
+              newParts.push({ text: part.text.slice(lastIndex, match.index), isCode: false });
+            }
+            newParts.push({ text: match[0], isCode: true });
+            lastIndex = match.index + match[0].length;
+          }
+          if (lastIndex < part.text.length) {
+            newParts.push({ text: part.text.slice(lastIndex), isCode: false });
+          }
+        }
+      });
+      parts = newParts;
+    });
+
+    return parts;
+  };
+
+  return (
+    <TerminalWindow>
+      <div className="p-6 space-y-4 font-mono text-sm">
+        {events.length === 0 && (
+          <div className="text-gray-500 text-xs">
+            <TerminalPrompt agentName="system" />
+            <span className="text-gray-400">Waiting for agents to start</span>
+            <LoadingDots />
+            <Cursor />
           </div>
-        );
-      })}
-      <div ref={bottomRef} />
-    </div>
+        )}
+        
+        {events.map((event) => {
+          const agentDesc = getAgentDescription(event.agentId, uiLanguage);
+          const agentName = getAgentName(event.agentId, uiLanguage);
+          const isTyping = !typingStates[event.id];
+          const showTyping = event.message && isTyping;
+
+          return (
+            <div key={event.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+              {/* Terminal-style line with prompt */}
+              <div className="flex items-start space-x-2 mb-2">
+                <TerminalPrompt agentName={agentName} />
+                
+                {/* Agent Description - Show when no message and no card */}
+                {!event.message && !event.cardType && agentDesc && (
+                  <div className="text-xs text-gray-400 italic flex items-center space-x-2">
+                    <span>{agentDesc}</span>
+                    <LoadingDots />
+                    <Cursor />
+                  </div>
+                )}
+                
+                {/* Message with typing effect */}
+                {event.message && (
+                  <div className={cn(
+                    "text-sm leading-relaxed flex-1",
+                    event.type === 'error' ? "text-red-400" : "text-gray-300"
+                  )}>
+                    {showTyping ? (
+                      <TypingText 
+                        text={event.message} 
+                        speed={20}
+                        onComplete={() => handleTypingComplete(event.id)}
+                      />
+                    ) : (
+                      <>
+                        {highlightCodeInText(event.message).map((part, i) => 
+                          part.isCode ? (
+                            <CodeHighlight key={i}>{part.text}</CodeHighlight>
+                          ) : (
+                            <span key={i}>{part.text}</span>
+                          )
+                        )}
+                        <Cursor />
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Functional Cards */}
+              {event.type === 'card' && (
+                <div className="ml-8 mt-2">
+                  <StreamEventDetails 
+                    event={event} 
+                    uiLanguage={uiLanguage}
+                    onImageFullscreen={handleImageFullscreen}
+                  />
+                </div>
+              )}
+
+              {/* Error Card */}
+              {event.type === 'error' && (
+                <div className="ml-8 mt-2">
+                  <ErrorCard
+                    type={(event.data?.errorType as ErrorType) || 'unknown'}
+                    message={event.message || 'An error occurred'}
+                    details={event.data?.details}
+                    onRetry={event.data?.onRetry}
+                    uiLanguage={uiLanguage}
+                  />
+                </div>
+              )}
+
+              {/* Timestamp (subtle) */}
+              <div className="ml-8 text-[10px] text-gray-600 mt-1">
+                [{new Date(event.timestamp).toLocaleTimeString()}]
+              </div>
+            </div>
+          );
+        })}
+        
+        {/* Always show cursor at the end */}
+        {events.length > 0 && (
+          <div className="text-gray-500 text-xs mt-4">
+            <TerminalPrompt agentName="system" />
+            <Cursor />
+          </div>
+        )}
+        
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Image Lightbox */}
+      {lightboxImage && (
+        <ImageLightbox
+          imageUrl={lightboxImage.url}
+          prompt={lightboxImage.prompt}
+          theme={lightboxImage.theme}
+          isOpen={!!lightboxImage}
+          onClose={() => setLightboxImage(null)}
+          uiLanguage={uiLanguage}
+        />
+      )}
+    </TerminalWindow>
   );
 };

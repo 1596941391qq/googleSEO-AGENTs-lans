@@ -1,8 +1,10 @@
 
 import React, { useState } from 'react';
-import { Download, RefreshCw, X, Image as ImageIcon, Save, CheckCircle } from 'lucide-react';
+import { Download, RefreshCw, X, Image as ImageIcon, Save, CheckCircle, Maximize2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { MarkdownContent } from '../ui/MarkdownContent';
+import { ImageRevealAnimation } from './ImageRevealAnimation';
+import { ImageLightbox } from './ImageLightbox';
 // We'll use a markdown library or just simple HTML rendering
 // For simplicity, we assume 'content' is marked up HTML string for now
 // In a real app, use react-markdown
@@ -32,6 +34,7 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
 }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; prompt?: string } | null>(null);
 
   // Handle Export
   const handleExport = () => {
@@ -107,11 +110,27 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           {finalArticle.images.length > 0 && (
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose mb-8">
                 {finalArticle.images.map((img, i) => (
-                    <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10 shadow-2xl">
-                        <img src={img.url} alt={img.prompt} className="w-full h-64 object-cover" />
-                        <div className="absolute inset-x-0 bottom-0 bg-black/80 p-2 opacity-0 group-hover:opacity-100 transition-opacity text-[10px] text-gray-400">
-                           {img.prompt}
+                    <div 
+                      key={i} 
+                      className="relative group rounded-xl overflow-hidden border border-white/10 shadow-2xl cursor-pointer"
+                      onClick={() => setLightboxImage({ url: img.url, prompt: img.prompt })}
+                    >
+                        <ImageRevealAnimation
+                          imageUrl={img.url}
+                          prompt={img.prompt}
+                          aspectRatio="4:3"
+                        />
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <div className="flex items-center space-x-2 text-white text-sm">
+                            <Maximize2 size={18} />
+                            <span>{uiLanguage === 'zh' ? '点击查看大图' : 'Click to view fullscreen'}</span>
+                          </div>
                         </div>
+                        {img.prompt && (
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <p className="text-xs text-gray-300 italic line-clamp-2">"{img.prompt}"</p>
+                          </div>
+                        )}
                     </div>
                 ))}
             </div>
@@ -193,6 +212,23 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                 {renderContent()}
             </div>
         </div>
+
+        {/* Image Lightbox */}
+        {lightboxImage && (
+          <ImageLightbox
+            imageUrl={lightboxImage.url}
+            prompt={lightboxImage.prompt}
+            isOpen={!!lightboxImage}
+            onClose={() => setLightboxImage(null)}
+            onDownload={() => {
+              const a = document.createElement('a');
+              a.href = lightboxImage.url;
+              a.download = `image-${Date.now()}.jpg`;
+              a.click();
+            }}
+            uiLanguage={uiLanguage}
+          />
+        )}
     </div>
   );
 };

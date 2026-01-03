@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { AgentStreamFeed } from './AgentStreamFeed';
 import { ArticleInputConfig, ArticleConfig } from './ArticleInputConfig';
 import { ArticlePreview } from './ArticlePreview';
+import { OverallProgressBar, GenerationStage } from './OverallProgressBar';
 import { AgentStreamEvent, TargetLanguage } from '../../types';
 import { cn } from '../../lib/utils';
 
@@ -141,15 +142,39 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                     const json = JSON.parse(line.replace('data: ', ''));
                     
                     if (json.type === 'event') {
-                        currentEvents = [...currentEvents, json.data];
+                        const event = json.data as AgentStreamEvent;
+                        currentEvents = [...currentEvents, event];
+                        
+                        // Update progress and stage based on agent
+                        let newProgress = state.progress || 0;
+                        let newStage: GenerationStage = state.currentStage || 'research';
+                        
+                        // Calculate progress based on agent activity
+                        if (event.agentId === 'researcher') {
+                            newStage = 'research';
+                            newProgress = Math.max(newProgress, 20);
+                        } else if (event.agentId === 'strategist') {
+                            newStage = 'strategy';
+                            newProgress = Math.max(newProgress, 40);
+                        } else if (event.agentId === 'writer') {
+                            newStage = 'writing';
+                            newProgress = Math.max(newProgress, 60);
+                        } else if (event.agentId === 'artist') {
+                            newStage = 'visualizing';
+                            newProgress = Math.max(newProgress, 80);
+                        }
+                        
                         updateState({
                             streamEvents: currentEvents,
+                            progress: newProgress,
+                            currentStage: newStage,
                         });
                     } else if (json.type === 'done') {
                         updateState({
                             finalArticle: json.data,
                             isGenerating: false,
                             currentStage: 'complete',
+                            progress: 100,
                         });
                     } else if (json.type === 'error') {
                         const errorEvent: AgentStreamEvent = {
@@ -157,11 +182,16 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                             agentId: 'tracker',
                             type: 'error',
                             timestamp: Date.now(),
-                            message: json.message
+                            message: json.message,
+                            data: {
+                                errorType: 'api-error',
+                                details: json.message
+                            }
                         };
                         currentEvents = [...currentEvents, errorEvent];
                         updateState({
                             streamEvents: currentEvents,
+                            isGenerating: false,
                         });
                     }
                 } catch (e) {
@@ -205,7 +235,19 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                 
                 {stage === 'generating' && (
                     <div className="h-full flex flex-col">
-                        <AgentStreamFeed events={events} uiLanguage={uiLanguage} />
+                        {/* Overall Progress Bar */}
+                        <div className="p-6 pb-4 shrink-0">
+                            <OverallProgressBar
+                                currentStage={state.currentStage || 'research'}
+                                progress={state.progress || 0}
+                                uiLanguage={uiLanguage}
+                            />
+                        </div>
+                        
+                        {/* Agent Stream Feed */}
+                        <div className="flex-1 min-h-0">
+                            <AgentStreamFeed events={events} uiLanguage={uiLanguage} />
+                        </div>
                     </div>
                 )}
                 

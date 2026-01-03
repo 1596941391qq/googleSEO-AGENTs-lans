@@ -67,6 +67,7 @@ import { KeywordTable } from "./components/mining/KeywordTable";
 import { MarkdownContent } from "./components/ui/MarkdownContent";
 import { TestAgentPanel } from "./components/TestAgentPanel";
 import { ContentGenerationView } from "./components/ContentGenerationView";
+import { WebsiteSelector } from "./components/WebsiteSelector";
 import {
   KeywordMiningGuide,
   MiningConfig,
@@ -2309,6 +2310,85 @@ export default function App() {
   const [showTaskMenu, setShowTaskMenu] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true); // Theme toggle state
   const [showMiningGuide, setShowMiningGuide] = useState(false); // 挖词引导模态框
+  const [selectedWebsite, setSelectedWebsite] = useState<any | null>(null); // Selected website for input page
+  const [manualWebsiteUrl, setManualWebsiteUrl] = useState(""); // Manual website URL input
+  const [urlValidationStatus, setUrlValidationStatus] = useState<
+    "idle" | "valid" | "invalid" | "validating"
+  >("idle"); // URL validation status
+  const [miningMode, setMiningMode] = useState<
+    "blue-ocean" | "existing-website-audit"
+  >("blue-ocean"); // 挖掘模式
+  const urlValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Helper function to normalize URL (support formats like "302.ai" or "www.302.ai")
+  const normalizeUrl = (input: string): string => {
+    const trimmed = input.trim();
+    if (!trimmed) return trimmed;
+
+    // If already has protocol, return as is
+    if (trimmed.match(/^https?:\/\//i)) {
+      return trimmed;
+    }
+
+    // If starts with //, add https:
+    if (trimmed.startsWith("//")) {
+      return `https:${trimmed}`;
+    }
+
+    // Otherwise, add https://
+    return `https://${trimmed}`;
+  };
+
+  // Auto-validate URL with debounce
+  useEffect(() => {
+    // Clear previous timeout
+    if (urlValidationTimeoutRef.current) {
+      clearTimeout(urlValidationTimeoutRef.current);
+    }
+
+    // If input is empty, reset status
+    if (!manualWebsiteUrl.trim()) {
+      setUrlValidationStatus("idle");
+      return;
+    }
+
+    // Set validating status
+    setUrlValidationStatus("validating");
+
+    // Debounce validation (wait 800ms after user stops typing)
+    urlValidationTimeoutRef.current = setTimeout(() => {
+      const trimmed = manualWebsiteUrl.trim();
+      if (!trimmed) {
+        setUrlValidationStatus("idle");
+        return;
+      }
+
+      try {
+        const normalizedUrl = normalizeUrl(trimmed);
+        const urlObj = new URL(normalizedUrl);
+
+        // URL is valid, automatically set as selected website
+        setSelectedWebsite({
+          id: `manual-${Date.now()}`,
+          url: normalizedUrl,
+          domain: urlObj.hostname.replace(/^www\./, ""),
+          isDefault: false,
+        });
+        setUrlValidationStatus("valid");
+      } catch (e) {
+        // URL is invalid
+        setUrlValidationStatus("invalid");
+        setSelectedWebsite(null); // Clear selection if invalid
+      }
+    }, 800);
+
+    // Cleanup function
+    return () => {
+      if (urlValidationTimeoutRef.current) {
+        clearTimeout(urlValidationTimeoutRef.current);
+      }
+    };
+  }, [manualWebsiteUrl]);
   const stopBatchRef = useRef(false);
 
   const stopMiningRef = useRef(false);
@@ -4201,16 +4281,41 @@ export default function App() {
   };
 
   const startMining = async (continueExisting = false) => {
-    if (!state.seedKeyword.trim()) return;
+    // Mode-specific validation
+    if (miningMode === "blue-ocean" && !state.seedKeyword.trim()) {
+      return;
+    }
+    if (miningMode === "existing-website-audit" && !selectedWebsite) {
+      setState((prev) => ({
+        ...prev,
+        error:
+          state.uiLanguage === "zh"
+            ? "请先选择要分析的网站"
+            : "Please select a website to analyze",
+      }));
+      return;
+    }
 
     // Check authentication
     if (!authenticated) {
       setState((prev) => ({
         ...prev,
-        error: "请先登录才能使用关键词挖掘功能",
+        error:
+          state.uiLanguage === "zh"
+            ? "请先登录才能使用关键词挖掘功能"
+            : "Please login to use keyword mining",
       }));
       return;
     }
+
+    // Handle existing-website-audit mode
+    if (miningMode === "existing-website-audit") {
+      await startWebsiteAudit();
+      return;
+    }
+
+    // Continue with blue-ocean mode (existing logic)
+    if (!state.seedKeyword.trim()) return;
 
     // Auto-create task if no active task exists
     if (!state.taskManager.activeTaskId) {
@@ -4259,6 +4364,529 @@ export default function App() {
     );
 
     runMiningLoop(continueExisting ? state.miningRound : 0, currentTaskId);
+  };
+
+  // Start Website Audit (存量拓新)
+  const startWebsiteAudit = async () => {
+    if (!selectedWebsite) {
+      setState((prev) => ({
+        ...prev,
+        error:
+          state.uiLanguage === "zh"
+            ? "请先选择要分析的网站"
+            : "Please select a website to analyze",
+      }));
+      return;
+    }
+
+    // Check authentication
+    if (!authenticated) {
+      setState((prev) => ({
+        ...prev,
+        error:
+          state.uiLanguage === "zh"
+            ? "请先登录才能使用网站分析功能"
+            : "Please login to use website audit",
+      }));
+      return;
+    }
+
+    // Auto-create task if no active task exists
+    if (!state.taskManager.activeTaskId) {
+      addTask({
+        type: "mining",
+        seedKeyword: `Website Audit: ${selectedWebsite.url}`,
+        targetLanguage: state.targetLanguage,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return;
+    }
+
+    const currentTaskId = state.taskManager.activeTaskId;
+    stopMiningRef.current = false;
+
+    setState((prev) => ({
+      ...prev,
+      step: "mining",
+      isMining: true,
+      miningSuccess: false,
+      error: null,
+      logs: [],
+      agentThoughts: [],
+      miningRound: 0,
+      keywords: [],
+    }));
+
+    addLog(
+      state.uiLanguage === "zh"
+        ? `开始分析网站: ${selectedWebsite.url}`
+        : `Starting website audit: ${selectedWebsite.url}`,
+      "info",
+      currentTaskId
+    );
+
+    // Step 1: 网站分析（存量拓新）- 可视化开始
+    addThought(
+      "generation",
+      state.uiLanguage === "zh"
+        ? `开始分析网站: ${selectedWebsite.url}`
+        : `Starting website audit: ${selectedWebsite.url}`,
+      undefined,
+      currentTaskId
+    );
+
+    try {
+      // Step 1.1: 获取网站内容
+      addLog(
+        state.uiLanguage === "zh"
+          ? "📄 步骤 1: 正在获取网站内容..."
+          : "📄 Step 1: Fetching website content...",
+        "info",
+        currentTaskId
+      );
+
+      addThought(
+        "generation",
+        state.uiLanguage === "zh"
+          ? "正在使用 Firecrawl 抓取网站内容..."
+          : "Scraping website content using Firecrawl...",
+        undefined,
+        currentTaskId
+      );
+
+      // Call website audit API
+      // For manually entered URLs, use a temporary ID
+      const websiteId = selectedWebsite.id?.startsWith("manual-")
+        ? `temp-${Date.now()}`
+        : selectedWebsite.id;
+
+      const response = await fetch("/api/website-audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteId: websiteId,
+          websiteUrl: selectedWebsite.url,
+          websiteDomain:
+            selectedWebsite.domain ||
+            new URL(selectedWebsite.url).hostname.replace(/^www\./, ""),
+          targetLanguage: state.targetLanguage,
+          uiLanguage: state.uiLanguage,
+          wordsPerRound: state.wordsPerRound || 10,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.keywords) {
+        // Step 1.2: 显示网站内容摘要（更详细的显示）
+        if (result.analysis?.websiteContentSummary) {
+          addLog(
+            state.uiLanguage === "zh"
+              ? `✅ 网站内容已获取 (${result.analysis.websiteContentSummary.length} 字符)`
+              : `✅ Website content fetched (${result.analysis.websiteContentSummary.length} chars)`,
+            "success",
+            currentTaskId
+          );
+
+          addThought(
+            "analysis",
+            state.uiLanguage === "zh"
+              ? `网站内容分析完成，已提取 ${result.analysis.websiteContentSummary.length} 字符的内容摘要。正在分析现有内容覆盖和主题...`
+              : `Website content analysis complete, extracted ${result.analysis.websiteContentSummary.length} chars summary. Analyzing existing content coverage and themes...`,
+            {
+              data: {
+                summary: result.analysis.websiteContentSummary,
+                url: selectedWebsite.url,
+                domain:
+                  selectedWebsite.domain ||
+                  new URL(selectedWebsite.url).hostname.replace(/^www\./, ""),
+                contentLength: result.analysis.websiteContentSummary.length,
+                analysisType: "website-content",
+              },
+              dataType: "analysis",
+            },
+            currentTaskId
+          );
+        }
+
+        // Step 1.3: 显示竞争对手分析结果（更详细的显示）
+        if (result.analysis?.competitorKeywordsCount !== undefined) {
+          addLog(
+            state.uiLanguage === "zh"
+              ? `🔍 步骤 2: 发现 ${result.analysis.competitorKeywordsCount} 个竞争对手关键词`
+              : `🔍 Step 2: Found ${result.analysis.competitorKeywordsCount} competitor keywords`,
+            "info",
+            currentTaskId
+          );
+
+          addThought(
+            "analysis",
+            state.uiLanguage === "zh"
+              ? `竞争对手分析完成：发现 ${
+                  result.analysis.competitorKeywordsCount
+                } 个竞争对手关键词，识别出 ${
+                  result.analysis.opportunitiesFound || result.keywords.length
+                } 个流量机会（内容缺口、优化机会、扩展方向）`
+              : `Competitor analysis complete: Found ${
+                  result.analysis.competitorKeywordsCount
+                } competitor keywords, identified ${
+                  result.analysis.opportunitiesFound || result.keywords.length
+                } traffic opportunities (content gaps, optimization opportunities, expansion directions)`,
+            {
+              data: {
+                competitorKeywordsCount:
+                  result.analysis.competitorKeywordsCount,
+                opportunitiesFound:
+                  result.analysis.opportunitiesFound || result.keywords.length,
+                analysisType: "competitor-analysis",
+                websiteUrl: selectedWebsite.url,
+              },
+              dataType: "analysis",
+            },
+            currentTaskId
+          );
+        }
+
+        // Step 1.4: 显示 AI 分析结果（初始关键词列表）
+        addLog(
+          state.uiLanguage === "zh"
+            ? `🤖 步骤 3: AI 正在分析关键词机会...`
+            : `🤖 Step 3: AI analyzing keyword opportunities...`,
+          "info",
+          currentTaskId
+        );
+
+        addThought(
+          "generation",
+          state.uiLanguage === "zh"
+            ? `AI 分析完成，发现 ${result.keywords.length} 个关键词机会（待进一步分析）`
+            : `AI analysis complete, found ${result.keywords.length} keyword opportunities (pending further analysis)`,
+          {
+            keywords: result.keywords.map((k: KeywordData) => k.keyword),
+            data: result.keywords,
+            dataType: "keywords",
+          },
+          currentTaskId
+        );
+
+        addLog(
+          state.uiLanguage === "zh"
+            ? `✨ 发现 ${result.keywords.length} 个关键词机会`
+            : `✨ Found ${result.keywords.length} keyword opportunities`,
+          "success",
+          currentTaskId
+        );
+
+        // Step 2: 翻译处理（存量拓新返回的关键词已经是目标语言，跳过翻译）
+        addLog(
+          state.uiLanguage === "zh"
+            ? `✅ 关键词已经是目标语言 (${state.targetLanguage.toUpperCase()})，跳过翻译步骤`
+            : `✅ Keywords already in target language (${state.targetLanguage.toUpperCase()}), skipping translation`,
+          "info",
+          currentTaskId
+        );
+
+        // Step 3: 批量翻译分析（SE Ranking + SERP + 排名概率分析）
+        addLog(
+          state.uiLanguage === "zh"
+            ? `📊 步骤 4: 开始批量分析关键词（SE Ranking + SERP + 排名概率）...`
+            : `📊 Step 4: Starting batch analysis (SE Ranking + SERP + Ranking Probability)...`,
+          "info",
+          currentTaskId
+        );
+
+        addThought(
+          "analysis",
+          state.uiLanguage === "zh"
+            ? `正在批量获取 SE Ranking 数据和进行 SERP 分析...`
+            : `Fetching SE Ranking data and performing SERP analysis...`,
+          undefined,
+          currentTaskId
+        );
+
+        try {
+          // 调用批量翻译分析API，使用 keywordsFromAudit 参数
+          const batchAnalysisResponse = await fetch(
+            "/api/batch-translate-analyze",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                keywordsFromAudit: result.keywords, // 传递关键词对象数组
+                targetLanguage: state.targetLanguage,
+                systemInstruction: getWorkflowPrompt(
+                  "batch",
+                  "batch-analyze",
+                  state.analyzePrompt
+                ),
+                uiLanguage: state.uiLanguage,
+              }),
+            }
+          );
+
+          if (!batchAnalysisResponse.ok) {
+            throw new Error(
+              `Batch analysis API error: ${batchAnalysisResponse.status}`
+            );
+          }
+
+          const batchResult = await batchAnalysisResponse.json();
+
+          if (batchResult.success && batchResult.keywords) {
+            addLog(
+              state.uiLanguage === "zh"
+                ? `✅ 批量分析完成：${batchResult.keywords.length} 个关键词已分析`
+                : `✅ Batch analysis complete: ${batchResult.keywords.length} keywords analyzed`,
+              "success",
+              currentTaskId
+            );
+
+            // 显示 SE Ranking 数据统计
+            const keywordsWithSeranking = batchResult.keywords.filter(
+              (k: KeywordData) => k.serankingData?.is_data_found
+            );
+            if (keywordsWithSeranking.length > 0) {
+              addThought(
+                "analysis",
+                state.uiLanguage === "zh"
+                  ? `SE Ranking 数据获取完成，${keywordsWithSeranking.length}/${batchResult.keywords.length} 个关键词有数据`
+                  : `SE Ranking data fetched, ${keywordsWithSeranking.length}/${batchResult.keywords.length} keywords have data`,
+                {
+                  data: {
+                    totalKeywords: batchResult.keywords.length,
+                    keywordsWithData: keywordsWithSeranking.length,
+                    sampleKeywords: keywordsWithSeranking
+                      .slice(0, 5)
+                      .map((k: KeywordData) => ({
+                        keyword: k.keyword,
+                        volume: k.serankingData?.volume,
+                        difficulty: k.serankingData?.difficulty,
+                      })),
+                  },
+                  dataType: "analysis",
+                },
+                currentTaskId
+              );
+            }
+
+            // 显示 SERP 分析结果（包含详细的 SERP 数据）
+            const keywordsWithSerp = batchResult.keywords.filter(
+              (k: KeywordData) =>
+                k.topSerpSnippets && k.topSerpSnippets.length > 0
+            );
+            if (keywordsWithSerp.length > 0) {
+              addLog(
+                state.uiLanguage === "zh"
+                  ? `🔍 SERP 分析完成，${keywordsWithSerp.length} 个关键词已获取搜索结果`
+                  : `🔍 SERP analysis complete, ${keywordsWithSerp.length} keywords have search results`,
+                "success",
+                currentTaskId
+              );
+
+              addThought(
+                "analysis",
+                state.uiLanguage === "zh"
+                  ? `SERP 分析完成，${keywordsWithSerp.length} 个关键词已获取搜索结果`
+                  : `SERP analysis complete, ${keywordsWithSerp.length} keywords have search results`,
+                {
+                  data: {
+                    keywordsWithSerp: keywordsWithSerp.length,
+                    sampleSerpResults: keywordsWithSerp
+                      .slice(0, 5)
+                      .map((k: KeywordData) => ({
+                        keyword: k.keyword,
+                        serpCount: k.serpResultCount,
+                        topDomainType: k.topDomainType,
+                        probability: k.probability,
+                        topResults: k.topSerpSnippets
+                          ?.slice(0, 5)
+                          .map((s: any) => ({
+                            title: s.title,
+                            url: s.url,
+                            snippet: s.snippet,
+                          })),
+                      })),
+                  },
+                  dataType: "analysis",
+                },
+                currentTaskId
+              );
+            }
+
+            // 显示用户意图分析结果
+            const keywordsWithIntent = batchResult.keywords.filter(
+              (k: KeywordData) => k.searchIntent || k.intentAnalysis
+            );
+            if (keywordsWithIntent.length > 0) {
+              addLog(
+                state.uiLanguage === "zh"
+                  ? `💭 用户意图分析完成，${keywordsWithIntent.length} 个关键词已分析意图`
+                  : `💭 Search intent analysis complete, ${keywordsWithIntent.length} keywords analyzed`,
+                "success",
+                currentTaskId
+              );
+
+              addThought(
+                "analysis",
+                state.uiLanguage === "zh"
+                  ? `用户意图分析完成，${keywordsWithIntent.length} 个关键词已分析搜索意图`
+                  : `Search intent analysis complete, ${keywordsWithIntent.length} keywords analyzed`,
+                {
+                  data: {
+                    keywordsWithIntent: keywordsWithIntent.length,
+                    sampleIntentAnalysis: keywordsWithIntent
+                      .slice(0, 5)
+                      .map((k: KeywordData) => ({
+                        keyword: k.keyword,
+                        searchIntent: k.searchIntent,
+                        intentAnalysis: k.intentAnalysis,
+                        intent: k.intent,
+                      })),
+                  },
+                  dataType: "analysis",
+                },
+                currentTaskId
+              );
+            }
+
+            // 显示排名概率分析结果（包含完整的analyzedKeywords用于SERP显示）
+            const highProbKeywords = batchResult.keywords.filter(
+              (k: KeywordData) => k.probability === ProbabilityLevel.HIGH
+            );
+            const mediumProbKeywords = batchResult.keywords.filter(
+              (k: KeywordData) => k.probability === ProbabilityLevel.MEDIUM
+            );
+            const lowProbKeywords = batchResult.keywords.filter(
+              (k: KeywordData) => k.probability === ProbabilityLevel.LOW
+            );
+
+            // 确保所有关键词都有probability和topDomainType字段
+            const keywordsWithAnalysis = batchResult.keywords.map(
+              (k: KeywordData) => ({
+                ...k,
+                probability: k.probability || ProbabilityLevel.MEDIUM,
+                topDomainType: k.topDomainType || "Unknown",
+                serpResultCount:
+                  k.serpResultCount !== undefined ? k.serpResultCount : -1,
+              })
+            );
+
+            addThought(
+              "analysis",
+              state.uiLanguage === "zh"
+                ? `排名概率分析完成：高概率 ${highProbKeywords.length} 个，中概率 ${mediumProbKeywords.length} 个，低概率 ${lowProbKeywords.length} 个`
+                : `Ranking probability analysis complete: High ${highProbKeywords.length}, Medium ${mediumProbKeywords.length}, Low ${lowProbKeywords.length}`,
+              {
+                stats: {
+                  high: highProbKeywords.length,
+                  medium: mediumProbKeywords.length,
+                  low: lowProbKeywords.length,
+                },
+                analyzedKeywords: keywordsWithAnalysis, // 确保包含完整的SERP数据
+                data: highProbKeywords,
+                dataType: "analysis",
+              },
+              currentTaskId
+            );
+
+            // 显示关键词表格（包含完整分析数据，包含probability和topDomainType）
+            addThought(
+              "generation",
+              state.uiLanguage === "zh"
+                ? `关键词分析完成，共 ${keywordsWithAnalysis.length} 个关键词（已包含排名概率和SERP分析）`
+                : `Keyword analysis complete, ${keywordsWithAnalysis.length} keywords total (with ranking probability and SERP analysis)`,
+              {
+                keywords: keywordsWithAnalysis.map(
+                  (k: KeywordData) => k.keyword
+                ),
+                data: keywordsWithAnalysis, // 使用包含完整分析数据的关键词
+                dataType: "keywords",
+              },
+              currentTaskId
+            );
+
+            // Step 4: 结果展示（使用包含完整分析数据的关键词）
+            setState((prev) => ({
+              ...prev,
+              keywords: keywordsWithAnalysis, // 使用包含完整分析数据的关键词
+              isMining: false,
+              miningSuccess: true,
+              step: "results",
+            }));
+
+            // 最终统计
+            addLog(
+              state.uiLanguage === "zh"
+                ? `✅ 网站分析完成！发现 ${batchResult.keywords.length} 个关键词机会 (高概率: ${highProbKeywords.length}, 中概率: ${mediumProbKeywords.length}, 低概率: ${lowProbKeywords.length})`
+                : `✅ Website audit completed! Found ${batchResult.keywords.length} keyword opportunities (High: ${highProbKeywords.length}, Medium: ${mediumProbKeywords.length}, Low: ${lowProbKeywords.length})`,
+              "success",
+              currentTaskId
+            );
+          } else {
+            throw new Error(batchResult.error || "Batch analysis failed");
+          }
+        } catch (batchError: any) {
+          console.error("[Website Audit] Batch analysis error:", batchError);
+          addLog(
+            state.uiLanguage === "zh"
+              ? `⚠️ 批量分析失败，使用基础关键词数据: ${batchError.message}`
+              : `⚠️ Batch analysis failed, using basic keyword data: ${batchError.message}`,
+            "warning",
+            currentTaskId
+          );
+
+          // 如果批量分析失败，至少使用基础关键词数据
+          setState((prev) => ({
+            ...prev,
+            keywords: result.keywords,
+            isMining: false,
+            miningSuccess: true,
+            step: "results",
+          }));
+
+          addThought(
+            "decision",
+            state.uiLanguage === "zh"
+              ? `批量分析失败，使用基础关键词数据（${result.keywords.length} 个关键词）`
+              : `Batch analysis failed, using basic keyword data (${result.keywords.length} keywords)`,
+            undefined,
+            currentTaskId
+          );
+        }
+      } else {
+        throw new Error(result.error || "Unknown error");
+      }
+    } catch (error: any) {
+      console.error("[Website Audit] Error:", error);
+      setState((prev) => ({
+        ...prev,
+        error:
+          state.uiLanguage === "zh"
+            ? `网站分析失败: ${error.message}`
+            : `Website audit failed: ${error.message}`,
+        isMining: false,
+      }));
+      addLog(
+        state.uiLanguage === "zh"
+          ? `❌ 错误: ${error.message}`
+          : `❌ Error: ${error.message}`,
+        "error",
+        currentTaskId
+      );
+
+      addThought(
+        "decision",
+        state.uiLanguage === "zh"
+          ? `分析失败: ${error.message}`
+          : `Analysis failed: ${error.message}`,
+        undefined,
+        currentTaskId
+      );
+    }
   };
 
   const runMiningLoop = async (startRound: number, taskId: string) => {
@@ -6500,6 +7128,55 @@ export default function App() {
           {/* STEP 1: INPUT */}
           {state.step === "input" && (
             <div className="max-w-6xl mx-auto mt-8 flex-1 w-full">
+              {/* Mode Selector */}
+              <div className="mb-6">
+                <div
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-lg",
+                    isDarkTheme
+                      ? "bg-black/40 border border-emerald-500/20"
+                      : "bg-white border border-emerald-500/30"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "text-sm font-medium whitespace-nowrap",
+                      isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                    )}
+                  >
+                    {state.uiLanguage === "zh" ? "挖掘模式" : "Mining Mode"}:
+                  </span>
+                  <div className="flex gap-2 flex-1">
+                    <button
+                      onClick={() => setMiningMode("blue-ocean")}
+                      className={cn(
+                        "flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                        miningMode === "blue-ocean"
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : isDarkTheme
+                          ? "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-emerald-400"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-emerald-600"
+                      )}
+                    >
+                      {state.uiLanguage === "zh" ? "蓝海发现" : "Blue Ocean"}
+                    </button>
+                    <button
+                      onClick={() => setMiningMode("existing-website-audit")}
+                      className={cn(
+                        "flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                        miningMode === "existing-website-audit"
+                          ? "bg-emerald-500 text-white shadow-sm"
+                          : isDarkTheme
+                          ? "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-emerald-400"
+                          : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-emerald-600"
+                      )}
+                    >
+                      {state.uiLanguage === "zh" ? "存量拓新" : "Website Audit"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div className="text-center mb-10">
                 <h2
                   className={`text-2xl font-bold mb-3 ${
@@ -6562,253 +7239,98 @@ export default function App() {
               {/* Mining Tab Content */}
               {activeTab === "mining" && (
                 <div className="max-w-3xl mx-auto">
-                  {/* Refine Industry Button */}
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <BrainCircuit className="w-5 h-5 text-emerald-400" />
-                      <span
-                        className={`text-sm font-semibold ${
-                          isDarkTheme ? "text-white" : "text-gray-900"
-                        }`}
-                      >
-                        {state.uiLanguage === "zh"
-                          ? "需要帮助？"
-                          : "Need Help?"}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setShowMiningGuide(true)}
-                      className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
-                    >
-                      <Lightbulb className="w-3.5 h-3.5" />
-                      {state.uiLanguage === "zh"
-                        ? "精确行业"
-                        : "Refine Industry"}
-                    </button>
-                  </div>
-
-                  {/* Display Saved Mining Configuration */}
-                  {state.miningConfig && (
-                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Lightbulb className="w-4 h-4 text-emerald-400" />
-                        <span className="text-sm font-semibold text-emerald-400">
-                          {state.uiLanguage === "zh"
-                            ? "已保存的配置"
-                            : "Saved Configuration"}
-                        </span>
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        <p
-                          className={
-                            isDarkTheme ? "text-white" : "text-gray-700"
-                          }
-                        >
-                          <span className="text-emerald-400 font-medium">
-                            {state.uiLanguage === "zh" ? "行业:" : "Industry:"}
-                          </span>{" "}
-                          {state.miningConfig.industry}
-                        </p>
-                        {state.miningConfig.additionalSuggestions && (
-                          <p
-                            className={
-                              isDarkTheme ? "text-white" : "text-gray-700"
-                            }
+                  {/* Blue Ocean Mode - Show keyword input */}
+                  {miningMode === "blue-ocean" && (
+                    <>
+                      {/* Refine Industry Button */}
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                          <span
+                            className={`text-sm font-semibold ${
+                              isDarkTheme ? "text-white" : "text-gray-900"
+                            }`}
                           >
-                            <span className="text-emerald-400 font-medium">
+                            {state.uiLanguage === "zh"
+                              ? "需要帮助？"
+                              : "Need Help?"}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setShowMiningGuide(true)}
+                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                        >
+                          <Lightbulb className="w-3.5 h-3.5" />
+                          {state.uiLanguage === "zh"
+                            ? "精确行业"
+                            : "Refine Industry"}
+                        </button>
+                      </div>
+
+                      {/* Display Saved Mining Configuration */}
+                      {state.miningConfig && (
+                        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Lightbulb className="w-4 h-4 text-emerald-400" />
+                            <span className="text-sm font-semibold text-emerald-400">
                               {state.uiLanguage === "zh"
-                                ? "建议:"
-                                : "Suggestions:"}
-                            </span>{" "}
-                            {state.miningConfig.additionalSuggestions}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Clean Input Design */}
-                  <div className="flex w-full gap-2 items-center h-[56px]">
-                    {/* Target Language Selector */}
-                    <Select
-                      value={state.targetLanguage}
-                      onValueChange={(value) =>
-                        setState((prev) => ({
-                          ...prev,
-                          targetLanguage: value as TargetLanguage,
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        hideIcon
-                        className={cn(
-                          "flex-shrink-0 h-[56px] px-4 bg-emerald-500 border-0 shadow-sm gap-2 rounded-l-lg rounded-r-none",
-                          "text-white hover:bg-emerald-600 transition-colors font-medium text-sm"
-                        )}
-                      >
-                        <Globe className="w-4 h-4 text-white flex-shrink-0" />
-                        <SelectValue className="text-white font-medium" />
-                        <ChevronRight className="w-4 h-4 text-white ml-auto flex-shrink-0" />
-                      </SelectTrigger>
-                      <SelectContent
-                        className={cn(
-                          isDarkTheme
-                            ? "bg-black/90 border-emerald-500/30"
-                            : "bg-white border-emerald-500/30"
-                        )}
-                      >
-                        {LANGUAGES.map((l) => (
-                          <SelectItem
-                            key={l.code}
-                            value={l.code}
-                            className={cn(
-                              isDarkTheme
-                                ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                ? "已保存的配置"
+                                : "Saved Configuration"}
+                            </span>
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            <p
+                              className={
+                                isDarkTheme ? "text-white" : "text-gray-700"
+                              }
+                            >
+                              <span className="text-emerald-400 font-medium">
+                                {state.uiLanguage === "zh"
+                                  ? "行业:"
+                                  : "Industry:"}
+                              </span>{" "}
+                              {state.miningConfig.industry}
+                            </p>
+                            {state.miningConfig.additionalSuggestions && (
+                              <p
+                                className={
+                                  isDarkTheme ? "text-white" : "text-gray-700"
+                                }
+                              >
+                                <span className="text-emerald-400 font-medium">
+                                  {state.uiLanguage === "zh"
+                                    ? "建议:"
+                                    : "Suggestions:"}
+                                </span>{" "}
+                                {state.miningConfig.additionalSuggestions}
+                              </p>
                             )}
-                          >
-                            {l.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          </div>
+                        </div>
+                      )}
 
-                    {/* Input Field */}
-                    <div
-                      className={`flex flex-1 h-[56px] backdrop-blur-sm rounded-r-lg rounded-l-none shadow-lg border border-l-0 overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/50 transition-all ${
-                        isDarkTheme
-                          ? "bg-black/40 border-emerald-500/30"
-                          : "bg-white border-emerald-500/30"
-                      }`}
-                    >
-                      <div className="flex items-center justify-center pl-4 text-emerald-400/60">
-                        <Search className="w-4 h-4" />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder={t.placeholder}
-                        className={`flex-1 px-3 py-0 h-full text-sm outline-none bg-transparent placeholder:text-slate-500 ${
-                          isDarkTheme ? "text-white" : "text-gray-900"
-                        }`}
-                        value={state.seedKeyword}
-                        onChange={(e) =>
-                          setState((prev) => ({
-                            ...prev,
-                            seedKeyword: e.target.value,
-                          }))
-                        }
-                        onKeyDown={(e) =>
-                          e.key === "Enter" && startMining(false)
-                        }
-                      />
-                    </div>
-                    <button
-                      onClick={() => startMining(false)}
-                      disabled={!state.seedKeyword.trim()}
-                      className="h-[56px] px-6 bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                    >
-                      {t.btnStart}
-                    </button>
-                  </div>
-
-                  {/* Mining Settings Panel */}
-                  <div
-                    className={`mt-6 backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
-                      isDarkTheme
-                        ? "bg-black/40 border-emerald-500/20"
-                        : "bg-white border-emerald-500/30"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-4">
-                      <Settings className="w-4 h-4 text-emerald-400" />
-                      <h4
-                        className={`text-sm font-bold ${
-                          isDarkTheme ? "text-white" : "text-gray-900"
-                        }`}
-                      >
-                        {state.uiLanguage === "zh"
-                          ? "挖词设置"
-                          : "Mining Settings"}
-                      </h4>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Words Per Round */}
-                      <div>
-                        <label
-                          className={`flex items-center gap-2 text-xs font-semibold mb-2 ${
-                            isDarkTheme ? "text-slate-400" : "text-gray-600"
-                          }`}
-                        >
-                          <Hash className="w-3.5 h-3.5 text-emerald-400" />
-                          {state.uiLanguage === "zh"
-                            ? "每轮词语数"
-                            : "Words Per Round"}
-                        </label>
-                        <Input
-                          type="number"
-                          min="5"
-                          max="20"
-                          value={state.wordsPerRound}
-                          onChange={(e) =>
-                            setState((prev) => ({
-                              ...prev,
-                              wordsPerRound: Math.max(
-                                5,
-                                Math.min(20, parseInt(e.target.value) || 10)
-                              ),
-                            }))
-                          }
-                          className={cn(
-                            "text-sm font-medium h-10",
-                            isDarkTheme
-                              ? "border-emerald-500/30 bg-black/60 text-white"
-                              : "border-emerald-500/30 bg-white text-gray-900"
-                          )}
-                        />
-                        <p
-                          className={`text-xs mt-1 ${
-                            isDarkTheme ? "text-slate-500" : "text-gray-500"
-                          }`}
-                        >
-                          {state.uiLanguage === "zh"
-                            ? "范围: 5-20"
-                            : "Range: 5-20"}
-                        </p>
-                      </div>
-
-                      {/* Mining Strategy */}
-                      <div>
-                        <label
-                          className={`flex items-center gap-2 text-xs font-semibold mb-2 ${
-                            isDarkTheme ? "text-slate-400" : "text-gray-600"
-                          }`}
-                        >
-                          <Network className="w-3.5 h-3.5 text-emerald-400" />
-                          {state.uiLanguage === "zh"
-                            ? "挖词策略"
-                            : "Mining Strategy"}
-                        </label>
+                      {/* Clean Input Design */}
+                      <div className="flex w-full gap-2 items-center h-[56px]">
+                        {/* Target Language Selector */}
                         <Select
-                          value={state.miningStrategy}
+                          value={state.targetLanguage}
                           onValueChange={(value) =>
                             setState((prev) => ({
                               ...prev,
-                              miningStrategy: value as
-                                | "horizontal"
-                                | "vertical",
+                              targetLanguage: value as TargetLanguage,
                             }))
                           }
                         >
                           <SelectTrigger
+                            hideIcon
                             className={cn(
-                              "text-sm font-medium h-10",
-                              isDarkTheme
-                                ? "border-emerald-500/30 bg-black/60 text-white"
-                                : "border-emerald-500/30 bg-white text-gray-900"
+                              "flex-shrink-0 h-[56px] px-4 bg-emerald-500 border-0 shadow-sm gap-2 rounded-l-lg rounded-r-none",
+                              "text-white hover:bg-emerald-600 transition-colors font-medium text-sm"
                             )}
                           >
-                            <SelectValue />
+                            <Globe className="w-4 h-4 text-white flex-shrink-0" />
+                            <SelectValue className="text-white font-medium" />
+                            <ChevronRight className="w-4 h-4 text-white ml-auto flex-shrink-0" />
                           </SelectTrigger>
                           <SelectContent
                             className={cn(
@@ -6817,44 +7339,443 @@ export default function App() {
                                 : "bg-white border-emerald-500/30"
                             )}
                           >
-                            <SelectItem
-                              value="horizontal"
-                              className={cn(
-                                isDarkTheme
-                                  ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                  : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                              )}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "横向挖掘(广泛主题)"
-                                : "Horizontal Mining (Broad Topics)"}
-                            </SelectItem>
-                            <SelectItem
-                              value="vertical"
-                              className={cn(
-                                isDarkTheme
-                                  ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                  : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                              )}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "纵向挖掘(深度挖掘)"
-                                : "Vertical Mining (Deep Dive)"}
-                            </SelectItem>
+                            {LANGUAGES.map((l) => (
+                              <SelectItem
+                                key={l.code}
+                                value={l.code}
+                                className={cn(
+                                  isDarkTheme
+                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                )}
+                              >
+                                {l.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
-                        <p
-                          className={`text-xs mt-1 ${
-                            isDarkTheme ? "text-slate-500" : "text-gray-500"
+
+                        {/* Input Field */}
+                        <div
+                          className={`flex flex-1 h-[56px] backdrop-blur-sm rounded-r-lg rounded-l-none shadow-lg border border-l-0 overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/50 transition-all ${
+                            isDarkTheme
+                              ? "bg-black/40 border-emerald-500/30"
+                              : "bg-white border-emerald-500/30"
+                          }`}
+                        >
+                          <div className="flex items-center justify-center pl-4 text-emerald-400/60">
+                            <Search className="w-4 h-4" />
+                          </div>
+                          <input
+                            type="text"
+                            placeholder={t.placeholder}
+                            className={`flex-1 px-3 py-0 h-full text-sm outline-none bg-transparent placeholder:text-slate-500 ${
+                              isDarkTheme ? "text-white" : "text-gray-900"
+                            }`}
+                            value={state.seedKeyword}
+                            onChange={(e) =>
+                              setState((prev) => ({
+                                ...prev,
+                                seedKeyword: e.target.value,
+                              }))
+                            }
+                            onKeyDown={(e) =>
+                              e.key === "Enter" && startMining(false)
+                            }
+                          />
+                        </div>
+                        <button
+                          onClick={() => startMining(false)}
+                          disabled={!state.seedKeyword.trim()}
+                          className="h-[56px] px-6 bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        >
+                          {t.btnStart}
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Existing Website Audit Mode - Show website selector and audit button */}
+                  {miningMode === "existing-website-audit" && (
+                    <div className="space-y-4">
+                      {/* Combined Website Selector and Input */}
+                      <div
+                        className={cn(
+                          "p-4 rounded-lg border",
+                          isDarkTheme
+                            ? "bg-black/40 border-emerald-500/20"
+                            : "bg-white border-emerald-500/30"
+                        )}
+                      >
+                        <div className="flex items-center gap-2 mb-3">
+                          <Globe className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                          <span
+                            className={cn(
+                              "text-sm font-medium",
+                              isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                            )}
+                          >
+                            {state.uiLanguage === "zh"
+                              ? "选择网站"
+                              : "Select Website"}
+                          </span>
+                        </div>
+
+                        {/* Website Selector Dropdown */}
+                        <div className="mb-3">
+                          <WebsiteSelector
+                            userId={1}
+                            isDarkTheme={isDarkTheme}
+                            uiLanguage={state.uiLanguage}
+                            selectedWebsiteId={selectedWebsite?.id || null}
+                            onWebsiteSelect={(website) => {
+                              setSelectedWebsite(website);
+                              if (website) {
+                                setManualWebsiteUrl(""); // Clear manual input when selecting from list
+                                setUrlValidationStatus("idle"); // Reset validation status
+                              }
+                              console.log("[App] Website selected:", website);
+                            }}
+                          />
+                        </div>
+
+                        {/* Divider */}
+                        <div className="flex items-center gap-2 my-3">
+                          <div
+                            className={cn(
+                              "flex-1 h-px",
+                              isDarkTheme
+                                ? "bg-emerald-500/20"
+                                : "bg-emerald-500/30"
+                            )}
+                          />
+                          <span
+                            className={cn(
+                              "text-xs px-2",
+                              isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                            )}
+                          >
+                            {state.uiLanguage === "zh" ? "或" : "OR"}
+                          </span>
+                          <div
+                            className={cn(
+                              "flex-1 h-px",
+                              isDarkTheme
+                                ? "bg-emerald-500/20"
+                                : "bg-emerald-500/30"
+                            )}
+                          />
+                        </div>
+
+                        {/* Manual URL Input */}
+                        <div className="space-y-2">
+                          <label
+                            className={cn(
+                              "text-xs font-medium block",
+                              isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                            )}
+                          >
+                            {state.uiLanguage === "zh"
+                              ? "手动输入网址（自动验证）"
+                              : "Enter URL Manually (Auto-validated)"}
+                          </label>
+                          <div className="relative">
+                            <Input
+                              type="text"
+                              value={manualWebsiteUrl}
+                              onChange={(e) => {
+                                setManualWebsiteUrl(e.target.value);
+                                // Clear selected website from dropdown when typing manually
+                                if (
+                                  e.target.value.trim() &&
+                                  selectedWebsite?.id?.startsWith("manual-") ===
+                                    false
+                                ) {
+                                  setSelectedWebsite(null);
+                                }
+                              }}
+                              placeholder={
+                                state.uiLanguage === "zh"
+                                  ? "例如: 302.ai 或 https://example.com"
+                                  : "e.g., 302.ai or https://example.com"
+                              }
+                              className={cn(
+                                "flex-1 pr-10",
+                                isDarkTheme
+                                  ? "bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600"
+                                  : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400",
+                                // Dynamic border color based on validation status
+                                urlValidationStatus === "valid" &&
+                                  "border-emerald-500",
+                                urlValidationStatus === "invalid" &&
+                                  "border-red-500",
+                                urlValidationStatus === "validating" &&
+                                  "border-yellow-500"
+                              )}
+                            />
+                            {/* Validation Status Icon */}
+                            {manualWebsiteUrl.trim() && (
+                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                {urlValidationStatus === "validating" && (
+                                  <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
+                                )}
+                                {urlValidationStatus === "valid" && (
+                                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                )}
+                                {urlValidationStatus === "invalid" && (
+                                  <AlertCircle className="w-4 h-4 text-red-500" />
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          {/* Validation Status Message */}
+                          {manualWebsiteUrl.trim() &&
+                            urlValidationStatus !== "idle" && (
+                              <div
+                                className={cn(
+                                  "text-xs flex items-center gap-1",
+                                  urlValidationStatus === "valid" &&
+                                    "text-emerald-500",
+                                  urlValidationStatus === "invalid" &&
+                                    "text-red-500",
+                                  urlValidationStatus === "validating" &&
+                                    "text-yellow-500"
+                                )}
+                              >
+                                {urlValidationStatus === "validating" && (
+                                  <>
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span>
+                                      {state.uiLanguage === "zh"
+                                        ? "正在验证..."
+                                        : "Validating..."}
+                                    </span>
+                                  </>
+                                )}
+                                {urlValidationStatus === "valid" && (
+                                  <>
+                                    <CheckCircle className="w-3 h-3" />
+                                    <span>
+                                      {state.uiLanguage === "zh"
+                                        ? "网址有效，已自动选择"
+                                        : "URL valid, automatically selected"}
+                                    </span>
+                                  </>
+                                )}
+                                {urlValidationStatus === "invalid" && (
+                                  <>
+                                    <AlertCircle className="w-3 h-3" />
+                                    <span>
+                                      {state.uiLanguage === "zh"
+                                        ? "请输入有效的网址"
+                                        : "Please enter a valid URL"}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                        </div>
+
+                        {/* Selected Website Display */}
+                        {selectedWebsite && (
+                          <div
+                            className={cn(
+                              "mt-3 p-3 rounded border",
+                              isDarkTheme
+                                ? "bg-emerald-500/10 border-emerald-500/30"
+                                : "bg-emerald-50 border-emerald-200"
+                            )}
+                          >
+                            <div className="flex items-center gap-2">
+                              <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                              <span
+                                className={cn(
+                                  "text-sm font-medium flex-1 truncate",
+                                  isDarkTheme ? "text-white" : "text-gray-900"
+                                )}
+                              >
+                                {selectedWebsite.url}
+                              </span>
+                              {!selectedWebsite.id?.startsWith("manual-") && (
+                                <Badge
+                                  variant="secondary"
+                                  className="flex-shrink-0 text-xs"
+                                >
+                                  {state.uiLanguage === "zh"
+                                    ? "已保存"
+                                    : "Saved"}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Start Audit Button */}
+                      <button
+                        onClick={() => startMining(false)}
+                        disabled={!selectedWebsite}
+                        className={cn(
+                          "w-full h-[56px] px-6 text-white font-medium text-sm rounded-lg transition-colors flex items-center justify-center gap-2",
+                          selectedWebsite
+                            ? "bg-emerald-500 hover:bg-emerald-600"
+                            : "bg-gray-400 cursor-not-allowed"
+                        )}
+                      >
+                        <Search className="w-4 h-4" />
+                        {state.uiLanguage === "zh"
+                          ? "开始分析网站"
+                          : "Start Website Audit"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Mining Settings Panel - Only show for blue-ocean mode */}
+                  {miningMode === "blue-ocean" && (
+                    <div
+                      className={`mt-6 backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
+                        isDarkTheme
+                          ? "bg-black/40 border-emerald-500/20"
+                          : "bg-white border-emerald-500/30"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-4">
+                        <Settings className="w-4 h-4 text-emerald-400" />
+                        <h4
+                          className={`text-sm font-bold ${
+                            isDarkTheme ? "text-white" : "text-gray-900"
                           }`}
                         >
                           {state.uiLanguage === "zh"
-                            ? "探索不同的平行主题"
-                            : "Explore different parallel topics"}
-                        </p>
+                            ? "挖词设置"
+                            : "Mining Settings"}
+                        </h4>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Words Per Round */}
+                        <div>
+                          <label
+                            className={`flex items-center gap-2 text-xs font-semibold mb-2 ${
+                              isDarkTheme ? "text-slate-400" : "text-gray-600"
+                            }`}
+                          >
+                            <Hash className="w-3.5 h-3.5 text-emerald-400" />
+                            {state.uiLanguage === "zh"
+                              ? "每轮词语数"
+                              : "Words Per Round"}
+                          </label>
+                          <Input
+                            type="number"
+                            min="5"
+                            max="20"
+                            value={state.wordsPerRound}
+                            onChange={(e) =>
+                              setState((prev) => ({
+                                ...prev,
+                                wordsPerRound: Math.max(
+                                  5,
+                                  Math.min(20, parseInt(e.target.value) || 10)
+                                ),
+                              }))
+                            }
+                            className={cn(
+                              "text-sm font-medium h-10",
+                              isDarkTheme
+                                ? "border-emerald-500/30 bg-black/60 text-white"
+                                : "border-emerald-500/30 bg-white text-gray-900"
+                            )}
+                          />
+                          <p
+                            className={`text-xs mt-1 ${
+                              isDarkTheme ? "text-slate-500" : "text-gray-500"
+                            }`}
+                          >
+                            {state.uiLanguage === "zh"
+                              ? "范围: 5-20"
+                              : "Range: 5-20"}
+                          </p>
+                        </div>
+
+                        {/* Mining Strategy */}
+                        <div>
+                          <label
+                            className={`flex items-center gap-2 text-xs font-semibold mb-2 ${
+                              isDarkTheme ? "text-slate-400" : "text-gray-600"
+                            }`}
+                          >
+                            <Network className="w-3.5 h-3.5 text-emerald-400" />
+                            {state.uiLanguage === "zh"
+                              ? "挖词策略"
+                              : "Mining Strategy"}
+                          </label>
+                          <Select
+                            value={state.miningStrategy}
+                            onValueChange={(value) =>
+                              setState((prev) => ({
+                                ...prev,
+                                miningStrategy: value as
+                                  | "horizontal"
+                                  | "vertical",
+                              }))
+                            }
+                          >
+                            <SelectTrigger
+                              className={cn(
+                                "text-sm font-medium h-10",
+                                isDarkTheme
+                                  ? "border-emerald-500/30 bg-black/60 text-white"
+                                  : "border-emerald-500/30 bg-white text-gray-900"
+                              )}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent
+                              className={cn(
+                                isDarkTheme
+                                  ? "bg-black/90 border-emerald-500/30"
+                                  : "bg-white border-emerald-500/30"
+                              )}
+                            >
+                              <SelectItem
+                                value="horizontal"
+                                className={cn(
+                                  isDarkTheme
+                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                )}
+                              >
+                                {state.uiLanguage === "zh"
+                                  ? "横向挖掘(广泛主题)"
+                                  : "Horizontal Mining (Broad Topics)"}
+                              </SelectItem>
+                              <SelectItem
+                                value="vertical"
+                                className={cn(
+                                  isDarkTheme
+                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                )}
+                              >
+                                {state.uiLanguage === "zh"
+                                  ? "纵向挖掘(深度挖掘)"
+                                  : "Vertical Mining (Deep Dive)"}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p
+                            className={`text-xs mt-1 ${
+                              isDarkTheme ? "text-slate-500" : "text-gray-500"
+                            }`}
+                          >
+                            {state.uiLanguage === "zh"
+                              ? "探索不同的平行主题"
+                              : "Explore different parallel topics"}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Mining Archive List */}
                   {state.archives.length > 0 && (

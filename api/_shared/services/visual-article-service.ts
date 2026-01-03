@@ -133,9 +133,17 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       const selectedThemes = visualThemes.themes.slice(0, 2); // Limit to 2 for speed/cost
       const prompts = await generateImagePrompts(selectedThemes, uiLanguage);
 
-      // Emit image-gen cards as "loading"
+      // Emit image-gen cards as "loading" with theme info
       prompts.forEach((p, i) => {
-        emit('artist', 'card', undefined, 'image-gen', { prompt: p.prompt, imageUrl: null });
+        const theme = selectedThemes[i];
+        emit('artist', 'card', undefined, 'image-gen', { 
+          theme: theme?.title || theme?.id || `Theme ${i + 1}`,
+          prompt: p.prompt, 
+          description: p.description,
+          imageUrl: null,
+          status: 'extracting',
+          progress: 0
+        });
       });
 
       // Generate images (could be parallel)
@@ -146,16 +154,50 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         placement: 'inline'
       }));
 
-      // Update cards with results
+      // Update cards with results and progress
       imageResults.forEach((res, i) => {
+        const theme = selectedThemes[i];
         if (res.imageUrl) {
-          emit('artist', 'card', uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`, 'image-gen', { prompt: res.theme, imageUrl: res.imageUrl });
+          emit('artist', 'card', 
+            uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`, 
+            'image-gen', 
+            { 
+              theme: theme?.title || theme?.id || res.theme,
+              prompt: prompts[i]?.prompt || res.theme,
+              description: prompts[i]?.description,
+              imageUrl: res.imageUrl,
+              status: 'completed',
+              progress: 100
+            }
+          );
+        } else if (res.error) {
+          emit('artist', 'card', 
+            uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`, 
+            'image-gen', 
+            { 
+              theme: theme?.title || theme?.id || res.theme,
+              prompt: prompts[i]?.prompt || res.theme,
+              description: prompts[i]?.description,
+              imageUrl: null,
+              status: 'failed',
+              error: res.error,
+              progress: 0
+            }
+          );
         }
       });
     }
 
     // 4. Writing phase
     emit('writer', 'log', uiLanguage === 'zh' ? `正在为 ${targetMarket === 'global' ? '全球' : targetMarket.toUpperCase()} 市场撰写包含视觉元素的精细内容...` : `Drafting content with integrated visuals for ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()} market...`);
+    
+    // Emit streaming text card
+    emit('writer', 'card', undefined, 'streaming-text', {
+      content: '',
+      speed: 3,
+      interval: 50
+    });
+
     const contentResult = await generateContent(
       strategyReport,
       searchPrefs,
@@ -163,6 +205,15 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       uiLanguage,
       targetMarket
     );
+
+    // Update streaming text with final content
+    if (contentResult.content || contentResult.article_body) {
+      emit('writer', 'card', undefined, 'streaming-text', {
+        content: contentResult.content || contentResult.article_body || '',
+        speed: 3,
+        interval: 50
+      });
+    }
 
     // Final result assembly
     const finalArticle = {

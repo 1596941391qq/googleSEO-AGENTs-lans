@@ -1,8 +1,9 @@
 /**
- * API: 更新网站指标（从 SE-Ranking Domain API 获取并缓存）
+ * API: 更新网站指标（从 DataForSEO API 和 SE-Ranking Domain API 获取并缓存）
  *
  * 功能：
- * - 调用 SE-Ranking Domain API 获取域名概览、关键词、历史、竞争对手数据
+ * - 优先调用 DataForSEO API 获取域名概览、关键词数据
+ * - 调用 SE-Ranking Domain API 获取补充数据（历史、竞争对手等）
  * - 缓存到数据库
  * - 返回最新数据
  *
@@ -19,6 +20,11 @@ import {
   type RankingHistoryPoint,
   type DomainCompetitor,
 } from '../_shared/tools/index.js';
+import {
+  getDomainOverview as getDataForSEODomainOverview,
+  getDomainKeywords as getDataForSEODomainKeywords,
+  fetchKeywordData as fetchDataForSEOKeywordData,
+} from '../_shared/tools/dataforseo.js';
 
 interface UpdateMetricsRequestBody {
   websiteId: string;
@@ -44,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 设置超时控制（Vercel 函数有30秒超时限制）
   const startTime = Date.now();
   const MAX_EXECUTION_TIME = 25000; // 25秒，留5秒缓冲
-  
+
   // 时间统计对象
   const timings: Record<string, number> = {};
   const logTiming = (step: string, start: number) => {
@@ -97,11 +103,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     logTiming('Step 1: 获取网站信息', step1Start);
 
     // ==========================================
-    // Step 2: 从 SE-Ranking Domain API 获取数据
+    // Step 2: 优先从 DataForSEO API 获取数据
     // ==========================================
     const step2Start = Date.now();
-    console.log('[update-metrics] Fetching data from SE-Ranking Domain API...');
-    
+    console.log('[update-metrics] Fetching data from DataForSEO API (primary source)...');
+
     // 检查是否已经接近超时
     if (Date.now() - startTime > MAX_EXECUTION_TIME - 10000) {
       return res.status(200).json({
@@ -114,10 +120,181 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 获取地区参数（如果未提供，使用空字符串表示全球）
     const region = body.region || '';
     console.log(`[update-metrics] Fetching data for region: ${region || 'global (default)'}`);
-    
-    const domainData = await getAllDomainData(website.website_domain, region);
-    logTiming('Step 2: 从 SE-Ranking API 获取数据', step2Start);
-    
+
+    // 将地区代码转换为 DataForSEO 的位置代码（2840 = United States）
+    const locationCode = region === 'us' ? 2840 : 2840; // 默认使用 US，可以根据需要扩展地区映射
+
+    // 初始化 domainData 对象
+    const domainData: {
+      overview: DomainOverview | null;
+      keywords: DomainKeyword[];
+      history: RankingHistoryPoint[];
+      competitors: DomainCompetitor[];
+    } = {
+      overview: null,
+      keywords: [],
+      history: [],
+      competitors: [],
+    };
+
+    // 优先从 DataForSEO 获取域名概览和关键词
+    // 使用 Promise.race 添加超时保护（10秒超时，更快降级）
+    const createTimeoutPromise = () => new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('DataForSEO API timeout')), 10000);
+    });
+
+    let dataForSEOSuccess = false;
+
+    try {
+      console.log('[update-metrics] Attempting to fetch from DataForSEO (10s timeout)...');
+
+      // 获取 DataForSEO 域名概览（带超时保护）
+      const overviewPromise = getDataForSEODomainOverview(website.website_domain, locationCode);
+      const dataForSEODomainOverview = await Promise.race([
+        overviewPromise,
+        createTimeoutPromise()
+      ]).catch((err) => {
+        console.log('[update-metrics] DataForSEO overview timeout or error:', err.message);
+        return null;
+      });
+
+      if (dataForSEODomainOverview && (dataForSEODomainOverview.organicTraffic > 0 || dataForSEODomainOverview.totalKeywords > 0)) {
+        domainData.overview = {
+          domain: website.website_domain,
+          organicTraffic: dataForSEODomainOverview.organicTraffic || 0,
+          paidTraffic: 0,
+          totalTraffic: dataForSEODomainOverview.organicTraffic || 0,
+          totalKeywords: dataForSEODomainOverview.totalKeywords || 0,
+          newKeywords: 0,
+          lostKeywords: 0,
+          improvedKeywords: 0,
+          declinedKeywords: 0,
+          avgPosition: dataForSEODomainOverview.avgPosition || 0,
+          trafficCost: 0,
+          rankingDistribution: {
+            top3: 0,
+            top10: 0,
+            top50: 0,
+            top100: 0,
+          },
+        };
+        console.log('[update-metrics] ✅ Successfully fetched overview from DataForSEO:', {
+          organicTraffic: domainData.overview.organicTraffic,
+          totalKeywords: domainData.overview.totalKeywords,
+        });
+        dataForSEOSuccess = true;
+      } else {
+        console.log('[update-metrics] ⚠️ DataForSEO returned no valid overview data (may require paid plan)');
+      }
+
+      // 获取 DataForSEO 关键词列表（带超时保护）
+      const keywordsListPromise = getDataForSEODomainKeywords(website.website_domain, locationCode, 50);
+      const dataForSEOKeywords = await Promise.race([
+        keywordsListPromise,
+        createTimeoutPromise()
+      ]).catch(() => []) as string[];
+      console.log(`[update-metrics] DataForSEO returned ${dataForSEOKeywords.length} keywords`);
+
+      // 获取关键词详细信息（只获取前10个，避免超时）
+      if (dataForSEOKeywords.length > 0) {
+        console.log('[update-metrics] Fetching keyword details from DataForSEO (limited to 10 keywords)...');
+        const keywordDetailsPromise = fetchDataForSEOKeywordData(dataForSEOKeywords.slice(0, 10), locationCode);
+        const keywordDetails = await Promise.race([
+          keywordDetailsPromise,
+          createTimeoutPromise()
+        ]).catch(() => []) as any[];
+
+        const validKeywords = keywordDetails.filter(kw => kw.is_data_found && kw.volume > 0);
+        if (validKeywords.length > 0) {
+          domainData.keywords = validKeywords.map(kw => ({
+            keyword: kw.keyword,
+            currentPosition: 0, // DataForSEO 不提供排名信息
+            previousPosition: 0,
+            positionChange: 0,
+            searchVolume: kw.volume || 0,
+            cpc: kw.cpc || 0,
+            competition: kw.competition || 0,
+            difficulty: kw.difficulty || 0,
+            trafficPercentage: 0,
+            url: '',
+          }));
+
+          console.log(`[update-metrics] ✅ Converted ${domainData.keywords.length} DataForSEO keywords to DomainKeyword format`);
+          dataForSEOSuccess = true;
+        }
+      }
+    } catch (error: any) {
+      console.error('[update-metrics] ❌ DataForSEO API error:', error.message);
+      console.log('[update-metrics] Falling back to SE-Ranking API...');
+      // 继续执行，尝试从 SE-Ranking 获取数据
+    }
+
+    logTiming('Step 2: 从 DataForSEO API 获取数据', step2Start);
+
+    // ==========================================
+    // Step 2.5: 从 SE-Ranking Domain API 获取补充数据（如果 DataForSEO 数据不足）
+    // ==========================================
+    const step2_5Start = Date.now();
+
+    // 如果 DataForSEO 没有返回有效数据，使用 SE-Ranking 作为主要数据源
+    if (!dataForSEOSuccess || !domainData.overview || domainData.keywords.length < 10) {
+      console.log('[update-metrics] DataForSEO data insufficient or unavailable, using SE-Ranking as primary source...');
+
+      try {
+        const seRankingStart = Date.now();
+        const seRankingData = await getAllDomainData(website.website_domain, region);
+        console.log(`[update-metrics] SE-Ranking API completed in ${Date.now() - seRankingStart}ms`);
+
+        // 如果 DataForSEO 没有概览数据，使用 SE-Ranking 的数据
+        if (!domainData.overview && seRankingData.overview) {
+          domainData.overview = seRankingData.overview;
+          console.log('[update-metrics] ✅ Using SE-Ranking overview data');
+        }
+
+        // 如果 DataForSEO 关键词不足，补充 SE-Ranking 的关键词
+        if (domainData.keywords.length < 10 && seRankingData.keywords.length > 0) {
+          // 合并关键词，避免重复
+          const existingKeywords = new Set(domainData.keywords.map(kw => kw.keyword.toLowerCase()));
+          const additionalKeywords = seRankingData.keywords.filter(
+            kw => !existingKeywords.has(kw.keyword.toLowerCase())
+          );
+          domainData.keywords = [...domainData.keywords, ...additionalKeywords.slice(0, 20 - domainData.keywords.length)];
+          console.log(`[update-metrics] ✅ Added ${additionalKeywords.length} keywords from SE-Ranking`);
+        }
+
+        // SE-Ranking 提供历史数据和竞争对手数据
+        domainData.history = seRankingData.history;
+        domainData.competitors = seRankingData.competitors;
+        console.log(`[update-metrics] ✅ Got ${domainData.history.length} history points and ${domainData.competitors.length} competitors from SE-Ranking`);
+      } catch (error: any) {
+        console.error('[update-metrics] ❌ SE-Ranking API error:', error.message);
+        // 继续执行，使用已有的 DataForSEO 数据
+      }
+    } else {
+      // 即使 DataForSEO 数据充足，也尝试从 SE-Ranking 获取历史数据和竞争对手数据
+      console.log('[update-metrics] DataForSEO data sufficient, fetching history/competitors from SE-Ranking...');
+      try {
+        const seRankingStart = Date.now();
+        const seRankingData = await getAllDomainData(website.website_domain, region);
+        console.log(`[update-metrics] SE-Ranking API completed in ${Date.now() - seRankingStart}ms`);
+        domainData.history = seRankingData.history;
+        domainData.competitors = seRankingData.competitors;
+        console.log(`[update-metrics] ✅ Got ${domainData.history.length} history points and ${domainData.competitors.length} competitors from SE-Ranking`);
+      } catch (error: any) {
+        console.error('[update-metrics] ❌ SE-Ranking API error (for history/competitors):', error.message);
+      }
+    }
+
+    // 最终数据检查
+    console.log('[update-metrics] 📊 Final data summary:', {
+      hasOverview: !!domainData.overview,
+      keywordsCount: domainData.keywords.length,
+      historyCount: domainData.history.length,
+      competitorsCount: domainData.competitors.length,
+    });
+
+    logTiming('Step 2.5: 从 SE-Ranking API 获取补充数据', step2_5Start);
+
     // 再次检查超时
     if (Date.now() - startTime > MAX_EXECUTION_TIME - 5000) {
       console.warn('[update-metrics] Approaching timeout, skipping keyword caching');
@@ -209,13 +386,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const MAX_KEYWORDS_TO_CACHE = 20;
       const keywordsToProcess = domainData.keywords.slice(0, MAX_KEYWORDS_TO_CACHE);
       const totalKeywords = domainData.keywords.length;
-      
+
       if (totalKeywords > MAX_KEYWORDS_TO_CACHE) {
         console.log(`[update-metrics] Caching only first ${MAX_KEYWORDS_TO_CACHE} keywords (total: ${totalKeywords}). Remaining keywords can be loaded on demand.`);
       }
-      
+
       console.log(`[update-metrics] Caching ${keywordsToProcess.length} keywords...`);
-      
+
       // 批量插入前20个关键词
       if (keywordsToProcess.length > 0) {
         await Promise.all(
@@ -276,7 +453,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const step5Start = Date.now();
     if (domainData.competitors && domainData.competitors.length > 0) {
       console.log(`[update-metrics] Caching ${domainData.competitors.length} competitors (parallel insert)...`);
-      
+
       // 并行插入所有竞争对手（数量通常较少）
       await Promise.all(
         domainData.competitors.map(comp => sql`

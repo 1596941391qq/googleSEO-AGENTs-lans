@@ -112,10 +112,10 @@ export async function analyzeSearchPreferences(
     const systemInstruction = getSEOResearcherPrompt('searchPreferences', language);
 
     // 构建分析提示
-    const marketLabel = targetMarket === 'global' 
+    const marketLabel = targetMarket === 'global'
       ? (language === 'zh' ? '全球市场' : 'Global Market')
       : targetMarket.toUpperCase();
-    
+
     const prompt = language === 'zh'
       ? `请分析关键词 "${keyword}" 在目标市场 ${marketLabel} 的不同搜索引擎中的优化策略。
 
@@ -216,38 +216,53 @@ export async function analyzeCompetitors(
       : 'No SERP results available.';
 
     // 2. Firecrawl: 抓取 Top 3 页面的深度内容
+    // 跳过失败的URL，继续抓取下一个可抓取的结果
     let deepContentContext = '';
-    const topResults = serpResults.results?.slice(0, 3) || [];
+    const allResults = serpResults.results || [];
+    const targetScrapeCount = 3; // 目标抓取数量
+    const scrapedData: Array<{ rank: number; title: string; url: string; content: string }> = [];
 
-    if (topResults.length > 0) {
-      console.log(`[Agent 2] Scraping Top ${topResults.length} competitors for deep analysis...`);
+    if (allResults.length > 0) {
+      console.log(`[Agent 2] Attempting to scrape ${targetScrapeCount} competitors for deep analysis...`);
 
       try {
-        const scrapePromises = topResults.map(async (r, index) => {
-          if (!r.url) return null;
+        // 逐个尝试抓取，跳过失败的URL，直到获取到足够的成功结果
+        for (let i = 0; i < allResults.length && scrapedData.length < targetScrapeCount; i++) {
+          const r = allResults[i];
+          if (!r.url) continue;
+
           try {
-            // Limit fetch time and allow failure without breaking everything
+            console.log(`[Agent 2] Attempting to scrape [${i + 1}/${allResults.length}]: ${r.url}`);
             const result = await scrapeWebsite(r.url, false);
             const processedContent = processScrapedContent(result.markdown || '');
-            return {
-              rank: index + 1,
-              title: r.title,
-              url: r.url,
-              content: processedContent
-            };
+
+            // 检查抓取的内容是否有效（不是错误页面）
+            if (processedContent && processedContent.length > 100) {
+              scrapedData.push({
+                rank: scrapedData.length + 1,
+                title: r.title,
+                url: r.url,
+                content: processedContent
+              });
+              console.log(`[Agent 2] Successfully scraped ${r.url} (${scrapedData.length}/${targetScrapeCount})`);
+            } else {
+              console.warn(`[Agent 2] Scraped content from ${r.url} is too short or invalid, skipping...`);
+            }
           } catch (e: any) {
             console.warn(`[Agent 2] Failed to scrape ${r.url}:`, e.message);
-            return null;
+            // 继续尝试下一个URL，不中断流程
+            continue;
           }
-        });
-
-        const scrapedData = (await Promise.all(scrapePromises)).filter(item => item !== null);
+        }
 
         if (scrapedData.length > 0) {
           deepContentContext = `\n\n=== DEEP DIVE: TOP COMPETITOR CONTENT ===\nI have scraped the full content of the top ${scrapedData.length} ranking pages. Use this for structural analysis:\n\n` +
             scrapedData.map(page =>
-              `--- COMPETITOR #${page!.rank}: ${page!.title} ---\nURL: ${page!.url}\nCONTENT START:\n${page!.content}\nCONTENT END\n`
+              `--- COMPETITOR #${page.rank}: ${page.title} ---\nURL: ${page.url}\nCONTENT START:\n${page.content}\nCONTENT END\n`
             ).join('\n\n');
+          console.log(`[Agent 2] Successfully scraped ${scrapedData.length} competitor pages for deep analysis`);
+        } else {
+          console.warn(`[Agent 2] No competitor pages could be scraped successfully, falling back to snippets only`);
         }
       } catch (err) {
         console.error('[Agent 2] Firecrawl scraping failed, falling back to snippets only', err);
@@ -255,10 +270,10 @@ export async function analyzeCompetitors(
     }
 
     // 构建分析提示
-    const marketLabel = targetMarket === 'global' 
+    const marketLabel = targetMarket === 'global'
       ? (language === 'zh' ? '全球市场' : 'Global Market')
       : targetMarket.toUpperCase();
-    
+
     const prompt = language === 'zh'
       ? `请分析关键词 "${keyword}" 在目标市场 ${marketLabel} 的 Top 10 竞争对手。
 由于我已经为你抓取了前几名竞争对手的详细网页内容，请根据这些详细内容进行深度的结构化分析。
@@ -705,10 +720,10 @@ export const generateDeepDiveStrategy = async (
     }
   }
 
-  const marketLabel = targetMarket === 'global' 
+  const marketLabel = targetMarket === 'global'
     ? 'Global'
     : targetMarket.toUpperCase();
-  
+
   const systemInstruction = (customPrompt || `
 You are a Strategic SEO Content Manager for Google ${targetLangName}, targeting the ${marketLabel} market.
 Your mission: Design a comprehensive content strategy that BEATS the competition in the ${marketLabel} market.
