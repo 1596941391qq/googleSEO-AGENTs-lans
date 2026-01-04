@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { translateKeywordToTarget } from './_shared/gemini.js';
 import { analyzeRankingProbability } from './_shared/agents/agent-2-seo-researcher.js';
-import { fetchSErankingData } from './_shared/tools/se-ranking.js';
+import { fetchKeywordData } from './_shared/tools/dataforseo.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { KeywordData, IntentType, ProbabilityLevel } from './_shared/types.js';
 
@@ -39,46 +39,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       volume: 0,
     };
 
-    // Step 2.5: Call SE Ranking API to get keyword difficulty data (before SERP analysis)
-    console.log(`[SEO词研究工具] Fetching SE Ranking data for "${keywordData.keyword}"`);
+    // Step 2.5: Call DataForSEO API to get keyword difficulty data (before SERP analysis)
+    console.log(`[SEO词研究工具] Fetching DataForSEO data for "${keywordData.keyword}"`);
 
     let shouldSkip = false;
 
     try {
-      const serankingResults = await fetchSErankingData([keywordData.keyword], 'us');
+      // 将语言代码转换为 DataForSEO 的 location_code 和 language_code
+      const locationCode = targetLanguage === 'zh' ? 2166 : 2840;
+      const languageCode = targetLanguage === 'zh' ? 'zh' : 'en';
+      
+      const dataForSEOResults = await fetchKeywordData([keywordData.keyword], locationCode, languageCode);
 
-      if (serankingResults.length > 0 && serankingResults[0].is_data_found) {
-        const serankingData = serankingResults[0];
+      if (dataForSEOResults.length > 0 && dataForSEOResults[0].is_data_found) {
+        const dataForSEOData = dataForSEOResults[0];
 
-        console.log(`[SE Ranking] "${serankingData.keyword}": Volume=${serankingData.volume}, KD=${serankingData.difficulty}, CPC=$${serankingData.cpc}, Competition=${serankingData.competition}`);
+        console.log(`[DataForSEO] "${dataForSEOData.keyword}": Volume=${dataForSEOData.volume}, KD=${dataForSEOData.difficulty}, CPC=$${dataForSEOData.cpc}, Competition=${dataForSEOData.competition}`);
 
-        // Attach SE Ranking data to keyword
+        // Attach DataForSEO data to keyword (保持接口兼容性，使用 serankingData 字段名)
         keywordData.serankingData = {
-          is_data_found: serankingData.is_data_found,
-          volume: serankingData.volume,
-          cpc: serankingData.cpc,
-          competition: serankingData.competition,
-          difficulty: serankingData.difficulty,
-          history_trend: serankingData.history_trend,
+          is_data_found: dataForSEOData.is_data_found,
+          volume: dataForSEOData.volume,
+          cpc: dataForSEOData.cpc,
+          competition: dataForSEOData.competition,
+          difficulty: dataForSEOData.difficulty,
+          history_trend: dataForSEOData.trends,
         };
 
-        // Update volume if SE Ranking has better data
-        if (serankingData.volume) {
-          keywordData.volume = serankingData.volume;
+        // Update volume if DataForSEO has better data
+        if (dataForSEOData.volume) {
+          keywordData.volume = dataForSEOData.volume;
         }
 
         // Check if difficulty > 40, skip SERP analysis
-        if (serankingData.difficulty && serankingData.difficulty > 40) {
-          console.log(`[SE Ranking] Keyword "${keywordData.keyword}" has KD ${serankingData.difficulty} > 40, marking as LOW and skipping`);
+        if (dataForSEOData.difficulty && dataForSEOData.difficulty > 40) {
+          console.log(`[DataForSEO] Keyword "${keywordData.keyword}" has KD ${dataForSEOData.difficulty} > 40, marking as LOW and skipping`);
           keywordData.probability = ProbabilityLevel.LOW;
-          keywordData.reasoning = `Keyword Difficulty (${serankingData.difficulty}) is too high (>40). This indicates strong competition. Skipped detailed SERP analysis.`;
+          keywordData.reasoning = `Keyword Difficulty (${dataForSEOData.difficulty}) is too high (>40). This indicates strong competition. Skipped detailed SERP analysis.`;
           shouldSkip = true;
         }
       } else {
-        console.log(`[SE Ranking] No data found for "${keywordData.keyword}"`);
+        console.log(`[DataForSEO] No data found for "${keywordData.keyword}"`);
       }
-    } catch (serankingError: any) {
-      console.warn(`[SE Ranking] API call failed: ${serankingError.message}. Proceeding with SERP analysis.`);
+    } catch (dataForSEOError: any) {
+      console.warn(`[DataForSEO] API call failed: ${dataForSEOError.message}. Proceeding with SERP analysis.`);
     }
 
     let result: KeywordData;

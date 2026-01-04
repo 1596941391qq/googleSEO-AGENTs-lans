@@ -265,13 +265,20 @@ export const translateKeywordToTarget = async (
 ): Promise<{ original: string; translated: string; translationBack: string }> => {
   const targetLangName = getLanguageName(targetLanguage);
 
-  const prompt = `Translate the following keyword into ${targetLangName} for SEO purposes.
-Provide ONLY the translated keyword that would be commonly searched by users in that market.
-Do not explain, just provide the direct translation.
+  const prompt = `You are a professional SEO translator specializing in cross-market keyword translation.
+
+Translate the following keyword into ${targetLangName} for SEO purposes in the ${targetLangName} market.
+
+Requirements:
+1. The translation must be the exact phrase that users in ${targetLangName} market would search for
+2. Consider cultural context and local search habits
+3. Preserve the search intent (informational, commercial, transactional, etc.)
+4. Use natural, commonly searched expressions in ${targetLangName}
+5. If the keyword is a brand name or proper noun, keep it as is
 
 Keyword: "${keyword}"
 
-Respond with ONLY the translated keyword in ${targetLangName}.`;
+Respond with ONLY the translated keyword in ${targetLangName}. Do not include any explanations, notes, or additional text.`;
 
   try {
     const response = await callGeminiAPI(prompt);

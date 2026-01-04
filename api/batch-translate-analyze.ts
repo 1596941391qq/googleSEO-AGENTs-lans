@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { translateKeywordToTarget } from './_shared/gemini.js';
 import { analyzeRankingProbability } from './_shared/agents/agent-2-seo-researcher.js';
-import { fetchSErankingData } from './_shared/tools/se-ranking.js';
+import { fetchKeywordData } from './_shared/tools/dataforseo.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { KeywordData, IntentType, ProbabilityLevel } from './_shared/types.js';
 
@@ -119,9 +119,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }));
     }
 
-    // Step 2: SE Ranking 数据获取
+    // Step 2: DataForSEO 数据获取
     // 与手动输入模式相同，批量获取搜索量、难度、CPC 等数据
-    console.log(`[Batch Translate-Analyze] Step 2: Fetching SE Ranking data for ${keywordsForAnalysis.length} keywords`);
+    console.log(`[Batch Translate-Analyze] Step 2: Fetching DataForSEO data for ${keywordsForAnalysis.length} keywords`);
 
     let serankingDataMap = new Map<string, any>();
     const keywordsToAnalyze: KeywordData[] = [];
@@ -129,7 +129,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
       const translatedKeywordsList = keywordsForAnalysis.map(k => k.keyword);
-      const serankingResults = await fetchSErankingData(translatedKeywordsList, 'us');
+      
+      // 将语言代码转换为 DataForSEO 的 location_code 和 language_code
+      // 2166 = 中国, 2840 = 美国
+      const locationCode = targetLanguage === 'zh' ? 2166 : 2840;
+      const languageCode = targetLanguage === 'zh' ? 'zh' : 'en';
+      
+      console.log(`[DataForSEO] Fetching data for ${translatedKeywordsList.length} keywords (location: ${locationCode}, language: ${languageCode})`);
+      
+      const dataForSEOResults = await fetchKeywordData(translatedKeywordsList, locationCode, languageCode);
+
+      // 转换为兼容 SE Ranking 格式（保持接口兼容性）
+      const serankingResults = dataForSEOResults.map(data => ({
+        keyword: data.keyword,
+        is_data_found: data.is_data_found || false,
+        volume: data.volume,
+        cpc: data.cpc,
+        competition: data.competition,
+        difficulty: data.difficulty,
+        history_trend: data.trends,
+      }));
 
       // Create a map for quick lookup
       serankingResults.forEach(data => {
@@ -138,25 +157,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       });
 
-      // Flag to indicate that SE Ranking API call succeeded (even if some keywords have no data)
+      // Flag to indicate that DataForSEO API call succeeded (even if some keywords have no data)
       // This is used to distinguish between "API failure" vs "API returned data (which might have is_data_found=false)"
       (serankingDataMap as any).apiSucceeded = true;
 
-      console.log(`[SE Ranking] Successfully fetched data for ${serankingResults.length}/${keywordsForAnalysis.length} keywords`);
+      console.log(`[DataForSEO] Successfully fetched data for ${serankingResults.length}/${keywordsForAnalysis.length} keywords`);
 
-      // Log SE Ranking data for each keyword
+      // Log DataForSEO data for each keyword
       serankingResults.forEach(data => {
         if (data.is_data_found) {
-          console.log(`[SE Ranking] "${data.keyword}": Volume=${data.volume}, KD=${data.difficulty}, CPC=$${data.cpc}, Competition=${data.competition}`);
+          console.log(`[DataForSEO] "${data.keyword}": Volume=${data.volume}, KD=${data.difficulty}, CPC=$${data.cpc}, Competition=${data.competition}`);
         }
       });
 
-      // Process each keyword with SE Ranking data
+      // Process each keyword with DataForSEO data
       for (const keyword of keywordsForAnalysis) {
         const serankingData = serankingDataMap.get(keyword.keyword.toLowerCase());
 
         if ((serankingDataMap as any).apiSucceeded && serankingData) {
-          // Only attach SE Ranking data if API succeeded
+          // Only attach DataForSEO data if API succeeded
           // This distinguishes between "API failure" vs "API returned data (which might have is_data_found=false)"
           keyword.serankingData = {
             is_data_found: serankingData.is_data_found,
@@ -167,14 +186,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             history_trend: serankingData.history_trend,
           };
 
-          // Update volume if SE Ranking has better data
+          // Update volume if DataForSEO has better data
           if (serankingData.volume) {
             keyword.volume = serankingData.volume;
           }
 
           // Check if difficulty > 40, skip SERP analysis
           if (serankingData.difficulty && serankingData.difficulty > 40) {
-            console.log(`[SE Ranking] Keyword "${keyword.keyword}" has KD ${serankingData.difficulty} > 40, marking as LOW and skipping`);
+            console.log(`[DataForSEO] Keyword "${keyword.keyword}" has KD ${serankingData.difficulty} > 40, marking as LOW and skipping`);
             keyword.probability = ProbabilityLevel.LOW;
             keyword.reasoning = `Keyword Difficulty (${serankingData.difficulty}) is too high (>40). This indicates strong competition. Skipped detailed SERP analysis.`;
             skippedKeywords.push(keyword);
@@ -186,11 +205,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         keywordsToAnalyze.push(keyword);
       }
 
-      console.log(`[SE Ranking] ${keywordsToAnalyze.length} keywords will proceed to SERP analysis, ${skippedKeywords.length} keywords skipped due to high KD`);
+      console.log(`[DataForSEO] ${keywordsToAnalyze.length} keywords will proceed to SERP analysis, ${skippedKeywords.length} keywords skipped due to high KD`);
 
-    } catch (serankingError: any) {
-      console.warn(`[SE Ranking] API call failed: ${serankingError.message}. Proceeding with SERP analysis for all keywords.`);
-      // On SE Ranking failure, analyze all keywords normally
+    } catch (dataForSEOError: any) {
+      console.warn(`[DataForSEO] API call failed: ${dataForSEOError.message}. Proceeding with SERP analysis for all keywords.`);
+      // On DataForSEO failure, analyze all keywords normally
       keywordsToAnalyze.push(...keywordsForAnalysis);
     }
 

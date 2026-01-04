@@ -42,6 +42,24 @@ export interface DataForSEODomainOverview {
     top50: number;
     top100: number;
   };
+  backlinksInfo?: {
+    referringDomains: number;
+    referringMainDomains: number;
+    referringPages: number;
+    dofollow: number;
+    backlinks: number;
+    timeUpdate?: string;
+  };
+}
+
+export interface DomainCompetitor {
+  domain: string;
+  title?: string;
+  commonKeywords: number;
+  organicTraffic: number;
+  totalKeywords: number;
+  gapKeywords?: number;
+  gapTraffic?: number;
 }
 
 // ============================================
@@ -68,7 +86,7 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await fetch(url, options);
-      
+
       // 如果是 429 错误且还有重试次数，进行重试
       if (response.status === 429 && attempt < maxRetries - 1) {
         const delay = retryDelay * Math.pow(2, attempt); // 指数退避：1s, 2s, 4s
@@ -76,7 +94,7 @@ async function fetchWithRetry(
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
-      
+
       // 其他状态码或最后一次尝试，直接返回
       return response;
     } catch (error: any) {
@@ -89,7 +107,7 @@ async function fetchWithRetry(
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-  
+
   // 理论上不会到达这里，但为了类型安全
   return await fetch(url, options);
 }
@@ -193,7 +211,7 @@ async function fetchKeywordBatch(
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[DataForSEO] API error:', response.status, errorText);
-        
+
         if (response.status === 404 || response.status === 400) {
           return keywords.map(kw => ({
             keyword: kw,
@@ -204,10 +222,10 @@ async function fetchKeywordBatch(
       }
 
       const data = await response.json();
-      
+
       // 解析响应数据
       const results: DataForSEOKeywordData[] = [];
-      
+
       if (Array.isArray(data) && data.length > 0) {
         data.forEach((task: any, index: number) => {
           if (task.tasks && task.tasks.length > 0) {
@@ -302,7 +320,9 @@ export async function getDomainOverview(
     // 端点路径：/domain_analytics/whois/overview/live
     const url = `${DATAFORSEO_BASE_URL}/domain_analytics/whois/overview/live`;
 
-    // 使用 filters 查询特定域名
+    // 使用 filters 查询特定域名（根据 DataForSEO API 文档格式）
+    // 参考格式：filters 支持 "=", "like", ">", "<" 等操作符
+    // order_by 用于排序结果
     const requestBody = [{
       limit: 1,
       filters: [
@@ -311,11 +331,12 @@ export async function getDomainOverview(
           "=",
           cleanDomain
         ]
-      ]
+      ],
+      order_by: ["metrics.organic.count,desc"] // 按有机关键词数降序排序
     }];
 
     console.log(`[DataForSEO] Request URL: ${url}`);
-    console.log(`[DataForSEO] Request body:`, JSON.stringify(requestBody));
+    console.log(`[DataForSEO] Request body:`, JSON.stringify(requestBody, null, 2));
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -337,21 +358,21 @@ export async function getDomainOverview(
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`[DataForSEO] API error for ${cleanDomain}:`, {
+        console.error(`[DataForSEO] ❌ API error for ${cleanDomain}:`, {
           status: response.status,
           statusText: response.statusText,
-          error: errorText,
+          error: errorText.substring(0, 500), // 限制错误文本长度
         });
         
         if (response.status === 404) {
-          console.log(`[DataForSEO] No data found for domain: ${cleanDomain}`);
+          console.log(`[DataForSEO] ⚠️ No data found for domain: ${cleanDomain}`);
           return null;
         }
         
         // 尝试解析错误响应
         try {
           const errorData = JSON.parse(errorText);
-          console.error('[DataForSEO] Error details:', errorData);
+          console.error('[DataForSEO] Error details:', JSON.stringify(errorData, null, 2));
         } catch {
           // 如果不是 JSON，直接输出文本
         }
@@ -362,55 +383,95 @@ export async function getDomainOverview(
       const data = await response.json();
 
       // 添加详细日志查看 API 响应结构
-      console.log(`[DataForSEO] API Response for ${cleanDomain}:`, {
+      console.log(`[DataForSEO] 📥 API Response for ${cleanDomain}:`, {
         isArray: Array.isArray(data),
         length: Array.isArray(data) ? data.length : 0,
+        hasStatusCode: !!(data && data.status_code),
+        statusCode: data?.status_code,
         firstItemKeys: Array.isArray(data) && data.length > 0 ? Object.keys(data[0]) : [],
-        hasTasks: Array.isArray(data) && data.length > 0 && data[0].tasks,
-        tasksLength: Array.isArray(data) && data.length > 0 && data[0].tasks ? data[0].tasks.length : 0,
-        sampleData: JSON.stringify(data).substring(0, 500),
+        hasTasks: !!(data && data.tasks),
+        tasksLength: data?.tasks?.length || 0,
+        sampleData: JSON.stringify(data).substring(0, 1000), // 增加样本数据长度
       });
 
       // 解析响应数据
       // DataForSEO API 响应格式: { version, status_code, tasks: [{ result: [{ items: [...] }] }] }
       // status_code: 20000 = 成功, 其他值 = 错误
-      if (data && data.status_code === 20000 && data.tasks && Array.isArray(data.tasks) && data.tasks.length > 0) {
+      
+      // 首先检查响应格式
+      if (!data) {
+        console.error(`[DataForSEO] ❌ Empty response from API`);
+        return null;
+      }
+
+      // 处理标准响应格式：{ status_code, tasks: [...] }
+      if (data.status_code !== undefined) {
+        console.log(`[DataForSEO] Response status_code: ${data.status_code}`);
+        
+        if (data.status_code !== 20000) {
+          console.error(`[DataForSEO] ❌ API returned error status_code: ${data.status_code}`, {
+            status_message: data.status_message || 'Unknown error',
+          });
+          return null;
+        }
+
+        if (!data.tasks || !Array.isArray(data.tasks) || data.tasks.length === 0) {
+          console.error(`[DataForSEO] ❌ No tasks in response`);
+          return null;
+        }
+
         const firstTask = data.tasks[0];
         
         // 检查任务状态码
         if (firstTask.status_code !== 20000) {
-          console.error(`[DataForSEO] Task failed with status_code: ${firstTask.status_code}`, {
-            status_message: firstTask.status_message,
+          console.error(`[DataForSEO] ❌ Task failed with status_code: ${firstTask.status_code}`, {
+            status_message: firstTask.status_message || 'Unknown error',
           });
           return null;
         }
         
         // 解析 result 字段（whois/overview 端点的格式）
-        if (firstTask.result && Array.isArray(firstTask.result) && firstTask.result.length > 0) {
-          const resultItem = firstTask.result[0];
-          
-          // 检查是否有 items
-          if (resultItem.items && Array.isArray(resultItem.items) && resultItem.items.length > 0) {
-            const domainItem = resultItem.items[0];
-            
-            // 从 metrics.organic 中提取数据
-            const organicMetrics = domainItem.metrics?.organic || {};
-            const paidMetrics = domainItem.metrics?.paid || {};
-            
-            console.log(`[DataForSEO] Parsed domain item:`, {
-              domain: domainItem.domain,
-              organic_count: organicMetrics.count,
-              organic_etv: organicMetrics.etv,
-            });
-            
+        if (!firstTask.result) {
+          console.error(`[DataForSEO] ❌ No result in task`);
+          return null;
+        }
+
+        if (!Array.isArray(firstTask.result) || firstTask.result.length === 0) {
+          console.error(`[DataForSEO] ❌ Empty result array`);
+          return null;
+        }
+
+        const resultItem = firstTask.result[0];
+        
+        // 检查是否有 items
+        if (!resultItem.items || !Array.isArray(resultItem.items) || resultItem.items.length === 0) {
+          console.error(`[DataForSEO] ❌ No items found in result`, {
+            resultItemKeys: Object.keys(resultItem),
+          });
+          return null;
+        }
+
+        const domainItem = resultItem.items[0];
+        
+        // 从 metrics.organic 中提取数据
+        const organicMetrics = domainItem.metrics?.organic || {};
+        const paidMetrics = domainItem.metrics?.paid || {};
+        
+        console.log(`[DataForSEO] ✅ Parsed domain item:`, {
+          domain: domainItem.domain,
+          organic_count: organicMetrics.count,
+          organic_etv: organicMetrics.etv,
+          hasBacklinksInfo: !!domainItem.backlinks_info,
+        });
+
             // 计算总关键词数（有机关键词数）
             const totalKeywords = organicMetrics.count || 0;
-            
+
             // 计算平均位置（基于排名分布）
             // 使用加权平均：pos_1*1 + pos_2_3*2.5 + pos_4_10*7 + ... / total
             let totalPositions = 0;
             let totalKeywordsForAvg = 0;
-            
+
             if (organicMetrics.pos_1) {
               totalPositions += organicMetrics.pos_1 * 1;
               totalKeywordsForAvg += organicMetrics.pos_1;
@@ -439,9 +500,9 @@ export async function getDomainOverview(
               totalPositions += organicMetrics.pos_41_50 * 45.5;
               totalKeywordsForAvg += organicMetrics.pos_41_50;
             }
-            
+
             const avgPosition = totalKeywordsForAvg > 0 ? totalPositions / totalKeywordsForAvg : 0;
-            
+
             // 计算排名分布（根据新的响应格式）
             const pos1 = organicMetrics.pos_1 || 0;
             const pos2_3 = organicMetrics.pos_2_3 || 0;
@@ -455,56 +516,82 @@ export async function getDomainOverview(
             const pos71_80 = organicMetrics.pos_71_80 || 0;
             const pos81_90 = organicMetrics.pos_81_90 || 0;
             const pos91_100 = organicMetrics.pos_91_100 || 0;
-            
+
             // 计算排名分布
             const top3 = pos1 + pos2_3;
             const top10 = pos1 + pos2_3 + pos4_10;
             const top50 = pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50;
-            const top100 = pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50 + 
-                          pos51_60 + pos61_70 + pos71_80 + pos81_90 + pos91_100;
-            
-            return {
-              domain: cleanDomain,
-              organicTraffic: Math.round(organicMetrics.etv || 0), // 使用 ETV (Estimated Traffic Value) 作为流量估算
-              totalKeywords: totalKeywords,
-              avgPosition: Math.round(avgPosition * 10) / 10, // 保留一位小数
-              topKeywords: [], // whois/overview 端点不返回关键词列表
-              rankingDistribution: {
-                top3: top3,
-                top10: top10,
-                top50: top50,
-                top100: top100,
-              },
-            };
-          } else {
-            console.log(`[DataForSEO] No items found in result`);
-          }
+            const top100 = pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50 +
+              pos51_60 + pos61_70 + pos71_80 + pos81_90 + pos91_100;
+
+            // 解析 backlinks_info 字段
+            const backlinksInfo = domainItem.backlinks_info ? {
+              referringDomains: domainItem.backlinks_info.referring_domains || 0,
+              referringMainDomains: domainItem.backlinks_info.referring_main_domains || 0,
+              referringPages: domainItem.backlinks_info.referring_pages || 0,
+              dofollow: domainItem.backlinks_info.dofollow || 0,
+              backlinks: domainItem.backlinks_info.backlinks || 0,
+              timeUpdate: domainItem.backlinks_info.time_update || undefined,
+            } : undefined;
+
+        if (backlinksInfo) {
+          console.log(`[DataForSEO] ✅ Parsed backlinks info:`, backlinksInfo);
         } else {
-          console.log(`[DataForSEO] No result found in task`);
+          console.log(`[DataForSEO] ⚠️ No backlinks info in response`);
         }
+
+        // 即使数据为0，也返回结果（让调用方决定如何处理）
+        const result = {
+          domain: cleanDomain,
+          organicTraffic: Math.round(organicMetrics.etv || 0), // 使用 ETV (Estimated Traffic Value) 作为流量估算
+          totalKeywords: totalKeywords,
+          avgPosition: Math.round(avgPosition * 10) / 10, // 保留一位小数
+          topKeywords: [], // whois/overview 端点不返回关键词列表
+          rankingDistribution: {
+            top3: top3,
+            top10: top10,
+            top50: top50,
+            top100: top100,
+          },
+          backlinksInfo: backlinksInfo,
+        };
+
+        console.log(`[DataForSEO] ✅ Successfully parsed overview data:`, {
+          organicTraffic: result.organicTraffic,
+          totalKeywords: result.totalKeywords,
+          avgPosition: result.avgPosition,
+          top3: result.rankingDistribution.top3,
+          top10: result.rankingDistribution.top10,
+        });
+
+        return result;
       } else {
-        // 兼容旧的响应格式（如果 API 返回数组格式）
+        // 兼容数组格式响应（如果 API 返回数组格式）
         if (Array.isArray(data) && data.length > 0) {
+          console.log(`[DataForSEO] 📋 Processing array format response`);
           const firstItem = data[0];
-          
+
           if (firstItem.tasks && Array.isArray(firstItem.tasks) && firstItem.tasks.length > 0) {
             const firstTask = firstItem.tasks[0];
-            
+
             if (firstTask.status_code === 20000 && firstTask.result && Array.isArray(firstTask.result) && firstTask.result.length > 0) {
               const taskResult = firstTask.result[0];
-              
-              return {
+
+              const result = {
                 domain: cleanDomain,
                 organicTraffic: taskResult.organic_traffic || taskResult.organicTraffic || 0,
                 totalKeywords: taskResult.total_keywords || taskResult.totalKeywords || 0,
                 avgPosition: taskResult.avg_position || taskResult.avgPosition || 0,
                 topKeywords: taskResult.top_keywords || taskResult.topKeywords || [],
               };
+
+              console.log(`[DataForSEO] ✅ Successfully parsed overview data (array format):`, result);
+              return result;
             }
           }
         }
-        
-        console.log(`[DataForSEO] Response format not recognized or empty`);
+
+        console.error(`[DataForSEO] ❌ Response format not recognized or empty`);
       }
 
       return null;
@@ -584,14 +671,14 @@ export async function getDomainKeywords(
 
       // 解析响应数据
       const keywords: string[] = [];
-      
+
       if (Array.isArray(data) && data.length > 0) {
         const firstItem = data[0];
-        
+
         if (firstItem.tasks && Array.isArray(firstItem.tasks) && firstItem.tasks.length > 0) {
           const firstTask = firstItem.tasks[0];
           const taskResult = firstTask.result;
-          
+
           if (Array.isArray(taskResult)) {
             taskResult.forEach((item: any) => {
               if (item.keyword) {
@@ -628,6 +715,127 @@ export async function getDomainKeywords(
     }
   } catch (error: any) {
     console.error(`[DataForSEO] Failed to get keywords for ${domain}:`, error.message);
+    return [];
+  }
+}
+
+/**
+ * 获取域名竞争对手对比
+ * 
+ * 使用 DataForSEO Labs API: /v3/dataforseo_labs/google/competitors_domain/live
+ * 
+ * @param domain - 域名
+ * @param locationCode - 位置代码，默认 2840 (美国)，2166 (中国)
+ * @param limit - 返回数量限制，默认 5
+ * @returns 竞争对手数组
+ */
+export async function getDomainCompetitors(
+  domain: string,
+  locationCode: number = 2840,
+  limit: number = 5
+): Promise<DomainCompetitor[]> {
+  try {
+    console.log(`[DataForSEO] Getting competitors for ${domain} (location: ${locationCode})`);
+
+    const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '');
+
+    // Add timeout control (30 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const url = `${DATAFORSEO_BASE_URL}/dataforseo_labs/google/competitors_domain/live`;
+      
+      // DataForSEO API 请求体是数组格式
+      const requestBody = [{
+        target: cleanDomain,
+        location_code: locationCode,
+        language_code: locationCode === 2166 ? 'zh' : 'en',
+        limit: limit,
+      }];
+
+      console.log(`[DataForSEO] Competitors request URL: ${url}`);
+      console.log(`[DataForSEO] Competitors request body:`, JSON.stringify(requestBody));
+
+      const response = await fetchWithRetry(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': createAuthHeader(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        }
+      );
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DataForSEO] Competitors API error:', response.status, errorText);
+        // 对于 400 和 404 错误，返回空数组而不是抛出异常
+        if (response.status === 404 || response.status === 400) {
+          console.log(`[DataForSEO] Competitors endpoint may not be available or parameters incorrect`);
+          return [];
+        }
+        throw new Error(`DataForSEO Competitors API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // DataForSEO API 响应格式: { version, status_code, tasks: [{ result: [{ items: [...] }] }] }
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        console.log(`[DataForSEO] No tasks found in competitors response`);
+        return [];
+      }
+
+      const firstTask = data[0];
+      if (!firstTask || firstTask.status_code !== 20000) {
+        console.error(`[DataForSEO] Task failed with status_code: ${firstTask?.status_code}`, {
+          status_message: firstTask?.status_message,
+        });
+        return [];
+      }
+
+      const taskResult = firstTask.result;
+      if (!taskResult || !Array.isArray(taskResult) || taskResult.length === 0) {
+        console.log(`[DataForSEO] No result found in competitors task`);
+        return [];
+      }
+
+      const firstResult = taskResult[0];
+      if (!firstResult || !firstResult.items || !Array.isArray(firstResult.items)) {
+        console.log(`[DataForSEO] No items found in competitors result`);
+        return [];
+      }
+
+      // 解析竞争对手数据
+      const competitors: DomainCompetitor[] = firstResult.items
+        .slice(0, limit)
+        .map((item: any) => ({
+          domain: item.domain || '',
+          title: item.domain || item.title || '',
+          commonKeywords: item.common_keywords || item.common_keywords_count || 0,
+          organicTraffic: item.organic_traffic || item.organic_traffic_value || 0,
+          totalKeywords: item.total_keywords || item.keywords_count || 0,
+          gapKeywords: item.gap_keywords || item.gap_keywords_count || 0,
+          gapTraffic: item.gap_traffic || item.gap_traffic_value || 0,
+        }))
+        .filter((comp: DomainCompetitor) => comp.domain && comp.domain.trim() !== '');
+
+      console.log(`[DataForSEO] Successfully retrieved ${competitors.length} competitors for ${cleanDomain}`);
+      return competitors;
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        console.error(`[DataForSEO] Request timeout for competitors: ${domain}`);
+        return [];
+      }
+      throw fetchError;
+    }
+  } catch (error: any) {
+    console.error(`[DataForSEO] Failed to get competitors for ${domain}:`, error.message);
     return [];
   }
 }

@@ -158,7 +158,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return null;
       });
 
-      if (dataForSEODomainOverview && (dataForSEODomainOverview.organicTraffic > 0 || dataForSEODomainOverview.totalKeywords > 0)) {
+      if (dataForSEODomainOverview) {
+        // 即使数据为0，也使用返回的数据（可能是新域名或数据不足）
         domainData.overview = {
           domain: website.website_domain,
           organicTraffic: dataForSEODomainOverview.organicTraffic || 0,
@@ -177,14 +178,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             top50: 0,
             top100: 0,
           },
+          backlinksInfo: dataForSEODomainOverview.backlinksInfo,
         };
         console.log('[update-metrics] ✅ Successfully fetched overview from DataForSEO:', {
           organicTraffic: domainData.overview.organicTraffic,
           totalKeywords: domainData.overview.totalKeywords,
+          avgPosition: domainData.overview.avgPosition,
+          hasBacklinksInfo: !!domainData.overview.backlinksInfo,
         });
         dataForSEOSuccess = true;
       } else {
-        console.log('[update-metrics] ⚠️ DataForSEO returned no valid overview data (may require paid plan)');
+        console.log('[update-metrics] ⚠️ DataForSEO returned null (no data found or API error)');
       }
 
       // 获取 DataForSEO 关键词列表（带超时保护）
@@ -333,6 +337,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           top10_count,
           top50_count,
           top100_count,
+          backlinks_info,
           data_updated_at,
           cache_expires_at
         ) VALUES (
@@ -351,6 +356,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${domainData.overview.rankingDistribution.top10},
           ${domainData.overview.rankingDistribution.top50},
           ${domainData.overview.rankingDistribution.top100},
+          ${domainData.overview.backlinksInfo ? JSON.stringify(domainData.overview.backlinksInfo) : null},
           NOW(),
           NOW() + INTERVAL '24 hours'
         )
@@ -369,6 +375,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           top10_count = EXCLUDED.top10_count,
           top50_count = EXCLUDED.top50_count,
           top100_count = EXCLUDED.top100_count,
+          backlinks_info = EXCLUDED.backlinks_info,
           data_updated_at = NOW(),
           cache_expires_at = EXCLUDED.cache_expires_at
       `;

@@ -3336,7 +3336,8 @@ export default function App() {
       step: "deep-dive-results",
       deepDiveThoughts: [],
       logs: [],
-      showDetailedAnalysisModal: true,
+      // 只有在有 strategyReport 时才显示模态框
+      showDetailedAnalysisModal: !!entry.strategyReport,
     }));
   };
 
@@ -4701,13 +4702,17 @@ export default function App() {
     if (miningMode === "blue-ocean" && !state.seedKeyword.trim()) {
       return;
     }
-    if (miningMode === "existing-website-audit" && !selectedWebsite) {
+    if (
+      miningMode === "existing-website-audit" &&
+      !selectedWebsite &&
+      !manualWebsiteUrl.trim()
+    ) {
       setState((prev) => ({
         ...prev,
         error:
           state.uiLanguage === "zh"
-            ? "请先选择要分析的网站"
-            : "Please select a website to analyze",
+            ? "请先选择或输入要分析的网站"
+            : "Please select or enter a website to analyze",
       }));
       return;
     }
@@ -5139,294 +5144,22 @@ export default function App() {
           currentTaskId
         );
 
-        // Step 2: 翻译处理（存量拓新返回的关键词已经是目标语言，跳过翻译）
+        // Step 2: 开始 Keyword Mining 循环挖掘
         addLog(
           state.uiLanguage === "zh"
-            ? `✅ 关键词已经是目标语言 (${state.targetLanguage.toUpperCase()})，跳过翻译步骤`
-            : `✅ Keywords already in target language (${state.targetLanguage.toUpperCase()}), skipping translation`,
+            ? `🔄 步骤 2: 开始关键词挖掘循环（基于初始关键词作为种子）...`
+            : `🔄 Step 2: Starting keyword mining loop (using initial keywords as seeds)...`,
           "info",
           currentTaskId
         );
 
-        // Step 3: 跨市场洞察（SE Ranking + SERP + 排名概率分析）
-        addLog(
-          state.uiLanguage === "zh"
-            ? `📊 步骤 4: 开始批量分析关键词（SE Ranking + SERP + 排名概率）...`
-            : `📊 Step 4: Starting batch analysis (SE Ranking + SERP + Ranking Probability)...`,
-          "info",
-          currentTaskId
+        // 使用初始关键词作为种子，进行循环挖掘
+        const initialKeywords = result.keywords.map(
+          (k: KeywordData) => k.keyword
         );
-
-        addThought(
-          "analysis",
-          state.uiLanguage === "zh"
-            ? `正在批量获取 SE Ranking 数据和进行 SERP 分析...`
-            : `Fetching SE Ranking data and performing SERP analysis...`,
-          undefined,
-          currentTaskId
-        );
-
-        try {
-          // 调用跨市场洞察API，使用 keywordsFromAudit 参数
-          const batchAnalysisResponse = await fetch(
-            "/api/batch-translate-analyze",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                keywordsFromAudit: result.keywords, // 传递关键词对象数组
-                targetLanguage: state.targetLanguage,
-                systemInstruction: getWorkflowPrompt(
-                  "batch",
-                  "batch-analyze",
-                  state.analyzePrompt
-                ),
-                uiLanguage: state.uiLanguage,
-              }),
-            }
-          );
-
-          if (!batchAnalysisResponse.ok) {
-            throw new Error(
-              `Batch analysis API error: ${batchAnalysisResponse.status}`
-            );
-          }
-
-          const batchResult = await batchAnalysisResponse.json();
-
-          if (batchResult.success && batchResult.keywords) {
-            addLog(
-              state.uiLanguage === "zh"
-                ? `✅ 批量分析完成：${batchResult.keywords.length} 个关键词已分析`
-                : `✅ Batch analysis complete: ${batchResult.keywords.length} keywords analyzed`,
-              "success",
-              currentTaskId
-            );
-
-            // 显示 SE Ranking 数据统计
-            const keywordsWithSeranking = batchResult.keywords.filter(
-              (k: KeywordData) => k.serankingData?.is_data_found
-            );
-            if (keywordsWithSeranking.length > 0) {
-              addThought(
-                "analysis",
-                state.uiLanguage === "zh"
-                  ? `SE Ranking 数据获取完成，${keywordsWithSeranking.length}/${batchResult.keywords.length} 个关键词有数据`
-                  : `SE Ranking data fetched, ${keywordsWithSeranking.length}/${batchResult.keywords.length} keywords have data`,
-                {
-                  data: {
-                    totalKeywords: batchResult.keywords.length,
-                    keywordsWithData: keywordsWithSeranking.length,
-                    sampleKeywords: keywordsWithSeranking
-                      .slice(0, 5)
-                      .map((k: KeywordData) => ({
-                        keyword: k.keyword,
-                        volume: k.serankingData?.volume,
-                        difficulty: k.serankingData?.difficulty,
-                      })),
-                  },
-                  dataType: "analysis",
-                },
-                currentTaskId
-              );
-            }
-
-            // 显示 SERP 分析结果（包含详细的 SERP 数据）
-            const keywordsWithSerp = batchResult.keywords.filter(
-              (k: KeywordData) =>
-                k.topSerpSnippets && k.topSerpSnippets.length > 0
-            );
-            if (keywordsWithSerp.length > 0) {
-              addLog(
-                state.uiLanguage === "zh"
-                  ? `🔍 SERP 分析完成，${keywordsWithSerp.length} 个关键词已获取搜索结果`
-                  : `🔍 SERP analysis complete, ${keywordsWithSerp.length} keywords have search results`,
-                "success",
-                currentTaskId
-              );
-
-              addThought(
-                "analysis",
-                state.uiLanguage === "zh"
-                  ? `SERP 分析完成，${keywordsWithSerp.length} 个关键词已获取搜索结果`
-                  : `SERP analysis complete, ${keywordsWithSerp.length} keywords have search results`,
-                {
-                  data: {
-                    keywordsWithSerp: keywordsWithSerp.length,
-                    sampleSerpResults: keywordsWithSerp
-                      .slice(0, 5)
-                      .map((k: KeywordData) => ({
-                        keyword: k.keyword,
-                        serpCount: k.serpResultCount,
-                        topDomainType: k.topDomainType,
-                        probability: k.probability,
-                        topResults: k.topSerpSnippets
-                          ?.slice(0, 5)
-                          .map((s: any) => ({
-                            title: s.title,
-                            url: s.url,
-                            snippet: s.snippet,
-                          })),
-                      })),
-                  },
-                  dataType: "analysis",
-                },
-                currentTaskId
-              );
-            }
-
-            // 显示用户意图分析结果
-            const keywordsWithIntent = batchResult.keywords.filter(
-              (k: KeywordData) => k.searchIntent || k.intentAnalysis
-            );
-            if (keywordsWithIntent.length > 0) {
-              addLog(
-                state.uiLanguage === "zh"
-                  ? `💭 用户意图分析完成，${keywordsWithIntent.length} 个关键词已分析意图`
-                  : `💭 Search intent analysis complete, ${keywordsWithIntent.length} keywords analyzed`,
-                "success",
-                currentTaskId
-              );
-
-              addThought(
-                "analysis",
-                state.uiLanguage === "zh"
-                  ? `用户意图分析完成，${keywordsWithIntent.length} 个关键词已分析搜索意图`
-                  : `Search intent analysis complete, ${keywordsWithIntent.length} keywords analyzed`,
-                {
-                  data: {
-                    keywordsWithIntent: keywordsWithIntent.length,
-                    sampleIntentAnalysis: keywordsWithIntent
-                      .slice(0, 5)
-                      .map((k: KeywordData) => ({
-                        keyword: k.keyword,
-                        searchIntent: k.searchIntent,
-                        intentAnalysis: k.intentAnalysis,
-                        intent: k.intent,
-                      })),
-                  },
-                  dataType: "analysis",
-                },
-                currentTaskId
-              );
-            }
-
-            // 显示排名概率分析结果（包含完整的analyzedKeywords用于SERP显示）
-            const highProbKeywords = batchResult.keywords.filter(
-              (k: KeywordData) => k.probability === ProbabilityLevel.HIGH
-            );
-            const mediumProbKeywords = batchResult.keywords.filter(
-              (k: KeywordData) => k.probability === ProbabilityLevel.MEDIUM
-            );
-            const lowProbKeywords = batchResult.keywords.filter(
-              (k: KeywordData) => k.probability === ProbabilityLevel.LOW
-            );
-
-            // 确保所有关键词都有probability和topDomainType字段
-            const keywordsWithAnalysis = batchResult.keywords.map(
-              (k: KeywordData) => ({
-                ...k,
-                probability: k.probability || ProbabilityLevel.MEDIUM,
-                topDomainType: k.topDomainType || "Unknown",
-                serpResultCount:
-                  k.serpResultCount !== undefined ? k.serpResultCount : -1,
-              })
-            );
-
-            addThought(
-              "analysis",
-              state.uiLanguage === "zh"
-                ? `排名概率分析完成：高概率 ${highProbKeywords.length} 个，中概率 ${mediumProbKeywords.length} 个，低概率 ${lowProbKeywords.length} 个`
-                : `Ranking probability analysis complete: High ${highProbKeywords.length}, Medium ${mediumProbKeywords.length}, Low ${lowProbKeywords.length}`,
-              {
-                stats: {
-                  high: highProbKeywords.length,
-                  medium: mediumProbKeywords.length,
-                  low: lowProbKeywords.length,
-                },
-                analyzedKeywords: keywordsWithAnalysis, // 确保包含完整的SERP数据
-                data: highProbKeywords,
-                dataType: "analysis",
-              },
-              currentTaskId
-            );
-
-            // 显示关键词表格（包含完整分析数据，包含probability和topDomainType）
-            addThought(
-              "generation",
-              state.uiLanguage === "zh"
-                ? `关键词分析完成，共 ${keywordsWithAnalysis.length} 个关键词（已包含排名概率和SERP分析）`
-                : `Keyword analysis complete, ${keywordsWithAnalysis.length} keywords total (with ranking probability and SERP analysis)`,
-              {
-                keywords: keywordsWithAnalysis.map(
-                  (k: KeywordData) => k.keyword
-                ),
-                data: keywordsWithAnalysis, // 使用包含完整分析数据的关键词
-                dataType: "keywords",
-              },
-              currentTaskId
-            );
-
-            // Step 4: 结果展示（使用包含完整分析数据的关键词）
-            setState((prev) => {
-              const updatedState: AppState = {
-                ...prev,
-                keywords: keywordsWithAnalysis, // 使用包含完整分析数据的关键词
-                isMining: false,
-                miningSuccess: true,
-                step: "results" as const,
-              };
-              // 保存到挖掘历史
-              saveToArchive(updatedState);
-              return updatedState;
-            });
-
-            // 最终统计
-            addLog(
-              state.uiLanguage === "zh"
-                ? `✅ 网站分析完成！发现 ${batchResult.keywords.length} 个关键词机会 (高概率: ${highProbKeywords.length}, 中概率: ${mediumProbKeywords.length}, 低概率: ${lowProbKeywords.length})`
-                : `✅ Website audit completed! Found ${batchResult.keywords.length} keyword opportunities (High: ${highProbKeywords.length}, Medium: ${mediumProbKeywords.length}, Low: ${lowProbKeywords.length})`,
-              "success",
-              currentTaskId
-            );
-          } else {
-            throw new Error(batchResult.error || "Batch analysis failed");
-          }
-        } catch (batchError: any) {
-          console.error("[Website Audit] Batch analysis error:", batchError);
-          addLog(
-            state.uiLanguage === "zh"
-              ? `⚠️ 批量分析失败，使用基础关键词数据: ${batchError.message}`
-              : `⚠️ Batch analysis failed, using basic keyword data: ${batchError.message}`,
-            "warning",
-            currentTaskId
-          );
-
-          // 如果批量分析失败，至少使用基础关键词数据
-          setState((prev) => {
-            const updatedState: AppState = {
-              ...prev,
-              keywords: result.keywords,
-              isMining: false,
-              miningSuccess: true,
-              step: "results" as const,
-            };
-            // 保存到挖掘历史
-            saveToArchive(updatedState);
-            return updatedState;
-          });
-
-          addThought(
-            "decision",
-            state.uiLanguage === "zh"
-              ? `批量分析失败，使用基础关键词数据（${result.keywords.length} 个关键词）`
-              : `Batch analysis failed, using basic keyword data (${result.keywords.length} keywords)`,
-            undefined,
-            currentTaskId
-          );
-        }
+        await runWebsiteAuditMiningLoop(initialKeywords, currentTaskId);
       } else {
-        throw new Error(result.error || "Unknown error");
+        throw new Error(result.error || "Website audit failed");
       }
     } catch (error: any) {
       console.error("[Website Audit] Error:", error);
@@ -5861,6 +5594,318 @@ export default function App() {
     }
   };
 
+  // Website Audit Mining Loop (存量拓新的关键词挖掘循环)
+  const runWebsiteAuditMiningLoop = async (
+    seedKeywords: string[],
+    taskId: string
+  ) => {
+    let currentRound = 0;
+    const allKeywords: KeywordData[] = [];
+
+    // 将初始关键词添加到 allKeywords
+    const currentTask = state.taskManager.tasks.find((t) => t.id === taskId);
+    if (currentTask?.miningState?.keywords) {
+      allKeywords.push(...currentTask.miningState.keywords);
+    }
+
+    while (!stopMiningRef.current) {
+      currentRound++;
+
+      // Update miningRound with task isolation
+      setState((prev) => {
+        const updatedTasks = prev.taskManager.tasks.map((task) => {
+          if (task.id === taskId && task.miningState) {
+            return {
+              ...task,
+              miningState: {
+                ...task.miningState,
+                miningRound: currentRound,
+              },
+            };
+          }
+          return task;
+        });
+
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            miningRound: currentRound,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        } else {
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
+      });
+
+      addLog(
+        state.uiLanguage === "zh"
+          ? `[轮次 ${currentRound}] 正在生成候选关键词...`
+          : `[Round ${currentRound}] Generating candidate keywords...`,
+        "info",
+        taskId
+      );
+
+      // 使用种子关键词（初始关键词）进行挖掘
+      const seedKeyword = seedKeywords.join(", ");
+      addLog(
+        state.uiLanguage === "zh"
+          ? `💭 基于初始关键词 "${seedKeyword}" 进行挖掘`
+          : `💭 Mining based on initial keywords "${seedKeyword}"`,
+        "info",
+        taskId
+      );
+
+      addThought(
+        "generation",
+        state.uiLanguage === "zh"
+          ? `轮次 ${currentRound}: 基于网站分析发现的初始关键词进行扩展挖掘`
+          : `Round ${currentRound}: Expanding mining based on initial keywords from website audit`,
+        undefined,
+        taskId
+      );
+
+      try {
+        addLog(
+          state.uiLanguage === "zh"
+            ? "🤖 AI 正在思考..."
+            : "🤖 AI is thinking...",
+          "info",
+          taskId
+        );
+
+        const result = await generateKeywords(
+          seedKeyword,
+          state.targetLanguage,
+          getWorkflowPrompt("mining", "mining-gen", state.genPrompt),
+          allKeywords.map((k) => k.keyword),
+          currentRound,
+          state.wordsPerRound || 10,
+          state.miningStrategy || "horizontal",
+          state.userSuggestion || "",
+          state.uiLanguage,
+          state.miningConfig?.industry,
+          state.miningConfig?.additionalSuggestions
+        );
+
+        const generatedKeywords = result.keywords;
+
+        if (generatedKeywords.length === 0) {
+          addLog(
+            state.uiLanguage === "zh"
+              ? `[轮次 ${currentRound}] 未生成关键词，继续...`
+              : `[Round ${currentRound}] No keywords generated. Continuing...`,
+            "warning",
+            taskId
+          );
+          continue;
+        }
+
+        addThought(
+          "generation",
+          state.uiLanguage === "zh"
+            ? `生成了 ${generatedKeywords.length} 个候选关键词`
+            : `Generated ${generatedKeywords.length} candidate keywords`,
+          {
+            keywords: generatedKeywords.map((k) => k.keyword),
+            data: generatedKeywords,
+            dataType: "keywords",
+          },
+          taskId
+        );
+
+        addLog(
+          state.uiLanguage === "zh"
+            ? `✨ 成功生成 ${generatedKeywords.length} 个候选关键词`
+            : `✨ Generated ${generatedKeywords.length} candidate keywords`,
+          "success",
+          taskId
+        );
+
+        addLog(
+          state.uiLanguage === "zh"
+            ? `🔍 正在分析 SERP 估算排名概率...`
+            : `🔍 Analyzing SERP to estimate ranking probability...`,
+          "info",
+          taskId
+        );
+
+        // 分析排名概率
+        const analyzedBatch = await analyzeRankingProbability(
+          generatedKeywords,
+          getWorkflowPrompt("mining", "mining-analyze", state.analyzePrompt),
+          state.uiLanguage,
+          state.targetLanguage
+        );
+
+        // 更新关键词列表
+        allKeywords.push(...analyzedBatch);
+
+        // Update keywords with task isolation
+        setState((prev) => {
+          const updatedTasks = prev.taskManager.tasks.map((task) => {
+            if (task.id === taskId && task.miningState) {
+              return {
+                ...task,
+                miningState: {
+                  ...task.miningState,
+                  keywords: [...task.miningState.keywords, ...analyzedBatch],
+                },
+              };
+            }
+            return task;
+          });
+
+          if (taskId === prev.taskManager.activeTaskId) {
+            return {
+              ...prev,
+              keywords: [...prev.keywords, ...analyzedBatch],
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          } else {
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          }
+        });
+
+        const highProbCount = analyzedBatch.filter(
+          (k) => k.probability === ProbabilityLevel.HIGH
+        ).length;
+        const mediumProbCount = analyzedBatch.filter(
+          (k) => k.probability === ProbabilityLevel.MEDIUM
+        ).length;
+        const lowProbCount = analyzedBatch.filter(
+          (k) => k.probability === ProbabilityLevel.LOW
+        ).length;
+
+        addLog(
+          state.uiLanguage === "zh"
+            ? `📊 分析完成：高概率 ${highProbCount} 个，中概率 ${mediumProbCount} 个，低概率 ${lowProbCount} 个`
+            : `📊 Analysis complete: High ${highProbCount}, Medium ${mediumProbCount}, Low ${lowProbCount}`,
+          "success",
+          taskId
+        );
+
+        // 检查是否有高概率关键词
+        const highProbKeywords = analyzedBatch.filter(
+          (k) => k.probability === ProbabilityLevel.HIGH
+        );
+
+        if (highProbKeywords.length > 0) {
+          addLog(
+            state.uiLanguage === "zh"
+              ? `✅ 发现 ${highProbKeywords.length} 个高概率上首页的关键词！`
+              : `✅ Found ${highProbKeywords.length} high-probability keywords!`,
+            "success",
+            taskId
+          );
+
+          addThought(
+            "generation",
+            state.uiLanguage === "zh"
+              ? `发现高概率关键词：${highProbKeywords
+                  .map((k) => k.keyword)
+                  .join(", ")}`
+              : `High-probability keywords found: ${highProbKeywords
+                  .map((k) => k.keyword)
+                  .join(", ")}`,
+            {
+              keywords: highProbKeywords.map((k) => k.keyword),
+              data: highProbKeywords,
+              dataType: "keywords",
+            },
+            taskId
+          );
+        }
+
+        // 显示所有关键词
+        addThought(
+          "generation",
+          state.uiLanguage === "zh"
+            ? `关键词挖掘完成，共 ${allKeywords.length} 个关键词（高概率: ${
+                allKeywords.filter(
+                  (k) => k.probability === ProbabilityLevel.HIGH
+                ).length
+              }）`
+            : `Keyword mining complete, ${
+                allKeywords.length
+              } keywords total (High: ${
+                allKeywords.filter(
+                  (k) => k.probability === ProbabilityLevel.HIGH
+                ).length
+              })`,
+          {
+            keywords: allKeywords.map((k) => k.keyword),
+            data: allKeywords,
+            dataType: "keywords",
+          },
+          taskId
+        );
+
+        // 如果找到足够的高概率关键词，可以停止或继续
+        // 这里我们继续挖掘，直到用户停止
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      } catch (err: any) {
+        console.error("[Website Audit Mining Loop] Error:", err);
+        addLog(
+          state.uiLanguage === "zh"
+            ? `❌ 轮次 ${currentRound} 出错: ${err.message}`
+            : `❌ Error in Round ${currentRound}: ${err.message}`,
+          "error",
+          taskId
+        );
+        // 继续挖掘，不因为单次错误而停止
+      }
+    }
+
+    // 挖掘结束，显示最终结果
+    const finalHighProb = allKeywords.filter(
+      (k) => k.probability === ProbabilityLevel.HIGH
+    ).length;
+    const finalMediumProb = allKeywords.filter(
+      (k) => k.probability === ProbabilityLevel.MEDIUM
+    ).length;
+    const finalLowProb = allKeywords.filter(
+      (k) => k.probability === ProbabilityLevel.LOW
+    ).length;
+
+    setState((prev) => {
+      const updatedState: AppState = {
+        ...prev,
+        keywords: allKeywords,
+        isMining: false,
+        miningSuccess: true,
+        step: "results" as const,
+      };
+      saveToArchive(updatedState);
+      return updatedState;
+    });
+
+    addLog(
+      state.uiLanguage === "zh"
+        ? `✅ 关键词挖掘完成！共发现 ${allKeywords.length} 个关键词 (高概率: ${finalHighProb}, 中概率: ${finalMediumProb}, 低概率: ${finalLowProb})`
+        : `✅ Keyword mining complete! Found ${allKeywords.length} keywords (High: ${finalHighProb}, Medium: ${finalMediumProb}, Low: ${finalLowProb})`,
+      "success",
+      taskId
+    );
+  };
+
   const handleStop = () => {
     const currentTaskId = state.taskManager.activeTaskId;
 
@@ -6017,29 +6062,45 @@ export default function App() {
       );
 
       // Consume credits after successfully generating strategy (fixed 30 credits for deep dive)
-      try {
-        addLog("Consuming credits for deep dive analysis...", "info", taskId);
-        await consumeCredits(
-          "deep_mining",
-          `Deep Dive Strategy - "${
-            keyword.keyword
-          }" (${state.targetLanguage.toUpperCase()})`
-        );
+      // Skip credit consumption in local development environment
+      const isLocalDev =
+        import.meta.env.DEV ||
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+
+      if (isLocalDev) {
         addLog(
-          `✅ Credits consumed: 30 credits. Remaining: ${
-            credits?.remaining || 0
-          }`,
-          "success",
+          state.uiLanguage === "zh"
+            ? "本地测试模式：跳过 credit 消耗"
+            : "Local dev mode: Skipping credit consumption",
+          "info",
           taskId
         );
-      } catch (error: any) {
-        console.error("[Credits] Failed to consume credits:", error);
-        addLog(
-          `⚠️ Warning: Credits consumption failed - ${error.message}`,
-          "warning",
-          taskId
-        );
-        // Continue showing results even if credits fail
+      } else {
+        try {
+          addLog("Consuming credits for deep dive analysis...", "info", taskId);
+          await consumeCredits(
+            "deep_mining",
+            `Deep Dive Strategy - "${
+              keyword.keyword
+            }" (${state.targetLanguage.toUpperCase()})`
+          );
+          addLog(
+            `✅ Credits consumed: 30 credits. Remaining: ${
+              credits?.remaining || 0
+            }`,
+            "success",
+            taskId
+          );
+        } catch (error: any) {
+          console.error("[Credits] Failed to consume credits:", error);
+          addLog(
+            `⚠️ Warning: Credits consumption failed - ${error.message}`,
+            "warning",
+            taskId
+          );
+          // Continue showing results even if credits fail
+        }
       }
 
       // Step 2: Core keyword extraction (done by API)
@@ -6846,8 +6907,14 @@ export default function App() {
     // Check credits balance before starting
     const requiredCredits = 20; // batch_translation costs 20 credits
 
-    // Check if user has enough credits
-    if (!checkCreditsBalance(requiredCredits)) {
+    // Skip credit check in local development environment
+    const isLocalDev =
+      import.meta.env.DEV ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+
+    // Check if user has enough credits (skip in local dev)
+    if (!isLocalDev && !checkCreditsBalance(requiredCredits)) {
       const confirmRecharge = window.confirm(
         state.uiLanguage === "zh"
           ? `余额不足！此操作需要 ${requiredCredits} Credits，您当前剩余 ${
@@ -6878,44 +6945,53 @@ export default function App() {
       return;
     }
 
-    // Consume credits before starting
-    try {
-      addLog("Consuming credits...", "info");
-      await consumeCredits(
-        "batch_translation",
-        `Batch Translation - ${
-          keywordList.length
-        } keywords (${state.targetLanguage.toUpperCase()})`
-      );
+    // Consume credits before starting (skip in local dev)
+    if (isLocalDev) {
       addLog(
-        `✅ Credits consumed successfully. Remaining: ${
-          credits?.remaining || 0
-        }`,
-        "success"
+        state.uiLanguage === "zh"
+          ? "本地测试模式：跳过 credit 消耗"
+          : "Local dev mode: Skipping credit consumption",
+        "info"
       );
-    } catch (error: any) {
-      console.error("[Credits] Failed to consume credits:", error);
-
-      if (error.message === "INSUFFICIENT_CREDITS") {
-        const confirmRecharge = window.confirm(
-          state.uiLanguage === "zh"
-            ? "Credits余额不足，是否��往主应用充值？"
-            : "Insufficient credits. Go to main app to recharge?"
+    } else {
+      try {
+        addLog("Consuming credits...", "info");
+        await consumeCredits(
+          "batch_translation",
+          `Batch Translation - ${
+            keywordList.length
+          } keywords (${state.targetLanguage.toUpperCase()})`
         );
+        addLog(
+          `✅ Credits consumed successfully. Remaining: ${
+            credits?.remaining || 0
+          }`,
+          "success"
+        );
+      } catch (error: any) {
+        console.error("[Credits] Failed to consume credits:", error);
 
-        if (confirmRecharge) {
-          window.open(MAIN_APP_URL, "_blank");
-        }
-      } else {
-        setState((prev) => ({
-          ...prev,
-          error:
+        if (error.message === "INSUFFICIENT_CREDITS") {
+          const confirmRecharge = window.confirm(
             state.uiLanguage === "zh"
-              ? `Credits扣费失败: ${error.message}`
-              : `Failed to consume credits: ${error.message}`,
-        }));
+              ? "Credits余额不足，是否��往主应用充值？"
+              : "Insufficient credits. Go to main app to recharge?"
+          );
+
+          if (confirmRecharge) {
+            window.open(MAIN_APP_URL, "_blank");
+          }
+        } else {
+          setState((prev) => ({
+            ...prev,
+            error:
+              state.uiLanguage === "zh"
+                ? `Credits扣费失败: ${error.message}`
+                : `Failed to consume credits: ${error.message}`,
+          }));
+        }
+        return;
       }
-      return;
     }
 
     // Auto-create task if no active task exists
@@ -6959,71 +7035,28 @@ export default function App() {
 
   const runBatchAnalysis = async (keywordList: string[], taskId: string) => {
     try {
-      // Call batch API (translates all keywords and gets SE Ranking data in ONE request)
+      // Step-by-step execution for real-time streaming display
       addLog(
-        `Calling batch translation and SE Ranking API for ${keywordList.length} keywords...`,
-        "api",
+        `Starting step-by-step analysis for ${keywordList.length} keywords...`,
+        "info",
         taskId
       );
 
-      const batchResult = await batchTranslateAndAnalyze(
-        keywordList.join(", "),
-        state.targetLanguage,
-        getWorkflowPrompt("batch", "batch-analyze", state.analyzePrompt),
-        state.uiLanguage
+      const allKeywords: KeywordData[] = [];
+      const systemInstruction = getWorkflowPrompt(
+        "batch",
+        "batch-analyze",
+        state.analyzePrompt
       );
 
-      if (!batchResult.success) {
-        throw new Error("Batch analysis failed");
-      }
-
-      addLog(
-        `Batch API completed: ${batchResult.total} keywords processed`,
-        "success",
-        taskId
-      );
-
-      // Consume credits based on number of keywords processed
-      try {
-        addLog(
-          "Consuming credits based on keywords processed...",
-          "info",
-          taskId
-        );
-        await consumeCredits(
-          "batch_translation",
-          `Batch Translation - ${
-            batchResult.total
-          } keywords (${state.targetLanguage.toUpperCase()})`,
-          batchResult.total
-        );
-        addLog(
-          `✅ Credits consumed: ${
-            Math.ceil(batchResult.total / 10) * 20
-          } credits. Remaining: ${credits?.remaining || 0}`,
-          "success",
-          taskId
-        );
-      } catch (error: any) {
-        console.error("[Credits] Failed to consume credits:", error);
-        addLog(
-          `⚠️ Warning: Credits consumption failed - ${error.message}`,
-          "warning",
-          taskId
-        );
-        // Continue showing results even if credits fail
-      }
-
-      // Display results one by one (for UI streaming effect)
-      for (let i = 0; i < batchResult.keywords.length; i++) {
+      // Process each keyword one by one (real-time streaming)
+      for (let i = 0; i < keywordList.length; i++) {
         if (stopBatchRef.current) {
           addLog("Batch analysis stopped by user.", "warning", taskId);
           break;
         }
 
-        const result = batchResult.keywords[i];
-        const original =
-          batchResult.translationResults[i]?.original || `Keyword ${i + 1}`;
+        const originalKeyword = keywordList[i];
 
         // Update batchCurrentIndex with task isolation
         setState((prev) => {
@@ -7063,136 +7096,205 @@ export default function App() {
         });
 
         addLog(
-          `[${i + 1}/${batchResult.total}] Processing: "${original}"`,
+          `[${i + 1}/${keywordList.length}] Processing: "${originalKeyword}"`,
           "info",
           taskId
         );
 
-        // Show translation thought
-        addBatchThought(
-          "translation",
-          original,
-          `Translated to: "${result.keyword}"`,
-          { keyword: result.keyword },
-          taskId
-        );
+        try {
+          // Step 1: Translate keyword (real-time display)
+          addLog(
+            `[${i + 1}/${
+              keywordList.length
+            }] Step 1: Translating "${originalKeyword}"...`,
+            "info",
+            taskId
+          );
 
-        // Show SE Ranking thought
-        if (result.serankingData) {
-          if (result.serankingData.is_data_found) {
+          // Call translateAndAnalyzeSingle API which handles translation, DataForSEO, and analysis
+          const singleResult = await translateAndAnalyzeSingle(
+            originalKeyword,
+            state.targetLanguage,
+            systemInstruction,
+            state.uiLanguage
+          );
+
+          if (!singleResult.success) {
+            throw new Error(`Failed to analyze keyword: ${originalKeyword}`);
+          }
+
+          const result = singleResult.keyword;
+          const translated = singleResult.translated;
+
+          // Show translation thought (real-time)
+          addBatchThought(
+            "translation",
+            originalKeyword,
+            `Translated to: "${translated}"`,
+            { keyword: translated },
+            taskId
+          );
+
+          // Show DataForSEO thought (real-time)
+          if (result.serankingData) {
+            if (result.serankingData.is_data_found) {
+              addBatchThought(
+                "seranking",
+                result.keyword,
+                `DataForSEO: Volume=${result.serankingData.volume}, KD=${result.serankingData.difficulty}, CPC=$${result.serankingData.cpc}`,
+                { serankingData: result.serankingData },
+                taskId
+              );
+            } else {
+              addBatchThought(
+                "seranking",
+                result.keyword,
+                `DataForSEO: No data found (Blue Ocean Signal!)`,
+                { serankingData: { is_data_found: false } },
+                taskId
+              );
+            }
+          }
+
+          // Show SERP search thought (real-time)
+          if (result.topSerpSnippets && result.topSerpSnippets.length > 0) {
             addBatchThought(
-              "seranking",
+              "serp-search",
               result.keyword,
-              `SE Ranking: Volume=${result.serankingData.volume}, KD=${result.serankingData.difficulty}, CPC=$${result.serankingData.cpc}`,
-              { serankingData: result.serankingData },
-              taskId
-            );
-          } else {
-            addBatchThought(
-              "seranking",
-              result.keyword,
-              `SE Ranking: No data found (Blue Ocean Signal!)`,
-              { serankingData: { is_data_found: false } },
+              `Analyzed top ${result.topSerpSnippets.length} search results from Google`,
+              { serpSnippets: result.topSerpSnippets },
               taskId
             );
           }
-        }
 
-        // Show SERP search thought
-        if (result.topSerpSnippets && result.topSerpSnippets.length > 0) {
-          addBatchThought(
-            "serp-search",
-            result.keyword,
-            `Analyzed top ${result.topSerpSnippets.length} search results from Google`,
-            { serpSnippets: result.topSerpSnippets },
-            taskId
-          );
-        }
+          // Show intent analysis thought (real-time)
+          if (result.searchIntent && result.intentAnalysis) {
+            addBatchThought(
+              "intent-analysis",
+              result.keyword,
+              `Search intent analyzed`,
+              {
+                intentData: {
+                  searchIntent: result.searchIntent,
+                  intentAnalysis: result.intentAnalysis,
+                },
+              },
+              taskId
+            );
+          }
 
-        // Show intent analysis thought
-        if (result.searchIntent && result.intentAnalysis) {
+          // Show final analysis thought (real-time)
           addBatchThought(
-            "intent-analysis",
+            "analysis",
             result.keyword,
-            `Search intent analyzed`,
+            `Analysis complete: ${result.probability} probability`,
             {
-              intentData: {
-                searchIntent: result.searchIntent,
-                intentAnalysis: result.intentAnalysis,
+              analysis: {
+                probability: result.probability || ProbabilityLevel.LOW,
+                topDomainType: result.topDomainType || "Unknown",
+                serpResultCount: result.serpResultCount || -1,
+                reasoning: result.reasoning || "No reasoning provided",
               },
             },
             taskId
           );
-        }
 
-        // Show final analysis thought
-        addBatchThought(
-          "analysis",
-          result.keyword,
-          `Analysis complete: ${result.probability} probability`,
-          {
-            analysis: {
-              probability: result.probability || ProbabilityLevel.LOW,
-              topDomainType: result.topDomainType || "Unknown",
-              serpResultCount: result.serpResultCount || -1,
-              reasoning: result.reasoning || "No reasoning provided",
-            },
-          },
-          taskId
-        );
+          // Add to state with task isolation (real-time)
+          setState((prev) => {
+            const updatedTasks = prev.taskManager.tasks.map((task) => {
+              if (task.id === taskId && task.batchState) {
+                return {
+                  ...task,
+                  batchState: {
+                    ...task.batchState,
+                    batchKeywords: [...task.batchState.batchKeywords, result],
+                  },
+                };
+              }
+              return task;
+            });
 
-        // Add to state with task isolation
-        setState((prev) => {
-          const updatedTasks = prev.taskManager.tasks.map((task) => {
-            if (task.id === taskId && task.batchState) {
+            // Only update global state if this is the active task
+            if (taskId === prev.taskManager.activeTaskId) {
               return {
-                ...task,
-                batchState: {
-                  ...task.batchState,
-                  batchKeywords: [...task.batchState.batchKeywords, result],
+                ...prev,
+                batchKeywords: [...prev.batchKeywords, result],
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            } else {
+              // Background task - only update task object
+              return {
+                ...prev,
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
                 },
               };
             }
-            return task;
           });
 
-          // Only update global state if this is the active task
-          if (taskId === prev.taskManager.activeTaskId) {
-            return {
-              ...prev,
-              batchKeywords: [...prev.batchKeywords, result],
-              taskManager: {
-                ...prev.taskManager,
-                tasks: updatedTasks,
-              },
-            };
-          } else {
-            // Background task - only update task object
-            return {
-              ...prev,
-              taskManager: {
-                ...prev.taskManager,
-                tasks: updatedTasks,
-              },
-            };
-          }
-        });
+          allKeywords.push(result);
 
+          addLog(
+            `[${i + 1}/${
+              keywordList.length
+            }] Completed: "${originalKeyword}" → ${result.probability}`,
+            "success",
+            taskId
+          );
+        } catch (error: any) {
+          console.error(
+            `[Batch Analysis] Error processing keyword "${originalKeyword}":`,
+            error
+          );
+          addLog(
+            `[${i + 1}/${
+              keywordList.length
+            }] Error processing "${originalKeyword}": ${error.message}`,
+            "error",
+            taskId
+          );
+          // Continue with next keyword even if one fails
+        }
+      }
+
+      // Consume credits based on number of keywords processed
+      try {
         addLog(
-          `Completed: "${original}" → ${result.probability}`,
+          "Consuming credits based on keywords processed...",
+          "info",
+          taskId
+        );
+        await consumeCredits(
+          "batch_translation",
+          `Batch Translation - ${
+            allKeywords.length
+          } keywords (${state.targetLanguage.toUpperCase()})`,
+          allKeywords.length
+        );
+        addLog(
+          `✅ Credits consumed: ${
+            Math.ceil(allKeywords.length / 10) * 20
+          } credits. Remaining: ${credits?.remaining || 0}`,
           "success",
           taskId
         );
-
-        // Small delay for UI streaming effect
-        if (i < batchResult.keywords.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, 300));
-        }
+      } catch (error: any) {
+        console.error("[Credits] Failed to consume credits:", error);
+        addLog(
+          `⚠️ Warning: Credits consumption failed - ${error.message}`,
+          "warning",
+          taskId
+        );
+        // Continue showing results even if credits fail
       }
 
       // Analysis complete
       addLog(
-        `Batch analysis complete! Processed ${batchResult.keywords.length}/${batchResult.total} keywords.`,
+        `Batch analysis complete! Processed ${allKeywords.length}/${keywordList.length} keywords.`,
         "success",
         taskId
       );
@@ -7222,7 +7324,13 @@ export default function App() {
         );
 
         // Only update global step if this is the active task
+        console.log(
+          `[Batch Analysis] Setting step to batch-results, taskId: ${taskId}, activeTaskId: ${prev.taskManager.activeTaskId}`
+        );
         if (taskId === prev.taskManager.activeTaskId) {
+          console.log(
+            `[Batch Analysis] ✅ Active task match - navigating to batch-results page`
+          );
           return {
             ...prev,
             step: "batch-results",
@@ -7230,6 +7338,9 @@ export default function App() {
           };
         } else {
           // Background task - just update archives
+          console.log(
+            `[Batch Analysis] ⚠️ Background task - not navigating (taskId: ${taskId} !== activeTaskId: ${prev.taskManager.activeTaskId})`
+          );
           return {
             ...prev,
             batchArchives: updatedArchives,
@@ -8407,8 +8518,8 @@ export default function App() {
                                     <CheckCircle className="w-3 h-3" />
                                     <span>
                                       {state.uiLanguage === "zh"
-                                        ? "网址有效，已自动选择"
-                                        : "URL valid, automatically selected"}
+                                        ? "网址有效，将用于关键词挖掘分析"
+                                        : "URL valid, will be used for keyword mining analysis"}
                                     </span>
                                   </>
                                 )}
@@ -9233,8 +9344,8 @@ export default function App() {
                                   <CheckCircle className="w-3 h-3" />
                                   <span>
                                     {state.uiLanguage === "zh"
-                                      ? "网址有效，已自动选择"
-                                      : "URL valid, automatically selected"}
+                                      ? "网址有效，将用于跨市场分析"
+                                      : "URL valid, will be used for cross-market analysis"}
                                   </span>
                                 </>
                               )}
@@ -11545,7 +11656,9 @@ export default function App() {
                                 onClick={() =>
                                   setState((prev) => ({
                                     ...prev,
-                                    showDetailedAnalysisModal: true,
+                                    // 只有在有 currentStrategyReport 时才显示模态框
+                                    showDetailedAnalysisModal:
+                                      !!prev.currentStrategyReport,
                                   }))
                                 }
                                 className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all text-xs font-medium shadow-sm hover:shadow-md"
@@ -11725,38 +11838,301 @@ export default function App() {
                 </div>
 
                 {/* Detailed Analysis Modal */}
-                {state.showDetailedAnalysisModal && (
-                  <div
-                    className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
-                    onClick={() =>
-                      setState((prev) => ({
-                        ...prev,
-                        showDetailedAnalysisModal: false,
-                      }))
-                    }
-                  >
+                {state.showDetailedAnalysisModal &&
+                  state.currentStrategyReport && (
                     <div
-                      className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-                      onClick={(e) => e.stopPropagation()}
+                      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+                      onClick={() =>
+                        setState((prev) => ({
+                          ...prev,
+                          showDetailedAnalysisModal: false,
+                        }))
+                      }
                     >
-                      {/* Modal Header */}
-                      <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="bg-white/20 p-2 rounded-lg">
-                              <Search className="w-6 h-6" />
+                      <div
+                        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {/* Modal Header */}
+                        <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className="bg-white/20 p-2 rounded-lg">
+                                <Search className="w-6 h-6" />
+                              </div>
+                              <div>
+                                <h3 className="text-xl font-bold">
+                                  {state.uiLanguage === "zh"
+                                    ? "上首页概率验证结果"
+                                    : "Ranking Probability Analysis"}
+                                </h3>
+                                <p className="text-sm text-white/80 mt-1">
+                                  {state.currentStrategyReport?.targetKeyword}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <h3 className="text-xl font-bold">
-                                {state.uiLanguage === "zh"
-                                  ? "上首页概率验证结果"
-                                  : "Ranking Probability Analysis"}
-                              </h3>
-                              <p className="text-sm text-white/80 mt-1">
-                                {state.currentStrategyReport?.targetKeyword}
-                              </p>
-                            </div>
+                            <button
+                              onClick={() =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  showDetailedAnalysisModal: false,
+                                }))
+                              }
+                              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                            >
+                              <X className="w-5 h-5" />
+                            </button>
                           </div>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-auto p-6 space-y-6">
+                          {/* Ranking Probability Badge */}
+                          {state.currentStrategyReport?.rankingProbability && (
+                            <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
+                              <div className="text-sm text-slate-500 uppercase font-bold mb-3">
+                                {state.uiLanguage === "zh"
+                                  ? "上首页概率"
+                                  : "Ranking Probability"}
+                              </div>
+                              <div className="flex items-center gap-4 mb-4">
+                                <span
+                                  className={`px-6 py-3 rounded-xl text-xl font-bold shadow-lg ${
+                                    state.currentStrategyReport
+                                      .rankingProbability ===
+                                    ProbabilityLevel.HIGH
+                                      ? "bg-emerald-100 text-emerald-800 border-2 border-emerald-300"
+                                      : state.currentStrategyReport
+                                          .rankingProbability ===
+                                        ProbabilityLevel.MEDIUM
+                                      ? "bg-yellow-100 text-yellow-800 border-2 border-yellow-300"
+                                      : "bg-red-100 text-red-800 border-2 border-red-300"
+                                  }`}
+                                >
+                                  {
+                                    state.currentStrategyReport
+                                      .rankingProbability
+                                  }
+                                </span>
+                              </div>
+
+                              {/* Core Keywords */}
+                              {state.currentStrategyReport.coreKeywords &&
+                                state.currentStrategyReport.coreKeywords
+                                  .length > 0 && (
+                                  <div className="mb-4 p-4 bg-white rounded-lg border border-slate-200">
+                                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                      {state.uiLanguage === "zh"
+                                        ? "核心关键词"
+                                        : "Core Keywords"}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {state.currentStrategyReport.coreKeywords.map(
+                                        (kw, idx) => (
+                                          <span
+                                            key={idx}
+                                            className="px-3 py-1 bg-purple-50 text-purple-700 rounded-md text-sm font-medium border border-purple-200"
+                                          >
+                                            {kw}
+                                          </span>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                              {/* Search Intent */}
+                              {state.currentStrategyReport.searchIntent && (
+                                <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                  <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-2">
+                                    <Lightbulb className="w-4 h-4" />
+                                    {state.uiLanguage === "zh"
+                                      ? "搜索意图"
+                                      : "Search Intent"}
+                                  </div>
+                                  <MarkdownContent
+                                    content={
+                                      state.currentStrategyReport.searchIntent
+                                    }
+                                  />
+                                </div>
+                              )}
+
+                              {/* Intent Match */}
+                              {state.currentStrategyReport.intentMatch && (
+                                <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                                  <div className="text-xs text-purple-600 uppercase font-bold mb-2 flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4" />
+                                    {state.uiLanguage === "zh"
+                                      ? "内容匹配度"
+                                      : "Content-Intent Match"}
+                                  </div>
+                                  <MarkdownContent
+                                    content={
+                                      state.currentStrategyReport.intentMatch
+                                    }
+                                  />
+                                </div>
+                              )}
+
+                              {/* Ranking Analysis */}
+                              {state.currentStrategyReport.rankingAnalysis && (
+                                <div className="p-4 bg-white rounded-lg border border-slate-200">
+                                  <div className="text-xs text-slate-600 uppercase font-bold mb-2">
+                                    {state.uiLanguage === "zh"
+                                      ? "详细分析"
+                                      : "Detailed Analysis"}
+                                  </div>
+                                  <MarkdownContent
+                                    content={
+                                      state.currentStrategyReport
+                                        .rankingAnalysis
+                                    }
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* SERP Competition Data */}
+                          {state.currentStrategyReport?.serpCompetitionData &&
+                            state.currentStrategyReport.serpCompetitionData
+                              .length > 0 && (
+                              <div>
+                                <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                  <Search className="w-5 h-5 text-indigo-600" />
+                                  {state.uiLanguage === "zh"
+                                    ? "SERP竞争分析"
+                                    : "SERP Competition Analysis"}
+                                </h4>
+                                <div className="space-y-4">
+                                  {state.currentStrategyReport.serpCompetitionData.map(
+                                    (data, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="p-4 bg-slate-50 rounded-lg border border-slate-200"
+                                      >
+                                        <div className="font-bold text-sm text-slate-900 mb-2 flex items-center gap-2">
+                                          <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
+                                            #{idx + 1}
+                                          </span>
+                                          {data.keyword}
+                                        </div>
+                                        <div className="mb-3">
+                                          <MarkdownContent
+                                            content={data.analysis}
+                                          />
+                                        </div>
+
+                                        {/* SE Ranking Data for this keyword */}
+                                        {data.serankingData && (
+                                          <div className="mb-3 p-3 bg-white rounded border border-blue-200">
+                                            <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-1">
+                                              <TrendingUp className="w-3 h-3" />
+                                              SEO词研究工具 (SE Ranking Data)
+                                            </div>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                              <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                                <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                                  VOLUME
+                                                </div>
+                                                <div className="text-sm font-bold text-blue-600">
+                                                  {data.serankingData.volume?.toLocaleString() ||
+                                                    "N/A"}
+                                                </div>
+                                              </div>
+                                              <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                                <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                                  KD
+                                                </div>
+                                                <div
+                                                  className={`text-sm font-bold ${
+                                                    (data.serankingData
+                                                      .difficulty || 0) <= 40
+                                                      ? "text-emerald-600"
+                                                      : (data.serankingData
+                                                          .difficulty || 0) <=
+                                                        60
+                                                      ? "text-yellow-600"
+                                                      : "text-red-600"
+                                                  }`}
+                                                >
+                                                  {data.serankingData
+                                                    .difficulty || "N/A"}
+                                                </div>
+                                              </div>
+                                              <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                                <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                                  CPC
+                                                </div>
+                                                <div className="text-sm font-bold text-emerald-600">
+                                                  $
+                                                  {data.serankingData.cpc?.toFixed(
+                                                    2
+                                                  ) || "N/A"}
+                                                </div>
+                                              </div>
+                                              <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                                <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                                  COMP
+                                                </div>
+                                                <div className="text-sm font-bold text-purple-600">
+                                                  {data.serankingData
+                                                    .competition
+                                                    ? typeof data.serankingData
+                                                        .competition ===
+                                                      "number"
+                                                      ? (
+                                                          data.serankingData
+                                                            .competition * 100
+                                                        ).toFixed(1) + "%"
+                                                      : data.serankingData
+                                                          .competition
+                                                    : "N/A"}
+                                                </div>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {data.serpResults &&
+                                          data.serpResults.length > 0 && (
+                                            <div className="space-y-2">
+                                              <div className="text-xs text-slate-500 uppercase font-bold">
+                                                {state.uiLanguage === "zh"
+                                                  ? "前三名SERP结果"
+                                                  : "Top 3 SERP Results"}
+                                              </div>
+                                              {data.serpResults
+                                                .slice(0, 3)
+                                                .map((result, ridx) => (
+                                                  <div
+                                                    key={ridx}
+                                                    className="bg-white p-3 rounded border border-slate-200 text-xs hover:border-blue-300 transition-colors"
+                                                  >
+                                                    <div className="text-blue-700 font-medium truncate">
+                                                      {result.title}
+                                                    </div>
+                                                    <div className="text-emerald-700 text-[10px] truncate mt-1">
+                                                      {result.url}
+                                                    </div>
+                                                    <div className="text-slate-500 mt-2 line-clamp-2">
+                                                      {result.snippet}
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                            </div>
+                                          )}
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
                           <button
                             onClick={() =>
                               setState((prev) => ({
@@ -11764,269 +12140,14 @@ export default function App() {
                                 showDetailedAnalysisModal: false,
                               }))
                             }
-                            className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                            className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium"
                           >
-                            <X className="w-5 h-5" />
+                            {state.uiLanguage === "zh" ? "关闭" : "Close"}
                           </button>
                         </div>
                       </div>
-
-                      {/* Modal Body */}
-                      <div className="flex-1 overflow-auto p-6 space-y-6">
-                        {/* Ranking Probability Badge */}
-                        {state.currentStrategyReport?.rankingProbability && (
-                          <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
-                            <div className="text-sm text-slate-500 uppercase font-bold mb-3">
-                              {state.uiLanguage === "zh"
-                                ? "上首页概率"
-                                : "Ranking Probability"}
-                            </div>
-                            <div className="flex items-center gap-4 mb-4">
-                              <span
-                                className={`px-6 py-3 rounded-xl text-xl font-bold shadow-lg ${
-                                  state.currentStrategyReport
-                                    .rankingProbability ===
-                                  ProbabilityLevel.HIGH
-                                    ? "bg-emerald-100 text-emerald-800 border-2 border-emerald-300"
-                                    : state.currentStrategyReport
-                                        .rankingProbability ===
-                                      ProbabilityLevel.MEDIUM
-                                    ? "bg-yellow-100 text-yellow-800 border-2 border-yellow-300"
-                                    : "bg-red-100 text-red-800 border-2 border-red-300"
-                                }`}
-                              >
-                                {state.currentStrategyReport.rankingProbability}
-                              </span>
-                            </div>
-
-                            {/* Core Keywords */}
-                            {state.currentStrategyReport.coreKeywords &&
-                              state.currentStrategyReport.coreKeywords.length >
-                                0 && (
-                                <div className="mb-4 p-4 bg-white rounded-lg border border-slate-200">
-                                  <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                                    {state.uiLanguage === "zh"
-                                      ? "核心关键词"
-                                      : "Core Keywords"}
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {state.currentStrategyReport.coreKeywords.map(
-                                      (kw, idx) => (
-                                        <span
-                                          key={idx}
-                                          className="px-3 py-1 bg-purple-50 text-purple-700 rounded-md text-sm font-medium border border-purple-200"
-                                        >
-                                          {kw}
-                                        </span>
-                                      )
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-
-                            {/* Search Intent */}
-                            {state.currentStrategyReport.searchIntent && (
-                              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                                <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-2">
-                                  <Lightbulb className="w-4 h-4" />
-                                  {state.uiLanguage === "zh"
-                                    ? "搜索意图"
-                                    : "Search Intent"}
-                                </div>
-                                <MarkdownContent
-                                  content={
-                                    state.currentStrategyReport.searchIntent
-                                  }
-                                />
-                              </div>
-                            )}
-
-                            {/* Intent Match */}
-                            {state.currentStrategyReport.intentMatch && (
-                              <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                                <div className="text-xs text-purple-600 uppercase font-bold mb-2 flex items-center gap-2">
-                                  <CheckCircle className="w-4 h-4" />
-                                  {state.uiLanguage === "zh"
-                                    ? "内容匹配度"
-                                    : "Content-Intent Match"}
-                                </div>
-                                <MarkdownContent
-                                  content={
-                                    state.currentStrategyReport.intentMatch
-                                  }
-                                />
-                              </div>
-                            )}
-
-                            {/* Ranking Analysis */}
-                            {state.currentStrategyReport.rankingAnalysis && (
-                              <div className="p-4 bg-white rounded-lg border border-slate-200">
-                                <div className="text-xs text-slate-600 uppercase font-bold mb-2">
-                                  {state.uiLanguage === "zh"
-                                    ? "详细分析"
-                                    : "Detailed Analysis"}
-                                </div>
-                                <MarkdownContent
-                                  content={
-                                    state.currentStrategyReport.rankingAnalysis
-                                  }
-                                />
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* SERP Competition Data */}
-                        {state.currentStrategyReport?.serpCompetitionData &&
-                          state.currentStrategyReport.serpCompetitionData
-                            .length > 0 && (
-                            <div>
-                              <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                <Search className="w-5 h-5 text-indigo-600" />
-                                {state.uiLanguage === "zh"
-                                  ? "SERP竞争分析"
-                                  : "SERP Competition Analysis"}
-                              </h4>
-                              <div className="space-y-4">
-                                {state.currentStrategyReport.serpCompetitionData.map(
-                                  (data, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="p-4 bg-slate-50 rounded-lg border border-slate-200"
-                                    >
-                                      <div className="font-bold text-sm text-slate-900 mb-2 flex items-center gap-2">
-                                        <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
-                                          #{idx + 1}
-                                        </span>
-                                        {data.keyword}
-                                      </div>
-                                      <div className="mb-3">
-                                        <MarkdownContent
-                                          content={data.analysis}
-                                        />
-                                      </div>
-
-                                      {/* SE Ranking Data for this keyword */}
-                                      {data.serankingData && (
-                                        <div className="mb-3 p-3 bg-white rounded border border-blue-200">
-                                          <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-1">
-                                            <TrendingUp className="w-3 h-3" />
-                                            SEO词研究工具 (SE Ranking Data)
-                                          </div>
-                                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                            <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                                              <div className="text-[9px] text-slate-500 font-bold mb-1">
-                                                VOLUME
-                                              </div>
-                                              <div className="text-sm font-bold text-blue-600">
-                                                {data.serankingData.volume?.toLocaleString() ||
-                                                  "N/A"}
-                                              </div>
-                                            </div>
-                                            <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                                              <div className="text-[9px] text-slate-500 font-bold mb-1">
-                                                KD
-                                              </div>
-                                              <div
-                                                className={`text-sm font-bold ${
-                                                  (data.serankingData
-                                                    .difficulty || 0) <= 40
-                                                    ? "text-emerald-600"
-                                                    : (data.serankingData
-                                                        .difficulty || 0) <= 60
-                                                    ? "text-yellow-600"
-                                                    : "text-red-600"
-                                                }`}
-                                              >
-                                                {data.serankingData
-                                                  .difficulty || "N/A"}
-                                              </div>
-                                            </div>
-                                            <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                                              <div className="text-[9px] text-slate-500 font-bold mb-1">
-                                                CPC
-                                              </div>
-                                              <div className="text-sm font-bold text-emerald-600">
-                                                $
-                                                {data.serankingData.cpc?.toFixed(
-                                                  2
-                                                ) || "N/A"}
-                                              </div>
-                                            </div>
-                                            <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                                              <div className="text-[9px] text-slate-500 font-bold mb-1">
-                                                COMP
-                                              </div>
-                                              <div className="text-sm font-bold text-purple-600">
-                                                {data.serankingData.competition
-                                                  ? typeof data.serankingData
-                                                      .competition === "number"
-                                                    ? (
-                                                        data.serankingData
-                                                          .competition * 100
-                                                      ).toFixed(1) + "%"
-                                                    : data.serankingData
-                                                        .competition
-                                                  : "N/A"}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )}
-
-                                      {data.serpResults &&
-                                        data.serpResults.length > 0 && (
-                                          <div className="space-y-2">
-                                            <div className="text-xs text-slate-500 uppercase font-bold">
-                                              {state.uiLanguage === "zh"
-                                                ? "前三名SERP结果"
-                                                : "Top 3 SERP Results"}
-                                            </div>
-                                            {data.serpResults
-                                              .slice(0, 3)
-                                              .map((result, ridx) => (
-                                                <div
-                                                  key={ridx}
-                                                  className="bg-white p-3 rounded border border-slate-200 text-xs hover:border-blue-300 transition-colors"
-                                                >
-                                                  <div className="text-blue-700 font-medium truncate">
-                                                    {result.title}
-                                                  </div>
-                                                  <div className="text-emerald-700 text-[10px] truncate mt-1">
-                                                    {result.url}
-                                                  </div>
-                                                  <div className="text-slate-500 mt-2 line-clamp-2">
-                                                    {result.snippet}
-                                                  </div>
-                                                </div>
-                                              ))}
-                                          </div>
-                                        )}
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            </div>
-                          )}
-                      </div>
-
-                      {/* Modal Footer */}
-                      <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
-                        <button
-                          onClick={() =>
-                            setState((prev) => ({
-                              ...prev,
-                              showDetailedAnalysisModal: false,
-                            }))
-                          }
-                          className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium"
-                        >
-                          {state.uiLanguage === "zh" ? "关闭" : "Close"}
-                        </button>
-                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
               </div>
             )}
 

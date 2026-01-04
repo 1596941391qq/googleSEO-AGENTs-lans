@@ -41,6 +41,14 @@ export interface DomainOverview {
     top50: number;
     top100: number;
   };
+  backlinksInfo?: {
+    referringDomains: number;
+    referringMainDomains: number;
+    referringPages: number;
+    dofollow: number;
+    backlinks: number;
+    timeUpdate?: string;
+  };
 }
 
 export interface DomainKeyword {

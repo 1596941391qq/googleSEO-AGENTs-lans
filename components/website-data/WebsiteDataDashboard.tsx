@@ -1,15 +1,22 @@
 import React, { useState, useEffect } from "react";
 import {
-  RefreshCw,
-  Loader2,
   AlertCircle,
 } from "lucide-react";
-import { Button } from "../ui/button";
 import { OverviewCards } from "./OverviewCards";
 import { RankingDistributionChart } from "./RankingDistributionChart";
 import { TopKeywordsTable } from "./TopKeywordsTable";
 import { CompetitorsComparison } from "./CompetitorsComparison";
+import { BacklinksInfo } from "./BacklinksInfo";
 import { cn } from "../../lib/utils";
+
+interface BacklinksInfoData {
+  referringDomains: number;
+  referringMainDomains: number;
+  referringPages: number;
+  dofollow: number;
+  backlinks: number;
+  timeUpdate?: string;
+}
 
 interface WebsiteOverview {
   organicTraffic: number;
@@ -28,6 +35,7 @@ interface WebsiteOverview {
     top50: number;
     top100: number;
   };
+  backlinksInfo?: BacklinksInfoData | null;
   updatedAt: string;
   expiresAt: string;
 }
@@ -75,7 +83,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 }) => {
   const [data, setData] = useState<WebsiteData | null>(null);
   const [loading, setLoading] = useState(true); // 初始为 true，显示加载状态
-  const [updating, setUpdating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingParts, setLoadingParts] = useState({
     overview: true,
@@ -83,7 +90,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     competitors: true,
   });
 
-  // 并行加载数据 - 哪个先返回就先显示哪个
+  // 优先从缓存获取，如果缓存过期或不存在，才从API获取（只获取一次）
   const loadDataParallel = async () => {
     setLoading(true);
     setError(null);
@@ -106,9 +113,94 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
     console.log("[Dashboard] 🚀 Starting parallel data loading for websiteId:", websiteId);
 
-    // 并行发起所有请求
+    // 检查是否需要从API更新数据（使用sessionStorage防止重复调用）
+    const apiFetchKey = `api_fetch_${websiteId}`;
+    const lastFetchTime = sessionStorage.getItem(apiFetchKey);
+    const now = Date.now();
+    const FIVE_MINUTES = 5 * 60 * 1000; // 5分钟内不重复调用API
+
+    let needsApiUpdate = false;
+    let overviewCachePromise: Promise<Response> | null = null;
+
+    // 先检查缓存状态，决定是否需要调用API
+    try {
+      overviewCachePromise = fetch("/api/website-data/overview-only", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(baseRequest),
+      });
+
+      const cacheResponse = await overviewCachePromise;
+      if (cacheResponse.ok) {
+        const cacheResult = await cacheResponse.json();
+        
+        // 检查缓存是否有效
+        if (cacheResult.data && cacheResult.cached) {
+          const expiresAt = cacheResult.data.expiresAt ? new Date(cacheResult.data.expiresAt) : null;
+          const cacheTime = new Date();
+          
+          // 如果缓存过期或不存在，才需要从API更新
+          if (!expiresAt || expiresAt < cacheTime) {
+            console.log("[Dashboard] ⚠️ Cache expired, will fetch from API");
+            needsApiUpdate = true;
+          } else {
+            console.log("[Dashboard] ✅ Cache is valid, using cached data");
+            // 缓存有效，不需要调用API
+          }
+        } else {
+          // 没有缓存数据，需要从API获取
+          console.log("[Dashboard] ⚠️ No cache found, will fetch from API");
+          needsApiUpdate = true;
+        }
+      } else {
+        // 获取缓存失败，尝试从API获取
+        needsApiUpdate = true;
+      }
+    } catch (error: any) {
+      console.log("[Dashboard] ⚠️ Cache check failed, will try API:", error.message);
+      needsApiUpdate = true;
+      // 如果缓存检查失败，重新创建请求
+      overviewCachePromise = fetch("/api/website-data/overview-only", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(baseRequest),
+      });
+    }
+
+    // 只有在需要时才从API获取数据，并且防止重复调用
+    if (needsApiUpdate) {
+      // 如果5分钟内已经调用过API，就不再调用
+      if (lastFetchTime && (now - parseInt(lastFetchTime)) < FIVE_MINUTES) {
+        console.log("[Dashboard] ⏭️ API was called recently, skipping to avoid duplicate calls");
+        needsApiUpdate = false;
+      } else {
+        // 记录本次API调用时间
+        sessionStorage.setItem(apiFetchKey, now.toString());
+        
+        // 异步调用API更新，不阻塞数据加载
+        fetch("/api/website-data/update-metrics", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(baseRequest),
+        })
+        .then((updateResponse) => {
+          if (updateResponse.ok) {
+            console.log("[Dashboard] ✅ Successfully fetched fresh data from API");
+            // API更新完成后，重新加载数据
+            setTimeout(() => loadData(), 1000);
+          } else {
+            console.log("[Dashboard] ⚠️ API fetch failed, will use cache");
+          }
+        })
+        .catch((error: any) => {
+          console.log("[Dashboard] ⚠️ API fetch error, will use cache:", error.message);
+        });
+      }
+    }
+
+    // 并行发起所有请求（从缓存读取）
     const requests = {
-      overview: fetch("/api/website-data/overview-only", {
+      overview: overviewCachePromise || fetch("/api/website-data/overview-only", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(baseRequest),
@@ -204,40 +296,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   // 保持向后兼容的 loadData 方法
   const loadData = loadDataParallel;
 
-  // Update metrics (refresh from DataForSEO/SE-Ranking) - 只在用户手动点击时调用
-  const updateMetrics = async () => {
-    setUpdating(true);
-    setError(null);
-
-    try {
-      console.log("[Dashboard] 🔄 User manually triggered data update...");
-      const response = await fetch("/api/website-data/update-metrics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          userId: 1,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log("[Dashboard] ✅ Update completed:", result);
-        // 更新完成后重新加载数据
-        await loadData();
-      } else {
-        const errorText = await response.text();
-        console.error("[Dashboard] Update error:", errorText);
-        setError(uiLanguage === "zh" ? "更新失败，请稍后重试" : "Update failed, please try again");
-      }
-    } catch (error: any) {
-      console.error("[Dashboard] Failed to update:", error);
-      setError(uiLanguage === "zh" ? "网络错误，请检查连接" : "Network error, please check connection");
-    } finally {
-      setUpdating(false);
-    }
-  };
-
   useEffect(() => {
     if (websiteId) {
       // 异步加载数据
@@ -292,18 +350,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
             </p>
           )}
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={updateMetrics}
-          disabled={updating}
-        >
-          {updating ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <RefreshCw className="w-4 h-4" />
-          )}
-        </Button>
       </div>
 
       {/* Overview Cards - 始终显示，加载时显示骨架屏 */}
@@ -316,6 +362,14 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           newKeywords: data.overview.newKeywords,
         } : undefined}
         isLoading={loading || !data}
+        isDarkTheme={isDarkTheme}
+        uiLanguage={uiLanguage}
+      />
+
+      {/* Backlinks Info */}
+      <BacklinksInfo
+        backlinks={data?.overview?.backlinksInfo}
+        isLoading={loading || !data?.overview}
         isDarkTheme={isDarkTheme}
         uiLanguage={uiLanguage}
       />
@@ -363,14 +417,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           <div className="flex items-center gap-2">
             <AlertCircle className="w-4 h-4" />
             <span className="text-sm">{error}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadData}
-              className="ml-auto"
-            >
-              {uiLanguage === "zh" ? "重试" : "Retry"}
-            </Button>
           </div>
         </div>
       )}
@@ -385,28 +431,11 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
               : "bg-gray-50 border-gray-200 text-gray-500"
           )}
         >
-          <p className="text-sm mb-4">
+          <p className="text-sm">
             {uiLanguage === "zh"
-              ? "还没有网站数据。点击下方按钮从 DataForSEO 获取数据。"
-              : "No website data yet. Click the button below to fetch data from DataForSEO."}
+              ? "正在从 DataForSEO 获取数据，请稍候..."
+              : "Fetching data from DataForSEO, please wait..."}
           </p>
-          <Button
-            onClick={updateMetrics}
-            disabled={updating}
-            className="bg-emerald-500 hover:bg-emerald-600"
-          >
-            {updating ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {uiLanguage === "zh" ? "获取数据中..." : "Fetching..."}
-              </>
-            ) : (
-              <>
-                <RefreshCw className="w-4 h-4 mr-2" />
-                {uiLanguage === "zh" ? "获取数据" : "Fetch Data"}
-              </>
-            )}
-          </Button>
           {error && (
             <p className={cn(
               "text-xs mt-3",

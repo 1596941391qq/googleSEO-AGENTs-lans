@@ -55,6 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         top10_count,
         top50_count,
         top100_count,
+        backlinks_info,
         data_updated_at,
         cache_expires_at
       FROM domain_overview_cache
@@ -80,6 +81,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       top100: overview.top100_count || 0,
     };
 
+    // 解析 backlinks_info JSONB 字段
+    let backlinksInfo = null;
+    if (overview.backlinks_info) {
+      try {
+        backlinksInfo = typeof overview.backlinks_info === 'string' 
+          ? JSON.parse(overview.backlinks_info) 
+          : overview.backlinks_info;
+      } catch (error) {
+        console.warn('[overview-only] Failed to parse backlinks_info:', error);
+      }
+    }
+
     return res.status(200).json({
       success: true,
       data: {
@@ -94,6 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         avgPosition: overview.avg_position || 0,
         trafficCost: overview.traffic_cost || 0,
         rankingDistribution,
+        backlinksInfo,
         updatedAt: overview.data_updated_at,
         expiresAt: overview.cache_expires_at,
       },

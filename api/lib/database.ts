@@ -739,6 +739,7 @@ export async function initDomainCacheTables() {
           top10_count INTEGER DEFAULT 0,
           top50_count INTEGER DEFAULT 0,
           top100_count INTEGER DEFAULT 0,
+          backlinks_info JSONB,
           data_updated_at TIMESTAMP,
           cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
           created_at TIMESTAMP DEFAULT NOW(),
@@ -749,6 +750,30 @@ export async function initDomainCacheTables() {
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_website ON domain_overview_cache(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_date ON domain_overview_cache(data_date)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_expires ON domain_overview_cache(cache_expires_at)`;
+
+      // 添加 backlinks_info 字段（如果不存在）
+      try {
+        // 检查列是否存在
+        const columnCheck = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_schema = 'public'
+          AND table_name = 'domain_overview_cache' 
+          AND column_name = 'backlinks_info'
+        `;
+        
+        if (columnCheck.rows.length === 0) {
+          await sql`ALTER TABLE domain_overview_cache ADD COLUMN backlinks_info JSONB`;
+          console.log('[Database] Added backlinks_info column to domain_overview_cache');
+        }
+      } catch (error: any) {
+        // 如果错误是"列已存在"，这是正常的，可以忽略
+        if (error.code === '42701' || error.message?.includes('already exists')) {
+          // 静默处理，不输出日志
+        } else {
+          console.warn('[Database] Could not add backlinks_info column:', error.message);
+        }
+      }
 
       await sql`
         CREATE TABLE IF NOT EXISTS domain_keywords_cache (
