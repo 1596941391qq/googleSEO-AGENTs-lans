@@ -43,6 +43,11 @@ import {
   Hash,
   Network,
   Send,
+  Layers,
+  LayoutGrid,
+  Cpu,
+  Link2,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "./components/ui/button";
 import {
@@ -121,13 +126,16 @@ import {
 
 const TEXT = {
   en: {
-    title: "Google SEO Agent",
+    title: "Mine Hidden Alpha",
     step1: "1. Input",
     step2: "2. process",
     step3: "3. Results",
     inputTitle: "Define Your Niche",
     inputDesc:
       'Enter a seed keyword. The Agent will iterate until it finds a HIGH probability "Blue Ocean" keyword or "Weak Competitor" gap.',
+    auditInputTitle: "Expand Your Reach",
+    auditInputDesc:
+      "Enter a established URL. The Agent will pivot from the core to find high-conversion long-tail clusters and cross-category opportunities within the existing traffic pool.",
     placeholder: "Enter keyword (e.g., Tractor parts)",
     targetMarket: "Target Market",
     btnStart: "Start Mining",
@@ -185,13 +193,13 @@ const TEXT = {
     batchTranslateDesc:
       "Enter multiple keywords (comma-separated) to translate and analyze for blue ocean opportunities.",
     batchInputPlaceholder: "e.g., dog food, cat toys, bird cage",
-    btnBatchAnalyze: "Batch Analyze",
+    btnBatchAnalyze: "Cross-Market Insights",
     batchAnalyzing: "Translating and analyzing...",
-    batchResultsTitle: "Batch Analysis Results",
+    batchResultsTitle: "BCross-Market Insights Results",
     originalKeyword: "Original",
     translatedKeyword: "Translated",
     tabMining: "Keyword Mining",
-    tabBatch: "Batch Translation",
+    tabBatch: "Cross-Market Insight",
     tabDeepDive: "Deep Dive Strategy",
     deepDiveTitle: "Deep Dive SEO Strategy",
     deepDiveDesc:
@@ -200,7 +208,7 @@ const TEXT = {
     btnDeepDive: "Start Deep Dive",
     deepDiveArchives: "Deep Dive Archives",
     miningArchives: "Mining Archives",
-    batchArchives: "Batch Archives",
+    batchArchives: "Insight Archives",
     deepDiveAnalyzing: "Deep Dive Analysis",
     deepDiveResults: "Deep Dive Results",
     exportHTML: "Export HTML",
@@ -267,13 +275,16 @@ const TEXT = {
     cardWeakness: "Weakness",
   },
   zh: {
-    title: "Google SEO 智能 Agent",
+    title: "Mine Hidden Alpha",
     step1: "1. 输入",
     step2: "2. 过程",
     step3: "3. 结果",
-    inputTitle: "定义您的利基市场",
+    inputTitle: "定义您的 利基市场",
     inputDesc:
       "输入核心关键词。Agent 将循环挖掘，直到发现“蓝海词”或“弱竞争对手”（如论坛、PDF）占位的机会。",
+    auditInputTitle: "扩展您的 覆盖范围",
+    auditInputDesc:
+      "输入已建立的 URL。Agent 将从核心出发，在现有流量池中找到高转化的长尾词集群和跨类别机会。",
     placeholder: "输入初始词 (例如: manus,nanobanana)",
     targetMarket: "目标市场语言",
     btnStart: "开始挖掘",
@@ -327,17 +338,17 @@ const TEXT = {
     noConfigs: "暂无保存的配置",
     configSaved: "配置已保存",
     enterConfigName: "输入配置名称...",
-    batchTranslateTitle: "批量翻译并分析",
+    batchTranslateTitle: "跨市场洞察",
     batchTranslateDesc:
       "输入多个关键词（用逗号分隔），自动翻译到目标语言并分析蓝海机会。",
     batchInputPlaceholder: "例如：狗粮, 猫玩具, 鸟笼",
-    btnBatchAnalyze: "批量分析",
-    batchAnalyzing: "正在翻译和分析...",
-    batchResultsTitle: "批量分析结果",
+    btnBatchAnalyze: "跨市场洞察",
+    batchAnalyzing: "正在跨市场洞察...",
+    batchResultsTitle: "跨市场洞察结果",
     originalKeyword: "原始词",
     translatedKeyword: "翻译词",
     tabMining: "关键词挖掘",
-    tabBatch: "翻译分析",
+    tabBatch: "跨市场洞察",
     tabDeepDive: "深度策略",
     deepDiveTitle: "深度SEO策略",
     deepDiveDesc:
@@ -346,7 +357,7 @@ const TEXT = {
     btnDeepDive: "开始深度分析",
     deepDiveArchives: "深度挖掘历史",
     miningArchives: "挖掘历史",
-    batchArchives: "批量历史",
+    batchArchives: "洞察历史",
     deepDiveAnalyzing: "深度挖掘分析中",
     deepDiveResults: "深度挖掘结果",
     exportHTML: "导出 HTML",
@@ -365,7 +376,7 @@ const TEXT = {
     workflowConfig: "工作流配置",
     workflowConfigDesc: "为每个工作流配置AI代理",
     miningWorkflow: "挖掘工作流",
-    batchWorkflow: "批量翻译工作流",
+    batchWorkflow: "洞察工作流",
     deepDiveWorkflow: "深度挖掘工作流",
     agentNode: "代理节点",
     toolNode: "工具节点",
@@ -1318,7 +1329,7 @@ const BatchAnalysisStream = ({
         }`}
       >
         <Languages className="w-3 h-3 text-emerald-500" />
-        <span>Batch Analysis Stream</span>
+        <span>Cross-Market Insights Stream</span>
       </div>
       <div
         ref={scrollRef}
@@ -3524,7 +3535,7 @@ export default function App() {
   const generateTaskName = (type: TaskType, index: number): string => {
     const names = {
       mining: state.uiLanguage === "zh" ? "挖掘" : "Mining",
-      batch: state.uiLanguage === "zh" ? "批量" : "Batch",
+      batch: state.uiLanguage === "zh" ? "洞察" : "Insight",
       "article-generator": state.uiLanguage === "zh" ? "图文" : "Article",
     };
     return `${names[type]} #${index + 1}`;
@@ -4997,7 +5008,7 @@ export default function App() {
           currentTaskId
         );
 
-        // Step 3: 批量翻译分析（SE Ranking + SERP + 排名概率分析）
+        // Step 3: 跨市场洞察（SE Ranking + SERP + 排名概率分析）
         addLog(
           state.uiLanguage === "zh"
             ? `📊 步骤 4: 开始批量分析关键词（SE Ranking + SERP + 排名概率）...`
@@ -5016,7 +5027,7 @@ export default function App() {
         );
 
         try {
-          // 调用批量翻译分析API，使用 keywordsFromAudit 参数
+          // 调用跨市场洞察API，使用 keywordsFromAudit 参数
           const batchAnalysisResponse = await fetch(
             "/api/batch-translate-analyze",
             {
@@ -5445,6 +5456,7 @@ export default function App() {
             keywords: generatedKeywords.map((k) => k.keyword),
             data: generatedKeywords,
             dataType: "keywords",
+            searchResults: result.searchResults, // 添加联网搜索结果
           },
           taskId
         );
@@ -5583,6 +5595,24 @@ export default function App() {
           (k) => k.probability === ProbabilityLevel.HIGH
         );
 
+        // 收集所有关键词的联网搜索结果并去重
+        const allSearchResults: Array<{
+          title: string;
+          url: string;
+          snippet?: string;
+        }> = [];
+        const seenUrls = new Set<string>();
+        analyzedBatch.forEach((keyword) => {
+          if (keyword.searchResults) {
+            keyword.searchResults.forEach((result) => {
+              if (!seenUrls.has(result.url)) {
+                seenUrls.add(result.url);
+                allSearchResults.push(result);
+              }
+            });
+          }
+        });
+
         addThought(
           "analysis",
           `Analysis Complete.`,
@@ -5592,6 +5622,8 @@ export default function App() {
             table: undefined,
             data: highProbKeywords,
             dataType: "analysis",
+            searchResults:
+              allSearchResults.length > 0 ? allSearchResults : undefined, // 添加联网搜索结果
           },
           taskId
         );
@@ -7541,111 +7573,161 @@ export default function App() {
           {/* STEP 1: INPUT */}
           {state.step === "input" && (
             <div className="max-w-6xl mx-auto mt-8 flex-1 w-full">
-              {/* Mode Selector */}
-              <div className="mb-6">
-                <div
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg",
-                    isDarkTheme
-                      ? "bg-black/40 border border-emerald-500/20"
-                      : "bg-white border border-emerald-500/30"
-                  )}
-                >
-                  <span
+              {/* Hero Text */}
+              <div className="text-center space-y-6">
+                <div className="space-y-4">
+                  <h2
                     className={cn(
-                      "text-sm font-medium whitespace-nowrap",
-                      isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                      "text-4xl font-black tracking-tight",
+                      isDarkTheme ? "text-white" : "text-gray-900"
                     )}
                   >
-                    {state.uiLanguage === "zh" ? "挖掘模式" : "Mining Mode"}:
-                  </span>
-                  <div className="flex gap-2 flex-1">
+                    {miningMode === "existing-website-audit"
+                      ? (() => {
+                          const title =
+                            t.auditInputTitle || "Expand Your Reach";
+                          // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
+                          if (state.uiLanguage === "zh") {
+                            const lastFourChars = title.slice(-4);
+                            const restChars = title.slice(0, -4);
+                            return (
+                              <>
+                                {restChars}
+                                <span className="text-emerald-500">
+                                  {lastFourChars}
+                                </span>
+                              </>
+                            );
+                          } else {
+                            const words = title.split(" ");
+                            const lastWord = words.pop() || "";
+                            const restWords = words.join(" ");
+                            return (
+                              <>
+                                {restWords}{" "}
+                                <span className="text-emerald-500">
+                                  {lastWord}
+                                </span>
+                              </>
+                            );
+                          }
+                        })()
+                      : (() => {
+                          const title = t.inputTitle || "Define Your Niche";
+                          // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
+                          if (state.uiLanguage === "zh") {
+                            const lastFourChars = title.slice(-4);
+                            const restChars = title.slice(0, -4);
+                            return (
+                              <>
+                                {restChars}
+                                <span className="text-emerald-500">
+                                  {lastFourChars}
+                                </span>
+                              </>
+                            );
+                          } else {
+                            const words = title.split(" ");
+                            const lastWord = words.pop() || "";
+                            const restWords = words.join(" ");
+                            return (
+                              <>
+                                {restWords}{" "}
+                                <span className="text-emerald-500">
+                                  {lastWord}
+                                </span>
+                              </>
+                            );
+                          }
+                        })()}
+                  </h2>
+                  <p
+                    className={cn(
+                      "text-sm max-w-xl mx-auto leading-relaxed px-4",
+                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                    )}
+                  >
+                    {miningMode === "existing-website-audit"
+                      ? t.auditInputDesc
+                      : t.inputDesc}
+                  </p>
+                </div>
+
+                {/* Redesigned Major Mode Switcher */}
+                <div className="flex items-center justify-center pt-2">
+                  <div
+                    className={cn(
+                      "inline-flex p-1 rounded-xl shadow-2xl border",
+                      isDarkTheme
+                        ? "bg-neutral-900/80 border-white/10"
+                        : "bg-gray-100 border-gray-200"
+                    )}
+                  >
                     <button
                       onClick={() => setMiningMode("blue-ocean")}
                       className={cn(
-                        "flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                        "flex items-center space-x-3 px-8 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
                         miningMode === "blue-ocean"
-                          ? "bg-emerald-500 text-white shadow-sm"
+                          ? "bg-emerald-600 text-white shadow-lg"
                           : isDarkTheme
-                          ? "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-emerald-400"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-emerald-600"
+                          ? "text-neutral-500 hover:text-neutral-300"
+                          : "text-gray-600 hover:text-gray-900"
                       )}
                     >
-                      {state.uiLanguage === "zh" ? "蓝海发现" : "Blue Ocean"}
+                      <Layers size={14} />
+                      <span>
+                        {state.uiLanguage === "zh" ? "蓝海发现" : "Blue Ocean"}
+                      </span>
                     </button>
                     <button
                       onClick={() => setMiningMode("existing-website-audit")}
                       className={cn(
-                        "flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all",
+                        "flex items-center space-x-3 px-8 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
                         miningMode === "existing-website-audit"
-                          ? "bg-emerald-500 text-white shadow-sm"
+                          ? "bg-emerald-600 text-white shadow-lg"
                           : isDarkTheme
-                          ? "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-emerald-400"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-emerald-600"
+                          ? "text-neutral-500 hover:text-neutral-300"
+                          : "text-gray-600 hover:text-gray-900"
                       )}
                     >
-                      {state.uiLanguage === "zh" ? "存量拓新" : "Website Audit"}
+                      <RefreshCw size={14} />
+                      <span>
+                        {state.uiLanguage === "zh"
+                          ? "存量拓新"
+                          : "Website Audit"}
+                      </span>
                     </button>
                   </div>
                 </div>
-              </div>
 
-              <div className="text-center mb-10">
-                <h2
-                  className={`text-2xl font-bold mb-3 ${
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  }`}
-                >
-                  {t.inputTitle}
-                </h2>
-                <p
-                  className={`text-sm mb-6 ${
-                    isDarkTheme ? "text-slate-400" : "text-gray-600"
-                  }`}
-                >
-                  {t.inputDesc}
-                </p>
-
-                {/* Tabs */}
-                <div className="flex justify-center mb-8">
-                  <div
-                    className={`inline-flex backdrop-blur-sm rounded-lg border shadow-sm p-1 ${
-                      isDarkTheme
-                        ? "bg-black/40 border-emerald-500/20"
-                        : "bg-white border-emerald-500/30"
-                    }`}
+                {/* Sub Tabs */}
+                <div className="flex items-center justify-center space-x-2 pt-4">
+                  <button
+                    onClick={() => setActiveTab("mining")}
+                    className={cn(
+                      "px-5 py-2 rounded-md text-sm font-medium transition-all border",
+                      activeTab === "mining"
+                        ? "bg-emerald-500 text-white shadow-sm border-emerald-500"
+                        : isDarkTheme
+                        ? "text-neutral-500 hover:text-neutral-300 border-white/10"
+                        : "text-gray-600 hover:text-gray-900 border-gray-200"
+                    )}
                   >
-                    <button
-                      onClick={() => setActiveTab("mining")}
-                      className={`px-5 py-2 rounded-md font-medium text-sm transition-all ${
-                        activeTab === "mining"
-                          ? "bg-emerald-500 text-white shadow-sm"
-                          : isDarkTheme
-                          ? "text-slate-400 hover:text-emerald-400"
-                          : "text-gray-600 hover:text-emerald-600"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Search className="w-4 h-4" />
-                        {t.tabMining}
-                      </div>
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("batch")}
-                      className={`px-5 py-2 rounded-md font-medium text-sm transition-all ${
-                        activeTab === "batch"
-                          ? "bg-emerald-500 text-white shadow-sm"
-                          : isDarkTheme
-                          ? "text-slate-400 hover:text-emerald-400"
-                          : "text-gray-600 hover:text-emerald-600"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Languages className="w-4 h-4" />
-                        {t.tabBatch}
-                      </div>
-                    </button>
-                  </div>
+                    {t.tabMining}
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("batch")}
+                    className={cn(
+                      "px-5 py-2 rounded-md text-sm font-medium transition-all border",
+                      activeTab === "batch"
+                        ? "bg-emerald-500 text-white shadow-sm border-emerald-500"
+                        : isDarkTheme
+                        ? "text-neutral-500 hover:text-neutral-300 border-white/10"
+                        : "text-gray-600 hover:text-gray-900 border-gray-200"
+                    )}
+                  >
+                    {t.tabBatch}
+                  </button>
                 </div>
               </div>
 
@@ -7722,8 +7804,15 @@ export default function App() {
                         </div>
                       )}
 
-                      {/* Clean Input Design */}
-                      <div className="flex w-full gap-2 items-center h-[56px]">
+                      {/* Redesigned Input Design */}
+                      <div
+                        className={cn(
+                          "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
+                          isDarkTheme
+                            ? "bg-[#0f0f0f] border-white/10"
+                            : "bg-gray-50 border-gray-200"
+                        )}
+                      >
                         {/* Target Language Selector */}
                         <Select
                           value={state.targetLanguage}
@@ -7737,13 +7826,35 @@ export default function App() {
                           <SelectTrigger
                             hideIcon
                             className={cn(
-                              "flex-shrink-0 h-[56px] px-4 bg-emerald-500 border-0 shadow-sm gap-2 rounded-l-lg rounded-r-none",
-                              "text-white hover:bg-emerald-600 transition-colors font-medium text-sm"
+                              "md:w-48 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
+                              isDarkTheme
+                                ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
+                                : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
                             )}
                           >
-                            <Globe className="w-4 h-4 text-white flex-shrink-0" />
-                            <SelectValue className="text-white font-medium" />
-                            <ChevronRight className="w-4 h-4 text-white ml-auto flex-shrink-0" />
+                            <div className="flex items-center space-x-3 overflow-hidden">
+                              <Globe
+                                size={14}
+                                className={cn(
+                                  "shrink-0",
+                                  isDarkTheme
+                                    ? "text-emerald-500"
+                                    : "text-emerald-600"
+                                )}
+                              />
+                              <span className="text-[11px] font-bold truncate">
+                                <SelectValue />
+                              </span>
+                            </div>
+                            <ChevronRight
+                              size={14}
+                              className={cn(
+                                "shrink-0",
+                                isDarkTheme
+                                  ? "text-neutral-700"
+                                  : "text-gray-500"
+                              )}
+                            />
                           </SelectTrigger>
                           <SelectContent
                             className={cn(
@@ -7770,21 +7881,28 @@ export default function App() {
 
                         {/* Input Field */}
                         <div
-                          className={`flex flex-1 h-[56px] backdrop-blur-sm rounded-r-lg rounded-l-none shadow-lg border border-l-0 overflow-hidden focus-within:ring-2 focus-within:ring-emerald-500/50 transition-all ${
+                          className={cn(
+                            "flex-1 rounded-lg flex items-center px-4 h-14 transition-all border",
                             isDarkTheme
-                              ? "bg-black/40 border-emerald-500/30"
-                              : "bg-white border-emerald-500/30"
-                          }`}
+                              ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
+                              : "bg-white border-gray-200 focus-within:border-emerald-500/50"
+                          )}
                         >
-                          <div className="flex items-center justify-center pl-4 text-emerald-400/60">
-                            <Search className="w-4 h-4" />
-                          </div>
+                          <Search
+                            className={cn(
+                              isDarkTheme ? "text-neutral-600" : "text-gray-400"
+                            )}
+                            size={18}
+                          />
                           <input
                             type="text"
                             placeholder={t.placeholder}
-                            className={`flex-1 px-3 py-0 h-full text-sm outline-none bg-transparent placeholder:text-slate-500 ${
-                              isDarkTheme ? "text-white" : "text-gray-900"
-                            }`}
+                            className={cn(
+                              "bg-transparent border-none outline-none w-full text-sm font-medium px-4 h-14",
+                              isDarkTheme
+                                ? "text-white placeholder:text-neutral-700"
+                                : "text-gray-900 placeholder:text-gray-500"
+                            )}
                             value={state.seedKeyword}
                             onChange={(e) =>
                               setState((prev) => ({
@@ -7800,7 +7918,10 @@ export default function App() {
                         <button
                           onClick={() => startMining(false)}
                           disabled={!state.seedKeyword.trim()}
-                          className="h-[56px] px-6 bg-emerald-500 hover:bg-emerald-600 text-white font-medium text-sm rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                          className={cn(
+                            "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
+                            isDarkTheme && "shadow-emerald-900/20"
+                          )}
                         >
                           {t.btnStart}
                         </button>
@@ -8045,35 +8166,51 @@ export default function App() {
 
                   {/* Mining Settings Panel - Only show for blue-ocean mode */}
                   {miningMode === "blue-ocean" && (
-                    <div
-                      className={`mt-6 backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
-                        isDarkTheme
-                          ? "bg-black/40 border-emerald-500/20"
-                          : "bg-white border-emerald-500/30"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-4">
-                        <Settings className="w-4 h-4 text-emerald-400" />
-                        <h4
-                          className={`text-sm font-bold ${
-                            isDarkTheme ? "text-white" : "text-gray-900"
-                          }`}
+                    <section className="space-y-4 mt-8">
+                      <div className="flex items-center space-x-2 px-2">
+                        <Settings
+                          size={14}
+                          className={cn(
+                            isDarkTheme
+                              ? "text-emerald-500"
+                              : "text-emerald-600"
+                          )}
+                        />
+                        <h3
+                          className={cn(
+                            "text-[10px] font-black uppercase tracking-[0.2em]",
+                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                          )}
                         >
                           {state.uiLanguage === "zh"
                             ? "挖词设置"
                             : "Mining Settings"}
-                        </h4>
+                        </h3>
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div
+                        className={cn(
+                          "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
+                          isDarkTheme
+                            ? "bg-black/40 border-emerald-500/20"
+                            : "bg-white border-emerald-500/30"
+                        )}
+                      >
                         {/* Words Per Round */}
-                        <div>
+                        <div className="space-y-2">
                           <label
-                            className={`flex items-center gap-2 text-xs font-semibold mb-2 ${
-                              isDarkTheme ? "text-slate-400" : "text-gray-600"
-                            }`}
+                            className={cn(
+                              "flex items-center gap-2 text-xs font-semibold",
+                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                            )}
                           >
-                            <Hash className="w-3.5 h-3.5 text-emerald-400" />
+                            <Cpu
+                              size={14}
+                              className={cn(
+                                isDarkTheme
+                                  ? "text-emerald-500"
+                                  : "text-emerald-600"
+                              )}
+                            />
                             {state.uiLanguage === "zh"
                               ? "每轮词语数"
                               : "Words Per Round"}
@@ -8095,14 +8232,15 @@ export default function App() {
                             className={cn(
                               "text-sm font-medium h-10",
                               isDarkTheme
-                                ? "border-emerald-500/30 bg-black/60 text-white"
-                                : "border-emerald-500/30 bg-white text-gray-900"
+                                ? "border-white/10 bg-white/5 text-white"
+                                : "border-gray-200 bg-white text-gray-900"
                             )}
                           />
                           <p
-                            className={`text-xs mt-1 ${
-                              isDarkTheme ? "text-slate-500" : "text-gray-500"
-                            }`}
+                            className={cn(
+                              "text-[10px]",
+                              isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                            )}
                           >
                             {state.uiLanguage === "zh"
                               ? "范围: 5-20"
@@ -8111,15 +8249,23 @@ export default function App() {
                         </div>
 
                         {/* Mining Strategy */}
-                        <div>
+                        <div className="space-y-2">
                           <label
-                            className={`flex items-center gap-2 text-xs font-semibold mb-2 ${
-                              isDarkTheme ? "text-slate-400" : "text-gray-600"
-                            }`}
+                            className={cn(
+                              "flex items-center gap-2 text-xs font-semibold",
+                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                            )}
                           >
-                            <Network className="w-3.5 h-3.5 text-emerald-400" />
+                            <LayoutGrid
+                              size={14}
+                              className={cn(
+                                isDarkTheme
+                                  ? "text-emerald-500"
+                                  : "text-emerald-600"
+                              )}
+                            />
                             {state.uiLanguage === "zh"
-                              ? "挖词策略"
+                              ? "挖掘策略"
                               : "Mining Strategy"}
                           </label>
                           <Select
@@ -8137,8 +8283,8 @@ export default function App() {
                               className={cn(
                                 "text-sm font-medium h-10",
                                 isDarkTheme
-                                  ? "border-emerald-500/30 bg-black/60 text-white"
-                                  : "border-emerald-500/30 bg-white text-gray-900"
+                                  ? "border-white/10 bg-white/5 text-white"
+                                  : "border-gray-200 bg-white text-gray-900"
                               )}
                             >
                               <SelectValue />
@@ -8177,9 +8323,10 @@ export default function App() {
                             </SelectContent>
                           </Select>
                           <p
-                            className={`text-xs mt-1 ${
-                              isDarkTheme ? "text-slate-500" : "text-gray-500"
-                            }`}
+                            className={cn(
+                              "text-[10px]",
+                              isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                            )}
                           >
                             {state.uiLanguage === "zh"
                               ? "探索不同的平行主题"
@@ -8187,99 +8334,122 @@ export default function App() {
                           </p>
                         </div>
                       </div>
-                    </div>
+                    </section>
                   )}
 
                   {/* Mining Archive List */}
                   {state.archives.length > 0 && (
-                    <div className="mt-12">
-                      <h3
-                        className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${
-                          isDarkTheme ? "text-slate-400" : "text-gray-600"
-                        }`}
-                      >
-                        <History className="w-4 h-4" /> {t.miningArchives}
-                      </h3>
-                      <div
-                        className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
-                          isDarkTheme
-                            ? "bg-black/40 border-emerald-500/20"
-                            : "bg-white border-emerald-200"
-                        }`}
-                      >
-                        <div
-                          className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
+                    <section className="space-y-4 mt-12">
+                      <div className="flex items-center space-x-2 px-2">
+                        <History
+                          size={14}
+                          className={cn(
                             isDarkTheme
-                              ? "divide-emerald-500/10"
-                              : "divide-gray-200"
-                          }`}
+                              ? "text-emerald-500"
+                              : "text-emerald-600"
+                          )}
+                        />
+                        <h3
+                          className={cn(
+                            "text-[10px] font-black uppercase tracking-[0.2em]",
+                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                          )}
                         >
-                          {state.archives.map((arch) => (
-                            <div
-                              key={arch.id}
-                              onClick={() => loadArchive(arch)}
-                              className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
-                                isDarkTheme
-                                  ? "hover:bg-emerald-500/10"
-                                  : "hover:bg-emerald-50"
-                              }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={`p-2 rounded text-emerald-400 transition-colors ${
-                                    isDarkTheme
-                                      ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
-                                      : "bg-emerald-100 group-hover:bg-emerald-200"
-                                  }`}
-                                >
-                                  <Search className="w-4 h-4" />
-                                </div>
-                                <div>
-                                  <div
-                                    className={`font-medium flex items-center gap-2 ${
+                          {t.miningArchives}
+                        </h3>
+                      </div>
+                      <div className="space-y-2 pb-12">
+                        {state.archives.map((arch) => (
+                          <div
+                            key={arch.id}
+                            onClick={() => loadArchive(arch)}
+                            className={cn(
+                              "group flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer",
+                              isDarkTheme
+                                ? "bg-[#0a0a0a] border-white/5 hover:border-emerald-500/30"
+                                : "bg-white border-gray-200 hover:border-emerald-500/30"
+                            )}
+                          >
+                            <div className="flex items-center space-x-4">
+                              <div
+                                className={cn(
+                                  "w-10 h-10 rounded flex items-center justify-center transition-all group-hover:scale-105",
+                                  isDarkTheme
+                                    ? "bg-neutral-900 border border-white/10 text-emerald-500"
+                                    : "bg-gray-100 border border-gray-200 text-emerald-600"
+                                )}
+                              >
+                                {miningMode === "blue-ocean" ? (
+                                  <Search size={16} />
+                                ) : (
+                                  <Link2 size={16} />
+                                )}
+                              </div>
+                              <div>
+                                <div className="flex items-center space-x-2">
+                                  <span
+                                    className={cn(
+                                      "text-sm font-bold transition-colors",
                                       isDarkTheme
-                                        ? "text-white"
-                                        : "text-gray-900"
-                                    }`}
+                                        ? "text-white group-hover:text-emerald-400"
+                                        : "text-gray-900 group-hover:text-emerald-600"
+                                    )}
                                   >
                                     {arch.seedKeyword}
-                                    <span
-                                      className={`text-[10px] px-1.5 py-0.5 rounded border uppercase ${
-                                        isDarkTheme
-                                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                                      }`}
-                                    >
-                                      {arch.targetLanguage}
-                                    </span>
-                                  </div>
-                                  <div
-                                    className={`text-xs ${
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase",
                                       isDarkTheme
-                                        ? "text-slate-500"
-                                        : "text-gray-500"
-                                    }`}
+                                        ? "bg-emerald-500/10 text-emerald-500"
+                                        : "bg-emerald-50 text-emerald-600"
+                                    )}
                                   >
-                                    {new Date(arch.timestamp).toLocaleString()}{" "}
-                                    • {arch.keywords.length} keywords
-                                  </div>
+                                    {arch.targetLanguage.toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-4 mt-1">
+                                  <span
+                                    className={cn(
+                                      "text-[10px] mono",
+                                      isDarkTheme
+                                        ? "text-neutral-600"
+                                        : "text-gray-500"
+                                    )}
+                                  >
+                                    {new Date(arch.timestamp).toLocaleString()}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "text-[10px] font-bold uppercase tracking-widest",
+                                      isDarkTheme
+                                        ? "text-neutral-500"
+                                        : "text-gray-600"
+                                    )}
+                                  >
+                                    {arch.keywords.length}{" "}
+                                    {state.uiLanguage === "zh"
+                                      ? "个关键词"
+                                      : "keywords discovered"}
+                                  </span>
                                 </div>
                               </div>
-                              <button
-                                onClick={(e) => deleteArchive(arch.id, e)}
-                                className={`p-2 transition-colors ${
-                                  isDarkTheme
-                                    ? "text-slate-600 hover:text-red-400"
-                                    : "text-gray-500 hover:text-red-600"
-                                }`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
                             </div>
-                          ))}
-                        </div>
+                            <button
+                              onClick={(e) => deleteArchive(arch.id, e)}
+                              className={cn(
+                                "p-2 transition-colors opacity-0 group-hover:opacity-100",
+                                isDarkTheme
+                                  ? "text-neutral-700 hover:text-red-400"
+                                  : "text-gray-400 hover:text-red-600"
+                              )}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    </div>
+                    </section>
                   )}
                 </div>
               )}

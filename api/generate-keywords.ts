@@ -47,7 +47,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       additionalSuggestions
     );
 
-    return res.json({ keywords: result.keywords, rawResponse: result.rawResponse });
+    return res.json({ 
+      keywords: result.keywords, 
+      rawResponse: result.rawResponse,
+      searchResults: result.searchResults 
+    });
   } catch (error: any) {
     console.error('Handler error:', error);
     return sendErrorResponse(res, error, 'Failed to generate keywords');

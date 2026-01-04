@@ -202,27 +202,17 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     // 等待所有请求完成
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // 检查是否需要触发数据更新（仅一次，不轮询）
+    // 检查数据状态（不自动触发更新，只在用户访问时显示提示）
     setData((currentData) => {
       const hasAnyData = currentData?.overview || (currentData?.topKeywords?.length ?? 0) > 0 || (currentData?.competitors?.length ?? 0) > 0;
 
       if (!hasAnyData) {
-        console.log("[Dashboard] ⚠️ No cached data found, triggering one-time update...");
-        // 异步触发数据更新（不阻塞，仅一次）
-        fetch("/api/website-data/update-metrics", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(baseRequest),
-        })
-          .then(() => {
-            console.log("[Dashboard] Update completed, reloading once...");
-            // 更新完成后仅重新加载一次
-            loadDataParallel();
-          })
-          .catch((error) => {
-            console.error("[Dashboard] Update failed:", error);
-            setError(uiLanguage === "zh" ? "获取数据失败，请手动刷新" : "Failed to fetch data, please refresh manually");
-          });
+        console.log("[Dashboard] ⚠️ No cached data found - user needs to manually refresh");
+        // 不自动触发更新，只标记需要刷新
+        return {
+          ...currentData,
+          needsRefresh: true,
+        };
       }
 
       return currentData;
@@ -235,11 +225,13 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   // 保持向后兼容的 loadData 方法
   const loadData = loadDataParallel;
 
-  // Update metrics (refresh from SE-Ranking)
+  // Update metrics (refresh from DataForSEO/SE-Ranking) - 只在用户手动点击时调用
   const updateMetrics = async () => {
     setUpdating(true);
+    setError(null);
 
     try {
+      console.log("[Dashboard] 🔄 User manually triggered data update...");
       const response = await fetch("/api/website-data/update-metrics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -250,14 +242,18 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
       });
 
       if (response.ok) {
-        // Reload data after update
+        const result = await response.json();
+        console.log("[Dashboard] ✅ Update completed:", result);
+        // 更新完成后重新加载数据
         await loadData();
       } else {
         const errorText = await response.text();
         console.error("[Dashboard] Update error:", errorText);
+        setError(uiLanguage === "zh" ? "更新失败，请稍后重试" : "Update failed, please try again");
       }
     } catch (error: any) {
       console.error("[Dashboard] Failed to update:", error);
+      setError(uiLanguage === "zh" ? "网络错误，请检查连接" : "Network error, please check connection");
     } finally {
       setUpdating(false);
     }
@@ -586,8 +582,8 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
         >
           <p className="text-sm mb-4">
             {uiLanguage === "zh"
-              ? "还没有网站数据。请先从 SE-Ranking 获取数据。"
-              : "No website data yet. Please fetch data from SE-Ranking first."}
+              ? "还没有网站数据。点击下方按钮从 DataForSEO 获取数据。"
+              : "No website data yet. Click the button below to fetch data from DataForSEO."}
           </p>
           <Button
             onClick={updateMetrics}
@@ -606,6 +602,14 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
               </>
             )}
           </Button>
+          {error && (
+            <p className={cn(
+              "text-xs mt-3",
+              isDarkTheme ? "text-red-400" : "text-red-600"
+            )}>
+              {error}
+            </p>
+          )}
         </div>
       )}
     </div>

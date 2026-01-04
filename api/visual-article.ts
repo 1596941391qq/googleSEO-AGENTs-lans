@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateVisualArticle } from './_shared/services/visual-article-service.js';
 import { parseRequestBody, setCorsHeaders, handleOptions } from './_shared/request-handler.js';
+import { scrapeWebsite } from './_shared/tools/firecrawl.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -15,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = parseRequestBody(req);
-  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage } = body;
+  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, reference } = body;
 
   if (!keyword) {
     return res.status(400).json({ error: 'Missing keyword' });
@@ -68,6 +69,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 2. 否则根据目标市场和关键词推断
   const finalTargetLanguage = targetLanguage || getTargetLanguageFromMarket(targetMarket || 'global', keyword);
 
+  // Process reference if provided
+  let processedReference = reference;
+  if (reference?.type === 'url' && reference.url?.url) {
+    try {
+      console.log('[visual-article] Processing reference URL:', reference.url.url);
+      // Scrape URL with screenshot
+      const scrapeResult = await scrapeWebsite(reference.url.url, true);
+      
+      processedReference = {
+        type: 'url',
+        url: {
+          url: reference.url.url,
+          content: scrapeResult.markdown || '',
+          screenshot: scrapeResult.screenshot || undefined,
+          title: scrapeResult.title || undefined,
+        },
+      };
+      console.log('[visual-article] URL scraped successfully, content length:', scrapeResult.markdown?.length || 0);
+    } catch (error: any) {
+      console.error('[visual-article] Failed to scrape reference URL:', error);
+      // Continue without reference if scraping fails
+      processedReference = undefined;
+    }
+  }
+
   // Set up Server-Sent Events or multi-part like response for streaming
   // For simplicity but effectiveness, we'll use a custom newline-delimited JSON stream
   res.setHeader('Content-Type', 'text/event-stream');
@@ -87,6 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetMarket: targetMarket || 'global',
       uiLanguage: uiLanguage || 'en',
       targetLanguage: finalTargetLanguage,
+      reference: processedReference,
       onEvent: (event) => {
         sendEvent({ type: 'event', data: event });
       }

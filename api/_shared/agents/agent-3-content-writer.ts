@@ -63,7 +63,20 @@ export async function generateContent(
   competitorAnalysis?: CompetitorAnalysisResult,
   uiLanguage: 'zh' | 'en' = 'en',
   targetMarket: string = 'global',
-  targetLanguage: TargetLanguage = 'en'
+  targetLanguage: TargetLanguage = 'en',
+  reference?: {
+    type: 'document' | 'url';
+    document?: {
+      filename: string;
+      content: string;
+    };
+    url?: {
+      url: string;
+      content?: string;
+      screenshot?: string;
+      title?: string;
+    };
+  }
 ): Promise<ContentGenerationResult> {
   try {
     // 获取 Content Writer prompt - 使用 targetLanguage 来确定生成内容的语言
@@ -124,6 +137,60 @@ ${competitorAnalysis.competitorAnalysis ? JSON.stringify(competitorAnalysis.comp
       }
     }
 
+    // 添加参考资料上下文（如果提供）
+    let referenceContext = '';
+    if (reference) {
+      if (reference.type === 'document' && reference.document) {
+        // For writer, provide full content (or summary if too long)
+        const docContent = reference.document.content.length > 10000
+          ? reference.document.content.substring(0, 10000) + '...'
+          : reference.document.content;
+        if (contentLanguage === 'zh') {
+          referenceContext = `
+用户参考文档：
+文件名：${reference.document.filename}
+内容：
+${docContent}
+
+重要提示：虽然用户提供了参考文档，但文章的核心主题必须是"${seoStrategyReport.targetKeyword}"。从文档中提取与关键词相关的信息、数据和案例，但如果文档内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${seoStrategyReport.targetKeyword}"展开。
+`;
+        } else {
+          referenceContext = `
+User Reference Document:
+Filename: ${reference.document.filename}
+Content:
+${docContent}
+
+IMPORTANT: While the user provided this reference document, the core theme of the article must be "${seoStrategyReport.targetKeyword}". Extract relevant information, data, and examples from the document that relate to the keyword. If the document content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${seoStrategyReport.targetKeyword}".
+`;
+        }
+      } else if (reference.type === 'url' && reference.url?.content) {
+        // For writer, provide full content (or summary if too long)
+        const urlContent = reference.url.content.length > 10000
+          ? reference.url.content.substring(0, 10000) + '...'
+          : reference.url.content;
+        if (contentLanguage === 'zh') {
+          referenceContext = `
+用户参考URL：
+URL：${reference.url.url}
+${reference.url.title ? `标题：${reference.url.title}\n` : ''}内容：
+${urlContent}
+
+重要提示：虽然用户提供了参考URL，但文章的核心主题必须是"${seoStrategyReport.targetKeyword}"。从URL中提取与关键词相关的信息、数据和案例，但如果URL内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${seoStrategyReport.targetKeyword}"展开。
+`;
+        } else {
+          referenceContext = `
+User Reference URL:
+URL: ${reference.url.url}
+${reference.url.title ? `Title: ${reference.url.title}\n` : ''}Content:
+${urlContent}
+
+IMPORTANT: While the user provided this reference URL, the core theme of the article must be "${seoStrategyReport.targetKeyword}". Extract relevant information, data, and examples from the URL that relate to the keyword. If the URL content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${seoStrategyReport.targetKeyword}".
+`;
+        }
+      }
+    }
+
     // 构建生成提示
     const marketLabel = targetMarket === 'global' 
       ? (contentLanguage === 'zh' ? '全球市场' : 'Global Market')
@@ -132,7 +199,7 @@ ${competitorAnalysis.competitorAnalysis ? JSON.stringify(competitorAnalysis.comp
     const prompt = contentLanguage === 'zh'
       ? `基于以下SEO研究结果，为 ${marketLabel} 市场撰写一篇高质量的文章内容。
 
-${seoContext}${searchPreferencesContext}${competitorContext}
+${seoContext}${searchPreferencesContext}${competitorContext}${referenceContext}
 
 要求：
 1. 严格按照推荐的内容结构撰写，特别关注 ${marketLabel} 市场的本地化需求
@@ -145,7 +212,7 @@ ${seoContext}${searchPreferencesContext}${competitorContext}
 请以Markdown格式输出完整文章。`
       : `Generate a high-quality article based on the following SEO research findings for the ${marketLabel} market.
 
-${seoContext}${searchPreferencesContext}${competitorContext}
+${seoContext}${searchPreferencesContext}${competitorContext}${referenceContext}
 
 Requirements:
 1. Follow the recommended content structure strictly, with special attention to localization needs for ${marketLabel} market

@@ -584,7 +584,12 @@ Return a JSON object:
         analysis.topDomainType = 'Weak Page';
       }
 
-      return { ...keywordData, ...analysis, rawResponse: response.text };
+      return {
+        ...keywordData,
+        ...analysis,
+        rawResponse: response.text,
+        searchResults: response.searchResults // 添加联网搜索结果
+      };
 
     } catch (error) {
       console.error(`Analysis failed for ${keywordData.keyword}:`, error);
@@ -703,7 +708,20 @@ export const generateDeepDiveStrategy = async (
   customPrompt?: string,
   searchPreferences?: SearchPreferencesResult,
   competitorAnalysis?: CompetitorAnalysisResult,
-  targetMarket: string = 'global'
+  targetMarket: string = 'global',
+  reference?: {
+    type: 'document' | 'url';
+    document?: {
+      filename: string;
+      content: string;
+    };
+    url?: {
+      url: string;
+      content?: string;
+      screenshot?: string;
+      title?: string;
+    };
+  }
 ): Promise<SEOStrategyReport> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const targetLangName = getLanguageName(targetLanguage);
@@ -724,6 +742,24 @@ export const generateDeepDiveStrategy = async (
 
     if (competitorAnalysis.competitorAnalysis?.contentGaps) {
       analysisContext += `\n\nCONTENT GAPS TO FILL: ${competitorAnalysis.competitorAnalysis.contentGaps.join(', ')}`;
+    }
+  }
+
+  // Add reference context
+  let referenceContext = '';
+  if (reference) {
+    if (reference.type === 'document' && reference.document) {
+      // Provide summary for strategist (first 2000 chars)
+      const docSummary = reference.document.content.length > 2000
+        ? reference.document.content.substring(0, 2000) + '...'
+        : reference.document.content;
+      referenceContext = `\n\n=== USER REFERENCE DOCUMENT ===\nFilename: ${reference.document.filename}\nContent Summary:\n${docSummary}\n\nIMPORTANT: While the user provided this reference document, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the document that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the document content is not relevant to the keyword, use it only as a style reference.`;
+    } else if (reference.type === 'url' && reference.url?.content) {
+      // Provide summary for strategist (first 2000 chars)
+      const urlSummary = reference.url.content.length > 2000
+        ? reference.url.content.substring(0, 2000) + '...'
+        : reference.url.content;
+      referenceContext = `\n\n=== USER REFERENCE URL ===\nURL: ${reference.url.url}\n${reference.url.title ? `Title: ${reference.url.title}\n` : ''}Content Summary:\n${urlSummary}\n\nIMPORTANT: While the user provided this reference URL, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the URL that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the URL content is not relevant to the keyword, use it only as a style reference.`;
     }
   }
 
@@ -750,7 +786,7 @@ STRATEGIC INSTRUCTIONS:
 - If competitors have weak content, outline a "Skyscraper" strategy tailored for ${marketLabel}.
 - If competitors are strong, find a unique angle or "Blue Ocean" sub-topic specific to ${marketLabel} market.
 - Your goal is to be 10x better than the current top result in the ${marketLabel} market.
-`) + analysisContext;
+`) + analysisContext + referenceContext;
 
   const prompt = `
 Create a detailed Content Strategy Report for the keyword: "${keyword.keyword}".

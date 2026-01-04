@@ -48,6 +48,7 @@ export interface KeywordData {
   topSerpSnippets?: SerpSnippet[]; // For manual verification
 
   // Search Intent Analysis
+  searchResults?: Array<{ title: string; url: string; snippet?: string }>; // 联网搜索结果
   searchIntent?: string; // Predicted user search intent
   intentAnalysis?: string; // Analysis of the intent
 

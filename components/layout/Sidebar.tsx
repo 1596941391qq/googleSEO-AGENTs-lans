@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import {
   Globe,
@@ -56,7 +55,9 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({
     title={isCollapsed ? label : ""}
   >
     <span
-      className={`shrink-0 relative flex items-center justify-center ${active ? "opacity-100" : "opacity-60"}`}
+      className={`shrink-0 relative flex items-center justify-center ${
+        active ? "opacity-100" : "opacity-60"
+      }`}
     >
       {icon}
       {showBadge && !isCollapsed && (
@@ -86,8 +87,14 @@ interface SidebarProps {
   uiLanguage: UILanguage;
   step: string;
   isDarkTheme: boolean;
-  onContentGeneration?: (tab?: 'my-website' | 'website-data' | 'article-rankings' | 'publish') => void;
-  contentGenerationTab?: 'my-website' | 'website-data' | 'article-rankings' | 'publish';
+  onContentGeneration?: (
+    tab?: "my-website" | "website-data" | "article-rankings" | "publish"
+  ) => void;
+  contentGenerationTab?:
+    | "my-website"
+    | "website-data"
+    | "article-rankings"
+    | "publish";
   onTestAgents?: () => void;
   onDeepDive?: () => void;
   isCollapsed: boolean;
@@ -156,13 +163,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ) {
       return <Loader2 size={14} className="animate-spin text-emerald-500" />;
     }
-    
-    if (task.type === 'article-generator') {
-        return <Sparkles size={14} className={activeTaskId === task.id ? "text-purple-400" : "text-neutral-600"} />;
+
+    if (task.type === "article-generator") {
+      return (
+        <Sparkles
+          size={14}
+          className={
+            activeTaskId === task.id ? "text-purple-400" : "text-neutral-600"
+          }
+        />
+      );
     }
-    
-    if (task.type === 'batch') {
-        return <Languages size={14} className={activeTaskId === task.id ? "text-blue-400" : "text-neutral-600"} />;
+
+    if (task.type === "batch") {
+      return (
+        <Languages
+          size={14}
+          className={
+            activeTaskId === task.id ? "text-blue-400" : "text-neutral-600"
+          }
+        />
+      );
     }
 
     if (task.miningState?.miningSuccess) {
@@ -191,17 +212,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         onClick={onToggleCollapse}
         className={cn(
           "absolute -right-3 top-32 w-7 h-7 rounded-full border z-[60] flex items-center justify-center transition-all duration-300 shadow-[0_0_15px_rgba(0,0,0,0.5)] group/btn",
-          isDarkTheme 
-            ? "bg-[#111] border-white/20 text-white/70 hover:text-white hover:border-emerald-500/50 hover:bg-emerald-500/10" 
+          isDarkTheme
+            ? "bg-[#111] border-white/20 text-white/70 hover:text-white hover:border-emerald-500/50 hover:bg-emerald-500/10"
             : "bg-white border-gray-300 text-gray-500 hover:text-emerald-600 hover:border-emerald-600 shadow-sm"
         )}
       >
-        <TrendingUp 
-          size={12} 
+        <TrendingUp
+          size={12}
           className={cn(
-            "transition-transform duration-500", 
-            isCollapsed ? "rotate-90 scale-125" : "-rotate-90 group-hover/btn:-translate-y-0.5"
-          )} 
+            "transition-transform duration-500",
+            isCollapsed
+              ? "rotate-90 scale-125"
+              : "-rotate-90 group-hover/btn:-translate-y-0.5"
+          )}
         />
         {/* Hover ring */}
         <div className="absolute inset-0 rounded-full border border-emerald-500/0 group-hover/btn:scale-125 group-hover/btn:border-emerald-500/30 transition-all duration-300 pointer-events-none"></div>
@@ -233,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 Niche Digger
               </h1>
               <p className="text-[9px] text-emerald-500 font-bold tracking-tight uppercase mt-1">
-                Google SEO Agent
+                Mine Hidden Alpha
               </p>
             </div>
           )}
@@ -246,32 +269,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <SidebarLink
               icon={<Globe size={14} />}
               label={labels.myWebsite}
-              onClick={() => onContentGeneration('my-website')}
-              active={step === "content-generation" && contentGenerationTab === 'my-website'}
+              onClick={() => onContentGeneration("my-website")}
+              active={
+                step === "content-generation" &&
+                contentGenerationTab === "my-website"
+              }
               isDarkTheme={isDarkTheme}
               isCollapsed={isCollapsed}
             />
             <SidebarLink
               icon={<Hash size={14} />}
               label={labels.websiteData}
-              onClick={() => onContentGeneration('website-data')}
-              active={step === "content-generation" && contentGenerationTab === 'website-data'}
+              onClick={() => onContentGeneration("website-data")}
+              active={
+                step === "content-generation" &&
+                contentGenerationTab === "website-data"
+              }
               isDarkTheme={isDarkTheme}
               isCollapsed={isCollapsed}
             />
             <SidebarLink
               icon={<TrendingUp size={14} />}
               label={labels.articleRankings}
-              onClick={() => onContentGeneration('article-rankings')}
-              active={step === "content-generation" && contentGenerationTab === 'article-rankings'}
+              onClick={() => onContentGeneration("article-rankings")}
+              active={
+                step === "content-generation" &&
+                contentGenerationTab === "article-rankings"
+              }
               isDarkTheme={isDarkTheme}
               isCollapsed={isCollapsed}
             />
             <SidebarLink
               icon={<Send size={14} />}
               label={labels.publish}
-              onClick={() => onContentGeneration('publish')}
-              active={step === "content-generation" && contentGenerationTab === 'publish'}
+              onClick={() => onContentGeneration("publish")}
+              active={
+                step === "content-generation" &&
+                contentGenerationTab === "publish"
+              }
               isDarkTheme={isDarkTheme}
               isCollapsed={isCollapsed}
             />
@@ -279,25 +314,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
 
         <div>
-           {!isCollapsed && (
-              <div className="flex items-center justify-between px-3 mb-4 animate-in fade-in duration-300">
-                <span
-                  className={`text-[10px] font-black uppercase tracking-widest ${
-                    isDarkTheme ? "text-neutral-500" : "text-gray-500"
-                  }`}
+          {!isCollapsed && (
+            <div className="flex items-center justify-between px-3 mb-4 animate-in fade-in duration-300">
+              <span
+                className={`text-[10px] font-black uppercase tracking-widest ${
+                  isDarkTheme ? "text-neutral-500" : "text-gray-500"
+                }`}
+              >
+                {labels.activeTasks}
+              </span>
+              {tasks.length < maxTasks && (
+                <button
+                  onClick={onTaskAdd}
+                  className="text-emerald-500 hover:text-emerald-400 p-1 transition-colors"
                 >
-                  {labels.activeTasks}
-                </span>
-                {tasks.length < maxTasks && (
-                  <button
-                    onClick={onTaskAdd}
-                    className="text-emerald-500 hover:text-emerald-400 p-1 transition-colors"
-                  >
-                    <Plus size={14} />
-                  </button>
-                )}
-              </div>
-           )}
+                  <Plus size={14} />
+                </button>
+              )}
+            </div>
+          )}
           <div className="space-y-1">
             {tasks.map((task) => (
               <div
@@ -360,27 +395,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ))}
             {isCollapsed && tasks.length < maxTasks && (
-                <button
-                  onClick={onTaskAdd}
-                  className="w-full h-10 flex items-center justify-center text-emerald-500 hover:bg-emerald-500/10 transition-colors rounded"
-                  title={uiLanguage === 'zh' ? '添加任务' : 'Add Task'}
-                >
-                  <Plus size={16} />
-                </button>
+              <button
+                onClick={onTaskAdd}
+                className="w-full h-10 flex items-center justify-center text-emerald-500 hover:bg-emerald-500/10 transition-colors rounded"
+                title={uiLanguage === "zh" ? "添加任务" : "Add Task"}
+              >
+                <Plus size={16} />
+              </button>
             )}
           </div>
         </div>
 
         <div>
-           {!isCollapsed && (
-              <span
-                className={`text-[10px] font-black uppercase tracking-widest px-3 block mb-4 animate-in fade-in duration-300 ${
-                  isDarkTheme ? "text-neutral-500" : "text-gray-500"
-                }`}
-              >
-                {labels.options}
-              </span>
-           )}
+          {!isCollapsed && (
+            <span
+              className={`text-[10px] font-black uppercase tracking-widest px-3 block mb-4 animate-in fade-in duration-300 ${
+                isDarkTheme ? "text-neutral-500" : "text-gray-500"
+              }`}
+            >
+              {labels.options}
+            </span>
+          )}
           <div className="space-y-1">
             <SidebarLink
               icon={<Workflow size={14} />}
@@ -411,7 +446,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 label="Test Agents"
                 onClick={onTestAgents}
                 isDarkTheme={isDarkTheme}
-                active={step === 'test-agents'}
+                active={step === "test-agents"}
                 isCollapsed={isCollapsed}
               />
             )}

@@ -69,7 +69,7 @@ export const generateKeywords = async (
   uiLanguage: 'zh' | 'en' = 'en',
   industry?: string,
   additionalSuggestions?: string
-): Promise<{ keywords: KeywordData[]; rawResponse: string }> => {
+): Promise<{ keywords: KeywordData[]; rawResponse: string; searchResults?: Array<{ title: string; url: string; snippet?: string }> }> => {
   const result = await apiCall('/api/generate-keywords', {
     seedKeyword,
     targetLanguage,
@@ -83,7 +83,11 @@ export const generateKeywords = async (
     industry,
     additionalSuggestions,
   });
-  return { keywords: result.keywords, rawResponse: result.rawResponse || '' };
+  return { 
+    keywords: result.keywords, 
+    rawResponse: result.rawResponse || '',
+    searchResults: result.searchResults 
+  };
 };
 
 export const analyzeRankingProbability = async (

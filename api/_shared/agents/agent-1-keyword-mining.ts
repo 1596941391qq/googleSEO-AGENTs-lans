@@ -205,7 +205,11 @@ Return a JSON array with objects containing:
       id: `kw-${Date.now()}-${index}`,
     }));
 
-    return { keywords, rawResponse: originalResponse };
+    return { 
+      keywords, 
+      rawResponse: originalResponse,
+      searchResults: response.searchResults 
+    };
   } catch (error: any) {
     console.error("Generate Keywords Error:", error);
     return { keywords: [], rawResponse: "Error: " + error.message };

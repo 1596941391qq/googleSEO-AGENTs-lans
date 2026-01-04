@@ -1,7 +1,6 @@
-
-import React from 'react';
-import { Search, Languages, FileText, X, Sparkles } from 'lucide-react';
-import { TaskType, UILanguage } from '../../types';
+import React from "react";
+import { Search, Languages, FileText, X, Sparkles } from "lucide-react";
+import { TaskType, UILanguage } from "../../types";
 
 interface TaskMenuModalProps {
   show: boolean;
@@ -11,16 +10,16 @@ interface TaskMenuModalProps {
 }
 
 const TEXT = {
-    zh: {
-        tabMining: "关键词挖掘",
-        tabBatch: "批量翻译分析",
-        tabArticleGenerator: "AI 图文工场"
-    },
-    en: {
-        tabMining: "Keyword Mining",
-        tabBatch: "Batch Analysis",
-        tabArticleGenerator: "Article Generator"
-    }
+  zh: {
+    tabMining: "关键词挖掘",
+    tabBatch: "跨市场洞察",
+    tabArticleGenerator: "AI 图文工场",
+  },
+  en: {
+    tabMining: "Keyword Mining",
+    tabBatch: "Cross-Market Insight",
+    tabArticleGenerator: "Article Generator",
+  },
 };
 
 export const TaskMenuModal: React.FC<TaskMenuModalProps> = ({
@@ -43,12 +42,12 @@ export const TaskMenuModal: React.FC<TaskMenuModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-4">
-             <h3 className="text-lg font-bold text-white">
-               {uiLanguage === "zh" ? "创建新任务" : "Create New Task"}
-             </h3>
-             <button onClick={onClose} className="text-gray-500 hover:text-white">
-                 <X size={20} />
-             </button>
+          <h3 className="text-lg font-bold text-white">
+            {uiLanguage === "zh" ? "创建新任务" : "Create New Task"}
+          </h3>
+          <button onClick={onClose} className="text-gray-500 hover:text-white">
+            <X size={20} />
+          </button>
         </div>
 
         <div className="space-y-3">
@@ -97,7 +96,9 @@ export const TaskMenuModal: React.FC<TaskMenuModalProps> = ({
           >
             <Sparkles className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform" />
             <div className="text-left">
-              <div className="font-semibold text-white">{t.tabArticleGenerator}</div>
+              <div className="font-semibold text-white">
+                {t.tabArticleGenerator}
+              </div>
               <div className="text-xs text-slate-400">
                 {uiLanguage === "zh"
                   ? "自动生成高度优化的 SEO 文章与配图"

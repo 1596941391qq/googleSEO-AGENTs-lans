@@ -27,11 +27,24 @@ export interface VisualArticleOptions {
   targetMarket: string;
   uiLanguage: 'zh' | 'en';
   targetLanguage: TargetLanguage;
+  reference?: {
+    type: 'document' | 'url';
+    document?: {
+      filename: string;
+      content: string;
+    };
+    url?: {
+      url: string;
+      content?: string;
+      screenshot?: string;
+      title?: string;
+    };
+  };
   onEvent: (event: AgentStreamEvent) => void;
 }
 
 export async function generateVisualArticle(options: VisualArticleOptions) {
-  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, onEvent } = options;
+  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, reference, onEvent } = options;
 
   const emit = (agentId: AgentStreamEvent['agentId'], type: AgentStreamEvent['type'], message?: string, cardType?: AgentStreamEvent['cardType'], data?: any) => {
     onEvent({
@@ -104,7 +117,26 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
 
     // 2. Strategy phase
     emit('strategist', 'log', uiLanguage === 'zh' ? `正在为 ${targetMarket === 'global' ? '全球' : targetMarket.toUpperCase()} 市场制定超越前3名的内容策略...` : `Designing content strategy for ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()} market to beat Top 3...`);
-    const strategyPrompt = `Tone: ${tone}, Audience: ${targetAudience}, Target Market: ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()}. Ensure visual opportunities are highlighted and content is tailored for the target market.`;
+    
+    // Prepare reference context for strategist
+    let referenceContext = '';
+    if (reference) {
+      if (reference.type === 'document' && reference.document) {
+        // For document, provide summary (first 2000 chars)
+        const docSummary = reference.document.content.length > 2000
+          ? reference.document.content.substring(0, 2000) + '...'
+          : reference.document.content;
+        referenceContext = `\n\nUser Reference Document (${reference.document.filename}):\n${docSummary}`;
+      } else if (reference.type === 'url' && reference.url?.content) {
+        // For URL, provide summary (first 2000 chars)
+        const urlSummary = reference.url.content.length > 2000
+          ? reference.url.content.substring(0, 2000) + '...'
+          : reference.url.content;
+        referenceContext = `\n\nUser Reference URL (${reference.url.url}):\n${urlSummary}`;
+      }
+    }
+    
+    const strategyPrompt = `Tone: ${tone}, Audience: ${targetAudience}, Target Market: ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()}. Ensure visual opportunities are highlighted and content is tailored for the target market.${referenceContext}`;
     const strategyReport = await generateDeepDiveStrategy(
       keywordData,
       uiLanguage,
@@ -112,7 +144,8 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       strategyPrompt,
       searchPrefs,
       competitorAnalysis,
-      targetMarket
+      targetMarket,
+      reference
     );
 
     emit('strategist', 'card', undefined, 'outline', {
@@ -124,13 +157,18 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     // We do this BEFORE writing so we can potentially reference images or just show progress
     emit('artist', 'log', uiLanguage === 'zh' ? '正在分析结构以寻找视觉机会...' : 'Analyzing structure for visual opportunities...');
 
+    // Check if we have URL reference with screenshot
+    const hasUrlScreenshot = reference?.type === 'url' && reference.url?.screenshot;
+    
     // We'll use the strategy report to extract themes early or wait for content?
     // Let's use strategy report as a proxy for content to get themes early.
     const visualThemes = await extractVisualThemes(strategyReport.pageTitleH1 + "\n" + strategyReport.contentStructure.map(s => s.header).join("\n"), uiLanguage);
 
     let generatedImages: any[] = [];
     if (visualThemes.themes && visualThemes.themes.length > 0) {
-      const selectedThemes = visualThemes.themes.slice(0, 2); // Limit to 2 for speed/cost
+      // If we have URL screenshot, generate 1 AI image instead of 2
+      const imageCount = hasUrlScreenshot ? 1 : 2;
+      const selectedThemes = visualThemes.themes.slice(0, imageCount);
       const prompts = await generateImagePrompts(selectedThemes, uiLanguage);
 
       // Emit image-gen cards as "loading" with theme info
@@ -153,6 +191,28 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         prompt: r.theme,
         placement: 'inline'
       }));
+      
+      // If we have URL screenshot, add it as the second image
+      if (hasUrlScreenshot && reference.url?.screenshot) {
+        generatedImages.push({
+          url: reference.url.screenshot,
+          prompt: reference.url.title || reference.url.url,
+          placement: 'inline',
+          isScreenshot: true
+        });
+        emit('artist', 'card', 
+          uiLanguage === 'zh' ? `已添加参考页面截图` : `Reference page screenshot added`, 
+          'image-gen', 
+          { 
+            theme: reference.url.title || 'Reference Screenshot',
+            prompt: reference.url.url,
+            imageUrl: reference.url.screenshot,
+            status: 'completed',
+            progress: 100,
+            isScreenshot: true
+          }
+        );
+      }
 
       // Update cards with results and progress
       imageResults.forEach((res, i) => {
@@ -204,7 +264,8 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       competitorAnalysis,
       uiLanguage,
       targetMarket,
-      targetLanguage
+      targetLanguage,
+      reference
     );
 
     // Update streaming text with final content
