@@ -20,14 +20,36 @@ export interface SerpSnippet {
   snippet: string;
 }
 
-export interface SErankingData {
+// DataForSEO 数据接口（取代 SE-Ranking）
+export interface DataForSEOData {
   is_data_found: boolean;
+
+  // 基础数据
   volume?: number;
   cpc?: number;
-  competition?: number;
-  difficulty?: number;
+  competition?: number; // 0-1 scale
+  competition_level?: string; // 'LOW', 'MEDIUM', 'HIGH'
+
+  // DataForSEO 独有：关键词难度
+  difficulty?: number; // Keyword Difficulty (0-100)
+
+  // 历史数据 - DataForSEO 提供12个月历史数据
+  monthly_searches?: Array<{
+    year: number;
+    month: number;
+    search_volume: number;
+  }>;
+
+  // 出价范围
+  low_top_of_page_bid?: number;
+  high_top_of_page_bid?: number;
+
+  // 趋势数据（简化版）
   history_trend?: { [date: string]: number };
 }
+
+// 保留向后兼容
+export type SErankingData = DataForSEOData;
 
 export interface KeywordData {
   id: string;
@@ -39,7 +61,10 @@ export interface KeywordData {
   // Source tracking
   source?: 'manual' | 'website-audit'; // 标记关键词来源：手动输入 或 存量拓新
 
-  // SE Ranking API Data
+  // DataForSEO API Data
+  dataForSEOData?: DataForSEOData;
+
+  // 保留向后兼容
   serankingData?: SErankingData;
 
   // Analysis Metrics
@@ -89,7 +114,8 @@ export interface SEOStrategyReport {
     keyword: string;
     serpResults: SerpSnippet[];
     analysis: string;
-    serankingData?: SErankingData;
+    dataForSEOData?: DataForSEOData;
+    serankingData?: SErankingData; // 保留向后兼容
   }[];
 }
 

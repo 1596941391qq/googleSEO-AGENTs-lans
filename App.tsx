@@ -1254,6 +1254,169 @@ const AgentStream = ({
               </div>
             )}
 
+            {/* Keyword Research Data Cards - Display for each keyword with research data */}
+            {thought.type === "analysis" && thought.analyzedKeywords && (
+              <div className="mt-2 space-y-2">
+                {thought.analyzedKeywords
+                  .filter((kw) => kw.serankingData?.is_data_found)
+                  .slice(0, 5) // Show top 5 keywords with research data
+                  .map((kw) => (
+                    <div
+                      key={kw.id}
+                      className={`p-3 rounded border ${
+                        isDarkTheme
+                          ? "bg-black/40 border-orange-500/30"
+                          : "bg-orange-50 border-orange-200"
+                      }`}
+                    >
+                      <div
+                        className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
+                          isDarkTheme ? "text-orange-400" : "text-orange-600"
+                        }`}
+                      >
+                        <TrendingUp className="w-3 h-3" />
+                        KEYWORD RESEARCH: {kw.keyword}
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div
+                          className={`p-2 rounded border ${
+                            isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                          }`}
+                        >
+                          <div
+                            className={`text-[9px] font-bold mb-1 ${
+                              isDarkTheme ? "text-white/70" : "text-gray-500"
+                            }`}
+                          >
+                            VOLUME
+                          </div>
+                          <div
+                            className={`text-sm font-bold ${
+                              isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                            }`}
+                          >
+                            {kw.serankingData?.volume?.toLocaleString() ||
+                              "N/A"}
+                          </div>
+                        </div>
+                        <div
+                          className={`p-2 rounded border ${
+                            isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                          }`}
+                        >
+                          <div
+                            className={`text-[9px] font-bold mb-1 ${
+                              isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
+                          >
+                            KD
+                          </div>
+                          <div
+                            className={`text-sm font-bold ${
+                              (kw.serankingData?.difficulty || 0) <= 40
+                                ? isDarkTheme
+                                  ? "text-emerald-400"
+                                  : "text-emerald-600"
+                                : (kw.serankingData?.difficulty || 0) <= 60
+                                ? isDarkTheme
+                                  ? "text-yellow-400"
+                                  : "text-yellow-600"
+                                : isDarkTheme
+                                ? "text-red-400"
+                                : "text-red-600"
+                            }`}
+                          >
+                            {kw.serankingData?.difficulty || "N/A"}
+                          </div>
+                        </div>
+                        <div
+                          className={`p-2 rounded border ${
+                            isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                          }`}
+                        >
+                          <div
+                            className={`text-[9px] font-bold mb-1 ${
+                              isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
+                          >
+                            CPC
+                          </div>
+                          <div
+                            className={`text-sm font-bold ${
+                              isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                            }`}
+                          >
+                            ${kw.serankingData?.cpc?.toFixed(2) || "N/A"}
+                          </div>
+                        </div>
+                        <div
+                          className={`p-2 rounded border ${
+                            isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                          }`}
+                        >
+                          <div
+                            className={`text-[9px] font-bold mb-1 ${
+                              isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
+                          >
+                            COMP
+                          </div>
+                          <div
+                            className={`text-sm font-bold ${
+                              isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                            }`}
+                          >
+                            {kw.serankingData?.competition?.toFixed(2) || "N/A"}
+                          </div>
+                        </div>
+                      </div>
+                      {kw.probability && (
+                        <div className="mt-2">
+                          <div
+                            className={`text-[9px] font-bold mb-1 ${
+                              isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
+                          >
+                            PROBABILITY
+                          </div>
+                          <div
+                            className={`text-xs font-bold px-2 py-1 rounded inline-block ${
+                              kw.probability === ProbabilityLevel.HIGH
+                                ? isDarkTheme
+                                  ? "bg-emerald-500/20 text-emerald-400"
+                                  : "bg-emerald-100 text-emerald-700"
+                                : kw.probability === ProbabilityLevel.MEDIUM
+                                ? isDarkTheme
+                                  ? "bg-yellow-500/20 text-yellow-400"
+                                  : "bg-yellow-100 text-yellow-700"
+                                : isDarkTheme
+                                ? "bg-red-500/20 text-red-400"
+                                : "bg-red-100 text-red-700"
+                            }`}
+                          >
+                            {kw.probability}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            )}
+
             {/* SERP PREVIEW Section */}
             {thought.type === "analysis" && thought.analyzedKeywords && (
               <SerpPreview
@@ -5374,14 +5537,98 @@ export default function App() {
           taskId
         );
 
-        // This is now parallel individual execution with batching
-        // First fetch real SERP data, then analyze based on real data
-        const analyzedBatch = await analyzeRankingProbability(
-          generatedKeywords,
-          getWorkflowPrompt("mining", "mining-analyze", state.analyzePrompt),
-          state.uiLanguage,
-          state.targetLanguage
+        // Real-time streaming: Analyze keywords one by one for real-time display
+        const analyzedBatch: KeywordData[] = [];
+
+        addLog(
+          `[Round ${currentRound}] Analyzing ${generatedKeywords.length} keywords one by one (real-time streaming)...`,
+          "info",
+          taskId
         );
+
+        // Process keywords one by one for real-time streaming
+        for (let i = 0; i < generatedKeywords.length; i++) {
+          if (stopMiningRef.current) {
+            addLog("Mining stopped by user.", "warning", taskId);
+            break;
+          }
+
+          const keyword = generatedKeywords[i];
+
+          addLog(
+            `[${i + 1}/${generatedKeywords.length}] Analyzing: "${
+              keyword.keyword
+            }"...`,
+            "info",
+            taskId
+          );
+
+          try {
+            // Analyze single keyword (real-time)
+            const singleAnalysis = await analyzeRankingProbability(
+              [keyword],
+              getWorkflowPrompt(
+                "mining",
+                "mining-analyze",
+                state.analyzePrompt
+              ),
+              state.uiLanguage,
+              state.targetLanguage
+            );
+
+            if (singleAnalysis.length > 0) {
+              const analyzedKeyword = singleAnalysis[0];
+              analyzedBatch.push(analyzedKeyword);
+
+              // Real-time display: Add keyword research data thought if available
+              if (analyzedKeyword.serankingData?.is_data_found) {
+                addThought(
+                  "analysis",
+                  `Keyword Research: "${analyzedKeyword.keyword}"`,
+                  {
+                    analyzedKeywords: [analyzedKeyword],
+                    data: [analyzedKeyword],
+                    dataType: "analysis",
+                  },
+                  taskId
+                );
+              }
+
+              // Real-time display: Add analysis result thought
+              addThought(
+                "analysis",
+                `Analyzed "${analyzedKeyword.keyword}": ${analyzedKeyword.probability} probability`,
+                {
+                  analyzedKeywords: [analyzedKeyword],
+                  data: [analyzedKeyword],
+                  dataType: "analysis",
+                },
+                taskId
+              );
+
+              addLog(
+                `[${i + 1}/${generatedKeywords.length}] ✅ "${
+                  analyzedKeyword.keyword
+                }": ${analyzedKeyword.probability}`,
+                "success",
+                taskId
+              );
+            }
+          } catch (error: any) {
+            console.error(
+              `Error analyzing keyword "${keyword.keyword}":`,
+              error
+            );
+            addLog(
+              `[${i + 1}/${generatedKeywords.length}] ❌ Error analyzing "${
+                keyword.keyword
+              }": ${error.message}`,
+              "error",
+              taskId
+            );
+            // Continue with next keyword even if one fails
+          }
+        }
 
         // Consume credits on first successful round (after getting keywords)
         if (currentRound === 1 && analyzedBatch.length > 0) {
@@ -5496,9 +5743,10 @@ export default function App() {
           }
         });
 
+        // Add summary thought after all keywords are analyzed
         addThought(
           "analysis",
-          `Analysis Complete.`,
+          `Analysis Complete. ${high} High, ${medium} Medium, ${low} Low.`,
           {
             stats: { high, medium, low },
             analyzedKeywords: analyzedBatch,
@@ -7134,6 +7382,8 @@ export default function App() {
             { keyword: translated },
             taskId
           );
+          // Allow React to render before next update
+          await new Promise((resolve) => setTimeout(resolve, 50));
 
           // Show DataForSEO thought (real-time)
           if (result.serankingData) {
@@ -7145,6 +7395,7 @@ export default function App() {
                 { serankingData: result.serankingData },
                 taskId
               );
+              await new Promise((resolve) => setTimeout(resolve, 50));
             } else {
               addBatchThought(
                 "seranking",
@@ -7153,6 +7404,7 @@ export default function App() {
                 { serankingData: { is_data_found: false } },
                 taskId
               );
+              await new Promise((resolve) => setTimeout(resolve, 50));
             }
           }
 
@@ -7165,6 +7417,7 @@ export default function App() {
               { serpSnippets: result.topSerpSnippets },
               taskId
             );
+            await new Promise((resolve) => setTimeout(resolve, 50));
           }
 
           // Show intent analysis thought (real-time)
@@ -7181,6 +7434,7 @@ export default function App() {
               },
               taskId
             );
+            await new Promise((resolve) => setTimeout(resolve, 50));
           }
 
           // Show final analysis thought (real-time)
@@ -7198,6 +7452,7 @@ export default function App() {
             },
             taskId
           );
+          await new Promise((resolve) => setTimeout(resolve, 50));
 
           // Add to state with task isolation (real-time)
           setState((prev) => {

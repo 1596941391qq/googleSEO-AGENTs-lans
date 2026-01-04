@@ -7,7 +7,7 @@
  */
 
 import { generateKeywords } from '../agents/agent-1-keyword-mining.js';
-import { fetchSErankingData } from '../tools/se-ranking.js';
+import { fetchDataForSEOData, fetchKeywordData } from '../tools/dataforseo.js';
 import { analyzeRankingProbability } from '../agents/agent-2-seo-researcher.js';
 import { KeywordData, TargetLanguage } from '../types.js';
 
@@ -79,38 +79,42 @@ export async function generateKeywordsForMining(
 }
 
 /**
- * Step 2: 丰富关键词的 SE Ranking 数据
+ * Step 2: 丰富关键词的 DataForSEO 数据
  * 可单独测试
  */
-export async function enrichKeywordsWithSERankingForMining(
+export async function enrichKeywordsWithDataForSEOForMining(
   keywords: KeywordData[]
 ): Promise<KeywordData[]> {
   try {
     const keywordStrings = keywords.map(k => k.keyword);
-    const serankingResults = await fetchSErankingData(keywordStrings, 'us');
+    const dataForSEOResults = await fetchKeywordData(keywordStrings, 2840, 'en');
 
-    // 创建 SE Ranking 数据映射
-    const serankingMap = new Map<string, typeof serankingResults[0]>();
-    serankingResults.forEach(data => {
+    // 创建 DataForSEO 数据映射
+    const dataForSEOMap = new Map<string, typeof dataForSEOResults[0]>();
+    dataForSEOResults.forEach(data => {
       if (data.keyword) {
-        serankingMap.set(data.keyword.toLowerCase(), data);
+        dataForSEOMap.set(data.keyword.toLowerCase(), data);
       }
     });
 
-    // 合并 SE Ranking 数据到关键词
+    // 合并 DataForSEO 数据到关键词
     return keywords.map(keyword => {
-      const serankingData = serankingMap.get(keyword.keyword.toLowerCase());
+      const dataForSEOData = dataForSEOMap.get(keyword.keyword.toLowerCase());
       return {
         ...keyword,
-        serankingData: serankingData || undefined
+        dataForSEOData: dataForSEOData || undefined,
+        serankingData: dataForSEOData || undefined // 保留向后兼容
       };
     });
   } catch (error: any) {
-    console.warn(`[Keyword Mining Service] SE Ranking API call failed: ${error.message}. Continuing without SE Ranking data.`);
-    // 返回原始关键词，不包含 SE Ranking 数据
+    console.warn(`[Keyword Mining Service] DataForSEO API call failed: ${error.message}. Continuing without DataForSEO data.`);
+    // 返回原始关键词，不包含 DataForSEO 数据
     return keywords;
   }
 }
+
+// 保留别名以兼容旧代码
+export const enrichKeywordsWithSERankingForMining = enrichKeywordsWithDataForSEOForMining;
 
 /**
  * Step 3: 分析关键词排名概率
@@ -180,19 +184,19 @@ export async function executeKeywordMining(
 
     console.log(`[Keyword Mining Service] Generated ${generatedKeywords.length} keywords`);
 
-    // Step 2: 调用 SE Ranking 工具获取数据
-    console.log(`[Keyword Mining Service] Step 2: Fetching SE Ranking data...`);
-    const keywordsWithSERanking = await enrichKeywordsWithSERankingForMining(generatedKeywords);
-    console.log(`[Keyword Mining Service] Fetched SE Ranking data for ${keywordsWithSERanking.length} keywords`);
+    // Step 2: 调用 DataForSEO 工具获取数据
+    console.log(`[Keyword Mining Service] Step 2: Fetching DataForSEO data...`);
+    const keywordsWithDataForSEO = await enrichKeywordsWithDataForSEOForMining(generatedKeywords);
+    console.log(`[Keyword Mining Service] Fetched DataForSEO data for ${keywordsWithDataForSEO.length} keywords`);
 
     // Step 3: 使用快速排名分析工具做快速筛选（如果启用）
-    let finalKeywords = keywordsWithSERanking;
+    let finalKeywords = keywordsWithDataForSEO;
     if (analyzeRanking) {
       console.log(`[Keyword Mining Service] Step 3: Analyzing ranking probability...`);
       try {
         const analysisPromptToUse = analyzePrompt || systemInstruction || 'Analyze SEO ranking opportunities.';
         finalKeywords = await analyzeKeywordsRanking(
-          keywordsWithSERanking,
+          keywordsWithDataForSEO,
           analysisPromptToUse,
           uiLanguage,
           targetLanguage

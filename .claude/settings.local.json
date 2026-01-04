@@ -11,7 +11,8 @@
       "Bash(npm install:*)",
       "WebFetch(domain:bolt.new)",
       "WebSearch",
-      "Bash(vercel logs:*)"
+      "Bash(vercel logs:*)",
+      "WebFetch(domain:docs.dataforseo.com)"
     ]
   }
 }

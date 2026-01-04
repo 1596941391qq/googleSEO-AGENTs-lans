@@ -109,15 +109,15 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
 
     // 提取联网搜索结果（groundingMetadata）
     let searchResults: Array<{ title: string; url: string; snippet?: string }> = [];
-    
+
     if (data.candidates && data.candidates.length > 0) {
       const candidate = data.candidates[0];
-      
+
       // 提取文本内容
       if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
         content = candidate.content.parts[0].text || '';
       }
-      
+
       // 提取联网搜索结果（groundingMetadata）
       if (candidate.groundingMetadata && candidate.groundingMetadata.groundingChunks) {
         const chunks = candidate.groundingMetadata.groundingChunks;
@@ -128,7 +128,7 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
             url: chunk.web.uri,
             snippet: chunk.web?.snippet || undefined,
           }));
-        
+
         // 去重（基于 URL）
         const seenUrls = new Set<string>();
         searchResults = searchResults.filter((result) => {

@@ -1,286 +1,336 @@
 /**
  * DataForSEO API 工具
  *
- * 职责：获取关键词数据、域名分析等 SEO 数据
+ * 职责：获取关键词的真实数据（搜索量、难度、CPC等）
  * 特点：纯数据获取，无AI逻辑
  *
- * API 文档参考：https://docs.dataforseo.com/v3/
+ * API 文档：
+ * - Keyword Ideas: https://docs.dataforseo.com/v3/dataforseo_labs-keyword_ideas-live/
+ * - Bulk Keyword Difficulty: https://docs.dataforseo.com/v3/dataforseo_labs-google-bulk_keyword_difficulty-live/
+ * - Search Volume: https://docs.dataforseo.com/v3/keywords_data-google_ads-search_volume-live/
  *
- * 注意：
- * - 使用 Basic Auth 认证（login:password 的 base64 编码）
- * - 所有请求都是 POST 方法
- * - 请求体是 JSON 数组格式
+ * 认证：Basic Auth (Base64 encoded login:password)
  */
 
-const DATAFORSEO_LOGIN = process.env.DATAFORSEO_LOGIN || 'soulcraftlimited@galatea.bar';
-const DATAFORSEO_PASSWORD = process.env.DATAFORSEO_PASSWORD || '237696fd88fdfee9';
+const DATAFORSEO_LOGIN = process.env.DATAFORSEO_LOGIN || '';
+const DATAFORSEO_PASSWORD = process.env.DATAFORSEO_PASSWORD || '';
 const DATAFORSEO_BASE_URL = 'https://api.dataforseo.com/v3';
+
+/**
+ * 将目标语言代码转换为 DataForSEO 的 location_code 和 language_code
+ * 
+ * @param targetLanguage - 目标语言代码
+ * @returns { locationCode: number, languageCode: string }
+ */
+export function getDataForSEOLocationAndLanguage(targetLanguage: string): { locationCode: number; languageCode: string } {
+  // 语言代码映射
+  const languageMap: { [key: string]: string } = {
+    'en': 'en',
+    'zh': 'zh',
+    'ru': 'ru',
+    'fr': 'fr',
+    'ja': 'ja',
+    'ko': 'ko',
+    'pt': 'pt',
+    'id': 'id',
+    'es': 'es',
+    'ar': 'ar',
+  };
+
+  // 位置代码映射（主要市场）
+  // 注意：DataForSEO 已暂停对俄罗斯的支持，但我们可以使用其他位置作为替代
+  const locationMap: { [key: string]: number } = {
+    'en': 2840,  // 美国
+    'zh': 2166,  // 中国
+    'ru': 2826,  // 俄罗斯（已暂停，但保留代码用于兼容）
+    'fr': 2250,  // 法国
+    'ja': 2384,  // 日本
+    'ko': 2346,  // 韩国
+    'pt': 2344,  // 葡萄牙
+    'id': 2376,  // 印度尼西亚
+    'es': 2756,  // 西班牙
+    'ar': 2780,  // 阿拉伯（使用埃及作为代表）
+  };
+
+  const languageCode = languageMap[targetLanguage] || 'en';
+  const locationCode = locationMap[targetLanguage] || 2840; // 默认美国
+
+  return { locationCode, languageCode };
+}
 
 // ============================================
 // 类型定义
 // ============================================
 
+export interface MonthlySearchData {
+  year: number;
+  month: number;
+  search_volume: number;
+}
+
 export interface DataForSEOKeywordData {
   keyword: string;
   is_data_found: boolean;
-  volume?: number;
+
+  // 基础数据
+  search_volume?: number;
   cpc?: number;
-  competition?: number;
-  difficulty?: number;
-  trends?: { [date: string]: number };
-}
+  competition?: number; // 0-1 scale
+  competition_level?: string; // 'LOW', 'MEDIUM', 'HIGH'
 
-export interface DataForSEODomainOverview {
-  domain: string;
-  organicTraffic?: number;
-  totalKeywords?: number;
-  avgPosition?: number;
-  topKeywords?: string[];
-  rankingDistribution?: {
-    top3: number;
-    top10: number;
-    top50: number;
-    top100: number;
-  };
-  backlinksInfo?: {
-    referringDomains: number;
-    referringMainDomains: number;
-    referringPages: number;
-    dofollow: number;
-    backlinks: number;
-    timeUpdate?: string;
-  };
-}
+  // DataForSEO 独有：关键词难度
+  keyword_difficulty?: number; // 0-100
 
-export interface DomainCompetitor {
-  domain: string;
-  title?: string;
-  commonKeywords: number;
-  organicTraffic: number;
-  totalKeywords: number;
-  gapKeywords?: number;
-  gapTraffic?: number;
-}
+  // 历史数据 - DataForSEO 提供12个月历史数据
+  monthly_searches?: MonthlySearchData[];
 
-// ============================================
-// 辅助函数
-// ============================================
+  // 出价范围
+  low_top_of_page_bid?: number;
+  high_top_of_page_bid?: number;
+
+  // 趋势数据（简化版）
+  history_trend?: { [date: string]: number }; // 保持与原SE-Ranking兼容
+}
 
 /**
- * 创建 Basic Auth 认证头
+ * 生成 Basic Auth header
  */
-function createAuthHeader(): string {
-  const credentials = Buffer.from(`${DATAFORSEO_LOGIN}:${DATAFORSEO_PASSWORD}`).toString('base64');
-  return `Basic ${credentials}`;
+function getAuthHeader(): string {
+  const credentials = `${DATAFORSEO_LOGIN}:${DATAFORSEO_PASSWORD}`;
+  const encoded = Buffer.from(credentials).toString('base64');
+  return `Basic ${encoded}`;
 }
 
 /**
- * 重试请求的辅助函数（处理速率限制错误）
- */
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  maxRetries: number = 3,
-  retryDelay: number = 1000
-): Promise<Response> {
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    try {
-      const response = await fetch(url, options);
-
-      // 如果是 429 错误且还有重试次数，进行重试
-      if (response.status === 429 && attempt < maxRetries - 1) {
-        const delay = retryDelay * Math.pow(2, attempt); // 指数退避：1s, 2s, 4s
-        console.log(`[DataForSEO] Rate limited (429), retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        continue;
-      }
-
-      // 其他状态码或最后一次尝试，直接返回
-      return response;
-    } catch (error: any) {
-      // 如果是最后一次尝试，抛出错误
-      if (attempt === maxRetries - 1) {
-        throw error;
-      }
-      // 否则等待后重试
-      const delay = retryDelay * Math.pow(2, attempt);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-
-  // 理论上不会到达这里，但为了类型安全
-  return await fetch(url, options);
-}
-
-/**
- * 延迟函数
- */
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// ============================================
-// 关键词数据获取
-// ============================================
-
-/**
- * 获取关键词数据（使用 keyword_ideas API）
+ * 批量获取关键词数据（使用 DataForSEO Labs Keyword Ideas API）
  *
  * @param keywords - 关键词数组
- * @param locationCode - 位置代码，默认 2840 (United States)
+ * @param locationCode - 地区代码，默认 2840 (美国)，参考：https://docs.dataforseo.com/v3/appendix/locations
  * @param languageCode - 语言代码，默认 'en'
- * @returns 关键词数据数组
+ * @param retryCount - 重试次数，默认 3
+ * @returns DataForSEO数据数组
  */
-export async function fetchKeywordData(
+export async function fetchDataForSEOData(
   keywords: string[],
   locationCode: number = 2840,
-  languageCode: string = 'en'
+  languageCode: string = 'en',
+  retryCount: number = 3
 ): Promise<DataForSEOKeywordData[]> {
+  const BATCH_SIZE = 100; // DataForSEO 支持每次最多1000个关键词
+  const DELAY_BETWEEN_BATCHES = 1000; // 批次之间延迟1秒
+
   try {
     console.log(`[DataForSEO] Fetching data for ${keywords.length} keywords`);
 
-    // DataForSEO API 通常需要分批处理
-    const BATCH_SIZE = 10;
-    const results: DataForSEOKeywordData[] = [];
+    // 如果关键词数量较少，直接请求
+    if (keywords.length <= BATCH_SIZE) {
+      return await fetchBatchWithRetry(keywords, locationCode, languageCode, retryCount);
+    }
 
+    // 分批处理
+    const results: DataForSEOKeywordData[] = [];
     for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
       const batch = keywords.slice(i, i + BATCH_SIZE);
       console.log(`[DataForSEO] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(keywords.length / BATCH_SIZE)}`);
 
-      const batchResults = await fetchKeywordBatch(batch, locationCode, languageCode);
+      const batchResults = await fetchBatchWithRetry(batch, locationCode, languageCode, retryCount);
       results.push(...batchResults);
 
       // 如果不是最后一批，等待一段时间再请求下一批
       if (i + BATCH_SIZE < keywords.length) {
-        await delay(2000); // 延迟2秒
+        await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
       }
     }
 
     console.log(`[DataForSEO] Successfully retrieved data for ${results.length} keywords`);
     return results;
   } catch (error: any) {
-    console.error('[DataForSEO] Failed to fetch keyword data:', error.message);
-    return keywords.map(kw => ({
-      keyword: kw,
-      is_data_found: false,
-    }));
+    console.error('[DataForSEO] API call failed:', error);
+    throw error;
   }
 }
 
 /**
- * 获取一批关键词数据
+ * 获取一批关键词数据（带重试逻辑）
+ * 使用 DataForSEO Labs Google Ads Search Volume API
  */
-async function fetchKeywordBatch(
+async function fetchBatchWithRetry(
   keywords: string[],
   locationCode: number,
-  languageCode: string
+  languageCode: string,
+  maxRetries: number
 ): Promise<DataForSEOKeywordData[]> {
-  try {
-    // 使用 keyword_ideas API 或 keywords_data API
-    // 这里使用 keywords_data API 获取关键词指标
-    const url = `${DATAFORSEO_BASE_URL}/keywords_data/google_ads/keywords_for_keywords/live`;
+  let lastError: Error | null = null;
 
-    // DataForSEO API 请求体是数组格式
-    const requestBody = keywords.map(keyword => ({
-      keywords: [keyword],
-      location_code: locationCode,
-      language_code: languageCode,
-      sort_by: 'search_volume',
-      date_from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30天前
-      date_to: new Date().toISOString().split('T')[0], // 今天
-    }));
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const response = await fetchWithRetry(
-        url,
+      // 使用 Keywords Data API 的 Search Volume 端点
+      // 这个端点提供搜索量、CPC、竞争度等数据
+      const endpoint = `${DATAFORSEO_BASE_URL}/keywords_data/google_ads/search_volume/live`;
+
+      const requestBody = [
         {
-          method: 'POST',
-          headers: {
-            'Authorization': createAuthHeader(),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
+          keywords: keywords,
+          location_code: locationCode,
+          language_code: languageCode,
         }
-      );
-      clearTimeout(timeoutId);
+      ];
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': getAuthHeader(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      // 处理速率限制错误 (429)
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 1000;
+
+        console.warn(`[DataForSEO] Rate limited (429). Waiting ${waitTime}ms before retry ${attempt}/${maxRetries}`);
+
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        } else {
+          throw new Error(`DataForSEO API rate limit exceeded after ${maxRetries} attempts`);
+        }
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[DataForSEO] API error:', response.status, errorText);
-
-        if (response.status === 404 || response.status === 400) {
-          return keywords.map(kw => ({
-            keyword: kw,
-            is_data_found: false,
-          }));
-        }
         throw new Error(`DataForSEO API error: ${response.status}`);
       }
 
       const data = await response.json();
 
       // 解析响应数据
-      const results: DataForSEOKeywordData[] = [];
-
-      if (Array.isArray(data) && data.length > 0) {
-        data.forEach((task: any, index: number) => {
-          if (task.tasks && task.tasks.length > 0) {
-            task.tasks.forEach((taskItem: any) => {
-              if (taskItem.result && Array.isArray(taskItem.result)) {
-                taskItem.result.forEach((item: any) => {
-                  if (item.keyword_info) {
-                    const keywordInfo = item.keyword_info;
-                    results.push({
-                      keyword: keywords[index] || keywordInfo.keyword || '',
-                      is_data_found: true,
-                      volume: keywordInfo.search_volume || keywordInfo.monthly_searches?.[0]?.search_volume || 0,
-                      cpc: keywordInfo.cpc || 0,
-                      competition: keywordInfo.competition || 0,
-                      difficulty: keywordInfo.keyword_difficulty || 0,
-                    });
-                  }
-                });
-              }
-            });
-          }
-        });
+      // DataForSEO 响应格式：{ tasks: [{ result: [...] }] }
+      if (!data.tasks || !data.tasks[0] || !data.tasks[0].result) {
+        console.warn('[DataForSEO] No results in response');
+        return keywords.map(kw => ({ keyword: kw, is_data_found: false }));
       }
 
-      // 如果解析失败，返回默认值
-      if (results.length === 0) {
-        return keywords.map(kw => ({
-          keyword: kw,
-          is_data_found: false,
-        }));
-      }
+      const results: DataForSEOKeywordData[] = data.tasks[0].result.map((item: any) => {
+        const keyword = item.keyword || '';
+
+        // 转换 monthly_searches 为 history_trend 格式（保持向后兼容）
+        const historyTrend: { [date: string]: number } = {};
+        if (item.monthly_searches && Array.isArray(item.monthly_searches)) {
+          item.monthly_searches.forEach((ms: MonthlySearchData) => {
+            const dateKey = `${ms.year}-${String(ms.month).padStart(2, '0')}`;
+            historyTrend[dateKey] = ms.search_volume || 0;
+          });
+        }
+
+        return {
+          keyword,
+          is_data_found: item.search_volume !== null && item.search_volume !== undefined,
+          search_volume: item.search_volume || undefined,
+          cpc: item.cpc || undefined,
+          competition: item.competition !== undefined ? item.competition : undefined,
+          competition_level: item.competition_level || undefined,
+          keyword_difficulty: item.keyword_difficulty || undefined,
+          monthly_searches: item.monthly_searches || undefined,
+          low_top_of_page_bid: item.low_top_of_page_bid || undefined,
+          high_top_of_page_bid: item.high_top_of_page_bid || undefined,
+          history_trend: Object.keys(historyTrend).length > 0 ? historyTrend : undefined,
+        };
+      });
 
       return results;
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        console.error('[DataForSEO] Request timeout for keywords');
-        return keywords.map(kw => ({
-          keyword: kw,
-          is_data_found: false,
-        }));
+    } catch (error: any) {
+      lastError = error;
+
+      // 如果是速率限制错误且还有重试机会，继续重试
+      if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+        if (attempt < maxRetries) {
+          const waitTime = Math.pow(2, attempt) * 1000;
+          console.warn(`[DataForSEO] Retrying after ${waitTime}ms (attempt ${attempt}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
       }
-      throw fetchError;
+
+      // 如果不是速率限制错误，或者已经达到最大重试次数，抛出错误
+      if (attempt === maxRetries) {
+        throw error;
+      }
     }
-  } catch (error: any) {
-    console.error('[DataForSEO] Failed to fetch keyword batch:', error.message);
-    return keywords.map(kw => ({
-      keyword: kw,
-      is_data_found: false,
+  }
+
+  throw lastError || new Error('Failed to fetch DataForSEO data');
+}
+
+/**
+ * 批量获取关键词难度（使用 DataForSEO Labs Bulk Keyword Difficulty API）
+ *
+ * @param keywords - 关键词数组（最多1000个）
+ * @param locationCode - 地区代码，默认 2840 (美国)
+ * @param languageCode - 语言代码，默认 'en'
+ * @returns 关键词难度数据数组
+ */
+export async function fetchKeywordDifficulty(
+  keywords: string[],
+  locationCode: number = 2840,
+  languageCode: string = 'en'
+): Promise<{ keyword: string; keyword_difficulty?: number }[]> {
+  try {
+    console.log(`[DataForSEO] Fetching keyword difficulty for ${keywords.length} keywords`);
+
+    const endpoint = `${DATAFORSEO_BASE_URL}/dataforseo_labs/google/bulk_keyword_difficulty/live`;
+
+    const requestBody = [
+      {
+        keywords: keywords.slice(0, 1000), // 限制最多1000个
+        location_code: locationCode,
+        language_code: languageCode,
+      }
+    ];
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Authorization': getAuthHeader(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[DataForSEO] Keyword difficulty API error:', response.status, errorText);
+      throw new Error(`DataForSEO API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.tasks || !data.tasks[0] || !data.tasks[0].result) {
+      console.warn('[DataForSEO] No keyword difficulty results');
+      return keywords.map(kw => ({ keyword: kw }));
+    }
+
+    return data.tasks[0].result.map((item: any) => ({
+      keyword: item.keyword || '',
+      keyword_difficulty: item.keyword_difficulty,
     }));
+  } catch (error: any) {
+    console.error('[DataForSEO] Failed to fetch keyword difficulty:', error.message);
+    return keywords.map(kw => ({ keyword: kw }));
   }
 }
 
 /**
- * 获取单个关键词的数据
+ * 获取单个关键词的 DataForSEO 数据
+ *
+ * @param keyword - 关键词
+ * @param locationCode - 地区代码，默认 2840 (美国)
+ * @param languageCode - 语言代码，默认 'en'
+ * @returns DataForSEO数据，如果失败返回null
  */
 export async function fetchSingleKeywordData(
   keyword: string,
@@ -288,7 +338,7 @@ export async function fetchSingleKeywordData(
   languageCode: string = 'en'
 ): Promise<DataForSEOKeywordData | null> {
   try {
-    const results = await fetchKeywordData([keyword], locationCode, languageCode);
+    const results = await fetchDataForSEOData([keyword], locationCode, languageCode);
     return results.length > 0 ? results[0] : null;
   } catch (error: any) {
     console.error(`[DataForSEO] Failed to fetch data for "${keyword}":`, error.message);
@@ -296,547 +346,72 @@ export async function fetchSingleKeywordData(
   }
 }
 
-// ============================================
-// 域名分析
-// ============================================
-
 /**
- * 获取域名概览数据
- *
- * @param domain - 域名（例如: example.com）
- * @param locationCode - 位置代码，默认 2840 (United States)
- * @returns 域名概览数据
- */
-export async function getDomainOverview(
-  domain: string,
-  locationCode: number = 2840
-): Promise<DataForSEODomainOverview | null> {
-  try {
-    console.log(`[DataForSEO] Getting overview for ${domain}`);
-
-    const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0];
-
-    // 使用 whois/overview 端点（根据用户提供的示例，这个端点返回域名的 SEO 指标）
-    // 端点路径：/domain_analytics/whois/overview/live
-    const url = `${DATAFORSEO_BASE_URL}/domain_analytics/whois/overview/live`;
-
-    // 使用 filters 查询特定域名（根据 DataForSEO API 文档格式）
-    // 参考格式：filters 支持 "=", "like", ">", "<" 等操作符
-    // order_by 用于排序结果
-    const requestBody = [{
-      limit: 1,
-      filters: [
-        [
-          "domain",
-          "=",
-          cleanDomain
-        ]
-      ],
-      order_by: ["metrics.organic.count,desc"] // 按有机关键词数降序排序
-    }];
-
-    console.log(`[DataForSEO] Request URL: ${url}`);
-    console.log(`[DataForSEO] Request body:`, JSON.stringify(requestBody, null, 2));
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      const response = await fetchWithRetry(
-        url,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': createAuthHeader(),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        }
-      );
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[DataForSEO] ❌ API error for ${cleanDomain}:`, {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText.substring(0, 500), // 限制错误文本长度
-        });
-        
-        if (response.status === 404) {
-          console.log(`[DataForSEO] ⚠️ No data found for domain: ${cleanDomain}`);
-          return null;
-        }
-        
-        // 尝试解析错误响应
-        try {
-          const errorData = JSON.parse(errorText);
-          console.error('[DataForSEO] Error details:', JSON.stringify(errorData, null, 2));
-        } catch {
-          // 如果不是 JSON，直接输出文本
-        }
-        
-        return null;
-      }
-
-      const data = await response.json();
-
-      // 添加详细日志查看 API 响应结构
-      console.log(`[DataForSEO] 📥 API Response for ${cleanDomain}:`, {
-        isArray: Array.isArray(data),
-        length: Array.isArray(data) ? data.length : 0,
-        hasStatusCode: !!(data && data.status_code),
-        statusCode: data?.status_code,
-        firstItemKeys: Array.isArray(data) && data.length > 0 ? Object.keys(data[0]) : [],
-        hasTasks: !!(data && data.tasks),
-        tasksLength: data?.tasks?.length || 0,
-        sampleData: JSON.stringify(data).substring(0, 1000), // 增加样本数据长度
-      });
-
-      // 解析响应数据
-      // DataForSEO API 响应格式: { version, status_code, tasks: [{ result: [{ items: [...] }] }] }
-      // status_code: 20000 = 成功, 其他值 = 错误
-      
-      // 首先检查响应格式
-      if (!data) {
-        console.error(`[DataForSEO] ❌ Empty response from API`);
-        return null;
-      }
-
-      // 处理标准响应格式：{ status_code, tasks: [...] }
-      if (data.status_code !== undefined) {
-        console.log(`[DataForSEO] Response status_code: ${data.status_code}`);
-        
-        if (data.status_code !== 20000) {
-          console.error(`[DataForSEO] ❌ API returned error status_code: ${data.status_code}`, {
-            status_message: data.status_message || 'Unknown error',
-          });
-          return null;
-        }
-
-        if (!data.tasks || !Array.isArray(data.tasks) || data.tasks.length === 0) {
-          console.error(`[DataForSEO] ❌ No tasks in response`);
-          return null;
-        }
-
-        const firstTask = data.tasks[0];
-        
-        // 检查任务状态码
-        if (firstTask.status_code !== 20000) {
-          console.error(`[DataForSEO] ❌ Task failed with status_code: ${firstTask.status_code}`, {
-            status_message: firstTask.status_message || 'Unknown error',
-          });
-          return null;
-        }
-        
-        // 解析 result 字段（whois/overview 端点的格式）
-        if (!firstTask.result) {
-          console.error(`[DataForSEO] ❌ No result in task`);
-          return null;
-        }
-
-        if (!Array.isArray(firstTask.result) || firstTask.result.length === 0) {
-          console.error(`[DataForSEO] ❌ Empty result array`);
-          return null;
-        }
-
-        const resultItem = firstTask.result[0];
-        
-        // 检查是否有 items
-        if (!resultItem.items || !Array.isArray(resultItem.items) || resultItem.items.length === 0) {
-          console.error(`[DataForSEO] ❌ No items found in result`, {
-            resultItemKeys: Object.keys(resultItem),
-          });
-          return null;
-        }
-
-        const domainItem = resultItem.items[0];
-        
-        // 从 metrics.organic 中提取数据
-        const organicMetrics = domainItem.metrics?.organic || {};
-        const paidMetrics = domainItem.metrics?.paid || {};
-        
-        console.log(`[DataForSEO] ✅ Parsed domain item:`, {
-          domain: domainItem.domain,
-          organic_count: organicMetrics.count,
-          organic_etv: organicMetrics.etv,
-          hasBacklinksInfo: !!domainItem.backlinks_info,
-        });
-
-            // 计算总关键词数（有机关键词数）
-            const totalKeywords = organicMetrics.count || 0;
-
-            // 计算平均位置（基于排名分布）
-            // 使用加权平均：pos_1*1 + pos_2_3*2.5 + pos_4_10*7 + ... / total
-            let totalPositions = 0;
-            let totalKeywordsForAvg = 0;
-
-            if (organicMetrics.pos_1) {
-              totalPositions += organicMetrics.pos_1 * 1;
-              totalKeywordsForAvg += organicMetrics.pos_1;
-            }
-            if (organicMetrics.pos_2_3) {
-              totalPositions += organicMetrics.pos_2_3 * 2.5;
-              totalKeywordsForAvg += organicMetrics.pos_2_3;
-            }
-            if (organicMetrics.pos_4_10) {
-              totalPositions += organicMetrics.pos_4_10 * 7;
-              totalKeywordsForAvg += organicMetrics.pos_4_10;
-            }
-            if (organicMetrics.pos_11_20) {
-              totalPositions += organicMetrics.pos_11_20 * 15.5;
-              totalKeywordsForAvg += organicMetrics.pos_11_20;
-            }
-            if (organicMetrics.pos_21_30) {
-              totalPositions += organicMetrics.pos_21_30 * 25.5;
-              totalKeywordsForAvg += organicMetrics.pos_21_30;
-            }
-            if (organicMetrics.pos_31_40) {
-              totalPositions += organicMetrics.pos_31_40 * 35.5;
-              totalKeywordsForAvg += organicMetrics.pos_31_40;
-            }
-            if (organicMetrics.pos_41_50) {
-              totalPositions += organicMetrics.pos_41_50 * 45.5;
-              totalKeywordsForAvg += organicMetrics.pos_41_50;
-            }
-
-            const avgPosition = totalKeywordsForAvg > 0 ? totalPositions / totalKeywordsForAvg : 0;
-
-            // 计算排名分布（根据新的响应格式）
-            const pos1 = organicMetrics.pos_1 || 0;
-            const pos2_3 = organicMetrics.pos_2_3 || 0;
-            const pos4_10 = organicMetrics.pos_4_10 || 0;
-            const pos11_20 = organicMetrics.pos_11_20 || 0;
-            const pos21_30 = organicMetrics.pos_21_30 || 0;
-            const pos31_40 = organicMetrics.pos_31_40 || 0;
-            const pos41_50 = organicMetrics.pos_41_50 || 0;
-            const pos51_60 = organicMetrics.pos_51_60 || 0;
-            const pos61_70 = organicMetrics.pos_61_70 || 0;
-            const pos71_80 = organicMetrics.pos_71_80 || 0;
-            const pos81_90 = organicMetrics.pos_81_90 || 0;
-            const pos91_100 = organicMetrics.pos_91_100 || 0;
-
-            // 计算排名分布
-            const top3 = pos1 + pos2_3;
-            const top10 = pos1 + pos2_3 + pos4_10;
-            const top50 = pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50;
-            const top100 = pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50 +
-              pos51_60 + pos61_70 + pos71_80 + pos81_90 + pos91_100;
-
-            // 解析 backlinks_info 字段
-            const backlinksInfo = domainItem.backlinks_info ? {
-              referringDomains: domainItem.backlinks_info.referring_domains || 0,
-              referringMainDomains: domainItem.backlinks_info.referring_main_domains || 0,
-              referringPages: domainItem.backlinks_info.referring_pages || 0,
-              dofollow: domainItem.backlinks_info.dofollow || 0,
-              backlinks: domainItem.backlinks_info.backlinks || 0,
-              timeUpdate: domainItem.backlinks_info.time_update || undefined,
-            } : undefined;
-
-        if (backlinksInfo) {
-          console.log(`[DataForSEO] ✅ Parsed backlinks info:`, backlinksInfo);
-        } else {
-          console.log(`[DataForSEO] ⚠️ No backlinks info in response`);
-        }
-
-        // 即使数据为0，也返回结果（让调用方决定如何处理）
-        const result = {
-          domain: cleanDomain,
-          organicTraffic: Math.round(organicMetrics.etv || 0), // 使用 ETV (Estimated Traffic Value) 作为流量估算
-          totalKeywords: totalKeywords,
-          avgPosition: Math.round(avgPosition * 10) / 10, // 保留一位小数
-          topKeywords: [], // whois/overview 端点不返回关键词列表
-          rankingDistribution: {
-            top3: top3,
-            top10: top10,
-            top50: top50,
-            top100: top100,
-          },
-          backlinksInfo: backlinksInfo,
-        };
-
-        console.log(`[DataForSEO] ✅ Successfully parsed overview data:`, {
-          organicTraffic: result.organicTraffic,
-          totalKeywords: result.totalKeywords,
-          avgPosition: result.avgPosition,
-          top3: result.rankingDistribution.top3,
-          top10: result.rankingDistribution.top10,
-        });
-
-        return result;
-      } else {
-        // 兼容数组格式响应（如果 API 返回数组格式）
-        if (Array.isArray(data) && data.length > 0) {
-          console.log(`[DataForSEO] 📋 Processing array format response`);
-          const firstItem = data[0];
-
-          if (firstItem.tasks && Array.isArray(firstItem.tasks) && firstItem.tasks.length > 0) {
-            const firstTask = firstItem.tasks[0];
-
-            if (firstTask.status_code === 20000 && firstTask.result && Array.isArray(firstTask.result) && firstTask.result.length > 0) {
-              const taskResult = firstTask.result[0];
-
-              const result = {
-                domain: cleanDomain,
-                organicTraffic: taskResult.organic_traffic || taskResult.organicTraffic || 0,
-                totalKeywords: taskResult.total_keywords || taskResult.totalKeywords || 0,
-                avgPosition: taskResult.avg_position || taskResult.avgPosition || 0,
-                topKeywords: taskResult.top_keywords || taskResult.topKeywords || [],
-              };
-
-              console.log(`[DataForSEO] ✅ Successfully parsed overview data (array format):`, result);
-              return result;
-            }
-          }
-        }
-
-        console.error(`[DataForSEO] ❌ Response format not recognized or empty`);
-      }
-
-      return null;
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        console.error(`[DataForSEO] Request timeout for overview: ${domain}`);
-        return null;
-      }
-      throw fetchError;
-    }
-  } catch (error: any) {
-    console.error(`[DataForSEO] Failed to get overview for ${domain}:`, error.message);
-    return null;
-  }
-}
-
-/**
- * 获取域名的关键词列表
- *
- * @param domain - 域名
- * @param locationCode - 位置代码，默认 2840
- * @param limit - 返回数量限制，默认 100
- * @returns 关键词数组
- */
-export async function getDomainKeywords(
-  domain: string,
-  locationCode: number = 2840,
-  limit: number = 100
-): Promise<string[]> {
-  try {
-    console.log(`[DataForSEO] Getting keywords for ${domain}`);
-
-    const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0];
-
-    // 使用 domain_analytics API 获取关键词
-    const url = `${DATAFORSEO_BASE_URL}/domain_analytics/google/keywords/live`;
-
-    const requestBody = [{
-      target: cleanDomain,
-      location_code: locationCode,
-      limit: limit,
-    }];
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      const response = await fetchWithRetry(
-        url,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': createAuthHeader(),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        }
-      );
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[DataForSEO] API error:', response.status, errorText);
-        return [];
-      }
-
-      const data = await response.json();
-
-      // 添加详细日志
-      console.log(`[DataForSEO] Keywords API Response for ${cleanDomain}:`, {
-        isArray: Array.isArray(data),
-        length: Array.isArray(data) ? data.length : 0,
-        sampleData: JSON.stringify(data).substring(0, 500),
-      });
-
-      // 解析响应数据
-      const keywords: string[] = [];
-
-      if (Array.isArray(data) && data.length > 0) {
-        const firstItem = data[0];
-
-        if (firstItem.tasks && Array.isArray(firstItem.tasks) && firstItem.tasks.length > 0) {
-          const firstTask = firstItem.tasks[0];
-          const taskResult = firstTask.result;
-
-          if (Array.isArray(taskResult)) {
-            taskResult.forEach((item: any) => {
-              if (item.keyword) {
-                keywords.push(item.keyword);
-              } else if (item.keyword_text) {
-                keywords.push(item.keyword_text);
-              }
-            });
-          } else if (taskResult && typeof taskResult === 'object') {
-            // 如果 result 是对象，尝试提取关键词
-            console.log(`[DataForSEO] Result is object, keys:`, Object.keys(taskResult));
-            if (taskResult.keywords && Array.isArray(taskResult.keywords)) {
-              taskResult.keywords.forEach((item: any) => {
-                if (typeof item === 'string') {
-                  keywords.push(item);
-                } else if (item.keyword) {
-                  keywords.push(item.keyword);
-                }
-              });
-            }
-          }
-        }
-      }
-
-      console.log(`[DataForSEO] Extracted ${keywords.length} keywords`);
-      return keywords.slice(0, limit);
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        console.error(`[DataForSEO] Request timeout for keywords: ${domain}`);
-        return [];
-      }
-      throw fetchError;
-    }
-  } catch (error: any) {
-    console.error(`[DataForSEO] Failed to get keywords for ${domain}:`, error.message);
-    return [];
-  }
-}
-
-/**
- * 获取域名竞争对手对比
+ * 批量获取关键词数据（兼容别名，用于替换 SE Ranking）
  * 
- * 使用 DataForSEO Labs API: /v3/dataforseo_labs/google/competitors_domain/live
+ * 这个函数同时调用 search_volume 和 bulk_keyword_difficulty 两个端点
+ * 以获取完整的关键词数据（包括搜索量、CPC、竞争度和关键词难度）
  * 
- * @param domain - 域名
- * @param locationCode - 位置代码，默认 2840 (美国)，2166 (中国)
- * @param limit - 返回数量限制，默认 5
- * @returns 竞争对手数组
+ * @param keywords - 关键词数组
+ * @param locationCode - 位置代码，默认 2840 (美国)
+ * @param languageCode - 语言代码，默认 'en'
+ * @returns 关键词数据数组（兼容格式）
  */
-export async function getDomainCompetitors(
-  domain: string,
+export async function fetchKeywordData(
+  keywords: string[],
   locationCode: number = 2840,
-  limit: number = 5
-): Promise<DomainCompetitor[]> {
+  languageCode: string = 'en'
+): Promise<Array<{
+  keyword: string;
+  is_data_found: boolean;
+  volume?: number;
+  cpc?: number;
+  competition?: number;
+  difficulty?: number;
+  history_trend?: { [date: string]: number };
+}>> {
   try {
-    console.log(`[DataForSEO] Getting competitors for ${domain} (location: ${locationCode})`);
+    // 并行调用两个 API：search_volume 和 keyword_difficulty
+    const [volumeResults, difficultyResults] = await Promise.all([
+      fetchDataForSEOData(keywords, locationCode, languageCode).catch(err => {
+        console.warn('[DataForSEO] Search volume API failed:', err.message);
+        return keywords.map(kw => ({ keyword: kw, is_data_found: false }));
+      }),
+      fetchKeywordDifficulty(keywords, locationCode, languageCode).catch(err => {
+        console.warn('[DataForSEO] Keyword difficulty API failed:', err.message);
+        return keywords.map(kw => ({ keyword: kw }));
+      })
+    ]);
 
-    const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '');
-
-    // Add timeout control (30 seconds)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    try {
-      const url = `${DATAFORSEO_BASE_URL}/dataforseo_labs/google/competitors_domain/live`;
-      
-      // DataForSEO API 请求体是数组格式
-      const requestBody = [{
-        target: cleanDomain,
-        location_code: locationCode,
-        language_code: locationCode === 2166 ? 'zh' : 'en',
-        limit: limit,
-      }];
-
-      console.log(`[DataForSEO] Competitors request URL: ${url}`);
-      console.log(`[DataForSEO] Competitors request body:`, JSON.stringify(requestBody));
-
-      const response = await fetchWithRetry(
-        url,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': createAuthHeader(),
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        }
-      );
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[DataForSEO] Competitors API error:', response.status, errorText);
-        // 对于 400 和 404 错误，返回空数组而不是抛出异常
-        if (response.status === 404 || response.status === 400) {
-          console.log(`[DataForSEO] Competitors endpoint may not be available or parameters incorrect`);
-          return [];
-        }
-        throw new Error(`DataForSEO Competitors API error: ${response.status}`);
+    // 创建难度映射表
+    const difficultyMap = new Map<string, number>();
+    difficultyResults.forEach(item => {
+      if (item.keyword && item.keyword_difficulty !== undefined) {
+        difficultyMap.set(item.keyword.toLowerCase(), item.keyword_difficulty);
       }
+    });
 
-      const data = await response.json();
+    // 合并数据
+    return volumeResults.map(data => {
+      const keywordLower = data.keyword.toLowerCase();
+      const difficulty = difficultyMap.get(keywordLower);
 
-      // DataForSEO API 响应格式: { version, status_code, tasks: [{ result: [{ items: [...] }] }] }
-      if (!data || !Array.isArray(data) || data.length === 0) {
-        console.log(`[DataForSEO] No tasks found in competitors response`);
-        return [];
-      }
-
-      const firstTask = data[0];
-      if (!firstTask || firstTask.status_code !== 20000) {
-        console.error(`[DataForSEO] Task failed with status_code: ${firstTask?.status_code}`, {
-          status_message: firstTask?.status_message,
-        });
-        return [];
-      }
-
-      const taskResult = firstTask.result;
-      if (!taskResult || !Array.isArray(taskResult) || taskResult.length === 0) {
-        console.log(`[DataForSEO] No result found in competitors task`);
-        return [];
-      }
-
-      const firstResult = taskResult[0];
-      if (!firstResult || !firstResult.items || !Array.isArray(firstResult.items)) {
-        console.log(`[DataForSEO] No items found in competitors result`);
-        return [];
-      }
-
-      // 解析竞争对手数据
-      const competitors: DomainCompetitor[] = firstResult.items
-        .slice(0, limit)
-        .map((item: any) => ({
-          domain: item.domain || '',
-          title: item.domain || item.title || '',
-          commonKeywords: item.common_keywords || item.common_keywords_count || 0,
-          organicTraffic: item.organic_traffic || item.organic_traffic_value || 0,
-          totalKeywords: item.total_keywords || item.keywords_count || 0,
-          gapKeywords: item.gap_keywords || item.gap_keywords_count || 0,
-          gapTraffic: item.gap_traffic || item.gap_traffic_value || 0,
-        }))
-        .filter((comp: DomainCompetitor) => comp.domain && comp.domain.trim() !== '');
-
-      console.log(`[DataForSEO] Successfully retrieved ${competitors.length} competitors for ${cleanDomain}`);
-      return competitors;
-    } catch (fetchError: any) {
-      clearTimeout(timeoutId);
-      if (fetchError.name === 'AbortError') {
-        console.error(`[DataForSEO] Request timeout for competitors: ${domain}`);
-        return [];
-      }
-      throw fetchError;
-    }
+      return {
+        keyword: data.keyword,
+        is_data_found: data.is_data_found || false,
+        volume: data.search_volume, // search_volume -> volume
+        cpc: data.cpc,
+        competition: data.competition,
+        difficulty: difficulty !== undefined ? difficulty : data.keyword_difficulty, // 优先使用 bulk_keyword_difficulty 的结果
+        history_trend: data.history_trend,
+      };
+    });
   } catch (error: any) {
-    console.error(`[DataForSEO] Failed to get competitors for ${domain}:`, error.message);
-    return [];
+    console.error('[DataForSEO] Failed to fetch keyword data:', error.message);
+    // 返回空数据而不是抛出错误
+    return keywords.map(kw => ({
+      keyword: kw,
+      is_data_found: false,
+    }));
   }
 }
-

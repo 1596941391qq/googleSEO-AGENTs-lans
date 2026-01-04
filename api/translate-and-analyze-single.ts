@@ -40,14 +40,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     // Step 2.5: Call DataForSEO API to get keyword difficulty data (before SERP analysis)
-    console.log(`[SEO词研究工具] Fetching DataForSEO data for "${keywordData.keyword}"`);
+    console.log(`[DataForSEO] Fetching DataForSEO data for "${keywordData.keyword}"`);
 
     let shouldSkip = false;
 
     try {
       // 将语言代码转换为 DataForSEO 的 location_code 和 language_code
-      const locationCode = targetLanguage === 'zh' ? 2166 : 2840;
-      const languageCode = targetLanguage === 'zh' ? 'zh' : 'en';
+      const { getDataForSEOLocationAndLanguage } = await import('./_shared/tools/dataforseo.js');
+      const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
       
       const dataForSEOResults = await fetchKeywordData([keywordData.keyword], locationCode, languageCode);
 
@@ -56,14 +56,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         console.log(`[DataForSEO] "${dataForSEOData.keyword}": Volume=${dataForSEOData.volume}, KD=${dataForSEOData.difficulty}, CPC=$${dataForSEOData.cpc}, Competition=${dataForSEOData.competition}`);
 
-        // Attach DataForSEO data to keyword (保持接口兼容性，使用 serankingData 字段名)
+        // Attach DataForSEO data to keyword (保持向后兼容性)
+        keywordData.dataForSEOData = dataForSEOData;
         keywordData.serankingData = {
           is_data_found: dataForSEOData.is_data_found,
           volume: dataForSEOData.volume,
           cpc: dataForSEOData.cpc,
           competition: dataForSEOData.competition,
           difficulty: dataForSEOData.difficulty,
-          history_trend: dataForSEOData.trends,
+          history_trend: dataForSEOData.history_trend,
         };
 
         // Update volume if DataForSEO has better data

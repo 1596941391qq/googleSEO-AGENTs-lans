@@ -131,9 +131,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const translatedKeywordsList = keywordsForAnalysis.map(k => k.keyword);
       
       // 将语言代码转换为 DataForSEO 的 location_code 和 language_code
-      // 2166 = 中国, 2840 = 美国
-      const locationCode = targetLanguage === 'zh' ? 2166 : 2840;
-      const languageCode = targetLanguage === 'zh' ? 'zh' : 'en';
+      const { getDataForSEOLocationAndLanguage } = await import('./_shared/tools/dataforseo.js');
+      const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
       
       console.log(`[DataForSEO] Fetching data for ${translatedKeywordsList.length} keywords (location: ${locationCode}, language: ${languageCode})`);
       
@@ -147,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         cpc: data.cpc,
         competition: data.competition,
         difficulty: data.difficulty,
-        history_trend: data.trends,
+        history_trend: data.history_trend,
       }));
 
       // Create a map for quick lookup

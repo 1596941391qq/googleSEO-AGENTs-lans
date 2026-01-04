@@ -120,25 +120,25 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     const FIVE_MINUTES = 5 * 60 * 1000; // 5分钟内不重复调用API
 
     let needsApiUpdate = false;
-    let overviewCachePromise: Promise<Response> | null = null;
+    let cachedOverviewResult: any = null; // 缓存 JSON 结果而不是 Response
 
     // 先检查缓存状态，决定是否需要调用API
     try {
-      overviewCachePromise = fetch("/api/website-data/overview-only", {
+      const cacheResponse = await fetch("/api/website-data/overview-only", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(baseRequest),
       });
 
-      const cacheResponse = await overviewCachePromise;
       if (cacheResponse.ok) {
         const cacheResult = await cacheResponse.json();
-        
+        cachedOverviewResult = cacheResult; // 保存 JSON 结果
+
         // 检查缓存是否有效
         if (cacheResult.data && cacheResult.cached) {
           const expiresAt = cacheResult.data.expiresAt ? new Date(cacheResult.data.expiresAt) : null;
           const cacheTime = new Date();
-          
+
           // 如果缓存过期或不存在，才需要从API更新
           if (!expiresAt || expiresAt < cacheTime) {
             console.log("[Dashboard] ⚠️ Cache expired, will fetch from API");
@@ -159,12 +159,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     } catch (error: any) {
       console.log("[Dashboard] ⚠️ Cache check failed, will try API:", error.message);
       needsApiUpdate = true;
-      // 如果缓存检查失败，重新创建请求
-      overviewCachePromise = fetch("/api/website-data/overview-only", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(baseRequest),
-      });
     }
 
     // 只有在需要时才从API获取数据，并且防止重复调用
@@ -199,12 +193,18 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     }
 
     // 并行发起所有请求（从缓存读取）
+    // 如果已经有缓存的 overview 结果，直接使用；否则发起新请求
     const requests = {
-      overview: overviewCachePromise || fetch("/api/website-data/overview-only", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(baseRequest),
-      }),
+      overview: cachedOverviewResult
+        ? Promise.resolve(new Response(JSON.stringify(cachedOverviewResult), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          }))
+        : fetch("/api/website-data/overview-only", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(baseRequest),
+          }),
       keywords: fetch("/api/website-data/keywords-only", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

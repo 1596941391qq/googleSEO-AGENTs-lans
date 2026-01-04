@@ -101,8 +101,9 @@ export async function auditWebsiteForKeywords(
 
     try {
       // 获取竞争对手列表
-      // 将语言代码转换为 DataForSEO 的 location_code: 2166=中国, 2840=美国
-      const locationCode = targetLanguage === 'zh' ? 2166 : 2840;
+      // 将语言代码转换为 DataForSEO 的 location_code
+      const { getDataForSEOLocationAndLanguage } = await import('../tools/dataforseo.js');
+      const { locationCode } = getDataForSEOLocationAndLanguage(targetLanguage);
       const competitors = await getDomainCompetitors(websiteDomain, locationCode, 5);
       competitorDomains = competitors.map(c => c.domain).filter(Boolean);
       console.log(`[Website Audit] Found ${competitorDomains.length} competitors`);
