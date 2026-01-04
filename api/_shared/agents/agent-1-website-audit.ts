@@ -14,7 +14,8 @@
 
 import { callGeminiAPI } from '../gemini.js';
 import { scrapeWebsite } from '../tools/firecrawl.js';
-import { getDomainKeywords } from '../tools/se-ranking-domain.js';
+import { getDomainKeywords } from '../tools/dataforseo-domain.js';
+import { getDataForSEOLocationAndLanguage } from '../tools/dataforseo.js';
 import { getDomainCompetitors } from '../tools/dataforseo.js';
 import { KeywordData, TargetLanguage } from '../types.js';
 import { getExistingWebsiteAuditPrompt } from '../../../services/prompts/index.js';
@@ -111,7 +112,8 @@ export async function auditWebsiteForKeywords(
       // 获取每个竞争对手的关键词（取前几个）
       const competitorKeywordsPromises = competitorDomains.slice(0, 3).map(async (domain) => {
         try {
-          const keywords = await getDomainKeywords(domain, targetLanguage === 'zh' ? 'cn' : 'us', 20);
+          const { locationCode } = getDataForSEOLocationAndLanguage(targetLanguage);
+          const keywords = await getDomainKeywords(domain, locationCode, 20);
           return keywords.map(k => k.keyword);
         } catch (error: any) {
           console.warn(`[Website Audit] Failed to get keywords for competitor ${domain}: ${error.message}`);

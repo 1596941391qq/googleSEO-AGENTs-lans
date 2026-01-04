@@ -123,7 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 与手动输入模式相同，批量获取搜索量、难度、CPC 等数据
     console.log(`[Batch Translate-Analyze] Step 2: Fetching DataForSEO data for ${keywordsForAnalysis.length} keywords`);
 
-    let serankingDataMap = new Map<string, any>();
+    let dataForSEODataMap = new Map<string, any>();
     const keywordsToAnalyze: KeywordData[] = [];
     const skippedKeywords: KeywordData[] = [];
 
@@ -138,32 +138,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       const dataForSEOResults = await fetchKeywordData(translatedKeywordsList, locationCode, languageCode);
 
-      // 转换为兼容 SE Ranking 格式（保持接口兼容性）
-      const serankingResults = dataForSEOResults.map(data => ({
-        keyword: data.keyword,
-        is_data_found: data.is_data_found || false,
-        volume: data.volume,
-        cpc: data.cpc,
-        competition: data.competition,
-        difficulty: data.difficulty,
-        history_trend: data.history_trend,
-      }));
-
-      // Create a map for quick lookup
-      serankingResults.forEach(data => {
+      // Create a map for quick lookup (保持向后兼容性)
+      dataForSEOResults.forEach(data => {
         if (data.keyword) {
-          serankingDataMap.set(data.keyword.toLowerCase(), data);
+          dataForSEODataMap.set(data.keyword.toLowerCase(), data);
         }
       });
 
       // Flag to indicate that DataForSEO API call succeeded (even if some keywords have no data)
       // This is used to distinguish between "API failure" vs "API returned data (which might have is_data_found=false)"
-      (serankingDataMap as any).apiSucceeded = true;
+      (dataForSEODataMap as any).apiSucceeded = true;
 
-      console.log(`[DataForSEO] Successfully fetched data for ${serankingResults.length}/${keywordsForAnalysis.length} keywords`);
+      console.log(`[DataForSEO] Successfully fetched data for ${dataForSEOResults.length}/${keywordsForAnalysis.length} keywords`);
 
       // Log DataForSEO data for each keyword
-      serankingResults.forEach(data => {
+      dataForSEOResults.forEach(data => {
         if (data.is_data_found) {
           console.log(`[DataForSEO] "${data.keyword}": Volume=${data.volume}, KD=${data.difficulty}, CPC=$${data.cpc}, Competition=${data.competition}`);
         }
@@ -171,30 +160,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Process each keyword with DataForSEO data
       for (const keyword of keywordsForAnalysis) {
-        const serankingData = serankingDataMap.get(keyword.keyword.toLowerCase());
+        const dataForSEOData = dataForSEODataMap.get(keyword.keyword.toLowerCase());
 
-        if ((serankingDataMap as any).apiSucceeded && serankingData) {
+        if ((dataForSEODataMap as any).apiSucceeded && dataForSEOData) {
           // Only attach DataForSEO data if API succeeded
           // This distinguishes between "API failure" vs "API returned data (which might have is_data_found=false)"
+          keyword.dataForSEOData = dataForSEOData;
           keyword.serankingData = {
-            is_data_found: serankingData.is_data_found,
-            volume: serankingData.volume,
-            cpc: serankingData.cpc,
-            competition: serankingData.competition,
-            difficulty: serankingData.difficulty,
-            history_trend: serankingData.history_trend,
+            is_data_found: dataForSEOData.is_data_found,
+            volume: dataForSEOData.volume,
+            cpc: dataForSEOData.cpc,
+            competition: dataForSEOData.competition,
+            difficulty: dataForSEOData.difficulty,
+            history_trend: dataForSEOData.history_trend,
           };
 
           // Update volume if DataForSEO has better data
-          if (serankingData.volume) {
-            keyword.volume = serankingData.volume;
+          if (dataForSEOData.volume) {
+            keyword.volume = dataForSEOData.volume;
           }
 
           // Check if difficulty > 40, skip SERP analysis
-          if (serankingData.difficulty && serankingData.difficulty > 40) {
-            console.log(`[DataForSEO] Keyword "${keyword.keyword}" has KD ${serankingData.difficulty} > 40, marking as LOW and skipping`);
+          if (dataForSEOData.difficulty && dataForSEOData.difficulty > 40) {
+            console.log(`[DataForSEO] Keyword "${keyword.keyword}" has KD ${dataForSEOData.difficulty} > 40, marking as LOW and skipping`);
             keyword.probability = ProbabilityLevel.LOW;
-            keyword.reasoning = `Keyword Difficulty (${serankingData.difficulty}) is too high (>40). This indicates strong competition. Skipped detailed SERP analysis.`;
+            keyword.reasoning = `Keyword Difficulty (${dataForSEOData.difficulty}) is too high (>40). This indicates strong competition. Skipped detailed SERP analysis.`;
             skippedKeywords.push(keyword);
             continue;
           }

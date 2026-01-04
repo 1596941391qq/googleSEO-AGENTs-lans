@@ -9,7 +9,7 @@ import { callGeminiAPI } from '../gemini.js';
 import { fetchSerpResults, type SerpData } from '../tools/serp-search.js';
 import { getSEOResearcherPrompt } from '../../../services/prompts/index.js';
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport } from '../types.js';
-import { fetchSErankingData } from '../tools/se-ranking.js';
+import { fetchKeywordData } from '../tools/dataforseo.js';
 
 /**
  * 搜索引擎偏好分析结果

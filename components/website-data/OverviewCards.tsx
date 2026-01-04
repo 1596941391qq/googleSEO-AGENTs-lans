@@ -7,6 +7,10 @@ import {
   Target,
   BarChart3,
   Loader2,
+  DollarSign,
+  Activity,
+  ArrowDown,
+  CreditCard,
 } from "lucide-react";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -24,10 +28,15 @@ interface OverviewMetric {
 interface OverviewCardsProps {
   metrics?: {
     organicTraffic: number;
+    paidTraffic?: number;
+    totalTraffic?: number;
     totalKeywords: number;
     avgPosition: number;
     improvedKeywords: number;
     newKeywords: number;
+    lostKeywords?: number;
+    declinedKeywords?: number;
+    trafficCost?: number;
   };
   isLoading?: boolean;
   isDarkTheme: boolean;
@@ -47,12 +56,29 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
     return num.toString();
   };
 
+  // Format currency
+  const formatCurrency = (num: number): string => {
+    if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
+    if (num >= 1000) return `$${(num / 1000).toFixed(2)}K`;
+    return `$${num.toFixed(2)}`;
+  };
+
   // Define cards
   const cards: OverviewMetric[] = metrics ? [
     {
       label: uiLanguage === "zh" ? "有机流量" : "Organic Traffic",
       value: formatNumber(metrics.organicTraffic),
       icon: <Users className="w-4 h-4" />,
+    },
+    {
+      label: uiLanguage === "zh" ? "付费流量" : "Paid Traffic",
+      value: formatNumber(metrics.paidTraffic || 0),
+      icon: <CreditCard className="w-4 h-4" />,
+    },
+    {
+      label: uiLanguage === "zh" ? "总流量" : "Total Traffic",
+      value: formatNumber(metrics.totalTraffic || 0),
+      icon: <Activity className="w-4 h-4" />,
     },
     {
       label: uiLanguage === "zh" ? "总关键词数" : "Total Keywords",
@@ -76,6 +102,23 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       value: formatNumber(metrics.newKeywords),
       icon: <BarChart3 className="w-4 h-4" />,
       changeType: "increase",
+    },
+    {
+      label: uiLanguage === "zh" ? "丢失关键词" : "Lost Keywords",
+      value: formatNumber(metrics.lostKeywords || 0),
+      icon: <TrendingDown className="w-4 h-4" />,
+      changeType: "decrease",
+    },
+    {
+      label: uiLanguage === "zh" ? "下降关键词" : "Declined Keywords",
+      value: formatNumber(metrics.declinedKeywords || 0),
+      icon: <ArrowDown className="w-4 h-4" />,
+      changeType: "decrease",
+    },
+    {
+      label: uiLanguage === "zh" ? "流量成本" : "Traffic Cost",
+      value: formatCurrency(metrics.trafficCost || 0),
+      icon: <DollarSign className="w-4 h-4" />,
     },
   ] : [];
 
@@ -158,12 +201,30 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
                 <div
                   className={cn(
                     "p-2 rounded-lg",
-                    isDarkTheme
-                      ? "bg-emerald-500/10"
-                      : "bg-emerald-50"
+                    card.changeType === "decrease"
+                      ? isDarkTheme
+                        ? "bg-red-500/10"
+                        : "bg-red-50"
+                      : card.changeType === "increase"
+                      ? isDarkTheme
+                        ? "bg-emerald-500/10"
+                        : "bg-emerald-50"
+                      : isDarkTheme
+                      ? "bg-blue-500/10"
+                      : "bg-blue-50"
                   )}
                 >
-                  {card.icon}
+                  <div
+                    className={cn(
+                      card.changeType === "decrease"
+                        ? "text-red-500"
+                        : card.changeType === "increase"
+                        ? "text-emerald-500"
+                        : "text-blue-500"
+                    )}
+                  >
+                    {card.icon}
+                  </div>
                 </div>
               </div>
             </CardContent>

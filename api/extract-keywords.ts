@@ -1,8 +1,8 @@
-// Extract keywords from website content using Gemini and SE Ranking Domain API
+// Extract keywords from website content using Gemini and DataForSEO Domain API
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { callGeminiAPI } from './_shared/gemini.js';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from './_shared/request-handler.js';
-import { getDomainKeywords } from './_shared/tools/se-ranking-domain.js';
+import { getDomainKeywords } from './_shared/tools/dataforseo-domain.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -45,17 +45,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('[Extract Keywords] Detected language:', detectedLanguage);
     console.log('[Extract Keywords] Final target language:', finalTargetLanguage);
 
-    // Step 1: Try to get keywords from SE Ranking Domain API (most accurate)
-    let serankingKeywords: any[] = [];
+    // Step 1: Try to get keywords from DataForSEO Domain API (most accurate)
+    let dataForSEOKeywords: any[] = [];
     try {
       const domain = url.replace(/^https?:\/\//, '').split('/')[0];
-      const location = finalTargetLanguage === 'zh' ? 'cn' : 'us'; // Map language to region
 
-      console.log('[Extract Keywords] Fetching keywords from SE Ranking Domain API...');
-      const domainKeywords = await getDomainKeywords(domain, location, 50); // Get top 50 keywords
+      // 将语言代码转换为 DataForSEO 的 location_code
+      const { getDataForSEOLocationAndLanguage } = await import('./_shared/tools/dataforseo.js');
+      const { locationCode } = getDataForSEOLocationAndLanguage(finalTargetLanguage);
+
+      console.log('[Extract Keywords] Fetching keywords from DataForSEO Domain API...');
+      const domainKeywords = await getDomainKeywords(domain, locationCode, 50); // Get top 50 keywords
 
       if (domainKeywords && domainKeywords.length > 0) {
-        serankingKeywords = domainKeywords.map(kw => ({
+        dataForSEOKeywords = domainKeywords.map(kw => ({
           keyword: kw.keyword,
           translation: finalTargetLanguage === 'zh' ? kw.keyword : kw.keyword, // Can be enhanced with translation
           intent: 'Informational', // Default, can be analyzed later
@@ -64,23 +67,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           difficulty: kw.difficulty || 0,
           cpc: kw.cpc || 0,
           competition: kw.competition || 0,
-          source: 'seranking' // Mark as from SE Ranking
+          source: 'dataforseo' // Mark as from DataForSEO
         }));
-        console.log(`[Extract Keywords] Got ${serankingKeywords.length} keywords from SE Ranking`);
+        console.log(`[Extract Keywords] Got ${dataForSEOKeywords.length} keywords from DataForSEO`);
       }
-    } catch (serankingError: any) {
-      console.warn('[Extract Keywords] SE Ranking API failed:', serankingError.message);
+    } catch (dataForSEOError: any) {
+      console.warn('[Extract Keywords] DataForSEO API failed:', dataForSEOError.message);
       // Continue with AI extraction as fallback
     }
 
-    // Step 2: If we have SE Ranking keywords, use them as primary source
+    // Step 2: If we have DataForSEO keywords, use them as primary source
     // Otherwise, or in addition, use AI to extract keywords from content
     let aiKeywords: any[] = [];
 
     // Only use AI extraction if:
-    // 1. We have no SE Ranking keywords, OR
+    // 1. We have no DataForSEO keywords, OR
     // 2. We want to supplement with content-based keywords
-    if (serankingKeywords.length === 0) {
+    if (dataForSEOKeywords.length === 0) {
       console.log('[Extract Keywords] Using AI to extract keywords from content...');
 
       // Prepare prompt for keyword extraction
@@ -180,12 +183,12 @@ Please return only the JSON, nothing else.`;
       }
     }
 
-    // Step 3: Combine keywords (prioritize SE Ranking, supplement with AI)
+    // Step 3: Combine keywords (prioritize DataForSEO, supplement with AI)
     // Remove duplicates and merge data
     const keywordMap = new Map<string, any>();
 
-    // First add SE Ranking keywords (higher priority)
-    serankingKeywords.forEach(kw => {
+    // First add DataForSEO keywords (higher priority)
+    dataForSEOKeywords.forEach(kw => {
       keywordMap.set(kw.keyword.toLowerCase(), kw);
     });
 
@@ -195,7 +198,7 @@ Please return only the JSON, nothing else.`;
       if (!keywordMap.has(key)) {
         keywordMap.set(key, kw);
       } else {
-        // Merge: keep SE Ranking data but add AI insights if available
+        // Merge: keep DataForSEO data but add AI insights if available
         const existing = keywordMap.get(key);
         keywordMap.set(key, {
           ...existing,
@@ -207,25 +210,25 @@ Please return only the JSON, nothing else.`;
 
     const combinedKeywords = Array.from(keywordMap.values());
 
-    // Sort by volume/importance (SE Ranking keywords first, then by volume)
+    // Sort by volume/importance (DataForSEO keywords first, then by volume)
     combinedKeywords.sort((a, b) => {
-      if (a.source === 'seranking' && b.source !== 'seranking') return -1;
-      if (a.source !== 'seranking' && b.source === 'seranking') return 1;
+      if (a.source === 'dataforseo' && b.source !== 'dataforseo') return -1;
+      if (a.source !== 'dataforseo' && b.source === 'dataforseo') return 1;
       return (b.estimatedVolume || b.searchVolume || 0) - (a.estimatedVolume || a.searchVolume || 0);
     });
 
     // Limit to top 20 keywords
     const finalKeywords = combinedKeywords.slice(0, 20);
 
-    console.log(`[Extract Keywords] Final result: ${finalKeywords.length} keywords (${serankingKeywords.length} from SE Ranking, ${aiKeywords.length} from AI)`);
+    console.log(`[Extract Keywords] Final result: ${finalKeywords.length} keywords (${dataForSEOKeywords.length} from DataForSEO, ${aiKeywords.length} from AI)`);
 
     // Return success response
     return res.json({
       success: true,
       data: {
         keywords: finalKeywords,
-        websiteSummary: `Extracted ${finalKeywords.length} keywords from ${serankingKeywords.length > 0 ? 'SE Ranking API and ' : ''}content analysis`,
-        source: serankingKeywords.length > 0 ? 'seranking+ai' : 'ai',
+        websiteSummary: `Extracted ${finalKeywords.length} keywords from ${dataForSEOKeywords.length > 0 ? 'DataForSEO API and ' : ''}content analysis`,
+        source: dataForSEOKeywords.length > 0 ? 'dataforseo+ai' : 'ai',
         detectedLanguage: finalTargetLanguage,
       },
     });

@@ -1375,13 +1375,23 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               console.log("[Content Generation] Demo generation success");
 
               if (demoData.success && demoData.data) {
+                // After generating demo content, stay on step 1 (loading) for a moment
+                // Then move to step 2 (GPT demo) - user will click "Continue" to proceed
                 setState({
                   demoContent: {
                     ...demoData.data,
                     screenshot: data.data.screenshot,
                   },
-                  onboardingStep: 2, // Move to demo
+                  onboardingStep: 1, // Stay on loading step
                 });
+                
+                // After a short delay, move to step 2 (GPT demo)
+                setTimeout(() => {
+                  setState((prev) => ({
+                    ...prev,
+                    onboardingStep: 2, // Move to GPT demo
+                  }));
+                }, 1000);
               } else {
                 throw new Error("Invalid demo response format");
               }
@@ -1453,8 +1463,16 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               brandName: urlBrand2,
               screenshot: data.data.screenshot,
             },
-            onboardingStep: 2,
+            onboardingStep: 1, // Stay on loading step
           });
+          
+          // After a short delay, move to step 2 (GPT demo)
+          setTimeout(() => {
+            setState((prev) => ({
+              ...prev,
+              onboardingStep: 2, // Move to GPT demo
+            }));
+          }, 1000);
         }
       } else {
         throw new Error("No data returned from scrape");
@@ -1482,6 +1500,275 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
       alert(errorMessage);
       setState({ onboardingStep: 0 });
+    }
+  };
+
+  // Handle adding website from WebsiteManager (bound state)
+  const handleAddWebsiteFromManager = async (url: string) => {
+    // Auto-add https:// if missing
+    let processedUrl = url.trim();
+    if (!/^https?:\/\//i.test(processedUrl)) {
+      processedUrl = `https://${processedUrl}`;
+    }
+
+    // Validate URL format
+    try {
+      new URL(processedUrl);
+    } catch {
+      alert(
+        uiLanguage === "zh" ? "请输入有效的URL" : "Please enter a valid URL"
+      );
+      return;
+    }
+
+    // Clear current website and move to onboarding flow
+    setState({
+      website: null,
+      onboardingStep: 1, // Start with loading state
+      websiteData: null,
+      demoContent: null,
+    });
+    setTempUrl(processedUrl); // Store URL for later
+
+    try {
+      console.log(
+        "[Content Generation] Step 1: Scraping website:",
+        processedUrl
+      );
+
+      // Call Firecrawl API
+      const response = await fetch("/api/scrape-website", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url: processedUrl }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("[Content Generation] Scrape failed:", errorData);
+        throw new Error(errorData.error || "Failed to scrape website");
+      }
+
+      const data = await response.json();
+      console.log(
+        "[Content Generation] Scrape success, content length:",
+        data.data?.markdown?.length || 0
+      );
+
+      if (data.success && data.data) {
+        // Store scraped data in state (don't set website yet - only after full onboarding)
+        setState({
+          websiteData: {
+            rawContent: data.data.markdown,
+            extractedKeywords: [], // Will extract now
+            rankingOpportunities: [], // Will analyze later
+          },
+          onboardingStep: 1, // Stay on loading while extracting keywords
+        });
+
+        // Now extract keywords
+        try {
+          console.log("[Content Generation] Step 2: Extracting keywords...");
+          const extractResponse = await fetch("/api/extract-keywords", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              content: data.data.markdown,
+              url: processedUrl,
+              targetLanguage: uiLanguage === "zh" ? "zh" : "en",
+              uiLanguage: uiLanguage,
+            }),
+          });
+
+          if (!extractResponse.ok) {
+            const errorData = await extractResponse.json();
+            console.error("[Content Generation] Extract failed:", errorData);
+            throw new Error(errorData.error || "Failed to extract keywords");
+          }
+
+          const extractData = await extractResponse.json();
+          console.log(
+            "[Content Generation] Extract success, keywords:",
+            extractData.data?.keywords?.length || 0
+          );
+
+          if (extractData.success && extractData.data) {
+            setState({
+              websiteData: {
+                rawContent: data.data.markdown,
+                extractedKeywords: extractData.data.keywords || [],
+                rankingOpportunities: [], // Will analyze later
+              },
+              onboardingStep: 1, // Stay on loading while generating demo content
+            });
+
+            // Now generate demo content
+            try {
+              console.log(
+                "[Content Generation] Step 3: Generating demo content..."
+              );
+              const demoResponse = await fetch("/api/generate-demo-content", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  content: data.data.markdown,
+                  url: processedUrl,
+                  keywords: extractData.data.keywords || [],
+                  targetLanguage: uiLanguage, // Use uiLanguage instead of hardcoded "en"
+                  uiLanguage: uiLanguage,
+                  websiteTitle: data.data.title || "", // Pass website title to AI
+                }),
+              });
+
+              if (!demoResponse.ok) {
+                const errorData = await demoResponse.json();
+                console.error(
+                  "[Content Generation] Demo generation failed:",
+                  errorData
+                );
+                throw new Error(
+                  errorData.error || "Failed to generate demo content"
+                );
+              }
+
+              const demoData = await demoResponse.json();
+              console.log("[Content Generation] Demo generation success");
+
+              if (demoData.success && demoData.data) {
+                // After generating demo content, stay on step 1 (loading) for a moment
+                // Then move to step 2 (GPT demo) - user will click "Continue" to proceed
+                setState({
+                  demoContent: {
+                    ...demoData.data,
+                    screenshot: data.data.screenshot,
+                  },
+                  onboardingStep: 1, // Stay on loading step
+                });
+                
+                // After a short delay, move to step 2 (GPT demo)
+                setTimeout(() => {
+                  setState((prev) => ({
+                    ...prev,
+                    onboardingStep: 2, // Move to GPT demo
+                  }));
+                }, 1000);
+              } else {
+                throw new Error("Invalid demo response format");
+              }
+            } catch (demoError: any) {
+              console.error(
+                "[Content Generation] Error generating demo content:",
+                demoError
+              );
+
+              // 处理网络错误
+              if (
+                demoError?.message?.includes("Failed to fetch") ||
+                demoError?.name === "TypeError"
+              ) {
+                console.warn(
+                  "[Content Generation] Network error during demo generation"
+                );
+              }
+
+              // Still move to next step with default content
+              console.log(
+                "[Content Generation] Moving to step 2 with default content"
+              );
+              const urlDomain = new URL(processedUrl).hostname;
+              const urlBrand =
+                urlDomain.split(".")[0].charAt(0).toUpperCase() +
+                urlDomain.split(".")[0].slice(1);
+              setState({
+                demoContent: {
+                  chatGPTDemo: null,
+                  articleDemo: null,
+                  domain: urlDomain,
+                  brandName: urlBrand,
+                  screenshot: data.data.screenshot,
+                },
+                onboardingStep: 2,
+              });
+            }
+          } else {
+            throw new Error("Invalid extract response format");
+          }
+        } catch (extractError: any) {
+          console.error(
+            "[Content Generation] Error extracting keywords:",
+            extractError
+          );
+
+          // 处理网络错误
+          if (
+            extractError?.message?.includes("Failed to fetch") ||
+            extractError?.name === "TypeError"
+          ) {
+            console.warn(
+              "[Content Generation] Network error during keyword extraction"
+            );
+          }
+
+          // Still move to next step, just without keywords
+          console.log("[Content Generation] Moving to step 2 without keywords");
+          const urlDomain2 = new URL(processedUrl).hostname;
+          const urlBrand2 =
+            urlDomain2.split(".")[0].charAt(0).toUpperCase() +
+            urlDomain2.split(".")[0].slice(1);
+          setState({
+            demoContent: {
+              chatGPTDemo: null,
+              articleDemo: null,
+              domain: urlDomain2,
+              brandName: urlBrand2,
+              screenshot: data.data.screenshot,
+            },
+            onboardingStep: 1, // Stay on loading step
+          });
+          
+          // After a short delay, move to step 2 (GPT demo)
+          setTimeout(() => {
+            setState((prev) => ({
+              ...prev,
+              onboardingStep: 2, // Move to GPT demo
+            }));
+          }, 1000);
+        }
+      } else {
+        throw new Error("No data returned from scrape");
+      }
+    } catch (error: any) {
+      console.error("[Content Generation] Error scraping website:", error);
+
+      // 处理网络错误
+      let errorMessage =
+        uiLanguage === "zh"
+          ? "抓取网站失败，请稍后重试"
+          : "Failed to scrape website, please try again later";
+
+      if (
+        error?.message?.includes("Failed to fetch") ||
+        error?.name === "TypeError"
+      ) {
+        errorMessage =
+          uiLanguage === "zh"
+            ? "网络连接失败，请检查您的网络"
+            : "Network connection failed, please check your network";
+      }
+
+      alert(errorMessage);
+      setState({
+        website: null,
+        onboardingStep: 0, // Go back to URL input
+        websiteData: null,
+        demoContent: null,
+      });
     }
   };
 
@@ -1740,23 +2027,43 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 onWebsiteSelect={(website) => {
                   setState({ website });
                 }}
+                onAddWebsite={(url) => {
+                  handleAddWebsiteFromManager(url);
+                }}
                 onWebsiteBind={(website) => {
                   // Bind website and set to bound state
+                  const boundWebsite = {
+                    id: website.id,
+                    url: website.url,
+                    domain: website.domain,
+                    title: website.title,
+                    description: website.description,
+                    screenshot: website.screenshot,
+                    industry: website.industry || null,
+                    monthlyVisits: website.monthlyVisits || null,
+                    monthlyRevenue: website.monthlyRevenue || null,
+                    marketingTools: website.marketingTools || [],
+                    boundAt: website.boundAt || new Date().toISOString(),
+                  };
+
+                  // Save to localStorage as backup
+                  try {
+                    localStorage.setItem(
+                      "google_seo_bound_website",
+                      JSON.stringify(boundWebsite)
+                    );
+                  } catch (error) {
+                    console.error(
+                      "[Content Generation] Failed to save website to localStorage:",
+                      error
+                    );
+                  }
+
                   setState({
-                    website: {
-                      id: website.id,
-                      url: website.url,
-                      domain: website.domain,
-                      title: website.title,
-                      description: website.description,
-                      screenshot: website.screenshot,
-                      industry: website.industry || null,
-                      monthlyVisits: website.monthlyVisits || null,
-                      monthlyRevenue: website.monthlyRevenue || null,
-                      marketingTools: website.marketingTools || [],
-                    },
+                    website: boundWebsite,
                     onboardingStep: 5, // Set to bound state
                   });
+
                   // Update user preferences to set this as current website
                   fetch("/api/websites/set-default", {
                     method: "POST",
@@ -1765,12 +2072,21 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                       websiteId: website.id,
                       userId: 1,
                     }),
-                  }).catch((error) => {
-                    console.error(
-                      "[Content Generation] Failed to set default website:",
-                      error
-                    );
-                  });
+                  })
+                    .then((response) => {
+                      if (!response.ok) {
+                        throw new Error("Failed to set default website");
+                      }
+                      console.log(
+                        "[Content Generation] Default website set successfully"
+                      );
+                    })
+                    .catch((error) => {
+                      console.error(
+                        "[Content Generation] Failed to set default website:",
+                        error
+                      );
+                    });
                 }}
                 onWebsiteUnbind={(websiteId) => {
                   // Only unbind if this is the current website
@@ -2729,11 +3045,108 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           saveResponse.status,
                           errorText
                         );
-                      } else {
-                        console.log(
-                          "[Content Generation] Website data saved successfully"
+                        alert(
+                          uiLanguage === "zh"
+                            ? "保存网站数据失败，请重试"
+                            : "Failed to save website data, please try again"
+                        );
+                        return;
+                      }
+
+                      const saveData = await saveResponse.json();
+                      const websiteId = saveData.data?.websiteId;
+
+                      if (!websiteId) {
+                        console.error(
+                          "[Content Generation] No websiteId returned from save API"
+                        );
+                        alert(
+                          uiLanguage === "zh"
+                            ? "保存失败：未返回网站ID"
+                            : "Save failed: No website ID returned"
+                        );
+                        return;
+                      }
+
+                      console.log(
+                        "[Content Generation] Website data saved successfully, websiteId:",
+                        websiteId
+                      );
+
+                      // Set as default website
+                      try {
+                        const setDefaultResponse = await fetch(
+                          "/api/websites/set-default",
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              websiteId: websiteId,
+                              userId: 1, // TODO: Get from session/auth
+                            }),
+                          }
+                        );
+
+                        if (!setDefaultResponse.ok) {
+                          const errorText = await setDefaultResponse.text();
+                          console.error(
+                            "[Content Generation] Failed to set default website:",
+                            setDefaultResponse.status,
+                            errorText
+                          );
+                          // Don't block the flow if this fails, but log it
+                        } else {
+                          console.log(
+                            "[Content Generation] Default website set successfully"
+                          );
+                        }
+                      } catch (setDefaultError: any) {
+                        console.error(
+                          "[Content Generation] Error setting default website:",
+                          setDefaultError
+                        );
+                        // Don't block the flow if this fails
+                      }
+
+                      // Get domain from URL
+                      const domain = new URL(tempUrl).hostname.replace(
+                        /^www\./,
+                        ""
+                      );
+
+                      const boundWebsite = {
+                        id: websiteId,
+                        url: tempUrl,
+                        domain: domain,
+                        title:
+                          state.demoContent?.articleDemo?.article?.title || "",
+                        description: "",
+                        screenshot: state.demoContent?.screenshot || "",
+                        industry: state.website?.industry || null,
+                        monthlyVisits: state.website?.monthlyVisits || null,
+                        monthlyRevenue: qa2,
+                        marketingTools: qa3,
+                        boundAt: new Date().toISOString(),
+                        additionalInfo: qa4,
+                      };
+
+                      // Save to localStorage as backup
+                      try {
+                        localStorage.setItem(
+                          "google_seo_bound_website",
+                          JSON.stringify(boundWebsite)
+                        );
+                      } catch (error) {
+                        console.error(
+                          "[Content Generation] Failed to save website to localStorage:",
+                          error
                         );
                       }
+
+                      setState({
+                        website: boundWebsite,
+                        onboardingStep: 5, // Complete (bound state will show)
+                      });
                     } catch (error: any) {
                       console.error(
                         "[Content Generation] Error saving website data:",
@@ -2748,34 +3161,19 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                         console.warn(
                           "[Content Generation] Network error while saving website data"
                         );
+                        alert(
+                          uiLanguage === "zh"
+                            ? "网络连接失败，请检查网络连接或稍后重试"
+                            : "Network connection failed, please check your connection and try again"
+                        );
+                      } else {
+                        alert(
+                          uiLanguage === "zh"
+                            ? "保存网站数据失败，请重试"
+                            : "Failed to save website data, please try again"
+                        );
                       }
                     }
-
-                    const boundWebsite = {
-                      url: tempUrl,
-                      boundAt: new Date().toISOString(),
-                      monthlyRevenue: qa2,
-                      marketingTools: qa3,
-                      additionalInfo: qa4,
-                    };
-
-                    // Save to localStorage
-                    try {
-                      localStorage.setItem(
-                        "google_seo_bound_website",
-                        JSON.stringify(boundWebsite)
-                      );
-                    } catch (error) {
-                      console.error(
-                        "[Content Generation] Failed to save website to localStorage:",
-                        error
-                      );
-                    }
-
-                    setState({
-                      website: boundWebsite,
-                      onboardingStep: 5, // Complete (bound state will show)
-                    });
                   }}
                 >
                   {uiLanguage === "zh" ? "完成设置" : "Complete Setup"}

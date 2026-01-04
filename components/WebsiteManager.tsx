@@ -52,6 +52,7 @@ interface WebsiteManagerProps {
   onWebsiteSelect?: (website: Website) => void;
   onWebsiteBind?: (website: Website) => void;
   onWebsiteUnbind?: (websiteId: string) => void;
+  onAddWebsite?: (url: string) => void;
   currentWebsiteId?: string | null;
 }
 
@@ -62,12 +63,15 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
   onWebsiteSelect,
   onWebsiteBind,
   onWebsiteUnbind,
+  onAddWebsite,
   currentWebsiteId,
 }) => {
   const [data, setData] = useState<WebsitesListData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingWebsiteId, setDeletingWebsiteId] = useState<string | null>(null);
+  const [deletingWebsiteId, setDeletingWebsiteId] = useState<string | null>(
+    null
+  );
   const [settingDefaultId, setSettingDefaultId] = useState<string | null>(null);
   const [showAddWebsite, setShowAddWebsite] = useState(false);
   const [newWebsiteUrl, setNewWebsiteUrl] = useState("");
@@ -79,9 +83,7 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/websites/list?user_id=${userId}`
-      );
+      const response = await fetch(`/api/websites/list?user_id=${userId}`);
 
       if (response.ok) {
         const result = await response.json();
@@ -98,9 +100,7 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
     } catch (error: any) {
       console.error("[WebsiteManager] Failed to load:", error);
       setError(
-        uiLanguage === "zh"
-          ? "网络连接失败"
-          : "Network connection failed"
+        uiLanguage === "zh" ? "网络连接失败" : "Network connection failed"
       );
     } finally {
       setLoading(false);
@@ -176,12 +176,17 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
   // Add website
   const handleAddWebsite = async () => {
     if (!newWebsiteUrl || newWebsiteUrl.trim() === "") {
-      alert(uiLanguage === "zh" ? "请输入网站URL" : "Please enter a website URL");
+      alert(
+        uiLanguage === "zh" ? "请输入网站URL" : "Please enter a website URL"
+      );
       return;
     }
 
     let processedUrl = newWebsiteUrl.trim();
-    if (!processedUrl.startsWith("http://") && !processedUrl.startsWith("https://")) {
+    if (
+      !processedUrl.startsWith("http://") &&
+      !processedUrl.startsWith("https://")
+    ) {
       processedUrl = "https://" + processedUrl;
     }
 
@@ -234,10 +239,17 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
         throw new Error("Invalid save response");
       }
 
-      // Reload list
-      await loadWebsites();
-      setNewWebsiteUrl("");
-      setShowAddWebsite(false);
+      // If onAddWebsite callback is provided, trigger the demo flow
+      if (onAddWebsite) {
+        onAddWebsite(processedUrl);
+        setNewWebsiteUrl("");
+        setShowAddWebsite(false);
+      } else {
+        // Otherwise, just reload list
+        await loadWebsites();
+        setNewWebsiteUrl("");
+        setShowAddWebsite(false);
+      }
     } catch (error: any) {
       console.error("[WebsiteManager] Failed to add website:", error);
       alert(
@@ -401,7 +413,9 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
           >
             {uiLanguage === "zh"
               ? `${data.websites.length} 个网站`
-              : `${data.websites.length} website${data.websites.length > 1 ? "s" : ""}`}
+              : `${data.websites.length} website${
+                  data.websites.length > 1 ? "s" : ""
+                }`}
           </p>
         </div>
         {!showAddWebsite ? (
@@ -420,9 +434,7 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
               value={newWebsiteUrl}
               onChange={(e) => setNewWebsiteUrl(e.target.value)}
               placeholder={
-                uiLanguage === "zh"
-                  ? "输入网站URL"
-                  : "Enter website URL"
+                uiLanguage === "zh" ? "输入网站URL" : "Enter website URL"
               }
               className={cn(
                 "w-64 h-8",
@@ -673,8 +685,10 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
               >
                 {isSettingDefault ? (
                   <Loader2 className="w-3 h-3 animate-spin" />
+                ) : uiLanguage === "zh" ? (
+                  "设为默认"
                 ) : (
-                  uiLanguage === "zh" ? "设为默认" : "Set Default"
+                  "Set Default"
                 )}
               </Button>
             )}

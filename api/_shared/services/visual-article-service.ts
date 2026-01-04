@@ -15,7 +15,7 @@ import {
   ImagePromptResult
 } from '../agents/agent-5-image-creative.js';
 import { fetchSerpResults } from '../tools/serp-search.js';
-import { fetchSErankingData } from '../tools/se-ranking.js';
+import { fetchKeywordData, getDataForSEOLocationAndLanguage } from '../tools/dataforseo.js';
 import { KeywordData, SEOStrategyReport, TargetLanguage } from '../types.js';
 import { AgentStreamEvent } from '../../../types.js';
 import {
@@ -121,14 +121,14 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       });
     }
 
-    // Get SE Ranking data for the data card
+    // Get DataForSEO data for the data card
     try {
-      const seRankingCountryCode = countryCodeMap[targetMarket] || 'us';
-      const seRanking = await fetchSErankingData([keyword], seRankingCountryCode);
-      if (seRanking && seRanking.length > 0) {
+      const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
+      const dataForSEOResults = await fetchKeywordData([keyword], locationCode, languageCode);
+      if (dataForSEOResults && dataForSEOResults.length > 0 && dataForSEOResults[0].is_data_found) {
         emit('researcher', 'card', undefined, 'data', {
-          volume: seRanking[0].volume || 0,
-          difficulty: seRanking[0].difficulty || 0
+          volume: dataForSEOResults[0].volume || 0,
+          difficulty: dataForSEOResults[0].difficulty || 0
         });
       }
     } catch (e) {

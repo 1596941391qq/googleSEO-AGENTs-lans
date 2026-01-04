@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { OverviewCards } from "./OverviewCards";
 import { RankingDistributionChart } from "./RankingDistributionChart";
@@ -113,16 +114,14 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
     console.log("[Dashboard] 🚀 Starting parallel data loading for websiteId:", websiteId);
 
-    // 检查是否需要从API更新数据（使用sessionStorage防止重复调用）
+    // 使用sessionStorage防止重复调用
     const apiFetchKey = `api_fetch_${websiteId}`;
     const lastFetchTime = sessionStorage.getItem(apiFetchKey);
     const now = Date.now();
     const FIVE_MINUTES = 5 * 60 * 1000; // 5分钟内不重复调用API
 
-    let needsApiUpdate = false;
-    let cachedOverviewResult: any = null; // 缓存 JSON 结果而不是 Response
-
-    // 先检查缓存状态，决定是否需要调用API
+    // 先读取缓存作为后备（即使缓存没过期，也会先执行 update-metrics）
+    let cachedOverviewResult: any = null;
     try {
       const cacheResponse = await fetch("/api/website-data/overview-only", {
         method: "POST",
@@ -132,70 +131,56 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
       if (cacheResponse.ok) {
         const cacheResult = await cacheResponse.json();
-        cachedOverviewResult = cacheResult; // 保存 JSON 结果
-
-        // 检查缓存是否有效
-        if (cacheResult.data && cacheResult.cached) {
-          const expiresAt = cacheResult.data.expiresAt ? new Date(cacheResult.data.expiresAt) : null;
-          const cacheTime = new Date();
-
-          // 如果缓存过期或不存在，才需要从API更新
-          if (!expiresAt || expiresAt < cacheTime) {
-            console.log("[Dashboard] ⚠️ Cache expired, will fetch from API");
-            needsApiUpdate = true;
-          } else {
-            console.log("[Dashboard] ✅ Cache is valid, using cached data");
-            // 缓存有效，不需要调用API
-          }
-        } else {
-          // 没有缓存数据，需要从API获取
-          console.log("[Dashboard] ⚠️ No cache found, will fetch from API");
-          needsApiUpdate = true;
-        }
-      } else {
-        // 获取缓存失败，尝试从API获取
-        needsApiUpdate = true;
+        cachedOverviewResult = cacheResult; // 保存缓存结果作为后备
+        console.log("[Dashboard] 📦 Loaded cache as fallback (will try update-metrics first)");
       }
     } catch (error: any) {
-      console.log("[Dashboard] ⚠️ Cache check failed, will try API:", error.message);
-      needsApiUpdate = true;
+      console.log("[Dashboard] ⚠️ Failed to load cache:", error.message);
     }
 
-    // 只有在需要时才从API获取数据，并且防止重复调用
-    if (needsApiUpdate) {
-      // 如果5分钟内已经调用过API，就不再调用
-      if (lastFetchTime && (now - parseInt(lastFetchTime)) < FIVE_MINUTES) {
-        console.log("[Dashboard] ⏭️ API was called recently, skipping to avoid duplicate calls");
-        needsApiUpdate = false;
-      } else {
-        // 记录本次API调用时间
-        sessionStorage.setItem(apiFetchKey, now.toString());
-        
-        // 异步调用API更新，不阻塞数据加载
-        fetch("/api/website-data/update-metrics", {
+    // 总是先执行 update-metrics（即使缓存没过期），只有在失败时才使用缓存
+    let useCacheAsFallback = false;
+    
+    // 如果5分钟内已经调用过API，跳过以避免重复调用
+    if (lastFetchTime && (now - parseInt(lastFetchTime)) < FIVE_MINUTES) {
+      console.log("[Dashboard] ⏭️ API was called recently, skipping to avoid duplicate calls");
+      useCacheAsFallback = true; // 使用缓存
+    } else {
+      // 记录本次API调用时间（在调用前记录，防止重复调用）
+      sessionStorage.setItem(apiFetchKey, now.toString());
+      
+      console.log("[Dashboard] 🔄 Always calling update-metrics first (even if cache is valid)...");
+      
+      try {
+        // 同步调用API更新，等待完成
+        const updateResponse = await fetch("/api/website-data/update-metrics", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(baseRequest),
-        })
-        .then((updateResponse) => {
-          if (updateResponse.ok) {
-            console.log("[Dashboard] ✅ Successfully fetched fresh data from API");
-            // API更新完成后，重新加载数据
-            setTimeout(() => loadData(), 1000);
-          } else {
-            console.log("[Dashboard] ⚠️ API fetch failed, will use cache");
-          }
-        })
-        .catch((error: any) => {
-          console.log("[Dashboard] ⚠️ API fetch error, will use cache:", error.message);
         });
+
+        if (updateResponse.ok) {
+          const updateResult = await updateResponse.json();
+          console.log("[Dashboard] ✅ Successfully updated metrics from DataForSEO API:", updateResult);
+          // API更新成功，清除缓存的 overview 结果，强制重新读取最新数据
+          cachedOverviewResult = null;
+        } else {
+          const errorText = await updateResponse.text();
+          console.error("[Dashboard] ❌ update-metrics API failed:", updateResponse.status, errorText);
+          // API更新失败，使用缓存作为后备
+          useCacheAsFallback = true;
+        }
+      } catch (error: any) {
+        console.error("[Dashboard] ❌ update-metrics API error:", error.message);
+        // API调用出错，使用缓存作为后备
+        useCacheAsFallback = true;
       }
     }
 
     // 并行发起所有请求（从缓存读取）
-    // 如果已经有缓存的 overview 结果，直接使用；否则发起新请求
+    // 如果 update-metrics 失败且缓存可用，使用缓存；否则重新读取（可能包含最新数据）
     const requests = {
-      overview: cachedOverviewResult
+      overview: (useCacheAsFallback && cachedOverviewResult)
         ? Promise.resolve(new Response(JSON.stringify(cachedOverviewResult), {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
@@ -296,6 +281,18 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   // 保持向后兼容的 loadData 方法
   const loadData = loadDataParallel;
 
+  // 刷新数据：清除缓存记录，强制重新获取最新数据
+  const handleRefresh = async () => {
+    console.log("[Dashboard] 🔄 Manual refresh triggered");
+    
+    // 清除 sessionStorage 中的 API 调用记录，强制重新调用 update-metrics
+    const apiFetchKey = `api_fetch_${websiteId}`;
+    sessionStorage.removeItem(apiFetchKey);
+    
+    // 重新加载数据
+    await loadData();
+  };
+
   useEffect(() => {
     if (websiteId) {
       // 异步加载数据
@@ -350,16 +347,44 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
             </p>
           )}
         </div>
+        <button
+          onClick={handleRefresh}
+          disabled={loading}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg border transition-all",
+            "hover:opacity-80 active:scale-95",
+            "disabled:opacity-50 disabled:cursor-not-allowed",
+            isDarkTheme
+              ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+              : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+          )}
+          title={uiLanguage === "zh" ? "刷新数据" : "Refresh data"}
+        >
+          <RefreshCw
+            className={cn(
+              "w-4 h-4",
+              loading && "animate-spin"
+            )}
+          />
+          <span className="text-sm font-medium">
+            {uiLanguage === "zh" ? "刷新" : "Refresh"}
+          </span>
+        </button>
       </div>
 
       {/* Overview Cards - 始终显示，加载时显示骨架屏 */}
       <OverviewCards
         metrics={data?.overview ? {
           organicTraffic: data.overview.organicTraffic,
+          paidTraffic: data.overview.paidTraffic,
+          totalTraffic: data.overview.totalTraffic,
           totalKeywords: data.overview.totalKeywords,
           avgPosition: data.overview.avgPosition,
           improvedKeywords: data.overview.improvedKeywords,
           newKeywords: data.overview.newKeywords,
+          lostKeywords: data.overview.lostKeywords,
+          declinedKeywords: data.overview.declinedKeywords,
+          trafficCost: data.overview.trafficCost,
         } : undefined}
         isLoading={loading || !data}
         isDarkTheme={isDarkTheme}

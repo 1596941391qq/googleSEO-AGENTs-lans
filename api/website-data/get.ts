@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
-import { fetchSErankingData } from '../_shared/tools/se-ranking.js';
+import { fetchKeywordData } from '../_shared/tools/dataforseo.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ORDER BY created_at DESC
     `;
 
-    // Get SE-Ranking data for keywords that don't have it yet
+    // Get DataForSEO data for keywords that don't have it yet
     const keywordsNeedingData = keywordsResult.rows.filter(
       (k: any) => !k.seranking_data_found || !k.seranking_updated_at
     );
@@ -71,29 +71,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (keywordsNeedingData.length > 0) {
       try {
         const keywordStrings = keywordsNeedingData.map((k: any) => k.keyword);
-        const serankingResults = await fetchSErankingData(keywordStrings, 'us');
+        const dataForSEOResults = await fetchKeywordData(keywordStrings, 2840, 'en'); // US location
 
-        // Update keywords with SE-Ranking data
-        for (const serankingData of serankingResults) {
-          if (serankingData.is_data_found) {
+        // Update keywords with DataForSEO data
+        for (const dataForSEOData of dataForSEOResults) {
+          if (dataForSEOData.is_data_found) {
             await sql`
               UPDATE website_keywords
               SET
-                seranking_volume = ${serankingData.volume || null},
-                seranking_cpc = ${serankingData.cpc || null},
-                seranking_competition = ${serankingData.competition || null},
-                seranking_difficulty = ${serankingData.difficulty || null},
-                seranking_history_trend = ${serankingData.history_trend ? JSON.stringify(serankingData.history_trend) : null}::jsonb,
+                seranking_volume = ${dataForSEOData.volume || null},
+                seranking_cpc = ${dataForSEOData.cpc || null},
+                seranking_competition = ${dataForSEOData.competition || null},
+                seranking_difficulty = ${dataForSEOData.difficulty || null},
+                seranking_history_trend = ${dataForSEOData.history_trend ? JSON.stringify(dataForSEOData.history_trend) : null}::jsonb,
                 seranking_data_found = true,
                 seranking_updated_at = NOW(),
                 updated_at = NOW()
-              WHERE website_id = ${website.id} AND keyword = ${serankingData.keyword}
+              WHERE website_id = ${website.id} AND keyword = ${dataForSEOData.keyword}
             `;
           }
         }
       } catch (error) {
-        console.error('[Get Website Data] SE-Ranking API error:', error);
-        // Continue without SE-Ranking data
+        console.error('[Get Website Data] DataForSEO API error:', error);
+        // Continue without DataForSEO data
       }
     }
 

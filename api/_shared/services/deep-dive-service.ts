@@ -12,7 +12,7 @@ import { reviewQuality, QualityReviewResult } from '../agents/agent-4-quality-re
 import { extractVisualThemes, generateImagePrompts, generateImages, VisualThemesResult, ImagePromptResult } from '../agents/agent-5-image-creative.js';
 import { generateDeepDiveStrategy, extractCoreKeywords } from '../agents/agent-2-seo-researcher.js';
 import { fetchSerpResults } from '../tools/serp-search.js';
-import { fetchSErankingData } from '../tools/se-ranking.js';
+import { fetchKeywordData, getDataForSEOLocationAndLanguage } from '../tools/dataforseo.js';
 import { KeywordData, SEOStrategyReport, TargetLanguage, ProbabilityLevel } from '../types.js';
 import {
   initContentManagementTables,
@@ -177,17 +177,18 @@ export async function fetchSERankingAndSERPData(
 }> {
   const serankingDataMap = new Map<string, any>();
 
-  // 获取 SE Ranking 数据
+  // 获取 DataForSEO 数据
   try {
-    const serankingResults = await fetchSErankingData(coreKeywords, 'us');
-    serankingResults.forEach(data => {
+    const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
+    const dataForSEOResults = await fetchKeywordData(coreKeywords, locationCode, languageCode);
+    dataForSEOResults.forEach(data => {
       if (data.keyword) {
         serankingDataMap.set(data.keyword.toLowerCase(), data);
       }
     });
     (serankingDataMap as any).apiSucceeded = true;
   } catch (error: any) {
-    console.warn(`[Deep Dive Service] SE Ranking API call failed: ${error.message}`);
+    console.warn(`[Deep Dive Service] DataForSEO API call failed: ${error.message}`);
   }
 
   // 获取 SERP 竞争数据（限制数量）

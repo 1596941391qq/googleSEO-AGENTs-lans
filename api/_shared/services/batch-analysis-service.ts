@@ -7,7 +7,7 @@
  */
 
 import { translateKeywordToTarget } from '../gemini.js';
-import { fetchSErankingData } from '../tools/se-ranking.js';
+import { fetchKeywordData, getDataForSEOLocationAndLanguage } from '../tools/dataforseo.js';
 import { analyzeRankingProbability } from '../agents/agent-2-seo-researcher.js';
 import { KeywordData, TargetLanguage, IntentType, ProbabilityLevel } from '../types.js';
 
@@ -113,50 +113,56 @@ export function convertToKeywordData(
 }
 
 /**
- * Step 4: 获取 SE Ranking 数据并合并到关键词
+ * Step 4: 获取 DataForSEO 数据并合并到关键词
  * 可单独测试
  */
-export async function enrichKeywordsWithSERanking(
-  keywords: KeywordData[]
+export async function enrichKeywordsWithDataForSEO(
+  keywords: KeywordData[],
+  targetLanguage: TargetLanguage = 'en'
 ): Promise<{
   enrichedKeywords: KeywordData[];
   skippedKeywords: KeywordData[];
 }> {
   const enrichedKeywords: KeywordData[] = [];
   const skippedKeywords: KeywordData[] = [];
-  const serankingDataMap = new Map<string, any>();
+  const dataForSEODataMap = new Map<string, any>();
 
   try {
     const keywordStrings = keywords.map(k => k.keyword);
-    const serankingResults = await fetchSErankingData(keywordStrings, 'us');
 
-    serankingResults.forEach(data => {
+    // 将语言代码转换为 DataForSEO 的 location_code 和 language_code
+    const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
+
+    const dataForSEOResults = await fetchKeywordData(keywordStrings, locationCode, languageCode);
+
+    dataForSEOResults.forEach(data => {
       if (data.keyword) {
-        serankingDataMap.set(data.keyword.toLowerCase(), data);
+        dataForSEODataMap.set(data.keyword.toLowerCase(), data);
       }
     });
 
     for (const keyword of keywords) {
-      const serankingData = serankingDataMap.get(keyword.keyword.toLowerCase());
+      const dataForSEOData = dataForSEODataMap.get(keyword.keyword.toLowerCase());
 
-      if (serankingData) {
+      if (dataForSEOData) {
+        keyword.dataForSEOData = dataForSEOData;
         keyword.serankingData = {
-          is_data_found: serankingData.is_data_found,
-          volume: serankingData.volume,
-          cpc: serankingData.cpc,
-          competition: serankingData.competition,
-          difficulty: serankingData.difficulty,
-          history_trend: serankingData.history_trend,
+          is_data_found: dataForSEOData.is_data_found,
+          volume: dataForSEOData.volume,
+          cpc: dataForSEOData.cpc,
+          competition: dataForSEOData.competition,
+          difficulty: dataForSEOData.difficulty,
+          history_trend: dataForSEOData.history_trend,
         };
 
-        if (serankingData.volume) {
-          keyword.volume = serankingData.volume;
+        if (dataForSEOData.volume) {
+          keyword.volume = dataForSEOData.volume;
         }
 
         // 如果难度太高，跳过分析
-        if (serankingData.difficulty && serankingData.difficulty > 40) {
+        if (dataForSEOData.difficulty && dataForSEOData.difficulty > 40) {
           keyword.probability = ProbabilityLevel.LOW;
-          keyword.reasoning = `Keyword Difficulty (${serankingData.difficulty}) is too high (>40).`;
+          keyword.reasoning = `Keyword Difficulty (${dataForSEOData.difficulty}) is too high (>40).`;
           skippedKeywords.push(keyword);
           continue;
         }
@@ -164,12 +170,15 @@ export async function enrichKeywordsWithSERanking(
       enrichedKeywords.push(keyword);
     }
   } catch (error: any) {
-    console.warn(`[Batch Analysis Service] SE Ranking API call failed: ${error.message}. Proceeding with all keywords.`);
+    console.warn(`[Batch Analysis Service] DataForSEO API call failed: ${error.message}. Proceeding with all keywords.`);
     enrichedKeywords.push(...keywords);
   }
 
   return { enrichedKeywords, skippedKeywords };
 }
+
+// 保留别名以兼容旧代码
+export const enrichKeywordsWithSERanking = enrichKeywordsWithDataForSEO;
 
 /**
  * Step 5: 分析排名概率
@@ -235,8 +244,8 @@ export async function executeBatchAnalysis(
     // Step 3: 转换为 KeywordData 格式
     const keywordsForAnalysis = convertToKeywordData(translatedResults);
 
-    // Step 4: 获取 SE Ranking 数据
-    console.log(`[Batch Analysis Service] Step 2: Fetching SE Ranking data...`);
+    // Step 4: 获取 DataForSEO 数据
+    console.log(`[Batch Analysis Service] Step 2: Fetching DataForSEO data...`);
     const { enrichedKeywords, skippedKeywords } = await enrichKeywordsWithSERanking(keywordsForAnalysis);
 
     // Step 5: 分析排名概率（如果启用）

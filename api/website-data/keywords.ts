@@ -75,15 +75,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ==========================================
-    // Step 2: 从 SE-Ranking Domain API 获取关键词
+    // Step 2: 从 DataForSEO Domain API 获取关键词
     // ==========================================
     const offset = body.offset || 0;
     const limit = body.limit || 100;
     
-    console.log(`[keywords] Fetching keywords from SE-Ranking Domain API (offset: ${offset}, limit: ${limit})...`);
+    console.log(`[keywords] Fetching keywords from DataForSEO Domain API (offset: ${offset}, limit: ${limit})...`);
 
     // 获取关键词（从 offset 开始，获取 limit 个）
-    const allKeywords = await getDomainKeywords(website.website_domain, 'us', limit + offset);
+    // DataForSEO uses locationCode (2840 = US) instead of string location
+    const allKeywords = await getDomainKeywords(website.website_domain, 2840, limit + offset);
     
     // 应用 offset 和 limit
     const keywords = allKeywords.slice(offset, offset + limit);

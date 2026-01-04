@@ -131,14 +131,25 @@ async function fetchWithRetry(
  *
  * @param domain - 域名（例如: example.com）
  * @param locationCode - 地区代码，默认 2840 (美国)
+ * @param filters - 可选的过滤条件数组，例如: [["domain", "like", "%seo%"], "and", ["metrics.organic.pos_1", ">", 200]]
+ * @param orderBy - 可选的排序条件，例如: ["metrics.organic.pos_1,desc"]
+ * @param limit - 返回数量限制，默认 1
  * @returns 域名概览数据
  */
 export async function getDomainOverview(
   domain: string,
-  locationCode: number = 2840
+  locationCode: number = 2840,
+  filters?: any[],
+  orderBy?: string[],
+  limit: number = 1
 ): Promise<DomainOverview | null> {
   try {
-    console.log(`[DataForSEO Domain] Getting overview for ${domain}, location: ${locationCode}`);
+    console.log(`[DataForSEO Domain] 🔍 Getting overview for ${domain}, location: ${locationCode}`);
+    console.log(`[DataForSEO Domain] 🔑 API credentials check:`, {
+      hasLogin: !!DATAFORSEO_LOGIN,
+      hasPassword: !!DATAFORSEO_PASSWORD,
+      loginLength: DATAFORSEO_LOGIN?.length || 0,
+    });
 
     // Remove protocol and path if present
     const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0];
@@ -148,16 +159,32 @@ export async function getDomainOverview(
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      // 使用 DataForSEO Labs Domain Metrics API
-      const endpoint = `${DATAFORSEO_BASE_URL}/dataforseo_labs/google/domain_metrics/live`;
+      // 使用 DataForSEO Domain Analytics Whois Overview API
+      // 参考: https://docs.dataforseo.com/v3/domain_analytics-whois-overview-live
+      const endpoint = `${DATAFORSEO_BASE_URL}/domain_analytics/whois/overview/live`;
 
-      const requestBody = [
-        {
-          target: cleanDomain,
-          location_code: locationCode,
-        }
-      ];
+      // 构建请求体，支持 filters 和 order_by
+      const requestBody: any = {
+        limit: limit,
+      };
 
+      // 添加域名过滤条件
+      if (!filters) {
+        requestBody.filters = [
+          ["domain", "=", cleanDomain]
+        ];
+      } else {
+        requestBody.filters = filters;
+      }
+
+      // 添加排序条件
+      if (orderBy) {
+        requestBody.order_by = orderBy;
+      }
+
+      console.log(`[DataForSEO Domain] 📡 Making API request to: ${endpoint}`);
+      console.log(`[DataForSEO Domain] 📦 Request body:`, JSON.stringify([requestBody]));
+      
       const response = await fetchWithRetry(
         endpoint,
         {
@@ -166,11 +193,13 @@ export async function getDomainOverview(
             'Authorization': getAuthHeader(),
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify([requestBody]), // DataForSEO API 需要数组格式
           signal: controller.signal,
         }
       );
       clearTimeout(timeoutId);
+      
+      console.log(`[DataForSEO Domain] 📥 API response status: ${response.status} ${response.statusText}`);
 
       if (!response.ok) {
         if (response.status === 404) {
@@ -188,17 +217,28 @@ export async function getDomainOverview(
 
       const data = await response.json();
 
-      console.log(`[DataForSEO Domain] API Response structure:`, JSON.stringify(data, null, 2).substring(0, 500));
+      console.log(`[DataForSEO Domain] API Response structure:`, JSON.stringify(data, null, 2).substring(0, 1000));
 
+      // 检查响应结构：tasks[0].result[0].items[]
       if (!data.tasks || !data.tasks[0] || !data.tasks[0].result || !data.tasks[0].result[0]) {
-        console.warn('[DataForSEO Domain] No domain metrics in response');
+        console.warn('[DataForSEO Domain] No domain data in response');
         return null;
       }
 
-      const metrics = data.tasks[0].result[0].metrics;
+      const resultData = data.tasks[0].result[0];
+      
+      // 检查是否有 items 数组
+      if (!resultData.items || !Array.isArray(resultData.items) || resultData.items.length === 0) {
+        console.warn('[DataForSEO Domain] No items in response result');
+        return null;
+      }
+
+      // 获取第一个匹配的域名数据
+      const item = resultData.items[0];
+      const metrics = item.metrics;
 
       if (!metrics) {
-        console.warn('[DataForSEO Domain] No metrics data');
+        console.warn('[DataForSEO Domain] No metrics data in item');
         return null;
       }
 
@@ -206,8 +246,30 @@ export async function getDomainOverview(
       const organic = metrics.organic || {};
       const paid = metrics.paid || {};
 
+      // 解析排名分布（根据示例响应，字段是 pos_1, pos_2_3, pos_4_10 等）
+      const rankingDistribution = {
+        top3: (organic.pos_1 || 0) + (organic.pos_2_3 || 0), // pos_1 + pos_2_3 = top 3
+        top10: (organic.pos_1 || 0) + (organic.pos_2_3 || 0) + (organic.pos_4_10 || 0),
+        top50: (organic.pos_1 || 0) + (organic.pos_2_3 || 0) + (organic.pos_4_10 || 0) + 
+               (organic.pos_11_20 || 0) + (organic.pos_21_30 || 0) + (organic.pos_31_40 || 0) + (organic.pos_41_50 || 0),
+        top100: (organic.pos_1 || 0) + (organic.pos_2_3 || 0) + (organic.pos_4_10 || 0) + 
+                (organic.pos_11_20 || 0) + (organic.pos_21_30 || 0) + (organic.pos_31_40 || 0) + 
+                (organic.pos_41_50 || 0) + (organic.pos_51_60 || 0) + (organic.pos_61_70 || 0) + 
+                (organic.pos_71_80 || 0) + (organic.pos_81_90 || 0) + (organic.pos_91_100 || 0),
+      };
+
+      // 解析 backlinks_info
+      const backlinksInfo = item.backlinks_info ? {
+        referringDomains: item.backlinks_info.referring_domains || 0,
+        referringMainDomains: item.backlinks_info.referring_main_domains || 0,
+        referringPages: item.backlinks_info.referring_pages || 0,
+        dofollow: item.backlinks_info.dofollow || 0,
+        backlinks: item.backlinks_info.backlinks || 0,
+        timeUpdate: item.backlinks_info.time_update,
+      } : undefined;
+
       const result: DomainOverview = {
-        domain: cleanDomain,
+        domain: item.domain || cleanDomain,
         organicTraffic: organic.etv || 0, // estimated traffic value
         paidTraffic: paid.etv || 0,
         totalTraffic: (organic.etv || 0) + (paid.etv || 0),
@@ -218,18 +280,15 @@ export async function getDomainOverview(
         declinedKeywords: organic.keywords_positions_down || 0,
         avgPosition: organic.avg_position || 0,
         trafficCost: organic.estimated_paid_traffic_cost || 0,
-        rankingDistribution: {
-          top3: organic.pos_1_3 || 0,
-          top10: organic.pos_4_10 || 0,
-          top50: organic.pos_11_50 || 0,
-          top100: organic.pos_51_100 || 0,
-        },
+        rankingDistribution: rankingDistribution,
+        backlinksInfo: backlinksInfo,
       };
 
       console.log(`[DataForSEO Domain] Parsed overview data:`, {
         totalKeywords: result.totalKeywords,
         totalTraffic: result.totalTraffic,
         rankingDistribution: result.rankingDistribution,
+        hasBacklinksInfo: !!result.backlinksInfo,
       });
 
       return result;

@@ -6,7 +6,7 @@ import {
   generateDeepDiveStrategy,
   extractCoreKeywords
 } from './_shared/agents/agent-2-seo-researcher.js';
-import { fetchSErankingData } from './_shared/tools/se-ranking.js';
+import { fetchKeywordData } from './_shared/tools/dataforseo.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { KeywordData, IntentType, ProbabilityLevel } from './_shared/types.js';
 
@@ -538,9 +538,9 @@ async function handleBatchTranslation(
 
     try {
       const translatedKeywordsList = keywordsForAnalysis.map(k => k.keyword);
-      const serankingResults = await fetchSErankingData(translatedKeywordsList, 'us');
+      const dataForSEOResults = await fetchKeywordData(translatedKeywordsList, 2840, 'en'); // US location
 
-      serankingResults.forEach(data => {
+      dataForSEOResults.forEach(data => {
         if (data.keyword) {
           serankingDataMap.set(data.keyword.toLowerCase(), data);
         }
@@ -742,17 +742,18 @@ async function handleDeepDive(
     // Step 2: Extract core keywords
     const coreKeywords = await extractCoreKeywords(report, targetLanguage, uiLanguage);
 
-    // Step 3: Fetch SE Ranking data for core keywords
+    // Step 3: Fetch DataForSEO data for core keywords
     let serankingDataMap = new Map();
     try {
-      const serankingResults = await fetchSErankingData(coreKeywords, 'us');
-      serankingResults.forEach(data => {
+      const { locationCode, languageCode } = await import('./_shared/tools/dataforseo.js').then(m => m.getDataForSEOLocationAndLanguage(targetLanguage));
+      const dataForSEOResults = await fetchKeywordData(coreKeywords, locationCode, languageCode);
+      dataForSEOResults.forEach(data => {
         if (data.keyword) {
           serankingDataMap.set(data.keyword.toLowerCase(), data);
         }
       });
-    } catch (serankingError) {
-      console.warn('[SE Ranking] API call failed for deep dive');
+    } catch (dataForSEOError) {
+      console.warn('[DataForSEO] API call failed for deep dive');
     }
 
     // Step 4: Analyze core keywords with SERP

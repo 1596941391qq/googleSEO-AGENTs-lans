@@ -1,16 +1,23 @@
 /**
- * API: 仅获取网站概览数据（快速响应）
+ * API: 仅获取网站概览数据（只读缓存）
  * 
- * 用于并行加载，快速返回概览数据
+ * 逻辑：
+ * 1. 只从数据库缓存读取数据，不调用 DataForSEO API
+ * 2. 如果需要更新数据，应该调用 /api/website-data/update-metrics
+ * 3. 这样可以避免重复调用 getDomainOverview API
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
+// 不再导入 getDomainOverview，因为此端点只读取缓存，不调用 API
 
 interface OverviewOnlyRequestBody {
   websiteId: string;
   userId?: number;
+  region?: string;
 }
+
+// 注意：已移除内存缓存，因为此端点只从数据库读取，不调用 API
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -38,8 +45,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await initWebsiteDataTables();
 
-    // 获取概览数据
-    const overviewResult = await sql`
+    // 获取网站信息
+    const websiteResult = await sql`
+      SELECT website_domain, user_id
+      FROM user_websites
+      WHERE id = ${body.websiteId}
+    `;
+
+    if (websiteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Website not found' });
+    }
+
+    const website = websiteResult.rows[0];
+
+    // 验证权限
+    if (website.user_id !== userId) {
+      return res.status(403).json({ error: 'Website does not belong to user' });
+    }
+
+    // TODO: 临时测试 - 使用 apple.com 作为默认域名
+    const domain = 'apple.com'; // website.website_domain;
+
+    // 将地区代码转换为 locationCode
+    const region = body.region || '';
+    const regionToLocationCode: { [key: string]: number } = {
+      'us': 2840, 'uk': 2826, 'ca': 2124, 'au': 2036,
+      'de': 2276, 'fr': 2250, 'jp': 2384, 'cn': 2166,
+    };
+    const locationCode = regionToLocationCode[region] || 2840;
+
+    // overview-only 只从数据库缓存读取，不调用 API
+    // API 调用应该通过 update-metrics 端点进行
+    console.log('[overview-only] 📦 Reading from database cache only (no API calls)');
+    
+    // 从数据库缓存读取
+    const cacheResult = await sql`
       SELECT
         organic_traffic,
         paid_traffic,
@@ -64,54 +104,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       LIMIT 1
     `;
 
-    const overview = overviewResult.rows[0];
+    if (cacheResult.rows.length > 0) {
+      const cached = cacheResult.rows[0];
+      const rankingDistribution = {
+        top3: cached.top3_count || 0,
+        top10: cached.top10_count || 0,
+        top50: cached.top50_count || 0,
+        top100: cached.top100_count || 0,
+      };
 
-    if (!overview) {
+      let backlinksInfo = null;
+      if (cached.backlinks_info) {
+        try {
+          backlinksInfo = typeof cached.backlinks_info === 'string'
+            ? JSON.parse(cached.backlinks_info)
+            : cached.backlinks_info;
+        } catch (error) {
+          console.warn('[overview-only] Failed to parse backlinks_info:', error);
+        }
+      }
+
       return res.status(200).json({
         success: true,
-        data: null,
-        cached: false,
+        data: {
+          organicTraffic: cached.organic_traffic || 0,
+          paidTraffic: cached.paid_traffic || 0,
+          totalTraffic: cached.total_traffic || 0,
+          totalKeywords: cached.total_keywords || 0,
+          newKeywords: cached.new_keywords || 0,
+          lostKeywords: cached.lost_keywords || 0,
+          improvedKeywords: cached.improved_keywords || 0,
+          declinedKeywords: cached.declined_keywords || 0,
+          avgPosition: cached.avg_position || 0,
+          trafficCost: cached.traffic_cost || 0,
+          rankingDistribution,
+          backlinksInfo,
+          updatedAt: cached.data_updated_at,
+          expiresAt: cached.cache_expires_at,
+        },
+        cached: true,
       });
     }
 
-    const rankingDistribution = {
-      top3: overview.top3_count || 0,
-      top10: overview.top10_count || 0,
-      top50: overview.top50_count || 0,
-      top100: overview.top100_count || 0,
-    };
-
-    // 解析 backlinks_info JSONB 字段
-    let backlinksInfo = null;
-    if (overview.backlinks_info) {
-      try {
-        backlinksInfo = typeof overview.backlinks_info === 'string' 
-          ? JSON.parse(overview.backlinks_info) 
-          : overview.backlinks_info;
-      } catch (error) {
-        console.warn('[overview-only] Failed to parse backlinks_info:', error);
-      }
-    }
-
+    // 如果没有缓存数据
     return res.status(200).json({
       success: true,
-      data: {
-        organicTraffic: overview.organic_traffic || 0,
-        paidTraffic: overview.paid_traffic || 0,
-        totalTraffic: overview.total_traffic || 0,
-        totalKeywords: overview.total_keywords || 0,
-        newKeywords: overview.new_keywords || 0,
-        lostKeywords: overview.lost_keywords || 0,
-        improvedKeywords: overview.improved_keywords || 0,
-        declinedKeywords: overview.declined_keywords || 0,
-        avgPosition: overview.avg_position || 0,
-        trafficCost: overview.traffic_cost || 0,
-        rankingDistribution,
-        backlinksInfo,
-        updatedAt: overview.data_updated_at,
-        expiresAt: overview.cache_expires_at,
-      },
-      cached: true,
+      data: null,
+      cached: false,
     });
 
   } catch (error: any) {
@@ -123,4 +162,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 }
-

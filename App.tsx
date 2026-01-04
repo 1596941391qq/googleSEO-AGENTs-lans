@@ -7558,7 +7558,12 @@ export default function App() {
       // Save to batch archives and update state with task isolation
       setState((prev) => {
         const task = prev.taskManager.tasks.find((t) => t.id === taskId);
-        if (!task || !task.batchState) return prev;
+        if (!task || !task.batchState) {
+          console.warn(
+            `[Batch Analysis] Task not found or no batchState: ${taskId}`
+          );
+          return prev;
+        }
 
         const newArchive: BatchArchiveEntry = {
           id: `batch-${Date.now()}`,
@@ -7578,23 +7583,42 @@ export default function App() {
           JSON.stringify(updatedArchives)
         );
 
-        // Only update global step if this is the active task
+        // Always navigate to batch-results if this task has keywords and is active
+        const hasResults =
+          task.batchState.batchKeywords &&
+          task.batchState.batchKeywords.length > 0;
+        const isActiveTask = taskId === prev.taskManager.activeTaskId;
+
         console.log(
-          `[Batch Analysis] Setting step to batch-results, taskId: ${taskId}, activeTaskId: ${prev.taskManager.activeTaskId}`
+          `[Batch Analysis] Completing task ${taskId}, activeTaskId: ${prev.taskManager.activeTaskId}, hasResults: ${hasResults}, isActiveTask: ${isActiveTask}`
         );
-        if (taskId === prev.taskManager.activeTaskId) {
+
+        if (hasResults && isActiveTask) {
+          // Active task with results - navigate to results page
           console.log(
-            `[Batch Analysis] ✅ Active task match - navigating to batch-results page`
+            `[Batch Analysis] ✅ Active task with results - navigating to batch-results page`
           );
           return {
             ...prev,
             step: "batch-results",
             batchArchives: updatedArchives,
+            // Also update global batchKeywords for backward compatibility
+            batchKeywords: task.batchState.batchKeywords,
+            batchThoughts: task.batchState.batchThoughts || [],
+          };
+        } else if (hasResults && !isActiveTask) {
+          // Background task - still update archives, but don't navigate
+          console.log(
+            `[Batch Analysis] ⚠️ Background task completed (taskId: ${taskId} !== activeTaskId: ${prev.taskManager.activeTaskId})`
+          );
+          return {
+            ...prev,
+            batchArchives: updatedArchives,
           };
         } else {
-          // Background task - just update archives
-          console.log(
-            `[Batch Analysis] ⚠️ Background task - not navigating (taskId: ${taskId} !== activeTaskId: ${prev.taskManager.activeTaskId})`
+          // No results - stay on current step
+          console.warn(
+            `[Batch Analysis] Task completed but no results found or task is not active`
           );
           return {
             ...prev,
@@ -7602,6 +7626,37 @@ export default function App() {
           };
         }
       });
+
+      // Force a re-render check after state update
+      // Use setTimeout to ensure state update has been processed
+      setTimeout(() => {
+        setState((prev) => {
+          // Double-check: if we're still on batch-analyzing step but have results, force navigation
+          if (
+            prev.step === "batch-analyzing" &&
+            prev.taskManager.activeTaskId === taskId
+          ) {
+            const activeTask = prev.taskManager.tasks.find(
+              (t) => t.id === taskId
+            );
+            if (
+              activeTask?.batchState?.batchKeywords &&
+              activeTask.batchState.batchKeywords.length > 0
+            ) {
+              console.log(
+                `[Batch Analysis] 🔄 Force navigation to batch-results (step was still batch-analyzing)`
+              );
+              return {
+                ...prev,
+                step: "batch-results",
+                batchKeywords: activeTask.batchState.batchKeywords,
+                batchThoughts: activeTask.batchState.batchThoughts || [],
+              };
+            }
+          }
+          return prev;
+        });
+      }, 100);
     } catch (error: any) {
       console.error("Batch analysis error:", error);
       addLog(`Batch analysis failed: ${error.message}`, "error", taskId);

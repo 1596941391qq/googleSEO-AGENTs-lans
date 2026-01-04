@@ -725,16 +725,16 @@ export async function initDomainCacheTables() {
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
           data_date DATE DEFAULT CURRENT_DATE,
-          organic_traffic INTEGER DEFAULT 0,
-          paid_traffic INTEGER DEFAULT 0,
-          total_traffic INTEGER DEFAULT 0,
+          organic_traffic NUMERIC(20,2) DEFAULT 0,
+          paid_traffic NUMERIC(20,2) DEFAULT 0,
+          total_traffic NUMERIC(20,2) DEFAULT 0,
           total_keywords INTEGER DEFAULT 0,
           new_keywords INTEGER DEFAULT 0,
           lost_keywords INTEGER DEFAULT 0,
           improved_keywords INTEGER DEFAULT 0,
           declined_keywords INTEGER DEFAULT 0,
           avg_position DECIMAL(10,2),
-          traffic_cost DECIMAL(15,2),
+          traffic_cost DECIMAL(20,2),
           top3_count INTEGER DEFAULT 0,
           top10_count INTEGER DEFAULT 0,
           top50_count INTEGER DEFAULT 0,
@@ -750,6 +750,56 @@ export async function initDomainCacheTables() {
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_website ON domain_overview_cache(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_date ON domain_overview_cache(data_date)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_expires ON domain_overview_cache(cache_expires_at)`;
+
+      // 迁移现有表：将流量字段从 INTEGER 改为 NUMERIC（如果表已存在）
+      try {
+        // 检查表是否存在
+        const tableCheck = await sql`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'domain_overview_cache'
+          )
+        `;
+        
+        if (tableCheck.rows[0].exists) {
+          // 检查列类型，如果是 INTEGER，则改为 NUMERIC
+          const columnCheck = await sql`
+            SELECT data_type 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'domain_overview_cache' 
+            AND column_name = 'organic_traffic'
+          `;
+          
+          if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
+            console.log('[Database] Migrating traffic columns from INTEGER to NUMERIC...');
+            await sql`ALTER TABLE domain_overview_cache ALTER COLUMN organic_traffic TYPE NUMERIC(20,2)`;
+            await sql`ALTER TABLE domain_overview_cache ALTER COLUMN paid_traffic TYPE NUMERIC(20,2)`;
+            await sql`ALTER TABLE domain_overview_cache ALTER COLUMN total_traffic TYPE NUMERIC(20,2)`;
+            console.log('[Database] ✅ Successfully migrated traffic columns to NUMERIC');
+          }
+          
+          // 检查并更新 traffic_cost 精度
+          const costCheck = await sql`
+            SELECT numeric_precision, numeric_scale
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'domain_overview_cache' 
+            AND column_name = 'traffic_cost'
+          `;
+          
+          if (costCheck.rows.length > 0) {
+            const precision = costCheck.rows[0].numeric_precision;
+            if (precision && precision < 20) {
+              await sql`ALTER TABLE domain_overview_cache ALTER COLUMN traffic_cost TYPE DECIMAL(20,2)`;
+              console.log('[Database] ✅ Updated traffic_cost precision to DECIMAL(20,2)');
+            }
+          }
+        }
+      } catch (error: any) {
+        console.warn('[Database] Could not migrate traffic columns:', error.message);
+      }
 
       // 添加 backlinks_info 字段（如果不存在）
       try {
@@ -803,16 +853,17 @@ export async function initDomainCacheTables() {
         CREATE TABLE IF NOT EXISTS domain_competitors_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
-          domain VARCHAR(255) NOT NULL,
-          title VARCHAR(500),
+          competitor_domain VARCHAR(255) NOT NULL,
+          competitor_title VARCHAR(500),
           common_keywords INTEGER DEFAULT 0,
-          organic_traffic INTEGER DEFAULT 0,
+          organic_traffic NUMERIC(20,2) DEFAULT 0,
           total_keywords INTEGER DEFAULT 0,
           gap_keywords INTEGER DEFAULT 0,
-          gap_traffic INTEGER DEFAULT 0,
+          gap_traffic NUMERIC(20,2) DEFAULT 0,
           data_updated_at TIMESTAMP,
           cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '7 days',
-          created_at TIMESTAMP DEFAULT NOW()
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(website_id, competitor_domain)
         )
       `;
 
@@ -842,8 +893,78 @@ export async function initDomainCacheTables() {
       }
 
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_website ON domain_competitors_cache(website_id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_domain ON domain_competitors_cache(domain)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_domain ON domain_competitors_cache(competitor_domain)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_expires ON domain_competitors_cache(cache_expires_at)`;
+
+      // 迁移现有表：将竞争对手表的流量字段从 INTEGER 改为 NUMERIC（如果表已存在）
+      try {
+        const tableCheck = await sql`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'domain_competitors_cache'
+          )
+        `;
+        
+        if (tableCheck.rows[0].exists) {
+          const columnCheck = await sql`
+            SELECT data_type 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'domain_competitors_cache' 
+            AND column_name = 'organic_traffic'
+          `;
+          
+          if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
+            console.log('[Database] Migrating competitor traffic columns from INTEGER to NUMERIC...');
+            await sql`ALTER TABLE domain_competitors_cache ALTER COLUMN organic_traffic TYPE NUMERIC(20,2)`;
+            await sql`ALTER TABLE domain_competitors_cache ALTER COLUMN gap_traffic TYPE NUMERIC(20,2)`;
+            console.log('[Database] ✅ Successfully migrated competitor traffic columns to NUMERIC');
+          }
+          
+          // 检查并修复列名（domain -> competitor_domain, title -> competitor_title）
+          const domainColumnCheck = await sql`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'domain_competitors_cache' 
+            AND column_name = 'domain'
+          `;
+          
+          if (domainColumnCheck.rows.length > 0) {
+            // 如果存在旧的 'domain' 列，重命名为 'competitor_domain'
+            try {
+              await sql`ALTER TABLE domain_competitors_cache RENAME COLUMN domain TO competitor_domain`;
+              console.log('[Database] ✅ Renamed domain column to competitor_domain');
+            } catch (renameError: any) {
+              if (!renameError.message?.includes('does not exist')) {
+                console.warn('[Database] Could not rename domain column:', renameError.message);
+              }
+            }
+          }
+          
+          const titleColumnCheck = await sql`
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'domain_competitors_cache' 
+            AND column_name = 'title'
+          `;
+          
+          if (titleColumnCheck.rows.length > 0) {
+            try {
+              await sql`ALTER TABLE domain_competitors_cache RENAME COLUMN title TO competitor_title`;
+              console.log('[Database] ✅ Renamed title column to competitor_title');
+            } catch (renameError: any) {
+              if (!renameError.message?.includes('does not exist')) {
+                console.warn('[Database] Could not rename title column:', renameError.message);
+              }
+            }
+          }
+        }
+      } catch (error: any) {
+        console.warn('[Database] Could not migrate competitor traffic columns:', error.message);
+      }
 
       domainCacheTablesInitialized = true;
     } catch (error) {
