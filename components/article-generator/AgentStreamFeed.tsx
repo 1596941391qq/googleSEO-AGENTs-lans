@@ -34,6 +34,19 @@ const AGENT_TEXT: Record<UILanguage, any> = {
     cardDifficulty: "KD",
     cardAngle: "Angle",
     cardWeakness: "Weakness",
+    cardSearchPreferences: "Search Engine Preferences",
+    cardSemanticLandscape: "Semantic Landscape",
+    cardEngineStrategies: "Engine Strategies",
+    cardGeoRecommendations: "GEO Recommendations",
+    cardGoogle: "Google",
+    cardPerplexity: "Perplexity",
+    cardGenerativeAI: "Generative AI",
+    cardRankingLogic: "Ranking Logic",
+    cardContentGap: "Content Gap",
+    cardActionItem: "Action Item",
+    cardCitationLogic: "Citation Logic",
+    cardStructureHint: "Structure Hint",
+    cardLlmPreference: "LLM Preference",
   },
   zh: {
     agentTracker: "追踪器",
@@ -58,6 +71,19 @@ const AGENT_TEXT: Record<UILanguage, any> = {
     cardDifficulty: "难度",
     cardAngle: "角度",
     cardWeakness: "弱点",
+    cardSearchPreferences: "搜索引擎偏好",
+    cardSemanticLandscape: "语义分布",
+    cardEngineStrategies: "引擎策略",
+    cardGeoRecommendations: "GEO优化建议",
+    cardGoogle: "Google",
+    cardPerplexity: "Perplexity",
+    cardGenerativeAI: "生成式AI",
+    cardRankingLogic: "排名逻辑",
+    cardContentGap: "内容缺口",
+    cardActionItem: "行动项",
+    cardCitationLogic: "引用逻辑",
+    cardStructureHint: "结构建议",
+    cardLlmPreference: "LLM偏好",
   },
 };
 
@@ -123,6 +149,108 @@ const OutlineCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, ui
           </li>
         ))}
       </ul>
+    </div>
+  );
+};
+
+const SearchPreferencesCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
+  const t = AGENT_TEXT[uiLanguage];
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 space-y-4">
+      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+        <Search size={12} className="mr-1" /> {t.cardSearchPreferences}
+      </h4>
+      
+      {/* Semantic Landscape */}
+      {data.semantic_landscape && (
+        <div className="space-y-1">
+          <div className="text-[10px] text-purple-400/70 uppercase tracking-wider flex items-center">
+            <TrendingUp size={10} className="mr-1" /> {t.cardSemanticLandscape}
+          </div>
+          <div className="text-xs text-gray-300 leading-relaxed bg-purple-500/5 border border-purple-500/20 rounded p-2">
+            {data.semantic_landscape}
+          </div>
+        </div>
+      )}
+
+      {/* Engine Strategies */}
+      {data.engine_strategies && (
+        <div className="space-y-3">
+          <div className="text-[10px] text-cyan-400/70 uppercase tracking-wider">{t.cardEngineStrategies}</div>
+          
+          {/* Google Strategy */}
+          {data.engine_strategies.google && (
+            <div className="bg-cyan-500/5 border border-cyan-500/20 rounded p-2 space-y-2">
+              <div className="text-xs font-medium text-cyan-400">{t.cardGoogle}</div>
+              {data.engine_strategies.google.ranking_logic && (
+                <div className="text-[11px] text-gray-300">
+                  <span className="text-cyan-400/70">{t.cardRankingLogic}:</span> {data.engine_strategies.google.ranking_logic}
+                </div>
+              )}
+              {data.engine_strategies.google.content_gap && (
+                <div className="text-[11px] text-gray-300">
+                  <span className="text-cyan-400/70">{t.cardContentGap}:</span> {data.engine_strategies.google.content_gap}
+                </div>
+              )}
+              {data.engine_strategies.google.action_item && (
+                <div className="text-[11px] text-gray-300">
+                  <span className="text-cyan-400/70">{t.cardActionItem}:</span> {data.engine_strategies.google.action_item}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Perplexity Strategy */}
+          {data.engine_strategies.perplexity && (
+            <div className="bg-blue-500/5 border border-blue-500/20 rounded p-2 space-y-2">
+              <div className="text-xs font-medium text-blue-400">{t.cardPerplexity}</div>
+              {data.engine_strategies.perplexity.citation_logic && (
+                <div className="text-[11px] text-gray-300">
+                  <span className="text-blue-400/70">{t.cardCitationLogic}:</span> {data.engine_strategies.perplexity.citation_logic}
+                </div>
+              )}
+              {data.engine_strategies.perplexity.structure_hint && (
+                <div className="text-[11px] text-gray-300">
+                  <span className="text-blue-400/70">{t.cardStructureHint}:</span> {data.engine_strategies.perplexity.structure_hint}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Generative AI Strategy */}
+          {data.engine_strategies.generative_ai && (
+            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2 space-y-2">
+              <div className="text-xs font-medium text-emerald-400">{t.cardGenerativeAI}</div>
+              {data.engine_strategies.generative_ai.llm_preference && (
+                <div className="text-[11px] text-gray-300">
+                  <span className="text-emerald-400/70">{t.cardLlmPreference}:</span> {data.engine_strategies.generative_ai.llm_preference}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* GEO Recommendations */}
+      {data.geo_recommendations && (
+        <div className="space-y-1">
+          <div className="text-[10px] text-amber-400/70 uppercase tracking-wider">{t.cardGeoRecommendations}</div>
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded p-2 space-y-2 text-xs text-gray-300">
+            {data.geo_recommendations.format_engineering && (
+              <div><span className="text-amber-400/70">格式工程:</span> {data.geo_recommendations.format_engineering}</div>
+            )}
+            {data.geo_recommendations.entity_engineering && (
+              <div><span className="text-amber-400/70">实体工程:</span> {data.geo_recommendations.entity_engineering}</div>
+            )}
+            {data.geo_recommendations.information_gain && (
+              <div><span className="text-amber-400/70">信息增益:</span> {data.geo_recommendations.information_gain}</div>
+            )}
+            {data.geo_recommendations.structure_optimization && (
+              <div><span className="text-amber-400/70">结构优化:</span> {data.geo_recommendations.structure_optimization}</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -198,6 +326,7 @@ const StreamEventDetails: React.FC<{
         case 'data': return <DataCard data={event.data} uiLanguage={uiLanguage} />;
         case 'outline': return <OutlineCard data={event.data} uiLanguage={uiLanguage} />;
         case 'competitor-analysis': return <CompetitorAnalysisCard data={event.data} uiLanguage={uiLanguage} />;
+        case 'search-preferences': return <SearchPreferencesCard data={event.data} uiLanguage={uiLanguage} />;
         case 'image-gen': 
             // Determine status from event data
             const imageStatus: ImageGenerationStatus = event.data.status || 

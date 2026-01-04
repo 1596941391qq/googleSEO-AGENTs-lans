@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body = parseRequestBody(req);
-  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, reference } = body;
+  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, reference, userId, projectId, projectName } = body;
 
   if (!keyword) {
     return res.status(400).json({ error: 'Missing keyword' });
@@ -113,13 +113,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetMarket: targetMarket || 'global',
       uiLanguage: uiLanguage || 'en',
       targetLanguage: finalTargetLanguage,
+      userId: userId ? parseInt(userId.toString(), 10) : undefined,
+      projectId: projectId || undefined,
+      projectName: projectName || undefined,
       reference: processedReference,
       onEvent: (event) => {
         sendEvent({ type: 'event', data: event });
       }
     });
 
-    sendEvent({ type: 'done', data: finalArticle });
+    sendEvent({ 
+      type: 'done', 
+      data: {
+        ...finalArticle,
+        draftId: (finalArticle as any).draftId,
+        projectId: (finalArticle as any).projectId
+      }
+    });
     res.end();
   } catch (error: any) {
     console.error('Visual Article Error:', error);

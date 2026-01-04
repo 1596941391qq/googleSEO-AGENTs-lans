@@ -30,6 +30,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       uiLanguage = 'en',
       industry,
       wordsPerRound = 10,
+      miningStrategy = 'horizontal',
+      additionalSuggestions,
     } = body;
 
     if (!websiteId || !websiteUrl || !websiteDomain) {
@@ -49,6 +51,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       uiLanguage,
       industry,
       wordsPerRound,
+      miningStrategy,
+      additionalSuggestions,
     });
 
     return res.json({

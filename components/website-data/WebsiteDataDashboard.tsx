@@ -3,13 +3,8 @@ import {
   RefreshCw,
   Loader2,
   AlertCircle,
-  ChevronRight,
-  TestTube,
-  X,
 } from "lucide-react";
-import { Card, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
-import { Input } from "../ui/input";
 import { OverviewCards } from "./OverviewCards";
 import { RankingDistributionChart } from "./RankingDistributionChart";
 import { TopKeywordsTable } from "./TopKeywordsTable";
@@ -87,22 +82,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     keywords: true,
     competitors: true,
   });
-
-  // 测试功能状态（仅本地可见）
-  const [showTestPanel, setShowTestPanel] = useState(false);
-  const [testUrl, setTestUrl] = useState("");
-  const [testEndpoint, setTestEndpoint] = useState<"overview" | "keywords" | "keyword-data" | "whois-overview" | "custom">("whois-overview");
-  const [testCustomEndpoint, setTestCustomEndpoint] = useState("");
-  const [testLoading, setTestLoading] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
-  const [testError, setTestError] = useState<string | null>(null);
-
-  // 检查是否为本地环境
-  const isLocal = typeof window !== "undefined" && (
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1" ||
-    window.location.hostname === ""
-  );
 
   // 并行加载数据 - 哪个先返回就先显示哪个
   const loadDataParallel = async () => {
@@ -259,52 +238,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     }
   };
 
-  // 测试 DataForSEO API
-  const testDataForSEO = async () => {
-    if (!testUrl.trim()) {
-      setTestError(uiLanguage === "zh" ? "请输入网址" : "Please enter a URL");
-      return;
-    }
-
-    setTestLoading(true);
-    setTestError(null);
-    setTestResult(null);
-
-    try {
-      const requestBody: any = {
-        url: testUrl,
-        endpoint: testEndpoint,
-        locationCode: 2840,
-      };
-
-      if (testEndpoint === "custom" && testCustomEndpoint) {
-        requestBody.customEndpoint = testCustomEndpoint;
-        requestBody.requestBody = [{
-          target: testUrl.replace(/^https?:\/\//, '').split('/')[0],
-          location_code: 2840,
-        }];
-      }
-
-      const response = await fetch("/api/website-data/test-dataforseo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-
-      const result = await response.json();
-      
-      if (response.ok) {
-        setTestResult(result);
-      } else {
-        setTestError(result.error || result.details || "Unknown error");
-      }
-    } catch (error: any) {
-      setTestError(error.message || "Network error");
-    } finally {
-      setTestLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (websiteId) {
       // 异步加载数据
@@ -336,134 +269,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 测试面板 - 仅本地可见 */}
-      {isLocal && (
-        <Card className={cn(
-          isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-yellow-50 border-yellow-200"
-        )}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <TestTube className={cn(
-                  "w-5 h-5",
-                  isDarkTheme ? "text-yellow-400" : "text-yellow-600"
-                )} />
-                <h3 className={cn(
-                  "font-semibold",
-                  isDarkTheme ? "text-yellow-400" : "text-yellow-700"
-                )}>
-                  {uiLanguage === "zh" ? "DataForSEO API 测试（仅本地）" : "DataForSEO API Test (Local Only)"}
-                </h3>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setShowTestPanel(!showTestPanel);
-                  if (showTestPanel) {
-                    setTestResult(null);
-                    setTestError(null);
-                  }
-                }}
-              >
-                {showTestPanel ? (
-                  <X className="w-4 h-4" />
-                ) : (
-                  <TestTube className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-
-            {showTestPanel && (
-              <div className="space-y-4">
-                <div className="flex gap-2">
-                  <Input
-                    type="text"
-                    placeholder={uiLanguage === "zh" ? "输入网址，例如: example.com" : "Enter URL, e.g.: example.com"}
-                    value={testUrl}
-                    onChange={(e) => setTestUrl(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === "Enter") {
-                        testDataForSEO();
-                      }
-                    }}
-                    className={cn(
-                      "flex-1",
-                      isDarkTheme ? "bg-zinc-800 border-zinc-700" : "bg-white"
-                    )}
-                  />
-                  <select
-                    value={testEndpoint}
-                    onChange={(e) => setTestEndpoint(e.target.value as any)}
-                    className={cn(
-                      "px-3 py-2 rounded-md border",
-                      isDarkTheme ? "bg-zinc-800 border-zinc-700 text-white" : "bg-white border-gray-300"
-                    )}
-                  >
-                    <option value="whois-overview">Whois Overview (推荐 - 包含 SEO 指标)</option>
-                    <option value="overview">Overview (使用 target 参数)</option>
-                    <option value="keywords">Keywords (尝试多个端点)</option>
-                    <option value="keyword-data">Keyword Data</option>
-                    <option value="custom">Custom (自定义端点)</option>
-                  </select>
-                  {testEndpoint === "custom" && (
-                    <Input
-                      type="text"
-                      placeholder={uiLanguage === "zh" ? "端点路径，如: /dataforseo_labs/google/domain_analytics/live" : "Endpoint path, e.g.: /dataforseo_labs/google/domain_analytics/live"}
-                      value={testCustomEndpoint}
-                      onChange={(e) => setTestCustomEndpoint(e.target.value)}
-                      className={cn(
-                        "flex-1",
-                        isDarkTheme ? "bg-zinc-800 border-zinc-700" : "bg-white"
-                      )}
-                    />
-                  )}
-                  <Button
-                    onClick={testDataForSEO}
-                    disabled={testLoading || !testUrl.trim()}
-                    className="bg-emerald-500 hover:bg-emerald-600"
-                  >
-                    {testLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      uiLanguage === "zh" ? "测试" : "Test"
-                    )}
-                  </Button>
-                </div>
-
-                {testError && (
-                  <div className={cn(
-                    "p-3 rounded-md",
-                    isDarkTheme ? "bg-red-500/10 text-red-400" : "bg-red-50 text-red-600"
-                  )}>
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4" />
-                      <span className="text-sm">{testError}</span>
-                    </div>
-                  </div>
-                )}
-
-                {testResult && (
-                  <div className="space-y-2">
-                    <div className={cn(
-                      "p-3 rounded-md text-sm font-mono overflow-auto max-h-96",
-                      isDarkTheme ? "bg-zinc-800 text-zinc-300" : "bg-gray-100 text-gray-800"
-                    )}>
-                      <div className="mb-2 font-semibold">
-                        {uiLanguage === "zh" ? "响应内容：" : "Response:"}
-                      </div>
-                      <pre className="whitespace-pre-wrap break-words">
-                        {JSON.stringify(testResult, null, 2)}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

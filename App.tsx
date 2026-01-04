@@ -189,10 +189,10 @@ const TEXT = {
     noConfigs: "No saved configurations yet.",
     configSaved: "Configuration saved",
     enterConfigName: "Enter config name...",
-    batchTranslateTitle: "Batch Translate & Analyze",
+
     batchTranslateDesc:
-      "Enter multiple keywords (comma-separated) to translate and analyze for blue ocean opportunities.",
-    batchInputPlaceholder: "e.g., dog food, cat toys, bird cage",
+      "Will translate keywords to target language and analyze blue ocean opportunities.",
+    batchInputPlaceholder: "Support multiple keywords (e.g manus,nanobanana)",
     btnBatchAnalyze: "Cross-Market Insights",
     batchAnalyzing: "Translating and analyzing...",
     batchResultsTitle: "BCross-Market Insights Results",
@@ -338,10 +338,9 @@ const TEXT = {
     noConfigs: "暂无保存的配置",
     configSaved: "配置已保存",
     enterConfigName: "输入配置名称...",
-    batchTranslateTitle: "跨市场洞察",
-    batchTranslateDesc:
-      "输入多个关键词（用逗号分隔），自动翻译到目标语言并分析蓝海机会。",
-    batchInputPlaceholder: "例如：狗粮, 猫玩具, 鸟笼",
+
+    batchTranslateDesc: "将翻译keyword到目标语言并分析蓝海机会。",
+    batchInputPlaceholder: "支持输入多个关键词（e.g manus,nanobanana）",
     btnBatchAnalyze: "跨市场洞察",
     batchAnalyzing: "正在跨市场洞察...",
     batchResultsTitle: "跨市场洞察结果",
@@ -2549,6 +2548,30 @@ export default function App() {
     "blue-ocean" | "existing-website-audit"
   >("blue-ocean"); // 挖掘模式
   const urlValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [showWebsiteDropdown, setShowWebsiteDropdown] = useState(false); // Website dropdown visibility
+  const [websiteListData, setWebsiteListData] = useState<{
+    websites: Array<{
+      id: string;
+      url: string;
+      isDefault: boolean;
+    }>;
+    currentWebsite: {
+      id: string;
+      url: string;
+      isDefault: boolean;
+    } | null;
+  } | null>(null); // Website list data
+  // Batch mode website selection state
+  const [batchSelectedWebsite, setBatchSelectedWebsite] = useState<any | null>(
+    null
+  ); // Selected website for batch mode
+  const [batchManualWebsiteUrl, setBatchManualWebsiteUrl] = useState(""); // Manual website URL input for batch mode
+  const [batchUrlValidationStatus, setBatchUrlValidationStatus] = useState<
+    "idle" | "valid" | "invalid" | "validating"
+  >("idle"); // URL validation status for batch mode
+  const [showBatchWebsiteDropdown, setShowBatchWebsiteDropdown] =
+    useState(false); // Website dropdown visibility for batch mode
+  const batchUrlValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Helper function to normalize URL (support formats like "302.ai" or "www.302.ai")
   const normalizeUrl = (input: string): string => {
@@ -2619,6 +2642,120 @@ export default function App() {
       }
     };
   }, [manualWebsiteUrl]);
+
+  // Load website list for dropdown
+  const loadWebsiteList = async (mode?: "mining" | "batch") => {
+    try {
+      const response = await fetch(`/api/websites/list?user_id=1`);
+      if (response.ok) {
+        const result = await response.json();
+        setWebsiteListData(result.data);
+        // Auto-select current website if available and no selection yet AND user is not typing
+        // Only auto-select if there's no manual input and no existing selection
+        if (mode === "batch") {
+          // For batch mode (cross-market insight)
+          if (
+            !batchSelectedWebsite &&
+            !batchManualWebsiteUrl.trim() &&
+            result.data?.currentWebsite
+          ) {
+            setBatchSelectedWebsite(result.data.currentWebsite);
+          }
+        } else {
+          // For mining mode (default)
+          if (
+            !selectedWebsite &&
+            !manualWebsiteUrl.trim() &&
+            result.data?.currentWebsite
+          ) {
+            setSelectedWebsite(result.data.currentWebsite);
+          }
+        }
+      } else {
+        console.error("[App] Failed to load websites list");
+      }
+    } catch (error) {
+      console.error("[App] Failed to load websites list:", error);
+    }
+  };
+
+  // Auto-validate URL with debounce for batch mode
+  useEffect(() => {
+    // Clear previous timeout
+    if (batchUrlValidationTimeoutRef.current) {
+      clearTimeout(batchUrlValidationTimeoutRef.current);
+    }
+
+    // If input is empty, reset status
+    if (!batchManualWebsiteUrl.trim()) {
+      setBatchUrlValidationStatus("idle");
+      return;
+    }
+
+    // Set validating status
+    setBatchUrlValidationStatus("validating");
+
+    // Debounce validation (wait 800ms after user stops typing)
+    batchUrlValidationTimeoutRef.current = setTimeout(() => {
+      const trimmed = batchManualWebsiteUrl.trim();
+      if (!trimmed) {
+        setBatchUrlValidationStatus("idle");
+        return;
+      }
+
+      try {
+        const normalizedUrl = normalizeUrl(trimmed);
+        const urlObj = new URL(normalizedUrl);
+
+        // URL is valid, automatically set as selected website
+        setBatchSelectedWebsite({
+          id: `manual-${Date.now()}`,
+          url: normalizedUrl,
+          domain: urlObj.hostname.replace(/^www\./, ""),
+          isDefault: false,
+        });
+        setBatchUrlValidationStatus("valid");
+      } catch (e) {
+        // URL is invalid
+        setBatchUrlValidationStatus("invalid");
+        setBatchSelectedWebsite(null); // Clear selection if invalid
+      }
+    }, 800);
+
+    // Cleanup function
+    return () => {
+      if (batchUrlValidationTimeoutRef.current) {
+        clearTimeout(batchUrlValidationTimeoutRef.current);
+      }
+    };
+  }, [batchManualWebsiteUrl]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        showWebsiteDropdown &&
+        !target.closest(".website-dropdown-container")
+      ) {
+        setShowWebsiteDropdown(false);
+      }
+      if (
+        showBatchWebsiteDropdown &&
+        !target.closest(".batch-website-dropdown-container")
+      ) {
+        setShowBatchWebsiteDropdown(false);
+      }
+    };
+
+    if (showWebsiteDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }
+  }, [showWebsiteDropdown]);
+
   const stopBatchRef = useRef(false);
 
   const stopMiningRef = useRef(false);
@@ -4846,6 +4983,9 @@ export default function App() {
           targetLanguage: state.targetLanguage,
           uiLanguage: state.uiLanguage,
           wordsPerRound: state.wordsPerRound || 10,
+          miningStrategy: state.miningStrategy || "horizontal",
+          industry: state.miningConfig?.industry,
+          additionalSuggestions: state.miningConfig?.additionalSuggestions,
         }),
       });
 
@@ -5228,13 +5368,18 @@ export default function App() {
             );
 
             // Step 4: 结果展示（使用包含完整分析数据的关键词）
-            setState((prev) => ({
-              ...prev,
-              keywords: keywordsWithAnalysis, // 使用包含完整分析数据的关键词
-              isMining: false,
-              miningSuccess: true,
-              step: "results",
-            }));
+            setState((prev) => {
+              const updatedState: AppState = {
+                ...prev,
+                keywords: keywordsWithAnalysis, // 使用包含完整分析数据的关键词
+                isMining: false,
+                miningSuccess: true,
+                step: "results" as const,
+              };
+              // 保存到挖掘历史
+              saveToArchive(updatedState);
+              return updatedState;
+            });
 
             // 最终统计
             addLog(
@@ -5258,13 +5403,18 @@ export default function App() {
           );
 
           // 如果批量分析失败，至少使用基础关键词数据
-          setState((prev) => ({
-            ...prev,
-            keywords: result.keywords,
-            isMining: false,
-            miningSuccess: true,
-            step: "results",
-          }));
+          setState((prev) => {
+            const updatedState: AppState = {
+              ...prev,
+              keywords: result.keywords,
+              isMining: false,
+              miningSuccess: true,
+              step: "results" as const,
+            };
+            // 保存到挖掘历史
+            saveToArchive(updatedState);
+            return updatedState;
+          });
 
           addThought(
             "decision",
@@ -7931,100 +8081,180 @@ export default function App() {
 
                   {/* Existing Website Audit Mode - Show website selector and audit button */}
                   {miningMode === "existing-website-audit" && (
-                    <div className="space-y-4">
-                      {/* Combined Website Selector and Input */}
+                    <>
+                      {/* Refine Industry Button */}
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                          <span
+                            className={`text-sm font-semibold ${
+                              isDarkTheme ? "text-white" : "text-gray-900"
+                            }`}
+                          >
+                            {state.uiLanguage === "zh"
+                              ? "需要帮助？"
+                              : "Need Help?"}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setShowMiningGuide(true)}
+                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                        >
+                          <Lightbulb className="w-3.5 h-3.5" />
+                          {state.uiLanguage === "zh"
+                            ? "精确行业"
+                            : "Refine Industry"}
+                        </button>
+                      </div>
+
+                      {/* Display Saved Mining Configuration */}
+                      {state.miningConfig && (
+                        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Lightbulb className="w-4 h-4 text-emerald-400" />
+                            <span className="text-sm font-semibold text-emerald-400">
+                              {state.uiLanguage === "zh"
+                                ? "已保存的配置"
+                                : "Saved Configuration"}
+                            </span>
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            <p
+                              className={
+                                isDarkTheme ? "text-white" : "text-gray-700"
+                              }
+                            >
+                              <span className="text-emerald-400 font-medium">
+                                {state.uiLanguage === "zh"
+                                  ? "行业:"
+                                  : "Industry:"}
+                              </span>{" "}
+                              {state.miningConfig.industry}
+                            </p>
+                            {state.miningConfig.additionalSuggestions && (
+                              <p
+                                className={
+                                  isDarkTheme ? "text-white" : "text-gray-700"
+                                }
+                              >
+                                <span className="text-emerald-400 font-medium">
+                                  {state.uiLanguage === "zh"
+                                    ? "建议:"
+                                    : "Suggestions:"}
+                                </span>{" "}
+                                {state.miningConfig.additionalSuggestions}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Redesigned Input Design - Similar to Blue Ocean Mode */}
                       <div
                         className={cn(
-                          "p-4 rounded-lg border",
+                          "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
                           isDarkTheme
-                            ? "bg-black/40 border-emerald-500/20"
-                            : "bg-white border-emerald-500/30"
+                            ? "bg-[#0f0f0f] border-white/10"
+                            : "bg-gray-50 border-gray-200"
                         )}
                       >
-                        <div className="flex items-center gap-2 mb-3">
-                          <Globe className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                          <span
+                        {/* Target Language Selector */}
+                        <Select
+                          value={state.targetLanguage}
+                          onValueChange={(value) =>
+                            setState((prev) => ({
+                              ...prev,
+                              targetLanguage: value as TargetLanguage,
+                            }))
+                          }
+                        >
+                          <SelectTrigger
+                            hideIcon
                             className={cn(
-                              "text-sm font-medium",
-                              isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                              "md:w-48 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
+                              isDarkTheme
+                                ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
+                                : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
                             )}
                           >
-                            {state.uiLanguage === "zh"
-                              ? "选择网站"
-                              : "Select Website"}
-                          </span>
-                        </div>
+                            <div className="flex items-center space-x-3 overflow-hidden">
+                              <Globe
+                                size={14}
+                                className={cn(
+                                  "shrink-0",
+                                  isDarkTheme
+                                    ? "text-emerald-500"
+                                    : "text-emerald-600"
+                                )}
+                              />
+                              <span className="text-[11px] font-bold truncate">
+                                <SelectValue />
+                              </span>
+                            </div>
+                            <ChevronRight
+                              size={14}
+                              className={cn(
+                                "shrink-0",
+                                isDarkTheme
+                                  ? "text-neutral-700"
+                                  : "text-gray-500"
+                              )}
+                            />
+                          </SelectTrigger>
+                          <SelectContent
+                            className={cn(
+                              isDarkTheme
+                                ? "bg-black/90 border-emerald-500/30"
+                                : "bg-white border-emerald-500/30"
+                            )}
+                          >
+                            {LANGUAGES.map((l) => (
+                              <SelectItem
+                                key={l.code}
+                                value={l.code}
+                                className={cn(
+                                  isDarkTheme
+                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                )}
+                              >
+                                {l.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
 
-                        {/* Website Selector Dropdown */}
-                        <div className="mb-3">
-                          <WebsiteSelector
-                            userId={1}
-                            isDarkTheme={isDarkTheme}
-                            uiLanguage={state.uiLanguage}
-                            selectedWebsiteId={selectedWebsite?.id || null}
-                            onWebsiteSelect={(website) => {
-                              setSelectedWebsite(website);
-                              if (website) {
-                                setManualWebsiteUrl(""); // Clear manual input when selecting from list
-                                setUrlValidationStatus("idle"); // Reset validation status
-                              }
-                              console.log("[App] Website selected:", website);
-                            }}
-                          />
-                        </div>
-
-                        {/* Divider */}
-                        <div className="flex items-center gap-2 my-3">
+                        {/* Website Input Field with Dropdown */}
+                        <div className="flex-1 relative website-dropdown-container">
                           <div
                             className={cn(
-                              "flex-1 h-px",
+                              "flex items-center rounded-lg px-4 h-14 transition-all border relative",
                               isDarkTheme
-                                ? "bg-emerald-500/20"
-                                : "bg-emerald-500/30"
-                            )}
-                          />
-                          <span
-                            className={cn(
-                              "text-xs px-2",
-                              isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                                ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
+                                : "bg-white border-gray-200 focus-within:border-emerald-500/50"
                             )}
                           >
-                            {state.uiLanguage === "zh" ? "或" : "OR"}
-                          </span>
-                          <div
-                            className={cn(
-                              "flex-1 h-px",
-                              isDarkTheme
-                                ? "bg-emerald-500/20"
-                                : "bg-emerald-500/30"
-                            )}
-                          />
-                        </div>
-
-                        {/* Manual URL Input */}
-                        <div className="space-y-2">
-                          <label
-                            className={cn(
-                              "text-xs font-medium block",
-                              isDarkTheme ? "text-zinc-400" : "text-gray-600"
-                            )}
-                          >
-                            {state.uiLanguage === "zh"
-                              ? "手动输入网址（自动验证）"
-                              : "Enter URL Manually (Auto-validated)"}
-                          </label>
-                          <div className="relative">
-                            <Input
+                            <Globe
+                              className={cn(
+                                "w-4 h-4 mr-3 shrink-0",
+                                isDarkTheme
+                                  ? "text-neutral-600"
+                                  : "text-gray-400"
+                              )}
+                            />
+                            <input
                               type="text"
-                              value={manualWebsiteUrl}
+                              value={
+                                manualWebsiteUrl.trim()
+                                  ? manualWebsiteUrl
+                                  : selectedWebsite?.url || ""
+                              }
                               onChange={(e) => {
-                                setManualWebsiteUrl(e.target.value);
+                                const value = e.target.value;
+                                setManualWebsiteUrl(value);
+                                setShowWebsiteDropdown(false); // Close dropdown when typing
                                 // Clear selected website from dropdown when typing manually
-                                if (
-                                  e.target.value.trim() &&
-                                  selectedWebsite?.id?.startsWith("manual-") ===
-                                    false
-                                ) {
+                                if (value.trim()) {
                                   setSelectedWebsite(null);
                                 }
                               }}
@@ -8034,22 +8264,46 @@ export default function App() {
                                   : "e.g., 302.ai or https://example.com"
                               }
                               className={cn(
-                                "flex-1 pr-10",
+                                "bg-transparent border-none outline-none w-full text-sm font-medium flex-1",
                                 isDarkTheme
-                                  ? "bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600"
-                                  : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400",
-                                // Dynamic border color based on validation status
-                                urlValidationStatus === "valid" &&
-                                  "border-emerald-500",
-                                urlValidationStatus === "invalid" &&
-                                  "border-red-500",
-                                urlValidationStatus === "validating" &&
-                                  "border-yellow-500"
+                                  ? "text-white placeholder:text-neutral-700"
+                                  : "text-gray-900 placeholder:text-gray-500"
                               )}
+                              onFocus={() => {
+                                // Load websites when input is focused
+                                if (!websiteListData) {
+                                  loadWebsiteList();
+                                }
+                                setShowWebsiteDropdown(true); // Show dropdown when focused
+                              }}
                             />
+                            {/* Dropdown Arrow */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!websiteListData) {
+                                  loadWebsiteList();
+                                }
+                                setShowWebsiteDropdown(!showWebsiteDropdown);
+                              }}
+                              className={cn(
+                                "ml-2 p-1 shrink-0 transition-colors",
+                                isDarkTheme
+                                  ? "text-neutral-600 hover:text-white"
+                                  : "text-gray-400 hover:text-gray-600"
+                              )}
+                            >
+                              <ChevronDown
+                                size={16}
+                                className={cn(
+                                  "transition-transform",
+                                  showWebsiteDropdown && "rotate-180"
+                                )}
+                              />
+                            </button>
                             {/* Validation Status Icon */}
                             {manualWebsiteUrl.trim() && (
-                              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <div className="absolute right-10 top-1/2 -translate-y-1/2">
                                 {urlValidationStatus === "validating" && (
                                   <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
                                 )}
@@ -8062,12 +8316,74 @@ export default function App() {
                               </div>
                             )}
                           </div>
+                          {/* Website Dropdown */}
+                          {showWebsiteDropdown && websiteListData && (
+                            <div
+                              className={cn(
+                                "absolute z-50 w-full mt-1 rounded-lg border shadow-lg max-h-60 overflow-y-auto",
+                                isDarkTheme
+                                  ? "bg-black/90 border-emerald-500/30"
+                                  : "bg-white border-emerald-500/30"
+                              )}
+                            >
+                              {websiteListData.websites.length === 0 ? (
+                                <div
+                                  className={cn(
+                                    "p-4 text-center text-sm",
+                                    isDarkTheme
+                                      ? "text-zinc-400"
+                                      : "text-gray-500"
+                                  )}
+                                >
+                                  {state.uiLanguage === "zh"
+                                    ? "还没有绑定网站"
+                                    : "No websites bound yet"}
+                                </div>
+                              ) : (
+                                websiteListData.websites.map((website) => (
+                                  <button
+                                    key={website.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedWebsite(website);
+                                      setManualWebsiteUrl("");
+                                      setUrlValidationStatus("idle");
+                                      setShowWebsiteDropdown(false);
+                                    }}
+                                    className={cn(
+                                      "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors flex items-center justify-between",
+                                      selectedWebsite?.id === website.id &&
+                                        "bg-emerald-500/20",
+                                      isDarkTheme
+                                        ? "text-white"
+                                        : "text-gray-900"
+                                    )}
+                                  >
+                                    <span className="truncate">
+                                      {website.url}
+                                    </span>
+                                    {website.isDefault && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="flex-shrink-0 text-xs ml-2"
+                                      >
+                                        <CheckCircle className="w-2.5 h-2.5 mr-0.5" />
+                                        {state.uiLanguage === "zh"
+                                          ? "默认"
+                                          : "Default"}
+                                      </Badge>
+                                    )}
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          )}
                           {/* Validation Status Message */}
                           {manualWebsiteUrl.trim() &&
                             urlValidationStatus !== "idle" && (
                               <div
                                 className={cn(
-                                  "text-xs flex items-center gap-1",
+                                  "text-xs flex items-center gap-1 mt-1",
                                   urlValidationStatus === "valid" &&
                                     "text-emerald-500",
                                   urlValidationStatus === "invalid" &&
@@ -8109,59 +8425,199 @@ export default function App() {
                               </div>
                             )}
                         </div>
-
-                        {/* Selected Website Display */}
-                        {selectedWebsite && (
-                          <div
-                            className={cn(
-                              "mt-3 p-3 rounded border",
-                              isDarkTheme
-                                ? "bg-emerald-500/10 border-emerald-500/30"
-                                : "bg-emerald-50 border-emerald-200"
-                            )}
-                          >
-                            <div className="flex items-center gap-2">
-                              <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-                              <span
-                                className={cn(
-                                  "text-sm font-medium flex-1 truncate",
-                                  isDarkTheme ? "text-white" : "text-gray-900"
-                                )}
-                              >
-                                {selectedWebsite.url}
-                              </span>
-                              {!selectedWebsite.id?.startsWith("manual-") && (
-                                <Badge
-                                  variant="secondary"
-                                  className="flex-shrink-0 text-xs"
-                                >
-                                  {state.uiLanguage === "zh"
-                                    ? "已保存"
-                                    : "Saved"}
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                        <button
+                          onClick={() => startMining(false)}
+                          disabled={!selectedWebsite}
+                          className={cn(
+                            "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
+                            isDarkTheme && "shadow-emerald-900/20"
+                          )}
+                        >
+                          {state.uiLanguage === "zh"
+                            ? "开始分析网站"
+                            : "Start Website Audit"}
+                        </button>
                       </div>
 
-                      {/* Start Audit Button */}
-                      <button
-                        onClick={() => startMining(false)}
-                        disabled={!selectedWebsite}
-                        className={cn(
-                          "w-full h-[56px] px-6 text-white font-medium text-sm rounded-lg transition-colors flex items-center justify-center gap-2",
-                          selectedWebsite
-                            ? "bg-emerald-500 hover:bg-emerald-600"
-                            : "bg-gray-400 cursor-not-allowed"
-                        )}
-                      >
-                        <Search className="w-4 h-4" />
-                        {state.uiLanguage === "zh"
-                          ? "开始分析网站"
-                          : "Start Website Audit"}
-                      </button>
-                    </div>
+                      {/* Mining Settings Panel - Same as blue-ocean mode */}
+                      <section className="space-y-4 mt-8">
+                        <div className="flex items-center space-x-2 px-2">
+                          <Settings
+                            size={14}
+                            className={cn(
+                              isDarkTheme
+                                ? "text-emerald-500"
+                                : "text-emerald-600"
+                            )}
+                          />
+                          <h3
+                            className={cn(
+                              "text-[10px] font-black uppercase tracking-[0.2em]",
+                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                            )}
+                          >
+                            {state.uiLanguage === "zh"
+                              ? "挖词设置"
+                              : "Mining Settings"}
+                          </h3>
+                        </div>
+                        <div
+                          className={cn(
+                            "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
+                            isDarkTheme
+                              ? "bg-black/40 border-emerald-500/20"
+                              : "bg-white border-emerald-500/30"
+                          )}
+                        >
+                          {/* Words Per Round */}
+                          <div className="space-y-2">
+                            <label
+                              className={cn(
+                                "flex items-center gap-2 text-xs font-semibold",
+                                isDarkTheme
+                                  ? "text-neutral-400"
+                                  : "text-gray-600"
+                              )}
+                            >
+                              <Cpu
+                                size={14}
+                                className={cn(
+                                  isDarkTheme
+                                    ? "text-emerald-500"
+                                    : "text-emerald-600"
+                                )}
+                              />
+                              {state.uiLanguage === "zh"
+                                ? "每轮词语数"
+                                : "Words Per Round"}
+                            </label>
+                            <Input
+                              type="number"
+                              min="5"
+                              max="20"
+                              value={state.wordsPerRound}
+                              onChange={(e) =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  wordsPerRound: Math.max(
+                                    5,
+                                    Math.min(20, parseInt(e.target.value) || 10)
+                                  ),
+                                }))
+                              }
+                              className={cn(
+                                "text-sm font-medium h-10",
+                                isDarkTheme
+                                  ? "border-white/10 bg-white/5 text-white"
+                                  : "border-gray-200 bg-white text-gray-900"
+                              )}
+                            />
+                            <p
+                              className={cn(
+                                "text-[10px]",
+                                isDarkTheme
+                                  ? "text-neutral-600"
+                                  : "text-gray-500"
+                              )}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "范围: 5-20"
+                                : "Range: 5-20"}
+                            </p>
+                          </div>
+
+                          {/* Mining Strategy */}
+                          <div className="space-y-2">
+                            <label
+                              className={cn(
+                                "flex items-center gap-2 text-xs font-semibold",
+                                isDarkTheme
+                                  ? "text-neutral-400"
+                                  : "text-gray-600"
+                              )}
+                            >
+                              <LayoutGrid
+                                size={14}
+                                className={cn(
+                                  isDarkTheme
+                                    ? "text-emerald-500"
+                                    : "text-emerald-600"
+                                )}
+                              />
+                              {state.uiLanguage === "zh"
+                                ? "挖掘策略"
+                                : "Mining Strategy"}
+                            </label>
+                            <Select
+                              value={state.miningStrategy}
+                              onValueChange={(value) =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  miningStrategy: value as
+                                    | "horizontal"
+                                    | "vertical",
+                                }))
+                              }
+                            >
+                              <SelectTrigger
+                                className={cn(
+                                  "text-sm font-medium h-10",
+                                  isDarkTheme
+                                    ? "border-white/10 bg-white/5 text-white"
+                                    : "border-gray-200 bg-white text-gray-900"
+                                )}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent
+                                className={cn(
+                                  isDarkTheme
+                                    ? "bg-black/90 border-emerald-500/30"
+                                    : "bg-white border-emerald-500/30"
+                                )}
+                              >
+                                <SelectItem
+                                  value="horizontal"
+                                  className={cn(
+                                    isDarkTheme
+                                      ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                      : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                  )}
+                                >
+                                  {state.uiLanguage === "zh"
+                                    ? "横向挖掘(广泛主题)"
+                                    : "Horizontal Mining (Broad Topics)"}
+                                </SelectItem>
+                                <SelectItem
+                                  value="vertical"
+                                  className={cn(
+                                    isDarkTheme
+                                      ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                      : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                  )}
+                                >
+                                  {state.uiLanguage === "zh"
+                                    ? "纵向挖掘(深度挖掘)"
+                                    : "Vertical Mining (Deep Dive)"}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p
+                              className={cn(
+                                "text-[10px]",
+                                isDarkTheme
+                                  ? "text-neutral-600"
+                                  : "text-gray-500"
+                              )}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "探索不同的平行主题"
+                                : "Explore different parallel topics"}
+                            </p>
+                          </div>
+                        </div>
+                      </section>
+                    </>
                   )}
 
                   {/* Mining Settings Panel - Only show for blue-ocean mode */}
@@ -8457,57 +8913,566 @@ export default function App() {
               {/* Batch Translation Tab Content */}
               {activeTab === "batch" && (
                 <div className="max-w-3xl mx-auto">
-                  <div
-                    className={`backdrop-blur-sm rounded-xl border shadow-sm p-6 ${
-                      isDarkTheme
-                        ? "bg-black/40 border-emerald-500/20"
-                        : "bg-white border-emerald-200"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-3">
-                      <Languages className="w-5 h-5 text-emerald-400" />
-                      <h3
-                        className={`text-lg font-bold ${
+                  {/* Refine Industry Button */}
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                      <span
+                        className={`text-sm font-semibold ${
                           isDarkTheme ? "text-white" : "text-gray-900"
                         }`}
                       >
-                        {t.batchTranslateTitle}
-                      </h3>
+                        {state.uiLanguage === "zh"
+                          ? "将翻译keyword到目标语言并分析蓝海机会"
+                          : "Will translate keywords to target language and analyze blue ocean opportunities"}
+                      </span>
                     </div>
-                    <p
-                      className={`text-sm mb-4 ${
-                        isDarkTheme ? "text-slate-400" : "text-gray-600"
-                      }`}
+                    <button
+                      onClick={() => setShowMiningGuide(true)}
+                      className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
                     >
-                      {t.batchTranslateDesc}
-                    </p>
+                      <Lightbulb className="w-3.5 h-3.5" />
+                      {state.uiLanguage === "zh"
+                        ? "精确行业"
+                        : "Refine Industry"}
+                    </button>
+                  </div>
 
-                    <div className="space-y-4">
-                      {/* Batch Input */}
-                      <div>
-                        <textarea
+                  {/* Display Saved Mining Configuration */}
+                  {state.miningConfig && (
+                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Lightbulb className="w-4 h-4 text-emerald-400" />
+                        <span className="text-sm font-semibold text-emerald-400">
+                          {state.uiLanguage === "zh"
+                            ? "已保存的配置"
+                            : "Saved Configuration"}
+                        </span>
+                      </div>
+                      <div className="space-y-1 text-sm">
+                        <p
+                          className={
+                            isDarkTheme ? "text-white" : "text-gray-700"
+                          }
+                        >
+                          <span className="text-emerald-400 font-medium">
+                            {state.uiLanguage === "zh" ? "行业:" : "Industry:"}
+                          </span>{" "}
+                          {state.miningConfig.industry}
+                        </p>
+                        {state.miningConfig.additionalSuggestions && (
+                          <p
+                            className={
+                              isDarkTheme ? "text-white" : "text-gray-700"
+                            }
+                          >
+                            <span className="text-emerald-400 font-medium">
+                              {state.uiLanguage === "zh"
+                                ? "建议:"
+                                : "Suggestions:"}
+                            </span>{" "}
+                            {state.miningConfig.additionalSuggestions}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Redesigned Input Design - Similar to Blue Ocean Mode */}
+                  <div
+                    className={cn(
+                      "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
+                      isDarkTheme
+                        ? "bg-[#0f0f0f] border-white/10"
+                        : "bg-gray-50 border-gray-200"
+                    )}
+                  >
+                    {/* Target Language Selector */}
+                    <Select
+                      value={state.targetLanguage}
+                      onValueChange={(value) =>
+                        setState((prev) => ({
+                          ...prev,
+                          targetLanguage: value as TargetLanguage,
+                        }))
+                      }
+                    >
+                      <SelectTrigger
+                        hideIcon
+                        className={cn(
+                          "md:w-48 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
+                          isDarkTheme
+                            ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
+                            : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
+                        )}
+                      >
+                        <div className="flex items-center space-x-3 overflow-hidden">
+                          <Globe
+                            size={14}
+                            className={cn(
+                              "shrink-0",
+                              isDarkTheme
+                                ? "text-emerald-500"
+                                : "text-emerald-600"
+                            )}
+                          />
+                          <span className="text-[11px] font-bold truncate">
+                            <SelectValue />
+                          </span>
+                        </div>
+                        <ChevronRight
+                          size={14}
+                          className={cn(
+                            "shrink-0",
+                            isDarkTheme ? "text-neutral-700" : "text-gray-500"
+                          )}
+                        />
+                      </SelectTrigger>
+                      <SelectContent
+                        className={cn(
+                          isDarkTheme
+                            ? "bg-black/90 border-emerald-500/30"
+                            : "bg-white border-emerald-500/30"
+                        )}
+                      >
+                        {LANGUAGES.map((l) => (
+                          <SelectItem
+                            key={l.code}
+                            value={l.code}
+                            className={cn(
+                              isDarkTheme
+                                ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                            )}
+                          >
+                            {l.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Website Input Field with Dropdown - Only show for existing-website-audit mode */}
+                    {miningMode === "existing-website-audit" && (
+                      <div className="flex-1 min-w-0 relative batch-website-dropdown-container">
+                        <div
+                          className={cn(
+                            "flex items-center rounded-lg px-4 h-14 transition-all border relative",
+                            isDarkTheme
+                              ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
+                              : "bg-white border-gray-200 focus-within:border-emerald-500/50"
+                          )}
+                        >
+                          <Globe
+                            className={cn(
+                              "w-4 h-4 mr-3 shrink-0",
+                              isDarkTheme ? "text-neutral-600" : "text-gray-400"
+                            )}
+                          />
+                          <input
+                            type="text"
+                            value={
+                              batchManualWebsiteUrl.trim()
+                                ? batchManualWebsiteUrl
+                                : batchSelectedWebsite?.url || ""
+                            }
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              setBatchManualWebsiteUrl(value);
+                              setShowBatchWebsiteDropdown(false); // Close dropdown when typing
+                              // Clear selected website from dropdown when typing manually
+                              if (value.trim()) {
+                                setBatchSelectedWebsite(null);
+                              }
+                            }}
+                            placeholder={
+                              state.uiLanguage === "zh"
+                                ? "例如: 302.ai 或 https://example.com"
+                                : "e.g., 302.ai or https://example.com"
+                            }
+                            className={cn(
+                              "bg-transparent border-none outline-none w-full text-sm font-medium flex-1",
+                              isDarkTheme
+                                ? "text-white placeholder:text-neutral-700"
+                                : "text-gray-900 placeholder:text-gray-500"
+                            )}
+                            onFocus={() => {
+                              // Load websites when input is focused
+                              if (!websiteListData) {
+                                loadWebsiteList("batch");
+                              }
+                              setShowBatchWebsiteDropdown(true); // Show dropdown when focused
+                            }}
+                          />
+                          {/* Dropdown Arrow */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!websiteListData) {
+                                loadWebsiteList("batch");
+                              }
+                              setShowBatchWebsiteDropdown(
+                                !showBatchWebsiteDropdown
+                              );
+                            }}
+                            className={cn(
+                              "ml-2 p-1 shrink-0 transition-colors",
+                              isDarkTheme
+                                ? "text-neutral-600 hover:text-white"
+                                : "text-gray-400 hover:text-gray-600"
+                            )}
+                          >
+                            <ChevronDown
+                              size={16}
+                              className={cn(
+                                "transition-transform",
+                                showBatchWebsiteDropdown && "rotate-180"
+                              )}
+                            />
+                          </button>
+                          {/* Validation Status Icon */}
+                          {batchManualWebsiteUrl.trim() && (
+                            <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                              {batchUrlValidationStatus === "validating" && (
+                                <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
+                              )}
+                              {batchUrlValidationStatus === "valid" && (
+                                <CheckCircle className="w-4 h-4 text-emerald-500" />
+                              )}
+                              {batchUrlValidationStatus === "invalid" && (
+                                <AlertCircle className="w-4 h-4 text-red-500" />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        {/* Website Dropdown */}
+                        {showBatchWebsiteDropdown && websiteListData && (
+                          <div
+                            className={cn(
+                              "absolute z-50 w-full mt-1 rounded-lg border shadow-lg max-h-60 overflow-y-auto",
+                              isDarkTheme
+                                ? "bg-black/90 border-emerald-500/30"
+                                : "bg-white border-emerald-500/30"
+                            )}
+                          >
+                            {websiteListData.websites.length === 0 ? (
+                              <div
+                                className={cn(
+                                  "p-4 text-center text-sm",
+                                  isDarkTheme
+                                    ? "text-zinc-400"
+                                    : "text-gray-500"
+                                )}
+                              >
+                                {state.uiLanguage === "zh"
+                                  ? "还没有绑定网站"
+                                  : "No websites bound yet"}
+                              </div>
+                            ) : (
+                              websiteListData.websites.map((website) => (
+                                <button
+                                  key={website.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setBatchSelectedWebsite(website);
+                                    setBatchManualWebsiteUrl("");
+                                    setBatchUrlValidationStatus("idle");
+                                    setShowBatchWebsiteDropdown(false);
+                                  }}
+                                  className={cn(
+                                    "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors flex items-center justify-between",
+                                    batchSelectedWebsite?.id === website.id &&
+                                      "bg-emerald-500/20",
+                                    isDarkTheme ? "text-white" : "text-gray-900"
+                                  )}
+                                >
+                                  <span className="truncate">
+                                    {website.url}
+                                  </span>
+                                  {website.isDefault && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="flex-shrink-0 text-xs ml-2"
+                                    >
+                                      <CheckCircle className="w-2.5 h-2.5 mr-0.5" />
+                                      {state.uiLanguage === "zh"
+                                        ? "默认"
+                                        : "Default"}
+                                    </Badge>
+                                  )}
+                                </button>
+                              ))
+                            )}
+                          </div>
+                        )}
+                        {/* Validation Status Message */}
+                        {batchManualWebsiteUrl.trim() &&
+                          batchUrlValidationStatus !== "idle" && (
+                            <div
+                              className={cn(
+                                "text-xs flex items-center gap-1 mt-1",
+                                batchUrlValidationStatus === "valid" &&
+                                  "text-emerald-500",
+                                batchUrlValidationStatus === "invalid" &&
+                                  "text-red-500",
+                                batchUrlValidationStatus === "validating" &&
+                                  "text-yellow-500"
+                              )}
+                            >
+                              {batchUrlValidationStatus === "validating" && (
+                                <>
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  <span>
+                                    {state.uiLanguage === "zh"
+                                      ? "正在验证..."
+                                      : "Validating..."}
+                                  </span>
+                                </>
+                              )}
+                              {batchUrlValidationStatus === "valid" && (
+                                <>
+                                  <CheckCircle className="w-3 h-3" />
+                                  <span>
+                                    {state.uiLanguage === "zh"
+                                      ? "网址有效，已自动选择"
+                                      : "URL valid, automatically selected"}
+                                  </span>
+                                </>
+                              )}
+                              {batchUrlValidationStatus === "invalid" && (
+                                <>
+                                  <AlertCircle className="w-3 h-3" />
+                                  <span>
+                                    {state.uiLanguage === "zh"
+                                      ? "请输入有效的网址"
+                                      : "Please enter a valid URL"}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                      </div>
+                    )}
+
+                    {/* Keyword Input Field - Only show for blue-ocean mode */}
+                    {miningMode === "blue-ocean" && (
+                      <div
+                        className={cn(
+                          "flex-1 min-w-0 rounded-lg flex items-center px-4 h-14 transition-all border",
+                          isDarkTheme
+                            ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
+                            : "bg-white border-gray-200 focus-within:border-emerald-500/50"
+                        )}
+                      >
+                        <Search
+                          className={cn(
+                            isDarkTheme ? "text-neutral-600" : "text-gray-400"
+                          )}
+                          size={18}
+                        />
+                        <input
+                          type="text"
+                          placeholder={t.batchInputPlaceholder}
+                          className={cn(
+                            "bg-transparent border-none outline-none w-full text-sm font-medium px-4 h-14",
+                            isDarkTheme
+                              ? "text-white placeholder:text-neutral-700"
+                              : "text-gray-900 placeholder:text-gray-500"
+                          )}
                           value={batchInput}
                           onChange={(e) => setBatchInput(e.target.value)}
-                          placeholder={t.batchInputPlaceholder}
-                          className={`w-full h-32 px-4 py-3 border rounded-lg text-sm outline-none focus:ring-2 resize-none ${
-                            isDarkTheme
-                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                          }`}
+                          onKeyDown={(e) =>
+                            e.key === "Enter" && handleBatchAnalyze()
+                          }
                         />
                       </div>
-
-                      {/* Batch Analyze Button */}
-                      <button
-                        onClick={handleBatchAnalyze}
-                        disabled={!batchInput.trim()}
-                        className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-black px-6 py-3 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Search className="w-5 h-5" />
-                        {t.btnBatchAnalyze}
-                      </button>
-                    </div>
+                    )}
+                    <button
+                      onClick={handleBatchAnalyze}
+                      disabled={
+                        miningMode === "blue-ocean"
+                          ? !batchInput.trim()
+                          : miningMode === "existing-website-audit"
+                          ? !batchSelectedWebsite
+                          : !batchInput.trim()
+                      }
+                      className={cn(
+                        "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
+                        isDarkTheme && "shadow-emerald-900/20"
+                      )}
+                    >
+                      <Search className="w-4 h-4 inline-block mr-2" />
+                      {t.btnBatchAnalyze}
+                    </button>
                   </div>
+
+                  {/* Mining Settings Panel - Same as blue-ocean mode */}
+                  <section className="space-y-4 mt-8">
+                    <div className="flex items-center space-x-2 px-2">
+                      <Settings
+                        size={14}
+                        className={cn(
+                          isDarkTheme ? "text-emerald-500" : "text-emerald-600"
+                        )}
+                      />
+                      <h3
+                        className={cn(
+                          "text-[10px] font-black uppercase tracking-[0.2em]",
+                          isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                        )}
+                      >
+                        {state.uiLanguage === "zh"
+                          ? "挖词设置"
+                          : "Mining Settings"}
+                      </h3>
+                    </div>
+                    <div
+                      className={cn(
+                        "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
+                        isDarkTheme
+                          ? "bg-black/40 border-emerald-500/20"
+                          : "bg-white border-emerald-500/30"
+                      )}
+                    >
+                      {/* Words Per Round */}
+                      <div className="space-y-2">
+                        <label
+                          className={cn(
+                            "flex items-center gap-2 text-xs font-semibold",
+                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                          )}
+                        >
+                          <Cpu
+                            size={14}
+                            className={cn(
+                              isDarkTheme
+                                ? "text-emerald-500"
+                                : "text-emerald-600"
+                            )}
+                          />
+                          {state.uiLanguage === "zh"
+                            ? "每轮词语数"
+                            : "Words Per Round"}
+                        </label>
+                        <Input
+                          type="number"
+                          min="5"
+                          max="20"
+                          value={state.wordsPerRound}
+                          onChange={(e) =>
+                            setState((prev) => ({
+                              ...prev,
+                              wordsPerRound: Math.max(
+                                5,
+                                Math.min(20, parseInt(e.target.value) || 10)
+                              ),
+                            }))
+                          }
+                          className={cn(
+                            "text-sm font-medium h-10",
+                            isDarkTheme
+                              ? "border-white/10 bg-white/5 text-white"
+                              : "border-gray-200 bg-white text-gray-900"
+                          )}
+                        />
+                        <p
+                          className={cn(
+                            "text-[10px]",
+                            isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                          )}
+                        >
+                          {state.uiLanguage === "zh"
+                            ? "范围: 5-20"
+                            : "Range: 5-20"}
+                        </p>
+                      </div>
+
+                      {/* Mining Strategy */}
+                      <div className="space-y-2">
+                        <label
+                          className={cn(
+                            "flex items-center gap-2 text-xs font-semibold",
+                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                          )}
+                        >
+                          <LayoutGrid
+                            size={14}
+                            className={cn(
+                              isDarkTheme
+                                ? "text-emerald-500"
+                                : "text-emerald-600"
+                            )}
+                          />
+                          {state.uiLanguage === "zh"
+                            ? "挖掘策略"
+                            : "Mining Strategy"}
+                        </label>
+                        <Select
+                          value={state.miningStrategy}
+                          onValueChange={(value) =>
+                            setState((prev) => ({
+                              ...prev,
+                              miningStrategy: value as
+                                | "horizontal"
+                                | "vertical",
+                            }))
+                          }
+                        >
+                          <SelectTrigger
+                            className={cn(
+                              "text-sm font-medium h-10",
+                              isDarkTheme
+                                ? "border-white/10 bg-white/5 text-white"
+                                : "border-gray-200 bg-white text-gray-900"
+                            )}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent
+                            className={cn(
+                              isDarkTheme
+                                ? "bg-black/90 border-emerald-500/30"
+                                : "bg-white border-emerald-500/30"
+                            )}
+                          >
+                            <SelectItem
+                              value="horizontal"
+                              className={cn(
+                                isDarkTheme
+                                  ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                  : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                              )}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "横向挖掘(广泛主题)"
+                                : "Horizontal Mining (Broad Topics)"}
+                            </SelectItem>
+                            <SelectItem
+                              value="vertical"
+                              className={cn(
+                                isDarkTheme
+                                  ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                  : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                              )}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "纵向挖掘(深度挖掘)"
+                                : "Vertical Mining (Deep Dive)"}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p
+                          className={cn(
+                            "text-[10px]",
+                            isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                          )}
+                        >
+                          {state.uiLanguage === "zh"
+                            ? "探索不同的平行主题"
+                            : "Explore different parallel topics"}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
 
                   {/* Batch Archive List */}
                   {state.batchArchives.length > 0 && (

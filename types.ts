@@ -484,6 +484,6 @@ export interface AgentStreamEvent {
   message?: string;
 
   // For 'card' type
-  cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' | 'image-gen' | 'competitor-analysis';
+  cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' | 'image-gen' | 'competitor-analysis' | 'search-preferences';
   data?: any;
 }

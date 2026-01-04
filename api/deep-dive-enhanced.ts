@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const body = parseRequestBody(req);
-    const { keyword, uiLanguage, targetLanguage, strategyPrompt } = body;
+    const { keyword, uiLanguage, targetLanguage, strategyPrompt, userId, projectId, projectName } = body;
 
     if (!keyword || !uiLanguage || !targetLanguage) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -44,6 +44,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       uiLanguage,
       targetLanguage,
       strategyPrompt,
+      userId: userId ? parseInt(userId.toString(), 10) : undefined,
+      projectId: projectId || undefined,
+      projectName: projectName || undefined,
       stopAfterStrategy: true
     });
 
@@ -56,7 +59,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       rankingAnalysis: result.rankingAnalysis,
       searchIntent: result.searchIntent,
       intentMatch: result.intentMatch,
-      serpCompetitionData: result.serpCompetitionData
+      serpCompetitionData: result.serpCompetitionData,
+      draftId: (result as any).draftId,
+      projectId: (result as any).projectId
     };
 
     return res.json({ report: enhancedReport });

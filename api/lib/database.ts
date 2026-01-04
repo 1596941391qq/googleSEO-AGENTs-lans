@@ -1126,3 +1126,500 @@ export async function getUserById(id: string): Promise<User | null> {
     throw error;
   }
 }
+
+// =============================================
+// Projects & Content Management Tables
+// =============================================
+
+let projectsTableInitialized = false;
+let projectsTableInitPromise: Promise<void> | null = null;
+
+export async function initProjectsTable() {
+  if (projectsTableInitialized) return;
+  if (projectsTableInitPromise) {
+    await projectsTableInitPromise;
+    return;
+  }
+
+  projectsTableInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS projects (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id INTEGER NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          seed_keyword VARCHAR(500),
+          target_language VARCHAR(10),
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_projects_created ON projects(created_at DESC)`;
+
+      projectsTableInitialized = true;
+    } catch (error) {
+      console.error('[initProjectsTable] Error:', error);
+      projectsTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await projectsTableInitPromise;
+}
+
+let keywordsTableInitialized = false;
+let keywordsTableInitPromise: Promise<void> | null = null;
+
+export async function initKeywordsTable() {
+  if (keywordsTableInitialized) return;
+  if (keywordsTableInitPromise) {
+    await keywordsTableInitPromise;
+    return;
+  }
+
+  keywordsTableInitPromise = (async () => {
+    try {
+      await initProjectsTable(); // Ensure projects table exists first
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS keywords (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          keyword VARCHAR(500) NOT NULL,
+          translation VARCHAR(500),
+          intent VARCHAR(50),
+          volume INTEGER,
+          probability VARCHAR(20),
+          is_selected BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_keywords_project ON keywords(project_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_keywords_selected ON keywords(is_selected)`;
+
+      keywordsTableInitialized = true;
+    } catch (error) {
+      console.error('[initKeywordsTable] Error:', error);
+      keywordsTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await keywordsTableInitPromise;
+}
+
+let contentDraftsTableInitialized = false;
+let contentDraftsTableInitPromise: Promise<void> | null = null;
+
+export async function initContentDraftsTable() {
+  if (contentDraftsTableInitialized) return;
+  if (contentDraftsTableInitPromise) {
+    await contentDraftsTableInitPromise;
+    return;
+  }
+
+  contentDraftsTableInitPromise = (async () => {
+    try {
+      await initProjectsTable(); // Ensure projects table exists first
+      await initKeywordsTable(); // Ensure keywords table exists first
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS content_drafts (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+          keyword_id UUID REFERENCES keywords(id) ON DELETE SET NULL,
+          title VARCHAR(500),
+          content TEXT,
+          meta_description TEXT,
+          url_slug VARCHAR(500),
+          version INTEGER DEFAULT 1,
+          status VARCHAR(50) DEFAULT 'draft',
+          quality_score INTEGER,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_content_drafts_project ON content_drafts(project_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_content_drafts_keyword ON content_drafts(keyword_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_content_drafts_status ON content_drafts(status)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_content_drafts_version ON content_drafts(project_id, keyword_id, version)`;
+
+      contentDraftsTableInitialized = true;
+    } catch (error) {
+      console.error('[initContentDraftsTable] Error:', error);
+      contentDraftsTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await contentDraftsTableInitPromise;
+}
+
+let imagesTableInitialized = false;
+let imagesTableInitPromise: Promise<void> | null = null;
+
+export async function initImagesTable() {
+  if (imagesTableInitialized) return;
+  if (imagesTableInitPromise) {
+    await imagesTableInitPromise;
+    return;
+  }
+
+  imagesTableInitPromise = (async () => {
+    try {
+      await initContentDraftsTable(); // Ensure content_drafts table exists first
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS images (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          content_draft_id UUID REFERENCES content_drafts(id) ON DELETE CASCADE,
+          prompt TEXT,
+          image_url VARCHAR(1000),
+          alt_text VARCHAR(500),
+          position INTEGER DEFAULT 0,
+          metadata JSONB DEFAULT '{}'::jsonb,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_images_content_draft ON images(content_draft_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_images_position ON images(content_draft_id, position)`;
+
+      imagesTableInitialized = true;
+    } catch (error) {
+      console.error('[initImagesTable] Error:', error);
+      imagesTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await imagesTableInitPromise;
+}
+
+let publicationsTableInitialized = false;
+let publicationsTableInitPromise: Promise<void> | null = null;
+
+export async function initPublicationsTable() {
+  if (publicationsTableInitialized) return;
+  if (publicationsTableInitPromise) {
+    await publicationsTableInitPromise;
+    return;
+  }
+
+  publicationsTableInitPromise = (async () => {
+    try {
+      await initContentDraftsTable(); // Ensure content_drafts table exists first
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS publications (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          content_draft_id UUID REFERENCES content_drafts(id) ON DELETE CASCADE,
+          platform VARCHAR(100) NOT NULL,
+          platform_post_id VARCHAR(255),
+          post_url VARCHAR(1000),
+          status VARCHAR(50) DEFAULT 'pending',
+          published_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_publications_content_draft ON publications(content_draft_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_publications_platform ON publications(platform)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_publications_status ON publications(status)`;
+
+      publicationsTableInitialized = true;
+    } catch (error) {
+      console.error('[initPublicationsTable] Error:', error);
+      publicationsTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await publicationsTableInitPromise;
+}
+
+// Initialize all content management tables
+export async function initContentManagementTables() {
+  await initProjectsTable();
+  await initKeywordsTable();
+  await initContentDraftsTable();
+  await initImagesTable();
+  await initPublicationsTable();
+}
+
+// =============================================
+// Content Management Database Operations
+// =============================================
+
+export interface Project {
+  id: string;
+  user_id: number;
+  name: string;
+  seed_keyword: string | null;
+  target_language: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Keyword {
+  id: string;
+  project_id: string;
+  keyword: string;
+  translation: string | null;
+  intent: string | null;
+  volume: number | null;
+  probability: string | null;
+  is_selected: boolean;
+  created_at: Date;
+}
+
+export interface ContentDraft {
+  id: string;
+  project_id: string;
+  keyword_id: string | null;
+  title: string | null;
+  content: string | null;
+  meta_description: string | null;
+  url_slug: string | null;
+  version: number;
+  status: string;
+  quality_score: number | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Image {
+  id: string;
+  content_draft_id: string;
+  prompt: string | null;
+  image_url: string | null;
+  alt_text: string | null;
+  position: number;
+  metadata: any;
+  created_at: Date;
+}
+
+export interface Publication {
+  id: string;
+  content_draft_id: string;
+  platform: string;
+  platform_post_id: string | null;
+  post_url: string | null;
+  status: string;
+  published_at: Date | null;
+  created_at: Date;
+}
+
+/**
+ * 创建或获取项目
+ */
+export async function createOrGetProject(
+  userId: number,
+  name: string,
+  seedKeyword?: string,
+  targetLanguage?: string
+): Promise<Project> {
+  try {
+    await initProjectsTable();
+
+    // Try to find existing project with same name and user
+    const existing = await sql<Project>`
+      SELECT * FROM projects
+      WHERE user_id = ${userId} AND name = ${name}
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+
+    if (existing.rows.length > 0) {
+      return existing.rows[0];
+    }
+
+    // Create new project
+    const result = await sql<Project>`
+      INSERT INTO projects (user_id, name, seed_keyword, target_language, created_at, updated_at)
+      VALUES (${userId}, ${name}, ${seedKeyword || null}, ${targetLanguage || null}, NOW(), NOW())
+      RETURNING *
+    `;
+
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error creating/getting project:', error);
+    throw error;
+  }
+}
+
+/**
+ * 创建或获取关键词
+ */
+export async function createOrGetKeyword(
+  projectId: string,
+  keyword: string,
+  translation?: string,
+  intent?: string,
+  volume?: number,
+  probability?: string
+): Promise<Keyword> {
+  try {
+    await initKeywordsTable();
+
+    // Try to find existing keyword
+    const existing = await sql<Keyword>`
+      SELECT * FROM keywords
+      WHERE project_id = ${projectId} AND keyword = ${keyword}
+      LIMIT 1
+    `;
+
+    if (existing.rows.length > 0) {
+      return existing.rows[0];
+    }
+
+    // Create new keyword
+    const result = await sql<Keyword>`
+      INSERT INTO keywords (project_id, keyword, translation, intent, volume, probability, created_at)
+      VALUES (${projectId}, ${keyword}, ${translation || null}, ${intent || null}, ${volume || null}, ${probability || null}, NOW())
+      RETURNING *
+    `;
+
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error creating/getting keyword:', error);
+    throw error;
+  }
+}
+
+/**
+ * 保存内容草稿
+ */
+export async function saveContentDraft(
+  projectId: string,
+  keywordId: string | null,
+  title: string,
+  content: string,
+  metaDescription?: string,
+  urlSlug?: string,
+  qualityScore?: number
+): Promise<ContentDraft> {
+  try {
+    await initContentDraftsTable();
+
+    // Get next version number
+    const versionResult = await sql<{ max_version: number }>`
+      SELECT COALESCE(MAX(version), 0) + 1 as max_version
+      FROM content_drafts
+      WHERE project_id = ${projectId} AND (keyword_id = ${keywordId} OR (keyword_id IS NULL AND ${keywordId} IS NULL))
+    `;
+    const nextVersion = versionResult.rows[0]?.max_version || 1;
+
+    const result = await sql<ContentDraft>`
+      INSERT INTO content_drafts (
+        project_id, keyword_id, title, content, meta_description, url_slug,
+        version, status, quality_score, created_at, updated_at
+      )
+      VALUES (
+        ${projectId}, ${keywordId}, ${title}, ${content},
+        ${metaDescription || null}, ${urlSlug || null},
+        ${nextVersion}, 'draft', ${qualityScore || null}, NOW(), NOW()
+      )
+      RETURNING *
+    `;
+
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving content draft:', error);
+    throw error;
+  }
+}
+
+/**
+ * 保存图片
+ */
+export async function saveImage(
+  contentDraftId: string,
+  imageUrl: string,
+  prompt?: string,
+  altText?: string,
+  position?: number,
+  metadata?: any
+): Promise<Image> {
+  try {
+    await initImagesTable();
+
+    const result = await sql<Image>`
+      INSERT INTO images (
+        content_draft_id, prompt, image_url, alt_text, position, metadata, created_at
+      )
+      VALUES (
+        ${contentDraftId}, ${prompt || null}, ${imageUrl}, ${altText || null},
+        ${position || 0}, ${metadata ? JSON.stringify(metadata) : '{}'}::jsonb, NOW()
+      )
+      RETURNING *
+    `;
+
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error saving image:', error);
+    throw error;
+  }
+}
+
+/**
+ * 批量保存图片
+ */
+export async function saveImages(
+  contentDraftId: string,
+  images: Array<{
+    imageUrl: string;
+    prompt?: string;
+    altText?: string;
+    position?: number;
+    metadata?: any;
+  }>
+): Promise<Image[]> {
+  const savedImages: Image[] = [];
+  for (const img of images) {
+    const saved = await saveImage(
+      contentDraftId,
+      img.imageUrl,
+      img.prompt,
+      img.altText,
+      img.position,
+      img.metadata
+    );
+    savedImages.push(saved);
+  }
+  return savedImages;
+}
+
+/**
+ * 创建发布记录
+ */
+export async function createPublication(
+  contentDraftId: string,
+  platform: string,
+  platformPostId?: string,
+  postUrl?: string,
+  status: string = 'pending'
+): Promise<Publication> {
+  try {
+    await initPublicationsTable();
+
+    const result = await sql<Publication>`
+      INSERT INTO publications (
+        content_draft_id, platform, platform_post_id, post_url, status, created_at
+      )
+      VALUES (
+        ${contentDraftId}, ${platform}, ${platformPostId || null}, ${postUrl || null}, ${status}, NOW()
+      )
+      RETURNING *
+    `;
+
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error creating publication:', error);
+    throw error;
+  }
+}

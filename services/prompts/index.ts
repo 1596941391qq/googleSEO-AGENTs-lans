@@ -1553,12 +1553,15 @@ export const EXISTING_WEBSITE_AUDIT_PROMPTS = {
    * 存量拓新 Prompt - 分析现有网站，发现未被利用的流量空间
    */
   base: {
-    zh: (websiteUrl: string, websiteContent: string, competitorKeywords: string[], industry?: string) => `
+    zh: (websiteUrl: string, websiteContent: string, competitorKeywords: string[], industry?: string, miningStrategy: 'horizontal' | 'vertical' = 'horizontal', additionalSuggestions?: string, wordsPerRound: number = 10) => `
 # 角色
 你是一位拥有15年经验的资深 SEO 审计专家，擅长通过 AI 审计发现现有网站未被利用的流量空间。
 
 # 核心任务
 对网站 ${websiteUrl} 进行深度分析，识别出未被充分利用但具有真实商业潜力的 SEO 关键词机会。
+
+${industry ? `# 行业背景
+该网站属于 **${industry}** 行业。在分析时，请重点关注该行业的特点、用户需求和商业机会。` : ''}
 
 # 分析逻辑
 
@@ -1586,6 +1589,26 @@ ${competitorKeywords.slice(0, 50).join(', ')}
 - **优化机会**：网站有相关内容，但未针对特定关键词优化
 - **扩展方向**：基于现有优势主题，可以扩展的相邻主题
 
+${miningStrategy === 'horizontal' ? `
+# 挖掘策略：横向挖掘（广泛主题）
+请采用**横向挖掘**策略，探索与现有内容主题**平行或相关**的广泛主题领域。
+- 寻找语义上相关但主题不同的关键词
+- 探索相邻行业或相关领域的交叉机会
+- 发现可以自然扩展的内容方向
+` : `
+# 挖掘策略：纵向挖掘（深度挖掘）
+请采用**纵向挖掘**策略，深入挖掘现有主题的**长尾变体和具体用例**。
+- 寻找现有主题的长尾关键词变体
+- 探索更具体的使用场景和细分需求
+- 发现可以深度优化的内容方向
+`}
+
+${additionalSuggestions ? `
+# 用户额外建议
+用户提供了以下额外建议，请在分析时重点考虑：
+${additionalSuggestions}
+` : ''}
+
 <rules>
 1. **禁止行为**：不要推荐搜索量低于100的死词，不要推荐难度超过50的红海词。
 2. **相关性优先**：推荐的关键词必须与网站现有内容主题相关或可扩展。
@@ -1601,7 +1624,7 @@ ${competitorKeywords.slice(0, 50).join(', ')}
 </evaluation_criteria>
 
 <output_format>
-返回JSON数组：
+返回JSON数组，**最多返回 ${wordsPerRound} 个关键词**：
 [
   {
     "keyword": "关键词",
@@ -1615,15 +1638,18 @@ ${competitorKeywords.slice(0, 50).join(', ')}
   }
 ]
 
-CRITICAL: 返回 ONLY 一个有效的 JSON 数组。不要包含任何解释、思考过程或 markdown 格式。只返回 JSON 数组。
+CRITICAL: 返回 ONLY 一个有效的 JSON 数组，**最多包含 ${wordsPerRound} 个关键词**。不要包含任何解释、思考过程或 markdown 格式。只返回 JSON 数组。
 </output_format>
 `,
-    en: (websiteUrl: string, websiteContent: string, competitorKeywords: string[], industry?: string) => `
+    en: (websiteUrl: string, websiteContent: string, competitorKeywords: string[], industry?: string, miningStrategy: 'horizontal' | 'vertical' = 'horizontal', additionalSuggestions?: string, wordsPerRound: number = 10) => `
 # Role
 You are a Senior SEO Audit Expert with 15 years of experience, specializing in AI-powered audits to discover untapped traffic opportunities for existing websites.
 
 # Core Task
 Perform a deep analysis of the website ${websiteUrl} to identify SEO keyword opportunities that are not yet fully utilized but have real commercial potential.
+
+${industry ? `# Industry Background
+This website belongs to the **${industry}** industry. When analyzing, please focus on the characteristics, user needs, and business opportunities of this industry.` : ''}
 
 # Analysis Logic
 
@@ -1651,6 +1677,26 @@ Based on the above analysis, identify:
 - **Optimization Opportunities**: Content exists but not optimized for specific keywords
 - **Expansion Directions**: Adjacent topics that can be expanded based on existing strengths
 
+${miningStrategy === 'horizontal' ? `
+# Mining Strategy: Horizontal Mining (Broad Topics)
+Please adopt a **horizontal mining** strategy to explore **parallel or related** broad topic areas to existing content themes.
+- Look for semantically related but thematically different keywords
+- Explore cross-opportunities in adjacent industries or related fields
+- Discover content directions that can be naturally expanded
+` : `
+# Mining Strategy: Vertical Mining (Deep Dive)
+Please adopt a **vertical mining** strategy to deeply explore **long-tail variations and specific use cases** of existing themes.
+- Look for long-tail keyword variations of existing themes
+- Explore more specific use cases and niche needs
+- Discover content directions that can be deeply optimized
+`}
+
+${additionalSuggestions ? `
+# User Additional Suggestions
+The user has provided the following additional suggestions. Please consider them carefully during analysis:
+${additionalSuggestions}
+` : ''}
+
 <rules>
 1. **Prohibited Actions**: Do not recommend dead keywords with search volume below 100, do not recommend red ocean keywords with difficulty above 50.
 2. **Relevance First**: Recommended keywords must be related to or expandable from existing website content themes.
@@ -1666,7 +1712,7 @@ Based on the above analysis, identify:
 </evaluation_criteria>
 
 <output_format>
-Return JSON array:
+Return JSON array with **maximum ${wordsPerRound} keywords**:
 [
   {
     "keyword": "keyword",
@@ -1680,7 +1726,7 @@ Return JSON array:
   }
 ]
 
-CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
+CRITICAL: Return ONLY a valid JSON array with **maximum ${wordsPerRound} keywords**. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
 </output_format>
 `
   }
@@ -1691,12 +1737,15 @@ export function getExistingWebsiteAuditPrompt(
   websiteContent: string,
   competitorKeywords: string[],
   industry?: string,
-  language: 'zh' | 'en' = 'en'
+  language: 'zh' | 'en' = 'en',
+  miningStrategy: 'horizontal' | 'vertical' = 'horizontal',
+  additionalSuggestions?: string,
+  wordsPerRound: number = 10
 ): string {
   const prompt = EXISTING_WEBSITE_AUDIT_PROMPTS.base;
   return language === 'zh'
-    ? prompt.zh(websiteUrl, websiteContent, competitorKeywords, industry)
-    : prompt.en(websiteUrl, websiteContent, competitorKeywords, industry);
+    ? prompt.zh(websiteUrl, websiteContent, competitorKeywords, industry, miningStrategy, additionalSuggestions, wordsPerRound)
+    : prompt.en(websiteUrl, websiteContent, competitorKeywords, industry, miningStrategy, additionalSuggestions, wordsPerRound);
 }
 
 // ============================================================================

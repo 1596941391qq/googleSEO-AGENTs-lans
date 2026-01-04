@@ -18,6 +18,14 @@ import { fetchSerpResults } from '../tools/serp-search.js';
 import { fetchSErankingData } from '../tools/se-ranking.js';
 import { KeywordData, SEOStrategyReport, TargetLanguage } from '../types.js';
 import { AgentStreamEvent } from '../../../types.js';
+import {
+  initContentManagementTables,
+  createOrGetProject,
+  createOrGetKeyword,
+  saveContentDraft,
+  saveImages,
+  ContentDraft
+} from '../../lib/database.js';
 
 export interface VisualArticleOptions {
   keyword: string;
@@ -27,6 +35,9 @@ export interface VisualArticleOptions {
   targetMarket: string;
   uiLanguage: 'zh' | 'en';
   targetLanguage: TargetLanguage;
+  userId?: number;
+  projectId?: string;
+  projectName?: string;
   reference?: {
     type: 'document' | 'url';
     document?: {
@@ -44,7 +55,7 @@ export interface VisualArticleOptions {
 }
 
 export async function generateVisualArticle(options: VisualArticleOptions) {
-  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, reference, onEvent } = options;
+  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, userId, projectId, projectName, reference, onEvent } = options;
 
   const emit = (agentId: AgentStreamEvent['agentId'], type: AgentStreamEvent['type'], message?: string, cardType?: AgentStreamEvent['cardType'], data?: any) => {
     onEvent({
@@ -88,7 +99,16 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     emit('researcher', 'card', undefined, 'serp', { results: serpData.results });
 
     const searchPrefs = await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket);
-    // Optionally emit data card for prefs
+    
+    // Emit search preferences analysis results
+    if (searchPrefs) {
+      emit('researcher', 'card', undefined, 'search-preferences', {
+        semantic_landscape: searchPrefs.semantic_landscape,
+        engine_strategies: searchPrefs.engine_strategies,
+        geo_recommendations: searchPrefs.geo_recommendations,
+        searchPreferences: searchPrefs.searchPreferences
+      });
+    }
 
     const competitorAnalysis = await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket);
 
@@ -284,7 +304,80 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       images: generatedImages
     };
 
-    return finalArticle;
+    // Auto-save to database if userId is provided
+    let savedDraft: ContentDraft | null = null;
+    if (userId) {
+      try {
+        await initContentManagementTables();
+
+        // Create or get project
+        const project = await createOrGetProject(
+          userId,
+          projectName || `Project: ${keyword}`,
+          keyword,
+          targetLanguage
+        );
+
+        // Create or get keyword
+        const keywordRecord = await createOrGetKeyword(
+          project.id,
+          keyword,
+          keyword,
+          keywordData.intent,
+          keywordData.volume || undefined,
+          undefined
+        );
+
+        // Save content draft
+        savedDraft = await saveContentDraft(
+          project.id,
+          keywordRecord.id,
+          finalArticle.title,
+          finalArticle.content,
+          strategyReport.metaDescription,
+          undefined, // url_slug
+          undefined // quality_score
+        );
+
+        // Save images if any
+        if (generatedImages && generatedImages.length > 0 && savedDraft) {
+          await saveImages(
+            savedDraft.id,
+            generatedImages.map((img, index) => ({
+              imageUrl: img.url,
+              prompt: img.prompt,
+              altText: img.prompt,
+              position: index,
+              metadata: {
+                placement: img.placement,
+                isScreenshot: img.isScreenshot || false
+              }
+            }))
+          );
+        }
+
+        emit('tracker', 'log', uiLanguage === 'zh' ? '内容已自动保存到数据库' : 'Content automatically saved to database');
+      } catch (dbError: any) {
+        console.error('[VisualArticle] Error saving to database:', dbError);
+        // Don't throw error, just log it - the article generation succeeded
+        emit('tracker', 'log', uiLanguage === 'zh' ? '警告: 保存到数据库失败，但内容已生成' : 'Warning: Failed to save to database, but content was generated');
+      }
+    }
+
+    // Add draftId and projectId to result if saved
+    const finalResult: any = { ...finalArticle };
+    if (savedDraft && userId) {
+      finalResult.draftId = savedDraft.id;
+      const project = await createOrGetProject(
+        userId,
+        projectName || `Project: ${keyword}`,
+        keyword,
+        targetLanguage
+      );
+      finalResult.projectId = project.id;
+    }
+    
+    return finalResult;
 
   } catch (error: any) {
     emit('tracker', 'error', `Mission failed: ${error.message}`);

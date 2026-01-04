@@ -14,6 +14,14 @@ import { generateDeepDiveStrategy, extractCoreKeywords } from '../agents/agent-2
 import { fetchSerpResults } from '../tools/serp-search.js';
 import { fetchSErankingData } from '../tools/se-ranking.js';
 import { KeywordData, SEOStrategyReport, TargetLanguage, ProbabilityLevel } from '../types.js';
+import {
+  initContentManagementTables,
+  createOrGetProject,
+  createOrGetKeyword,
+  saveContentDraft,
+  saveImages,
+  ContentDraft
+} from '../../lib/database.js';
 
 /**
  * Deep Dive 选项
@@ -24,6 +32,9 @@ export interface DeepDiveOptions {
   targetLanguage: TargetLanguage;
   strategyPrompt?: string;
   generateImages?: boolean;
+  userId?: number;
+  projectId?: string;
+  projectName?: string;
   onProgress?: (step: number, message: string) => void;
   stopAfterStrategy?: boolean;
 }
@@ -617,8 +628,86 @@ export async function executeDeepDive(
     progress(8, 'Generating HTML content...');
     result.htmlContent = generateHTMLContentFromReport(result.seoStrategyReport, uiLanguage);
 
+    // Auto-save to database if userId is provided and content was generated
+    let savedDraft: ContentDraft | null = null;
+    if (options.userId && result.generatedContent && !stopAfterStrategy) {
+      try {
+        await initContentManagementTables();
+
+        // Create or get project
+        const project = await createOrGetProject(
+          options.userId,
+          options.projectName || `Project: ${keyword.keyword}`,
+          keyword.keyword,
+          targetLanguage
+        );
+
+        // Create or get keyword
+        const keywordRecord = await createOrGetKeyword(
+          project.id,
+          keyword.keyword,
+          keyword.translation || keyword.keyword,
+          keyword.intent,
+          keyword.volume || undefined,
+          result.rankingProbability
+        );
+
+        // Save content draft
+        const contentTitle = result.generatedContent.title || result.seoStrategyReport.pageTitleH1;
+        const contentBody = result.generatedContent.content || result.generatedContent.article_body || '';
+        const qualityScore = result.qualityReview?.overallScore || undefined;
+
+        savedDraft = await saveContentDraft(
+          project.id,
+          keywordRecord.id,
+          contentTitle,
+          contentBody,
+          result.seoStrategyReport.metaDescription,
+          undefined, // url_slug
+          qualityScore
+        );
+
+        // Save images if any
+        if (result.generatedImages && result.generatedImages.length > 0 && savedDraft) {
+          await saveImages(
+            savedDraft.id,
+            result.generatedImages
+              .filter(img => img.imageUrl)
+              .map((img, index) => ({
+                imageUrl: img.imageUrl!,
+                prompt: img.theme,
+                altText: img.theme,
+                position: index,
+                metadata: {}
+              }))
+          );
+        }
+
+        console.log(`[Deep Dive Service] Content automatically saved to database (draft ID: ${savedDraft.id})`);
+      } catch (dbError: any) {
+        console.error('[Deep Dive Service] Error saving to database:', dbError);
+        // Don't throw error, just log it - the deep dive succeeded
+      }
+    }
+
     console.log(`[Deep Dive Service] Completed successfully`);
-    return result;
+    
+    // Add draftId and projectId to result if saved
+    const finalResult: any = { ...result };
+    if (savedDraft) {
+      finalResult.draftId = savedDraft.id;
+      if (options.userId) {
+        const project = await createOrGetProject(
+          options.userId,
+          options.projectName || `Project: ${keyword.keyword}`,
+          keyword.keyword,
+          targetLanguage
+        );
+        finalResult.projectId = project.id;
+      }
+    }
+    
+    return finalResult as DeepDiveResult;
   } catch (error: any) {
     console.error(`[Deep Dive Service] Error:`, error);
     throw new Error(`Deep Dive failed: ${error.message}`);

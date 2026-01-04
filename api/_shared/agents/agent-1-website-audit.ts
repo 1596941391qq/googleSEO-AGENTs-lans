@@ -40,6 +40,8 @@ export interface ExistingWebsiteAuditOptions {
   uiLanguage?: 'zh' | 'en';
   industry?: string;
   wordsPerRound?: number; // 生成关键词数量
+  miningStrategy?: 'horizontal' | 'vertical'; // 挖掘策略
+  additionalSuggestions?: string; // 用户额外建议
 }
 
 /**
@@ -71,6 +73,8 @@ export async function auditWebsiteForKeywords(
     uiLanguage = 'en',
     industry,
     wordsPerRound = 10,
+    miningStrategy = 'horizontal',
+    additionalSuggestions,
   } = options;
 
   console.log(`[Website Audit] Starting audit for website: ${websiteUrl}`);
@@ -127,7 +131,10 @@ export async function auditWebsiteForKeywords(
       websiteContent,
       competitorKeywords,
       industry,
-      uiLanguage
+      uiLanguage,
+      miningStrategy,
+      additionalSuggestions,
+      wordsPerRound
     );
 
     // Step 4: 调用 AI 分析
@@ -158,17 +165,20 @@ export async function auditWebsiteForKeywords(
       parsedKeywords = [];
     }
 
-    // Step 6: 转换为 KeywordData 格式
-    const keywords: KeywordData[] = parsedKeywords.map((kw: any, index: number) => ({
-      id: `audit-${Date.now()}-${index}`, // 生成唯一 ID
-      keyword: kw.keyword || '',
-      translation: kw.translation || kw.keyword,
-      intent: (kw.intent || 'Informational') as KeywordData['intent'],
-      volume: kw.volume || 0,
-      reasoning: (kw.reasoning || kw.priority || '') + (kw.opportunity_type ? ` (${kw.opportunity_type})` : ''),
-      source: 'website-audit' as const, // 标记来源为存量拓新
-      // 注意：opportunityType 和 priority 不是 KeywordData 的标准字段，存储在 reasoning 中
-    })).filter((kw: KeywordData) => kw.keyword && kw.keyword.trim() !== '');
+    // Step 6: 转换为 KeywordData 格式，并限制数量
+    const keywords: KeywordData[] = parsedKeywords
+      .map((kw: any, index: number) => ({
+        id: `audit-${Date.now()}-${index}`, // 生成唯一 ID
+        keyword: kw.keyword || '',
+        translation: kw.translation || kw.keyword,
+        intent: (kw.intent || 'Informational') as KeywordData['intent'],
+        volume: kw.volume || 0,
+        reasoning: (kw.reasoning || kw.priority || '') + (kw.opportunity_type ? ` (${kw.opportunity_type})` : ''),
+        source: 'website-audit' as const, // 标记来源为存量拓新
+        // 注意：opportunityType 和 priority 不是 KeywordData 的标准字段，存储在 reasoning 中
+      }))
+      .filter((kw: KeywordData) => kw.keyword && kw.keyword.trim() !== '')
+      .slice(0, wordsPerRound); // 限制生成的关键词数量
 
     console.log(`[Website Audit] Generated ${keywords.length} keyword opportunities`);
 
