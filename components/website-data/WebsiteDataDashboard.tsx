@@ -10,7 +10,6 @@ import { OverviewCards } from "./OverviewCards";
 import { RankingDistributionChart } from "./RankingDistributionChart";
 import { TopKeywordsTable } from "./TopKeywordsTable";
 import { CompetitorsComparison } from "./CompetitorsComparison";
-import { BacklinksInfo } from "./BacklinksInfo";
 import { KeywordIntelligenceView } from "./KeywordIntelligenceView";
 import { RankedKeywordsTable } from "./RankedKeywordsTable";
 import { RelevantPagesTable } from "./RelevantPagesTable";
@@ -19,15 +18,6 @@ import { DomainIntersectionView } from "./DomainIntersectionView";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
-
-interface BacklinksInfoData {
-  referringDomains: number;
-  referringMainDomains: number;
-  referringPages: number;
-  dofollow: number;
-  backlinks: number;
-  timeUpdate?: string;
-}
 
 interface WebsiteOverview {
   organicTraffic: number;
@@ -543,14 +533,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
         uiLanguage={uiLanguage}
       />
 
-      {/* Backlinks Info - 暂时隐藏 */}
-      {/* <BacklinksInfo
-        backlinks={data?.overview?.backlinksInfo}
-        isLoading={loading || !data?.overview}
-        isDarkTheme={isDarkTheme}
-        uiLanguage={uiLanguage}
-      /> */}
-
       {/* Charts and Tables - 始终显示，加载时显示加载状态 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Ranking Distribution */}
@@ -575,6 +557,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           uiLanguage={uiLanguage}
           websiteId={websiteId}
           totalKeywordsCount={data?.overview?.totalKeywords}
+          onViewAll={() => setViewMode("ranked-keywords")}
         />
 
         {/* Competitors Comparison */}
@@ -640,7 +623,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           websiteId={websiteId}
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
-          limit={100}
+          limit={1000}
         />
       ) : viewMode === "relevant-pages" ? (
         <RelevantPagesTable

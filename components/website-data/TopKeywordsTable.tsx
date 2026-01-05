@@ -32,6 +32,7 @@ interface TopKeywordsTableProps {
   uiLanguage: "en" | "zh";
   websiteId?: string;
   totalKeywordsCount?: number;
+  onViewAll?: () => void; // 跳转到排名关键词页面的回调
 }
 
 export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
@@ -41,42 +42,19 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
   uiLanguage,
   websiteId,
   totalKeywordsCount,
+  onViewAll,
 }) => {
   const [allKeywords, setAllKeywords] =
     React.useState<DomainKeyword[]>(keywords);
-  const [loadingMore, setLoadingMore] = React.useState(false);
   const [showAll, setShowAll] = React.useState(false);
 
   const hasMore = totalKeywordsCount && totalKeywordsCount > 20;
   const displayedKeywords = showAll ? allKeywords : allKeywords.slice(0, 20);
 
-  const loadMoreKeywords = async () => {
-    if (!websiteId || loadingMore) return;
-
-    setLoadingMore(true);
-    try {
-      // 调用 API 获取剩余的关键词（从 SE-Ranking API 直接获取，不缓存）
-      const response = await fetch("/api/website-data/keywords", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          offset: allKeywords.length, // 从当前已加载的数量开始
-          limit: 100, // 获取最多100个剩余关键词
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        if (result.data && result.data.keywords) {
-          setAllKeywords([...allKeywords, ...result.data.keywords]);
-          setShowAll(true);
-        }
-      }
-    } catch (error) {
-      console.error("[TopKeywordsTable] Failed to load more keywords:", error);
-    } finally {
-      setLoadingMore(false);
+  const handleViewAll = () => {
+    if (onViewAll) {
+      // 跳转到排名关键词页面
+      onViewAll();
     }
   };
 
@@ -144,21 +122,11 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
             <Button
               variant="outline"
               size="sm"
-              onClick={loadMoreKeywords}
-              disabled={loadingMore}
+              onClick={handleViewAll}
             >
-              {loadingMore ? (
-                <>
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                  {uiLanguage === "zh" ? "加载中..." : "Loading..."}
-                </>
-              ) : (
-                <>
-                  {uiLanguage === "zh"
-                    ? `加载更多 (${totalKeywordsCount! - 20})`
-                    : `Load More (${totalKeywordsCount! - 20})`}
-                </>
-              )}
+              {uiLanguage === "zh"
+                ? `查看全部 (${totalKeywordsCount! - 20})`
+                : `View All (${totalKeywordsCount! - 20})`}
             </Button>
           )}
         </div>

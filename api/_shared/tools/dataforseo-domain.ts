@@ -1340,7 +1340,22 @@ export async function getRankedKeywords(
       // 新接口返回格式：result[0].items 数组
       const items = data.tasks[0].result[0].items || [];
       
-      const keywords: RankedKeyword[] = items.map((item: any) => {
+      // 调试：检查第一个 item 的结构
+      if (items.length > 0) {
+        console.log('[DataForSEO Domain] 📊 Sample item structure:', {
+          hasKeywordData: !!items[0].keyword_data,
+          hasRankedSerpElement: !!items[0].ranked_serp_element,
+          keywordDataKeys: items[0].keyword_data ? Object.keys(items[0].keyword_data) : [],
+          rankedSerpElementKeys: items[0].ranked_serp_element ? Object.keys(items[0].ranked_serp_element) : [],
+          hasSerpItem: !!items[0].ranked_serp_element?.serp_item,
+          serpItemKeys: items[0].ranked_serp_element?.serp_item ? Object.keys(items[0].ranked_serp_element.serp_item) : [],
+          hasRankAbsolute: items[0].ranked_serp_element?.serp_item?.rank_absolute !== undefined,
+          rankAbsolute: items[0].ranked_serp_element?.serp_item?.rank_absolute,
+          hasRankChanges: !!items[0].ranked_serp_element?.serp_item?.rank_changes,
+        });
+      }
+      
+      const keywords: RankedKeyword[] = items.map((item: any, index: number) => {
         const keywordData = item.keyword_data || {};
         const keywordInfo = keywordData.keyword_info || {};
         const keywordProperties = keywordData.keyword_properties || {};
@@ -1348,12 +1363,33 @@ export async function getRankedKeywords(
         const serpItem = rankedSerpElement.serp_item || {};
         const rankChanges = serpItem.rank_changes || {};
         
-        // 提取排名信息
-        const currentPosition = serpItem.rank_absolute || 0;
-        const previousPosition = rankChanges.previous_rank_absolute !== null && rankChanges.previous_rank_absolute !== undefined 
-          ? rankChanges.previous_rank_absolute 
+        // 尝试提取排名信息（如果 API 提供）
+        // 检查多个可能的路径
+        const currentPosition = serpItem.rank_absolute 
+          || rankedSerpElement.rank_absolute 
+          || item.rank_absolute 
+          || null;
+        
+        const previousPosition = rankChanges.previous_rank_absolute !== null && rankChanges.previous_rank_absolute !== undefined
+          ? rankChanges.previous_rank_absolute
+          : (rankedSerpElement.previous_rank_absolute !== null && rankedSerpElement.previous_rank_absolute !== undefined
+            ? rankedSerpElement.previous_rank_absolute
+            : null);
+        
+        const positionChange = (currentPosition !== null && previousPosition !== null) 
+          ? previousPosition - currentPosition 
           : null;
-        const positionChange = previousPosition !== null ? previousPosition - currentPosition : 0;
+        
+        // 调试：打印第一个关键词的排名信息
+        if (index === 0) {
+          console.log('[DataForSEO Domain] 📊 Sample keyword ranking data:', {
+            keyword: keywordData.keyword,
+            currentPosition,
+            previousPosition,
+            positionChange,
+            hasRankData: currentPosition !== null || previousPosition !== null,
+          });
+        }
         
         // 提取搜索量、CPC、难度
         const searchVolume = keywordInfo.search_volume || 0;
@@ -1377,9 +1413,9 @@ export async function getRankedKeywords(
         
         return {
           keyword: keywordData.keyword || '',
-          currentPosition: currentPosition,
+          currentPosition: currentPosition || 0, // 如果没有排名数据，设为 0
           previousPosition: previousPosition || 0,
-          positionChange: positionChange,
+          positionChange: positionChange || 0, // 如果没有变化数据，设为 0
           searchVolume: searchVolume,
           etv: etv,
           serpFeatures: serpFeatures,

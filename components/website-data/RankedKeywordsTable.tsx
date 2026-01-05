@@ -40,7 +40,7 @@ interface RankedKeyword {
   difficulty?: number;
 }
 
-type SortField = 'position' | 'cpc' | 'difficulty' | 'searchVolume';
+type SortField = 'cpc' | 'difficulty' | 'searchVolume'; // 移除 position
 type SortOrder = 'asc' | 'desc';
 
 interface RankedKeywordsTableProps {
@@ -61,8 +61,8 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
   const [keywords, setKeywords] = useState<RankedKeyword[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortField>('position');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+  const [sortBy, setSortBy] = useState<SortField>('searchVolume');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   useEffect(() => {
     if (websiteId) {
@@ -286,16 +286,31 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
                   {uiLanguage === "zh" ? "关键词" : "Keyword"}
                 </th>
                 <th className={cn(
-                  "text-center py-2 px-3 text-xs font-medium",
+                  "text-center py-2 px-3 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity",
                   isDarkTheme ? "text-zinc-400" : "text-gray-500"
-                )}>
-                  {uiLanguage === "zh" ? "排名" : "Position"}
+                )} onClick={() => handleSort('searchVolume')}>
+                  <div className="flex items-center justify-center">
+                    {uiLanguage === "zh" ? "搜索量" : "Volume"}
+                    {getSortIcon('searchVolume')}
+                  </div>
                 </th>
                 <th className={cn(
-                  "text-center py-2 px-3 text-xs font-medium",
+                  "text-center py-2 px-3 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity",
                   isDarkTheme ? "text-zinc-400" : "text-gray-500"
-                )}>
-                  {uiLanguage === "zh" ? "搜索量" : "Volume"}
+                )} onClick={() => handleSort('cpc')}>
+                  <div className="flex items-center justify-center">
+                    CPC
+                    {getSortIcon('cpc')}
+                  </div>
+                </th>
+                <th className={cn(
+                  "text-center py-2 px-3 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity",
+                  isDarkTheme ? "text-zinc-400" : "text-gray-500"
+                )} onClick={() => handleSort('difficulty')}>
+                  <div className="flex items-center justify-center">
+                    {uiLanguage === "zh" ? "难度" : "Difficulty"}
+                    {getSortIcon('difficulty')}
+                  </div>
                 </th>
                 <th className={cn(
                   "text-center py-2 px-3 text-xs font-medium",
@@ -309,18 +324,12 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
                 )}>
                   {uiLanguage === "zh" ? "SERP特性" : "SERP Features"}
                 </th>
-                <th className={cn(
-                  "text-center py-2 px-3 text-xs font-medium",
-                  isDarkTheme ? "text-zinc-400" : "text-gray-500"
-                )}>
-                  {uiLanguage === "zh" ? "变化" : "Change"}
-                </th>
               </tr>
             </thead>
             <tbody>
               {keywords.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className={cn(
+                  <td colSpan={6} className={cn(
                     "text-center py-8 text-sm",
                     isDarkTheme ? "text-zinc-500" : "text-gray-500"
                   )}>
@@ -359,14 +368,6 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
                         )}
                       </div>
                     </td>
-                    <td className="py-3 px-3 text-center">
-                      <span className={cn(
-                        "text-sm font-semibold",
-                        isDarkTheme ? "text-white" : "text-gray-900"
-                      )}>
-                        {kw.currentPosition || "-"}
-                      </span>
-                    </td>
                     <td className={cn(
                       "py-3 px-3 text-center text-sm",
                       isDarkTheme ? "text-zinc-300" : "text-gray-700"
@@ -395,34 +396,6 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
                       <div className="flex items-center justify-center flex-wrap gap-1">
                         {getSerpFeatureBadges(kw.serpFeatures)}
                       </div>
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      {kw.positionChange !== 0 ? (
-                        <span className={cn(
-                          "flex items-center justify-center text-xs",
-                          kw.positionChange > 0
-                            ? "text-emerald-500"
-                            : kw.positionChange < 0
-                            ? "text-red-500"
-                            : "text-gray-500"
-                        )}>
-                          {kw.positionChange > 0 ? (
-                            <ArrowUp className="w-3 h-3 mr-1" />
-                          ) : kw.positionChange < 0 ? (
-                            <ArrowDown className="w-3 h-3 mr-1" />
-                          ) : (
-                            <Minus className="w-3 h-3 mr-1" />
-                          )}
-                          {Math.abs(kw.positionChange)}
-                        </span>
-                      ) : (
-                        <span className={cn(
-                          "text-xs",
-                          isDarkTheme ? "text-zinc-500" : "text-gray-400"
-                        )}>
-                          —
-                        </span>
-                      )}
                     </td>
                   </tr>
                 ))

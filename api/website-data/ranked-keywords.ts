@@ -20,7 +20,7 @@ interface RankedKeywordsRequestBody {
   limit?: number;
   region?: string;
   includeSerpFeatures?: boolean;
-  sortBy?: 'position' | 'cpc' | 'difficulty' | 'searchVolume'; // 排序字段
+  sortBy?: 'cpc' | 'difficulty' | 'searchVolume'; // 排序字段（移除 position）
   sortOrder?: 'asc' | 'desc'; // 排序方向
 }
 
@@ -50,8 +50,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const limit = body.limit || 100;
     const includeSerpFeatures = body.includeSerpFeatures !== false; // 默认 true
-    const sortBy = body.sortBy || 'position'; // 默认按排名排序
-    const sortOrder = body.sortOrder || 'asc'; // 默认升序
+    const sortBy = body.sortBy || 'searchVolume'; // 默认按搜索量排序
+    const sortOrder = body.sortOrder || 'desc'; // 默认降序
 
     await initWebsiteDataTables();
 
@@ -83,35 +83,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
     const locationCode = regionToLocationCode[region] || 2840;
 
-    // 构建排序 SQL
+    // 构建排序 SQL（只支持 CPC、难度、搜索量）
     let orderByClause = '';
     switch (sortBy) {
-      case 'position':
-        orderByClause = sortOrder === 'asc' 
-          ? 'ORDER BY current_position ASC NULLS LAST' 
-          : 'ORDER BY current_position DESC NULLS LAST';
-        break;
       case 'cpc':
         orderByClause = sortOrder === 'asc' 
           ? 'ORDER BY cpc ASC NULLS LAST' 
           : 'ORDER BY cpc DESC NULLS LAST';
         break;
-          case 'difficulty':
-            orderByClause = sortOrder === 'asc' 
-              ? 'ORDER BY difficulty ASC NULLS LAST' 
-              : 'ORDER BY difficulty DESC NULLS LAST';
-            break;
+      case 'difficulty':
+        orderByClause = sortOrder === 'asc' 
+          ? 'ORDER BY difficulty ASC NULLS LAST' 
+          : 'ORDER BY difficulty DESC NULLS LAST';
+        break;
       case 'searchVolume':
         orderByClause = sortOrder === 'asc' 
           ? 'ORDER BY search_volume ASC NULLS LAST' 
           : 'ORDER BY search_volume DESC NULLS LAST';
         break;
       default:
-        orderByClause = 'ORDER BY etv DESC NULLS LAST, current_position ASC';
+        orderByClause = 'ORDER BY search_volume DESC NULLS LAST';
     }
 
-    // 先尝试从缓存读取
-    const cacheResult = await sql`
+    // 先尝试从缓存读取（使用动态 SQL 查询）
+    const cacheResult = await sql(`
       SELECT
         keyword,
         current_position,
@@ -124,11 +119,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         competition,
         difficulty
       FROM ranked_keywords_cache
-      WHERE website_id = ${body.websiteId}
+      WHERE website_id = $1
         AND cache_expires_at > NOW()
-      ${sql.unsafe(orderByClause)}
-      LIMIT ${limit}
-    `;
+      ${orderByClause}
+      LIMIT $2
+    `, body.websiteId, limit);
 
     let keywords: any[] = [];
     let fromApi = false;
@@ -229,16 +224,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         difficulty: kw.difficulty,
       }));
 
-      // 应用排序
+      // 应用排序（只支持 CPC、难度、搜索量）
       keywords.sort((a, b) => {
         let aValue: number | null = null;
         let bValue: number | null = null;
 
         switch (sortBy) {
-          case 'position':
-            aValue = a.currentPosition || 0;
-            bValue = b.currentPosition || 0;
-            break;
           case 'cpc':
             aValue = a.cpc || 0;
             bValue = b.cpc || 0;
