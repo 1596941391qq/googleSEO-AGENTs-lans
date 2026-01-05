@@ -71,6 +71,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 使用实际的网站域名
     const domain = website.website_domain;
 
+    if (!domain) {
+      return res.status(400).json({ error: 'Website domain is required' });
+    }
+
     // 将地区代码转换为 locationCode
     const region = body.region || '';
     const regionToLocationCode: { [key: string]: number } = {

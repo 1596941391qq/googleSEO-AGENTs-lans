@@ -49,6 +49,7 @@ interface WebsiteData {
   hasData: boolean;
   overview: WebsiteOverview | null;
   topKeywords: DomainKeyword[];
+  competitors?: any[];
   needsRefresh: boolean;
 }
 

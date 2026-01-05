@@ -82,6 +82,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 
+    // 验证域名是否存在
+    if (!website.website_domain) {
+      return res.status(400).json({ error: 'Website domain is required' });
+    }
+
     // 使用实际的网站域名
 
     // 将地区代码转换为 DataForSEO 的位置代码

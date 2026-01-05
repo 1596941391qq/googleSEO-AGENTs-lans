@@ -122,52 +122,62 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     }
 
     // Get DataForSEO data for the data card
+    emit('researcher', 'log', uiLanguage === 'zh' ? '正在获取关键词指标数据...' : 'Fetching keyword metrics data...');
     try {
       const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
       const dataForSEOResults = await fetchKeywordData([keyword], locationCode, languageCode);
       if (dataForSEOResults && dataForSEOResults.length > 0 && dataForSEOResults[0].is_data_found) {
+        emit('researcher', 'log', `✓ ${uiLanguage === 'zh' ? `关键词数据获取成功` : `Keyword metrics retrieved`} - Volume: ${dataForSEOResults[0].volume || 0}, Difficulty: ${dataForSEOResults[0].difficulty || 0}`);
         emit('researcher', 'card', undefined, 'data', {
           volume: dataForSEOResults[0].volume || 0,
           difficulty: dataForSEOResults[0].difficulty || 0
         });
+      } else {
+        emit('researcher', 'log', `⚠️ ${uiLanguage === 'zh' ? '未找到关键词数据，将使用估算值' : 'No keyword data found, using estimates'}`);
       }
     } catch (e) {
       console.warn('Failed to fetch SE Ranking data for visual article', e);
+      emit('researcher', 'log', `⚠️ ${uiLanguage === 'zh' ? '关键词数据获取失败，将继续执行' : 'Failed to fetch keyword data, proceeding anyway'}`);
     }
 
     // 2. Strategy phase
     emit('strategist', 'log', uiLanguage === 'zh' ? `正在为 ${targetMarket === 'global' ? '全球' : targetMarket.toUpperCase()} 市场制定超越前3名的内容策略...` : `Designing content strategy for ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()} market to beat Top 3...`);
-    
+
     // Prepare reference context for strategist
     let referenceContext = '';
     if (reference) {
       if (reference.type === 'document' && reference.document) {
+        emit('strategist', 'log', uiLanguage === 'zh' ? `正在处理参考文档: ${reference.document.filename} (${reference.document.content.length} 字符)` : `Processing reference document: ${reference.document.filename} (${reference.document.content.length} chars)`);
         // For document, provide summary (first 2000 chars)
         const docSummary = reference.document.content.length > 2000
           ? reference.document.content.substring(0, 2000) + '...'
           : reference.document.content;
         referenceContext = `\n\nUser Reference Document (${reference.document.filename}):\n${docSummary}`;
+        emit('strategist', 'log', `✓ ${uiLanguage === 'zh' ? `文档已整合到策略 (截取至 ${docSummary.length} 字符)` : `Document integrated into strategy (truncated to ${docSummary.length} chars)`}`);
       } else if (reference.type === 'url' && reference.url?.content) {
+        emit('strategist', 'log', uiLanguage === 'zh' ? `正在处理参考URL: ${reference.url.url}` : `Processing reference URL: ${reference.url.url}`);
         // For URL, provide summary (first 2000 chars)
         const urlSummary = reference.url.content.length > 2000
           ? reference.url.content.substring(0, 2000) + '...'
           : reference.url.content;
         referenceContext = `\n\nUser Reference URL (${reference.url.url}):\n${urlSummary}`;
+        emit('strategist', 'log', `✓ ${uiLanguage === 'zh' ? `URL内容已抓取 (${reference.url.content.length} 字符)，截图: ${reference.url.screenshot ? '是' : '否'}` : `URL scraped (${reference.url.content.length} chars), Screenshot: ${reference.url.screenshot ? 'Yes' : 'No'}`}`);
       }
     }
-    
-    const strategyPrompt = `Tone: ${tone}, Audience: ${targetAudience}, Target Market: ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()}. Ensure visual opportunities are highlighted and content is tailored for the target market.${referenceContext}`;
+
+    emit('strategist', 'log', uiLanguage === 'zh' ? '正在生成综合SEO策略报告...' : 'Generating comprehensive SEO strategy report...');
     const strategyReport = await generateDeepDiveStrategy(
       keywordData,
       uiLanguage,
       targetLanguage,
-      strategyPrompt,
+      `Tone: ${tone}, Audience: ${targetAudience}, Target Market: ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()}. Ensure visual opportunities are highlighted and content is tailored for the target market.${referenceContext}`,
       searchPrefs,
       competitorAnalysis,
       targetMarket,
       reference
     );
 
+    emit('strategist', 'log', `✓ ${uiLanguage === 'zh' ? `策略报告生成完成: ${strategyReport.contentStructure?.length || 0} 个主要章节` : `Strategy report complete: ${strategyReport.contentStructure?.length || 0} main sections`}`);
     emit('strategist', 'card', undefined, 'outline', {
       h1: strategyReport.pageTitleH1,
       structure: strategyReport.contentStructure
@@ -194,9 +204,9 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       // Emit image-gen cards as "loading" with theme info
       prompts.forEach((p, i) => {
         const theme = selectedThemes[i];
-        emit('artist', 'card', undefined, 'image-gen', { 
+        emit('artist', 'card', undefined, 'image-gen', {
           theme: theme?.title || theme?.id || `Theme ${i + 1}`,
-          prompt: p.prompt, 
+          prompt: p.prompt,
           description: p.description,
           imageUrl: null,
           status: 'extracting',
@@ -204,8 +214,14 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         });
       });
 
-      // Generate images (could be parallel)
+      // Generate images (parallel processing)
+      emit('artist', 'log', uiLanguage === 'zh' ? `正在生成 ${prompts.length} 张图片...` : `Generating ${prompts.length} images...`);
       const imageResults = await generateImages(prompts);
+
+      const successCount = imageResults.filter(r => r.imageUrl).length;
+      const failCount = imageResults.filter(r => r.error).length;
+      emit('artist', 'log', `✓ ${uiLanguage === 'zh' ? `图片生成完成: ${successCount} 成功, ${failCount} 失败` : `Image generation complete: ${successCount} succeeded, ${failCount} failed`}`);
+
       generatedImages = imageResults.filter(r => r.imageUrl).map(r => ({
         url: r.imageUrl,
         prompt: r.theme,
