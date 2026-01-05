@@ -59,17 +59,15 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
   }
 
   if (config?.responseMimeType === 'application/json') {
-    // 确保设置 responseMimeType（无论是否有 schema）
-    requestBody.generationConfig.responseMimeType = 'application/json';
-
-    // 如果有 schema，也设置它
-    if (config?.responseSchema) {
-      requestBody.generationConfig.responseSchema = config.responseSchema;
-    }
-
     // 在 prompt 中明确要求 JSON 格式（如果 prompt 中没有提到）
     if (!prompt.includes('JSON') && !prompt.includes('json') && !systemInstruction?.includes('JSON') && !systemInstruction?.includes('json')) {
       contents[contents.length - 1].parts[0].text += '\n\nCRITICAL: You MUST respond with valid JSON only. Do NOT include any markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object.';
+    }
+
+    // 只有当提供了 responseSchema 时才设置 responseMimeType（代理 API 可能要求同时提供）
+    if (config?.responseSchema) {
+      requestBody.generationConfig.responseSchema = config.responseSchema;
+      requestBody.generationConfig.responseMimeType = 'application/json';
     }
   }
 
