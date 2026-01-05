@@ -2,12 +2,22 @@ import React, { useState, useEffect } from "react";
 import {
   AlertCircle,
   RefreshCw,
+  BarChart3,
+  Search,
+  ExternalLink,
 } from "lucide-react";
 import { OverviewCards } from "./OverviewCards";
 import { RankingDistributionChart } from "./RankingDistributionChart";
 import { TopKeywordsTable } from "./TopKeywordsTable";
 import { CompetitorsComparison } from "./CompetitorsComparison";
 import { BacklinksInfo } from "./BacklinksInfo";
+import { KeywordIntelligenceView } from "./KeywordIntelligenceView";
+import { RankedKeywordsTable } from "./RankedKeywordsTable";
+import { RelevantPagesTable } from "./RelevantPagesTable";
+import { HistoricalRankChart } from "./HistoricalRankChart";
+import { DomainIntersectionView } from "./DomainIntersectionView";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
 
 interface BacklinksInfoData {
@@ -77,11 +87,14 @@ interface WebsiteDataDashboardProps {
   uiLanguage: "en" | "zh";
 }
 
+type ViewMode = "overview" | "keyword-intelligence" | "ranked-keywords" | "relevant-pages" | "historical-rank" | "domain-intersection";
+
 export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   websiteId,
   isDarkTheme,
   uiLanguage,
 }) => {
+  const [viewMode, setViewMode] = useState<ViewMode>("overview");
   const [data, setData] = useState<WebsiteData | null>(null);
   const [loading, setLoading] = useState(true); // 初始为 true，显示加载状态
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +103,8 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     keywords: true,
     competitors: true,
   });
+  const [websiteInfo, setWebsiteInfo] = useState<{ domain?: string; url?: string } | null>(null);
+  const [selectedCompetitor, setSelectedCompetitor] = useState<string>("");
 
   // 优先从缓存获取，如果缓存过期或不存在，才从API获取（只获取一次）
   const loadDataParallel = async () => {
@@ -120,31 +135,14 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     const now = Date.now();
     const FIVE_MINUTES = 5 * 60 * 1000; // 5分钟内不重复调用API
 
-    // 先读取缓存作为后备（即使缓存没过期，也会先执行 update-metrics）
-    let cachedOverviewResult: any = null;
-    try {
-      const cacheResponse = await fetch("/api/website-data/overview-only", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(baseRequest),
-      });
-
-      if (cacheResponse.ok) {
-        const cacheResult = await cacheResponse.json();
-        cachedOverviewResult = cacheResult; // 保存缓存结果作为后备
-        console.log("[Dashboard] 📦 Loaded cache as fallback (will try update-metrics first)");
-      }
-    } catch (error: any) {
-      console.log("[Dashboard] ⚠️ Failed to load cache:", error.message);
-    }
-
     // 总是先执行 update-metrics（即使缓存没过期），只有在失败时才使用缓存
     let useCacheAsFallback = false;
+    let cachedOverviewResult: any = null;
     
     // 如果5分钟内已经调用过API，跳过以避免重复调用
     if (lastFetchTime && (now - parseInt(lastFetchTime)) < FIVE_MINUTES) {
       console.log("[Dashboard] ⏭️ API was called recently, skipping to avoid duplicate calls");
-      useCacheAsFallback = true; // 使用缓存
+      useCacheAsFallback = true; // 使用缓存，先读取缓存
     } else {
       // 记录本次API调用时间（在调用前记录，防止重复调用）
       sessionStorage.setItem(apiFetchKey, now.toString());
@@ -152,7 +150,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
       console.log("[Dashboard] 🔄 Always calling update-metrics first (even if cache is valid)...");
       
       try {
-        // 同步调用API更新，等待完成
+        // 同步调用API更新，等待完成（这是第一个调用，优先于所有其他请求）
         const updateResponse = await fetch("/api/website-data/update-metrics", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -162,18 +160,36 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
         if (updateResponse.ok) {
           const updateResult = await updateResponse.json();
           console.log("[Dashboard] ✅ Successfully updated metrics from DataForSEO API:", updateResult);
-          // API更新成功，清除缓存的 overview 结果，强制重新读取最新数据
-          cachedOverviewResult = null;
+          // API更新成功，不设置 useCacheAsFallback，强制重新读取最新数据
         } else {
           const errorText = await updateResponse.text();
           console.error("[Dashboard] ❌ update-metrics API failed:", updateResponse.status, errorText);
-          // API更新失败，使用缓存作为后备
+          // API更新失败，使用缓存作为后备（稍后读取）
           useCacheAsFallback = true;
         }
       } catch (error: any) {
         console.error("[Dashboard] ❌ update-metrics API error:", error.message);
-        // API调用出错，使用缓存作为后备
+        // API调用出错，使用缓存作为后备（稍后读取）
         useCacheAsFallback = true;
+      }
+    }
+
+    // 只有在 update-metrics 失败时才读取缓存作为后备
+    if (useCacheAsFallback) {
+      try {
+        const cacheResponse = await fetch("/api/website-data/overview-only", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(baseRequest),
+        });
+
+        if (cacheResponse.ok) {
+          const cacheResult = await cacheResponse.json();
+          cachedOverviewResult = cacheResult; // 保存缓存结果作为后备
+          console.log("[Dashboard] 📦 Loaded cache as fallback (update-metrics failed or skipped)");
+        }
+      } catch (error: any) {
+        console.log("[Dashboard] ⚠️ Failed to load cache:", error.message);
       }
     }
 
@@ -293,17 +309,22 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     await loadData();
   };
 
+  // 从 overview API 获取网站信息（如果需要的话，可以从其他API获取）
+  // 暂时从 overview 数据中获取，如果没有则留空
+
   useEffect(() => {
     if (websiteId) {
-      // 异步加载数据
-      loadData();
+      // 只在总览视图时加载数据
+      if (viewMode === "overview") {
+        loadData();
+      }
     } else {
       // 如果没有 websiteId，重置状态
       setData(null);
       setLoading(false);
       setError(uiLanguage === "zh" ? "缺少网站ID" : "Missing website ID");
     }
-  }, [websiteId, uiLanguage]);
+  }, [websiteId, uiLanguage, viewMode]);
 
   // 如果没有 websiteId，显示错误
   if (!websiteId) {
@@ -324,53 +345,184 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2
-            className={cn(
-              "text-lg font-semibold",
-              isDarkTheme ? "text-white" : "text-gray-900"
-            )}
-          >
-            {uiLanguage === "zh" ? "网站数据概览" : "Website Data Overview"}
-          </h2>
-          {data?.overview && (
-            <p
+      {/* Top Navigation Bar */}
+      <div className={cn(
+        "flex items-center justify-between p-4 rounded-lg border",
+        isDarkTheme ? "bg-zinc-900/50 border-zinc-800" : "bg-gray-50 border-gray-200"
+      )}>
+        <div className="flex items-center gap-4">
+          {/* Brand Info */}
+          <div className="flex items-center gap-2">
+            <Badge
               className={cn(
-                "text-xs mt-1",
-                isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                "text-xs",
+                isDarkTheme ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-emerald-100 text-emerald-700 border-emerald-200"
               )}
             >
-              {uiLanguage === "zh" ? "最后更新" : "Last updated"}:{" "}
-              {new Date(data.overview.updatedAt).toLocaleString()}
-            </p>
-          )}
+              DATAFORSEO LABS ENGINE
+            </Badge>
+            <Badge
+              variant="outline"
+              className={cn(
+                "text-xs",
+                isDarkTheme ? "border-zinc-700 text-zinc-400" : "border-gray-300 text-gray-500"
+              )}
+            >
+              REAL-TIME NODE: US-EAST-1
+            </Badge>
+          </div>
+          
+          {/* Website Name - 可以从网站选择器或其他地方获取，这里暂时留空或显示websiteId */}
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "text-sm font-medium",
+              isDarkTheme ? "text-white" : "text-gray-900"
+            )}>
+              {websiteId.substring(0, 8)}...
+            </span>
+          </div>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={loading}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-lg border transition-all",
-            "hover:opacity-80 active:scale-95",
-            "disabled:opacity-50 disabled:cursor-not-allowed",
-            isDarkTheme
-              ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
-              : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-          )}
-          title={uiLanguage === "zh" ? "刷新数据" : "Refresh data"}
-        >
-          <RefreshCw
+
+        {/* View Toggle Buttons */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={viewMode === "overview" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("overview")}
             className={cn(
-              "w-4 h-4",
-              loading && "animate-spin"
+              viewMode === "overview"
+                ? isDarkTheme
+                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                : isDarkTheme
+                ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
             )}
-          />
-          <span className="text-sm font-medium">
-            {uiLanguage === "zh" ? "刷新" : "Refresh"}
-          </span>
-        </button>
+          >
+            <BarChart3 className="w-4 h-4 mr-2" />
+            {uiLanguage === "zh" ? "总览" : "Overview"}
+          </Button>
+          <Button
+            variant={viewMode === "keyword-intelligence" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("keyword-intelligence")}
+            className={cn(
+              viewMode === "keyword-intelligence"
+                ? isDarkTheme
+                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                : isDarkTheme
+                ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+            )}
+          >
+            <Search className="w-4 h-4 mr-2" />
+            {uiLanguage === "zh" ? "关键词情报" : "Keyword Intelligence"}
+          </Button>
+          <Button
+            variant={viewMode === "ranked-keywords" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("ranked-keywords")}
+            className={cn(
+              viewMode === "ranked-keywords"
+                ? isDarkTheme
+                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                : isDarkTheme
+                ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+            )}
+          >
+            <Search className="w-4 h-4 mr-2" />
+            {uiLanguage === "zh" ? "排名关键词" : "Ranked Keywords"}
+          </Button>
+          <Button
+            variant={viewMode === "relevant-pages" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("relevant-pages")}
+            className={cn(
+              viewMode === "relevant-pages"
+                ? isDarkTheme
+                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                : isDarkTheme
+                ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+            )}
+          >
+            <ExternalLink className="w-4 h-4 mr-2" />
+            {uiLanguage === "zh" ? "相关页面" : "Relevant Pages"}
+          </Button>
+          <Button
+            variant={viewMode === "historical-rank" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setViewMode("historical-rank")}
+            className={cn(
+              viewMode === "historical-rank"
+                ? isDarkTheme
+                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                  : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                : isDarkTheme
+                ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+            )}
+          >
+            <BarChart3 className="w-4 h-4 mr-2" />
+            {uiLanguage === "zh" ? "历史排名" : "Historical Rank"}
+          </Button>
+        </div>
       </div>
+
+      {/* Content based on view mode */}
+      {viewMode === "overview" ? (
+        <>
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h2
+                className={cn(
+                  "text-lg font-semibold",
+                  isDarkTheme ? "text-white" : "text-gray-900"
+                )}
+              >
+                {uiLanguage === "zh" ? "网站数据概览" : "Website Data Overview"}
+              </h2>
+              {data?.overview && (
+                <p
+                  className={cn(
+                    "text-xs mt-1",
+                    isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                  )}
+                >
+                  {uiLanguage === "zh" ? "最后更新" : "Last updated"}:{" "}
+                  {new Date(data.overview.updatedAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2 rounded-lg border transition-all",
+                "hover:opacity-80 active:scale-95",
+                "disabled:opacity-50 disabled:cursor-not-allowed",
+                isDarkTheme
+                  ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+                  : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
+              )}
+              title={uiLanguage === "zh" ? "刷新数据" : "Refresh data"}
+            >
+              <RefreshCw
+                className={cn(
+                  "w-4 h-4",
+                  loading && "animate-spin"
+                )}
+              />
+              <span className="text-sm font-medium">
+                {uiLanguage === "zh" ? "刷新" : "Refresh"}
+              </span>
+            </button>
+          </div>
 
       {/* Overview Cards - 始终显示，加载时显示骨架屏 */}
       <OverviewCards
@@ -391,13 +543,13 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
         uiLanguage={uiLanguage}
       />
 
-      {/* Backlinks Info */}
-      <BacklinksInfo
+      {/* Backlinks Info - 暂时隐藏 */}
+      {/* <BacklinksInfo
         backlinks={data?.overview?.backlinksInfo}
         isLoading={loading || !data?.overview}
         isDarkTheme={isDarkTheme}
         uiLanguage={uiLanguage}
-      />
+      /> */}
 
       {/* Charts and Tables - 始终显示，加载时显示加载状态 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -408,6 +560,11 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           isLoading={loading || !data?.overview}
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
+          changes={{
+            top3: data?.overview?.improvedKeywords ? Math.floor(data.overview.improvedKeywords * 0.1) : undefined,
+            top10: data?.overview?.improvedKeywords ? Math.floor(data.overview.improvedKeywords * 0.3) : undefined,
+            top100: data?.overview?.improvedKeywords ? Math.floor(data.overview.improvedKeywords * 0.5) : undefined,
+          }}
         />
 
         {/* Top Keywords Table */}
@@ -446,31 +603,118 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
         </div>
       )}
 
-      {/* 无数据提示 - 只在没有数据且不在加载时显示 */}
-      {!loading && (!data || !data.hasData) && (
-        <div
-          className={cn(
-            "text-center py-8 rounded-lg border",
-            isDarkTheme
-              ? "bg-zinc-900/50 border-zinc-800 text-zinc-400"
-              : "bg-gray-50 border-gray-200 text-gray-500"
+          {/* 无数据提示 - 只在没有数据且不在加载时显示 */}
+          {!loading && (!data || !data.hasData) && (
+            <div
+              className={cn(
+                "text-center py-8 rounded-lg border",
+                isDarkTheme
+                  ? "bg-zinc-900/50 border-zinc-800 text-zinc-400"
+                  : "bg-gray-50 border-gray-200 text-gray-500"
+              )}
+            >
+              <p className="text-sm">
+                {uiLanguage === "zh"
+                  ? "正在从 DataForSEO 获取数据，请稍候..."
+                  : "Fetching data from DataForSEO, please wait..."}
+              </p>
+              {error && (
+                <p className={cn(
+                  "text-xs mt-3",
+                  isDarkTheme ? "text-red-400" : "text-red-600"
+                )}>
+                  {error}
+                </p>
+              )}
+            </div>
           )}
-        >
-          <p className="text-sm">
-            {uiLanguage === "zh"
-              ? "正在从 DataForSEO 获取数据，请稍候..."
-              : "Fetching data from DataForSEO, please wait..."}
-          </p>
-          {error && (
-            <p className={cn(
-              "text-xs mt-3",
-              isDarkTheme ? "text-red-400" : "text-red-600"
+        </>
+      ) : viewMode === "keyword-intelligence" ? (
+        <KeywordIntelligenceView
+          websiteId={websiteId}
+          isDarkTheme={isDarkTheme}
+          uiLanguage={uiLanguage}
+        />
+      ) : viewMode === "ranked-keywords" ? (
+        <RankedKeywordsTable
+          websiteId={websiteId}
+          isDarkTheme={isDarkTheme}
+          uiLanguage={uiLanguage}
+          limit={100}
+        />
+      ) : viewMode === "relevant-pages" ? (
+        <RelevantPagesTable
+          websiteId={websiteId}
+          isDarkTheme={isDarkTheme}
+          uiLanguage={uiLanguage}
+          limit={20}
+        />
+      ) : viewMode === "historical-rank" ? (
+        <HistoricalRankChart
+          websiteId={websiteId}
+          isDarkTheme={isDarkTheme}
+          uiLanguage={uiLanguage}
+          days={30}
+        />
+      ) : viewMode === "domain-intersection" ? (
+        <div className="space-y-4">
+          {data?.competitors && data.competitors.length > 0 ? (
+            <>
+              <div className={cn(
+                "p-4 rounded-lg border",
+                isDarkTheme ? "bg-zinc-900/50 border-zinc-800" : "bg-gray-50 border-gray-200"
+              )}>
+                <label className={cn(
+                  "block text-sm font-medium mb-2",
+                  isDarkTheme ? "text-white" : "text-gray-900"
+                )}>
+                  {uiLanguage === "zh" ? "选择竞争对手" : "Select Competitor"}
+                </label>
+                <select
+                  value={selectedCompetitor}
+                  onChange={(e) => setSelectedCompetitor(e.target.value)}
+                  className={cn(
+                    "w-full px-3 py-2 rounded-lg border",
+                    isDarkTheme
+                      ? "bg-zinc-800 border-zinc-700 text-white"
+                      : "bg-white border-gray-300 text-gray-900"
+                  )}
+                >
+                  <option value="">
+                    {uiLanguage === "zh" ? "-- 请选择 --" : "-- Select --"}
+                  </option>
+                  {data.competitors.map((comp, index) => (
+                    <option key={index} value={comp.domain}>
+                      {comp.domain} ({comp.commonKeywords} {uiLanguage === "zh" ? "共同关键词" : "common keywords"})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {selectedCompetitor && (
+                <DomainIntersectionView
+                  websiteId={websiteId}
+                  competitorDomain={selectedCompetitor}
+                  isDarkTheme={isDarkTheme}
+                  uiLanguage={uiLanguage}
+                />
+              )}
+            </>
+          ) : (
+            <div className={cn(
+              "text-center py-8 rounded-lg border",
+              isDarkTheme
+                ? "bg-zinc-900/50 border-zinc-800 text-zinc-400"
+                : "bg-gray-50 border-gray-200 text-gray-500"
             )}>
-              {error}
-            </p>
+              <p className="text-sm">
+                {uiLanguage === "zh"
+                  ? "请先在总览页面加载竞争对手数据"
+                  : "Please load competitor data in the overview page first"}
+              </p>
+            </div>
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 };

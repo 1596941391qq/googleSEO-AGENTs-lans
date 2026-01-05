@@ -493,6 +493,8 @@ Return JSON:
 </rules>
 
 <output_format>
+**重要：必须返回有效的 JSON 格式，不要包含任何 Markdown 格式标记、解释性文字或 JSON 对象之外的文本。只返回 JSON 对象本身。**
+
 {
   "competitor_benchmark": [
     {

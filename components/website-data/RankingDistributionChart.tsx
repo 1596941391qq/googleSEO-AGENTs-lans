@@ -16,11 +16,16 @@ interface RankingDistributionChartProps {
   isLoading?: boolean;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
+  changes?: {
+    top3?: number;
+    top10?: number;
+    top100?: number;
+  };
 }
 
 export const RankingDistributionChart: React.FC<
   RankingDistributionChartProps
-> = ({ distribution, totalKeywords = 0, isLoading = false, isDarkTheme, uiLanguage }) => {
+> = ({ distribution, totalKeywords = 0, isLoading = false, isDarkTheme, uiLanguage, changes }) => {
   // Calculate percentages
   const getPercentage = (value: number): number => {
     if (totalKeywords === 0) return 0;
@@ -72,8 +77,22 @@ export const RankingDistributionChart: React.FC<
             isDarkTheme ? "text-white" : "text-gray-900"
           )}
         >
-          {uiLanguage === "zh" ? "排名分布" : "Ranking Distribution"}
+          {uiLanguage === "zh" ? "排名分布" : "RANK DISTRIBUTION"}
+          <span className={cn(
+            "ml-2 text-xs font-normal",
+            isDarkTheme ? "text-zinc-500" : "text-gray-500"
+          )}>
+            (RANK TRACKING API)
+          </span>
         </CardTitle>
+        <p className={cn(
+          "text-xs mt-2",
+          isDarkTheme ? "text-zinc-400" : "text-gray-500"
+        )}>
+          {uiLanguage === "zh" 
+            ? "📊 显示您的网站在 Google 搜索结果中的排名情况。例如：TOP 3 表示有 124 个关键词排在前 3 名，这些关键词能带来最多的流量。"
+            : "📊 Shows your website's ranking positions on Google. For example: TOP 3 means 124 keywords rank in the top 3 positions, bringing the most traffic."}
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (
@@ -90,47 +109,81 @@ export const RankingDistributionChart: React.FC<
             </span>
           </div>
         ) : data.length > 0 ? (
-          data.map((item) => (
-          <div key={item.label} className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span
-                className={cn(
-                  "font-medium",
-                  isDarkTheme ? "text-zinc-300" : "text-gray-700"
-                )}
-              >
-                {item.label}
-              </span>
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    "font-semibold",
-                    isDarkTheme ? "text-white" : "text-gray-900"
+          data.map((item) => {
+            const getDescription = (label: string) => {
+              if (uiLanguage === "zh") {
+                if (label.includes("TOP 3")) return "前 3 名 - 最佳位置，流量最多";
+                if (label.includes("TOP 10")) return "前 10 名 - 第一页，流量较高";
+                if (label.includes("TOP 50")) return "前 50 名 - 前 5 页，有一定流量";
+                if (label.includes("TOP 100")) return "前 100 名 - 前 10 页，总关键词数";
+              } else {
+                if (label.includes("TOP 3")) return "Top 3 - Best positions, most traffic";
+                if (label.includes("TOP 10")) return "Top 10 - First page, high traffic";
+                if (label.includes("TOP 50")) return "Top 50 - First 5 pages, moderate traffic";
+                if (label.includes("TOP 100")) return "Top 100 - First 10 pages, total keywords";
+              }
+              return "";
+            };
+            
+            return (
+            <div key={item.label} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span
+                    className={cn(
+                      "text-sm font-medium uppercase",
+                      isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                    )}
+                  >
+                    {item.label}
+                  </span>
+                  <span
+                    className={cn(
+                      "text-xs mt-0.5",
+                      isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                    )}
+                  >
+                    {getDescription(item.label)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span
+                    className={cn(
+                      "text-lg font-bold",
+                      isDarkTheme ? "text-white" : "text-gray-900"
+                    )}
+                  >
+                    {item.count.toLocaleString()}
+                  </span>
+                  {item.change !== undefined && item.change !== null && (
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        item.change >= 0
+                          ? "text-emerald-400"
+                          : "text-red-400"
+                      )}
+                    >
+                      {item.change >= 0 ? "+" : ""}{item.change}
+                    </span>
                   )}
-                >
-                  {item.count}
-                </span>
-                <span
+                </div>
+              </div>
+              <div className={cn(
+                "relative h-2 w-full overflow-hidden rounded-full",
+                isDarkTheme ? "bg-zinc-800" : "bg-gray-200"
+              )}>
+                <div
                   className={cn(
-                    "text-xs",
-                    isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                    "h-full rounded-full transition-all duration-500",
+                    item.color
                   )}
-                >
-                  ({item.percentage}%)
-                </span>
+                  style={{ width: `${Math.min(item.percentage, 100)}%` }}
+                />
               </div>
             </div>
-            <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-zinc-800">
-              <div
-                className={cn(
-                  "h-full rounded-full transition-all duration-500",
-                  item.color
-                )}
-                style={{ width: `${Math.min(item.percentage, 100)}%` }}
-              />
-            </div>
-          </div>
-          ))
+            );
+          })
         ) : (
           <div
             className={cn(

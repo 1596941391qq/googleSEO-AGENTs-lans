@@ -16,6 +16,8 @@ import {
   getDomainOverview,
   getDomainKeywords,
   getDomainCompetitors,
+  getRankedKeywords,
+  getRelevantPages,
   type DomainOverview,
   type DomainKeyword,
   type DomainCompetitor,
@@ -80,11 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 
-    // TODO: 临时测试 - 使用 apple.com 作为默认域名
-    // 测试完成后需要删除或注释掉这行代码
-    const originalDomain = website.website_domain;
-    website.website_domain = 'apple.com';
-    console.log('[update-metrics] 🧪 TEST MODE: Using apple.com instead of', originalDomain);
+    // 使用实际的网站域名
 
     // 将地区代码转换为 DataForSEO 的位置代码
     const region = body.region || '';
@@ -102,12 +100,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log('[update-metrics] 📍 Fetching data for domain:', website.website_domain, 'location:', locationCode);
 
+    // 清除可能存在的旧缓存（确保获取到正确的域名数据）
+    // 这样可以避免使用之前 apple.com 的测试数据
+    try {
+      console.log('[update-metrics] 🗑️  Clearing old cache to ensure fresh data for domain:', website.website_domain);
+      // 清除所有相关缓存表的数据（强制清除，确保获取新数据）
+      await sql`DELETE FROM domain_overview_cache WHERE website_id = ${body.websiteId}`;
+      await sql`DELETE FROM domain_keywords_cache WHERE website_id = ${body.websiteId}`;
+      await sql`DELETE FROM domain_competitors_cache WHERE website_id = ${body.websiteId}`;
+      console.log('[update-metrics] ✅ Cleared old cache for website:', body.websiteId);
+    } catch (clearError: any) {
+      console.warn('[update-metrics] ⚠️ Failed to clear old cache (non-critical):', clearError.message);
+      // 继续执行，不清除缓存也不影响主流程
+    }
+
     // 调用 DataForSEO API 获取数据
     const [overview, keywords, competitors] = await Promise.all([
-      getDomainOverview(website.website_domain, locationCode).catch((err) => {
-        console.error('[update-metrics] Failed to get overview:', err.message);
-        return null;
-      }),
+      getDomainOverview(website.website_domain, locationCode)
+        .then((result) => {
+          if (result) {
+            console.log('[update-metrics] ✅ Overview data received:', {
+              domain: result.domain,
+              totalKeywords: result.totalKeywords,
+              organicTraffic: result.organicTraffic,
+            });
+          } else {
+            console.warn('[update-metrics] ⚠️ Overview returned null - API may not have data for this domain');
+          }
+          return result;
+        })
+        .catch((err) => {
+          console.error('[update-metrics] ❌ Failed to get overview:', err.message);
+          console.error('[update-metrics] Error stack:', err.stack?.substring(0, 500));
+          return null;
+        }),
       getDomainKeywords(website.website_domain, locationCode, 50).catch((err) => {
         console.error('[update-metrics] Failed to get keywords:', err.message);
         return [];
@@ -120,6 +146,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 缓存概览数据
     if (overview) {
+      console.log('[update-metrics] 💾 Caching overview data:', {
+        websiteId: body.websiteId,
+        organicTraffic: overview.organicTraffic,
+        totalKeywords: overview.totalKeywords,
+        totalTraffic: overview.totalTraffic,
+        rankingDistribution: overview.rankingDistribution,
+      });
+
       await sql`
         INSERT INTO domain_overview_cache (
           website_id,
@@ -179,7 +213,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           data_updated_at = NOW(),
           cache_expires_at = EXCLUDED.cache_expires_at
       `;
-      console.log('[update-metrics] ✅ Cached overview data');
+      console.log('[update-metrics] ✅ Successfully cached overview data to database');
+    } else {
+      console.warn('[update-metrics] ⚠️ No overview data to cache (overview is null)');
     }
 
     // 缓存关键词数据（只缓存前20个）
@@ -272,6 +308,102 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `)
       );
       console.log(`[update-metrics] ✅ Cached ${competitors.length} competitors`);
+    }
+
+    // 可选：获取并缓存排名关键词（增强版，包含 SERP 特性）
+    // 注意：这是一个可选功能，如果 API 调用失败不影响主流程
+    try {
+      const rankedKeywords = await getRankedKeywords(website.website_domain, locationCode, 50, true);
+      if (rankedKeywords.length > 0) {
+        await Promise.all(
+          rankedKeywords.slice(0, 50).map(kw => sql`
+            INSERT INTO ranked_keywords_cache (
+              website_id,
+              keyword,
+              current_position,
+              previous_position,
+              search_volume,
+              etv,
+              serp_features,
+              ranking_url,
+              cpc,
+              competition,
+              difficulty,
+              data_updated_at,
+              cache_expires_at
+            ) VALUES (
+              ${body.websiteId},
+              ${kw.keyword},
+              ${kw.currentPosition},
+              ${kw.previousPosition},
+              ${kw.searchVolume},
+              ${kw.etv},
+              ${JSON.stringify(kw.serpFeatures)},
+              ${kw.url},
+              ${kw.cpc || null},
+              ${kw.competition || null},
+              ${kw.difficulty || null},
+              NOW(),
+              NOW() + INTERVAL '24 hours'
+            )
+            ON CONFLICT (website_id, keyword) DO UPDATE SET
+              current_position = EXCLUDED.current_position,
+              previous_position = EXCLUDED.previous_position,
+              search_volume = EXCLUDED.search_volume,
+              etv = EXCLUDED.etv,
+              serp_features = EXCLUDED.serp_features,
+              ranking_url = EXCLUDED.ranking_url,
+              cpc = EXCLUDED.cpc,
+              competition = EXCLUDED.competition,
+              difficulty = EXCLUDED.difficulty,
+              data_updated_at = NOW(),
+              cache_expires_at = EXCLUDED.cache_expires_at
+          `)
+        );
+        console.log(`[update-metrics] ✅ Cached ${rankedKeywords.length} ranked keywords`);
+      }
+    } catch (error: any) {
+      console.warn('[update-metrics] ⚠️ Failed to cache ranked keywords (non-critical):', error.message);
+    }
+
+    // 可选：获取并缓存相关页面
+    try {
+      const relevantPages = await getRelevantPages(website.website_domain, locationCode, 20);
+      if (relevantPages.length > 0) {
+        await Promise.all(
+          relevantPages.map(page => sql`
+            INSERT INTO relevant_pages_cache (
+              website_id,
+              page_url,
+              organic_traffic,
+              keywords_count,
+              avg_position,
+              top_keywords,
+              data_updated_at,
+              cache_expires_at
+            ) VALUES (
+              ${body.websiteId},
+              ${page.url},
+              ${page.organicTraffic},
+              ${page.keywordsCount},
+              ${page.avgPosition},
+              ${JSON.stringify(page.topKeywords)},
+              NOW(),
+              NOW() + INTERVAL '24 hours'
+            )
+            ON CONFLICT (website_id, page_url) DO UPDATE SET
+              organic_traffic = EXCLUDED.organic_traffic,
+              keywords_count = EXCLUDED.keywords_count,
+              avg_position = EXCLUDED.avg_position,
+              top_keywords = EXCLUDED.top_keywords,
+              data_updated_at = NOW(),
+              cache_expires_at = EXCLUDED.cache_expires_at
+          `)
+        );
+        console.log(`[update-metrics] ✅ Cached ${relevantPages.length} relevant pages`);
+      }
+    } catch (error: any) {
+      console.warn('[update-metrics] ⚠️ Failed to cache relevant pages (non-critical):', error.message);
     }
 
     // 更新网站表的最后更新时间

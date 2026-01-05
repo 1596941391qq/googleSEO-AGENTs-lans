@@ -63,8 +63,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 
-    // TODO: 临时测试 - 使用 apple.com 作为默认域名
-    const domain = 'apple.com'; // website.website_domain;
+    // 使用实际的网站域名
+    const domain = website.website_domain;
 
     // 将地区代码转换为 locationCode
     const region = body.region || '';
@@ -124,24 +124,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
+      const responseData = {
+        organicTraffic: Number(cached.organic_traffic) || 0,
+        paidTraffic: Number(cached.paid_traffic) || 0,
+        totalTraffic: Number(cached.total_traffic) || 0,
+        totalKeywords: Number(cached.total_keywords) || 0,
+        newKeywords: Number(cached.new_keywords) || 0,
+        lostKeywords: Number(cached.lost_keywords) || 0,
+        improvedKeywords: Number(cached.improved_keywords) || 0,
+        declinedKeywords: Number(cached.declined_keywords) || 0,
+        avgPosition: Number(cached.avg_position) || 0,
+        trafficCost: Number(cached.traffic_cost) || 0,
+        rankingDistribution,
+        backlinksInfo,
+        updatedAt: cached.data_updated_at,
+        expiresAt: cached.cache_expires_at,
+      };
+
+      console.log('[overview-only] ✅ Returning cached data:', {
+        websiteId: body.websiteId,
+        organicTraffic: responseData.organicTraffic,
+        totalKeywords: responseData.totalKeywords,
+        totalTraffic: responseData.totalTraffic,
+        rankingDistribution: responseData.rankingDistribution,
+        hasBacklinksInfo: !!responseData.backlinksInfo,
+      });
+
       return res.status(200).json({
         success: true,
-        data: {
-          organicTraffic: cached.organic_traffic || 0,
-          paidTraffic: cached.paid_traffic || 0,
-          totalTraffic: cached.total_traffic || 0,
-          totalKeywords: cached.total_keywords || 0,
-          newKeywords: cached.new_keywords || 0,
-          lostKeywords: cached.lost_keywords || 0,
-          improvedKeywords: cached.improved_keywords || 0,
-          declinedKeywords: cached.declined_keywords || 0,
-          avgPosition: cached.avg_position || 0,
-          trafficCost: cached.traffic_cost || 0,
-          rankingDistribution,
-          backlinksInfo,
-          updatedAt: cached.data_updated_at,
-          expiresAt: cached.cache_expires_at,
-        },
+        data: responseData,
         cached: true,
       });
     }

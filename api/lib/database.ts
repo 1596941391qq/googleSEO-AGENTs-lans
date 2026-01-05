@@ -896,6 +896,110 @@ export async function initDomainCacheTables() {
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_domain ON domain_competitors_cache(competitor_domain)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_expires ON domain_competitors_cache(cache_expires_at)`;
 
+      // 创建排名关键词缓存表
+      await sql`
+        CREATE TABLE IF NOT EXISTS ranked_keywords_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          keyword VARCHAR(500) NOT NULL,
+          current_position INTEGER,
+          previous_position INTEGER,
+          search_volume INTEGER,
+          etv NUMERIC(20,2),
+          serp_features JSONB,
+          ranking_url TEXT,
+          cpc DECIMAL(10,2),
+          competition DECIMAL(5,2),
+          difficulty INTEGER,
+          data_updated_at TIMESTAMP,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(website_id, keyword)
+        )
+      `;
+
+      // 添加 difficulty 字段（如果不存在）
+      await sql`
+        DO $$ 
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'ranked_keywords_cache' AND column_name = 'difficulty'
+          ) THEN
+            ALTER TABLE ranked_keywords_cache ADD COLUMN difficulty INTEGER;
+          END IF;
+        END $$;
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_website ON ranked_keywords_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_keyword ON ranked_keywords_cache(keyword)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_position ON ranked_keywords_cache(current_position)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_expires ON ranked_keywords_cache(cache_expires_at)`;
+
+      // 创建历史排名概览缓存表
+      await sql`
+        CREATE TABLE IF NOT EXISTS historical_rank_overview_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          date DATE NOT NULL,
+          top1_count INTEGER DEFAULT 0,
+          top3_count INTEGER DEFAULT 0,
+          top10_count INTEGER DEFAULT 0,
+          top50_count INTEGER DEFAULT 0,
+          top100_count INTEGER DEFAULT 0,
+          data_updated_at TIMESTAMP,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '7 days',
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(website_id, date)
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_historical_rank_website ON historical_rank_overview_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_historical_rank_date ON historical_rank_overview_cache(date)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_historical_rank_expires ON historical_rank_overview_cache(cache_expires_at)`;
+
+      // 创建域名重合度分析缓存表
+      await sql`
+        CREATE TABLE IF NOT EXISTS domain_intersection_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          competitor_domain VARCHAR(255) NOT NULL,
+          common_keywords JSONB,
+          gap_keywords JSONB,
+          gap_traffic NUMERIC(20,2),
+          our_keywords JSONB,
+          data_updated_at TIMESTAMP,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '7 days',
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(website_id, competitor_domain)
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_intersection_website ON domain_intersection_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_intersection_competitor ON domain_intersection_cache(competitor_domain)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_intersection_expires ON domain_intersection_cache(cache_expires_at)`;
+
+      // 创建相关页面缓存表
+      await sql`
+        CREATE TABLE IF NOT EXISTS relevant_pages_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          page_url TEXT NOT NULL,
+          organic_traffic NUMERIC(20,2),
+          keywords_count INTEGER,
+          avg_position DECIMAL(10,2),
+          top_keywords JSONB,
+          data_updated_at TIMESTAMP,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(website_id, page_url)
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_website ON relevant_pages_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_url ON relevant_pages_cache(page_url)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_expires ON relevant_pages_cache(cache_expires_at)`;
+
       // 迁移现有表：将竞争对手表的流量字段从 INTEGER 改为 NUMERIC（如果表已存在）
       try {
         const tableCheck = await sql`
@@ -923,21 +1027,25 @@ export async function initDomainCacheTables() {
           }
           
           // 检查并修复列名（domain -> competitor_domain, title -> competitor_title）
+          // 先检查是否存在旧的列名，且不存在新列名，才进行重命名
           const domainColumnCheck = await sql`
             SELECT column_name 
             FROM information_schema.columns 
             WHERE table_schema = 'public'
             AND table_name = 'domain_competitors_cache' 
-            AND column_name = 'domain'
+            AND column_name IN ('domain', 'competitor_domain')
           `;
           
-          if (domainColumnCheck.rows.length > 0) {
-            // 如果存在旧的 'domain' 列，重命名为 'competitor_domain'
+          const hasDomain = domainColumnCheck.rows.some((r: any) => r.column_name === 'domain');
+          const hasCompetitorDomain = domainColumnCheck.rows.some((r: any) => r.column_name === 'competitor_domain');
+          
+          if (hasDomain && !hasCompetitorDomain) {
+            // 如果存在旧的 'domain' 列且不存在 'competitor_domain'，重命名
             try {
               await sql`ALTER TABLE domain_competitors_cache RENAME COLUMN domain TO competitor_domain`;
               console.log('[Database] ✅ Renamed domain column to competitor_domain');
             } catch (renameError: any) {
-              if (!renameError.message?.includes('does not exist')) {
+              if (renameError.code !== '42701') { // 忽略"列已存在"错误
                 console.warn('[Database] Could not rename domain column:', renameError.message);
               }
             }
@@ -948,15 +1056,18 @@ export async function initDomainCacheTables() {
             FROM information_schema.columns 
             WHERE table_schema = 'public'
             AND table_name = 'domain_competitors_cache' 
-            AND column_name = 'title'
+            AND column_name IN ('title', 'competitor_title')
           `;
           
-          if (titleColumnCheck.rows.length > 0) {
+          const hasTitle = titleColumnCheck.rows.some((r: any) => r.column_name === 'title');
+          const hasCompetitorTitle = titleColumnCheck.rows.some((r: any) => r.column_name === 'competitor_title');
+          
+          if (hasTitle && !hasCompetitorTitle) {
             try {
               await sql`ALTER TABLE domain_competitors_cache RENAME COLUMN title TO competitor_title`;
               console.log('[Database] ✅ Renamed title column to competitor_title');
             } catch (renameError: any) {
-              if (!renameError.message?.includes('does not exist')) {
+              if (renameError.code !== '42701') { // 忽略"列已存在"错误
                 console.warn('[Database] Could not rename title column:', renameError.message);
               }
             }

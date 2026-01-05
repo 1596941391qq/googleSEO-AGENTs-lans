@@ -68,8 +68,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 
-    // TODO: 临时测试 - 使用 apple.com 作为默认域名
-    const domain = 'apple.com'; // website.website_domain;
+    // 使用实际的网站域名
+    const domain = website.website_domain;
 
     // 将地区代码转换为 locationCode
     const region = body.region || '';

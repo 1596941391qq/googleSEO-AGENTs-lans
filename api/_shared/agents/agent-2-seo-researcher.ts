@@ -83,12 +83,70 @@ export interface CompetitorAnalysisResult {
  * 提取JSON内容
  */
 function extractJSON(text: string): string {
-  // Try to find JSON object or array
+  if (!text) return '{}';
+  
+  // 移除 Markdown 代码块标记
+  text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  
+  // 移除可能的 Markdown 格式标记（如 ** 等）
+  // 但保留 JSON 内部的字符串内容
+  // 先尝试找到 JSON 对象或数组
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   if (jsonMatch) {
-    return jsonMatch[1];
+    let extracted = jsonMatch[1];
+    // 如果提取的内容前后还有 Markdown 标记，尝试清理
+    // 但要注意不要破坏 JSON 内部的字符串
+    return extracted.trim();
   }
-  return text.trim();
+  
+  // 如果没有找到 JSON，尝试移除开头的 Markdown 标记
+  // 查找第一个 { 或 [
+  const firstBrace = text.indexOf('{');
+  const firstBracket = text.indexOf('[');
+  
+  if (firstBrace !== -1 || firstBracket !== -1) {
+    const startIdx = firstBrace !== -1 && firstBracket !== -1
+      ? Math.min(firstBrace, firstBracket)
+      : (firstBrace !== -1 ? firstBrace : firstBracket);
+    
+    // 从第一个 { 或 [ 开始，找到匹配的 } 或 ]
+    let braceCount = 0;
+    let bracketCount = 0;
+    let inString = false;
+    let escapeNext = false;
+    
+    for (let i = startIdx; i < text.length; i++) {
+      const char = text[i];
+      
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+      
+      if (char === '\\') {
+        escapeNext = true;
+        continue;
+      }
+      
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+      
+      if (!inString) {
+        if (char === '{') braceCount++;
+        if (char === '}') braceCount--;
+        if (char === '[') bracketCount++;
+        if (char === ']') bracketCount--;
+        
+        if (braceCount === 0 && bracketCount === 0 && (char === '}' || char === ']')) {
+          return text.substring(startIdx, i + 1).trim();
+        }
+      }
+    }
+  }
+  
+  return text.trim() || '{}';
 }
 
 /**
@@ -123,14 +181,18 @@ export async function analyzeSearchPreferences(
 目标语言：${targetLanguage}
 目标市场：${marketLabel}
 
-请提供详细的搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。`
+请提供详细的搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。
+
+**重要：必须返回有效的 JSON 格式，不要包含任何 Markdown 格式标记、解释性文字或 JSON 对象之外的文本。只返回 JSON 对象本身。**`
       : `Please analyze optimization strategies for the keyword "${keyword}" across different search engines for the ${marketLabel} market.
 
 Keyword: ${keyword}
 Target Language: ${targetLanguage}
 Target Market: ${marketLabel}
 
-Please provide detailed search engine preference analysis and optimization recommendations, with special attention to localization needs for the target market.`;
+Please provide detailed search engine preference analysis and optimization recommendations, with special attention to localization needs for the target market.
+
+CRITICAL: You MUST respond with valid JSON only. Do NOT include any markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object.`;
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
@@ -293,7 +355,7 @@ ${deepContentContext}
 3. **字数与类型**：预估他们的字数和页面类型（博客、产品页、工具等）。
 4. **制胜策略**：总结他们为什么能排在第一，分析目标市场的竞争特点。
 
-请提供详细的 JSON 输出。`
+**重要：必须返回有效的 JSON 格式，不要包含任何 Markdown 格式标记、解释性文字或 JSON 对象之外的文本。只返回 JSON 对象本身。**`
       : `Please analyze the Top 10 competitors for the keyword "${keyword}" in the ${marketLabel} market.
 I have scraped the detailed web content of the top competitors for you. Please use this valid data for deep structural analysis.
 
@@ -311,7 +373,7 @@ Task Requirements:
 3. **Word Count & Type**: Estimate word count and page type (Blog, Product, Tool, etc.).
 4. **Winning Formula**: Summarize why they are ranking #1, analyzing competitive characteristics of the target market.
 
-Please provide detailed JSON output.`;
+CRITICAL: You MUST respond with valid JSON only. Do NOT include any markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object.`;
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
@@ -361,9 +423,66 @@ function getLanguageName(code: TargetLanguage): string {
 
 function extractJSONRobust(text: string): string {
   if (!text) return '{}';
-  text = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-  const jsonMatch = text.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
-  if (jsonMatch) return jsonMatch[1];
+  
+  // 移除 Markdown 代码块标记
+  text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  
+  // 移除可能的 Markdown 格式标记（如 ** 等）在 JSON 外部
+  // 先尝试找到 JSON 对象或数组
+  const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+  if (jsonMatch) {
+    let extracted = jsonMatch[1];
+    
+    // 使用更精确的方法提取完整的 JSON
+    // 查找第一个 { 或 [
+    const firstBrace = extracted.indexOf('{');
+    const firstBracket = extracted.indexOf('[');
+    
+    if (firstBrace !== -1 || firstBracket !== -1) {
+      const startIdx = firstBrace !== -1 && firstBracket !== -1
+        ? Math.min(firstBrace, firstBracket)
+        : (firstBrace !== -1 ? firstBrace : firstBracket);
+      
+      // 从第一个 { 或 [ 开始，找到匹配的 } 或 ]
+      let braceCount = 0;
+      let bracketCount = 0;
+      let inString = false;
+      let escapeNext = false;
+      
+      for (let i = startIdx; i < extracted.length; i++) {
+        const char = extracted[i];
+        
+        if (escapeNext) {
+          escapeNext = false;
+          continue;
+        }
+        
+        if (char === '\\') {
+          escapeNext = true;
+          continue;
+        }
+        
+        if (char === '"' && !escapeNext) {
+          inString = !inString;
+          continue;
+        }
+        
+        if (!inString) {
+          if (char === '{') braceCount++;
+          if (char === '}') braceCount--;
+          if (char === '[') bracketCount++;
+          if (char === ']') bracketCount--;
+          
+          if (braceCount === 0 && bracketCount === 0 && (char === '}' || char === ']')) {
+            return extracted.substring(startIdx, i + 1).trim();
+          }
+        }
+      }
+    }
+    
+    return extracted.trim();
+  }
+  
   return text.trim() || '{}';
 }
 
