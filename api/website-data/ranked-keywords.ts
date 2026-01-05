@@ -11,7 +11,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { initWebsiteDataTables, sql, raw } from '../lib/database.js';
 import { getRankedKeywords } from '../_shared/tools/dataforseo-domain.js';
 
 interface RankedKeywordsRequestBody {
@@ -106,7 +106,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 先尝试从缓存读取（使用动态 SQL 查询）
-    const cacheResult = await sql(`
+    // 使用模板标签语法，ORDER BY 子句使用 raw() 函数标记为原始 SQL
+    const cacheResult = await sql`
       SELECT
         keyword,
         current_position,
@@ -119,11 +120,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         competition,
         difficulty
       FROM ranked_keywords_cache
-      WHERE website_id = $1
+      WHERE website_id = ${body.websiteId}
         AND cache_expires_at > NOW()
-      ${orderByClause}
-      LIMIT $2
-    `, body.websiteId, limit);
+      ${raw(orderByClause)}
+      LIMIT ${limit}
+    `;
 
     let keywords: any[] = [];
     let fromApi = false;

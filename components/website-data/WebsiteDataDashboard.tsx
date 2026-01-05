@@ -9,12 +9,9 @@ import {
 import { OverviewCards } from "./OverviewCards";
 import { RankingDistributionChart } from "./RankingDistributionChart";
 import { TopKeywordsTable } from "./TopKeywordsTable";
-import { CompetitorsComparison } from "./CompetitorsComparison";
 import { KeywordIntelligenceView } from "./KeywordIntelligenceView";
 import { RankedKeywordsTable } from "./RankedKeywordsTable";
 import { RelevantPagesTable } from "./RelevantPagesTable";
-import { HistoricalRankChart } from "./HistoricalRankChart";
-import { DomainIntersectionView } from "./DomainIntersectionView";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
@@ -24,10 +21,6 @@ interface WebsiteOverview {
   paidTraffic: number;
   totalTraffic: number;
   totalKeywords: number;
-  newKeywords: number;
-  lostKeywords: number;
-  improvedKeywords: number;
-  declinedKeywords: number;
   avgPosition: number;
   trafficCost: number;
   rankingDistribution: {
@@ -36,7 +29,6 @@ interface WebsiteOverview {
     top50: number;
     top100: number;
   };
-  backlinksInfo?: BacklinksInfoData | null;
   updatedAt: string;
   expiresAt: string;
 }
@@ -53,21 +45,10 @@ interface DomainKeyword {
   trafficPercentage: number;
 }
 
-interface DomainCompetitor {
-  domain: string;
-  title: string;
-  commonKeywords: number;
-  organicTraffic: number;
-  totalKeywords: number;
-  gapKeywords: number;
-  gapTraffic: number;
-}
-
 interface WebsiteData {
   hasData: boolean;
   overview: WebsiteOverview | null;
   topKeywords: DomainKeyword[];
-  competitors: DomainCompetitor[];
   needsRefresh: boolean;
 }
 
@@ -77,7 +58,7 @@ interface WebsiteDataDashboardProps {
   uiLanguage: "en" | "zh";
 }
 
-type ViewMode = "overview" | "keyword-intelligence" | "ranked-keywords" | "relevant-pages" | "historical-rank" | "domain-intersection";
+type ViewMode = "overview" | "keyword-intelligence" | "ranked-keywords" | "relevant-pages" | "domain-intersection";
 
 export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   websiteId,
@@ -91,16 +72,14 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   const [loadingParts, setLoadingParts] = useState({
     overview: true,
     keywords: true,
-    competitors: true,
   });
   const [websiteInfo, setWebsiteInfo] = useState<{ domain?: string; url?: string } | null>(null);
-  const [selectedCompetitor, setSelectedCompetitor] = useState<string>("");
 
   // 优先从缓存获取，如果缓存过期或不存在，才从API获取（只获取一次）
   const loadDataParallel = async () => {
     setLoading(true);
     setError(null);
-    setLoadingParts({ overview: true, keywords: true, competitors: true });
+    setLoadingParts({ overview: true, keywords: true });
 
     // 初始化数据结构
     const initialData: WebsiteData = {
@@ -201,16 +180,11 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...baseRequest, limit: 20 }),
       }),
-      competitors: fetch("/api/website-data/competitors-only", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...baseRequest, limit: 5 }),
-      }),
     };
 
     // 处理每个请求，哪个先返回就先更新
     const handleResponse = async (
-      key: 'overview' | 'keywords' | 'competitors',
+      key: 'overview' | 'keywords',
       responsePromise: Promise<Response>
     ) => {
       try {
@@ -258,7 +232,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     await Promise.allSettled([
       handleResponse('overview', requests.overview),
       handleResponse('keywords', requests.keywords),
-      handleResponse('competitors', requests.competitors),
     ]);
 
     // 等待所有请求完成
@@ -443,23 +416,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
             <ExternalLink className="w-4 h-4 mr-2" />
             {uiLanguage === "zh" ? "相关页面" : "Relevant Pages"}
           </Button>
-          <Button
-            variant={viewMode === "historical-rank" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setViewMode("historical-rank")}
-            className={cn(
-              viewMode === "historical-rank"
-                ? isDarkTheme
-                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
-                  : "bg-emerald-500 hover:bg-emerald-600 text-white"
-                : isDarkTheme
-                ? "bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
-                : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50"
-            )}
-          >
-            <BarChart3 className="w-4 h-4 mr-2" />
-            {uiLanguage === "zh" ? "历史排名" : "Historical Rank"}
-          </Button>
         </div>
       </div>
 
@@ -522,10 +478,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           totalTraffic: data.overview.totalTraffic,
           totalKeywords: data.overview.totalKeywords,
           avgPosition: data.overview.avgPosition,
-          improvedKeywords: data.overview.improvedKeywords,
-          newKeywords: data.overview.newKeywords,
-          lostKeywords: data.overview.lostKeywords,
-          declinedKeywords: data.overview.declinedKeywords,
           trafficCost: data.overview.trafficCost,
         } : undefined}
         isLoading={loading || !data}
@@ -534,7 +486,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
       />
 
       {/* Charts and Tables - 始终显示，加载时显示加载状态 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Ranking Distribution */}
         <RankingDistributionChart
           distribution={data?.overview?.rankingDistribution}
@@ -542,11 +494,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           isLoading={loading || !data?.overview}
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
-          changes={{
-            top3: data?.overview?.improvedKeywords ? Math.floor(data.overview.improvedKeywords * 0.1) : undefined,
-            top10: data?.overview?.improvedKeywords ? Math.floor(data.overview.improvedKeywords * 0.3) : undefined,
-            top100: data?.overview?.improvedKeywords ? Math.floor(data.overview.improvedKeywords * 0.5) : undefined,
-          }}
         />
 
         {/* Top Keywords Table */}
@@ -558,14 +505,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           websiteId={websiteId}
           totalKeywordsCount={data?.overview?.totalKeywords}
           onViewAll={() => setViewMode("ranked-keywords")}
-        />
-
-        {/* Competitors Comparison */}
-        <CompetitorsComparison
-          competitors={data?.competitors || []}
-          isLoading={loading || !data}
-          isDarkTheme={isDarkTheme}
-          uiLanguage={uiLanguage}
         />
       </div>
 
@@ -632,70 +571,20 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           uiLanguage={uiLanguage}
           limit={20}
         />
-      ) : viewMode === "historical-rank" ? (
-        <HistoricalRankChart
-          websiteId={websiteId}
-          isDarkTheme={isDarkTheme}
-          uiLanguage={uiLanguage}
-          days={30}
-        />
       ) : viewMode === "domain-intersection" ? (
         <div className="space-y-4">
-          {data?.competitors && data.competitors.length > 0 ? (
-            <>
-              <div className={cn(
-                "p-4 rounded-lg border",
-                isDarkTheme ? "bg-zinc-900/50 border-zinc-800" : "bg-gray-50 border-gray-200"
-              )}>
-                <label className={cn(
-                  "block text-sm font-medium mb-2",
-                  isDarkTheme ? "text-white" : "text-gray-900"
-                )}>
-                  {uiLanguage === "zh" ? "选择竞争对手" : "Select Competitor"}
-                </label>
-                <select
-                  value={selectedCompetitor}
-                  onChange={(e) => setSelectedCompetitor(e.target.value)}
-                  className={cn(
-                    "w-full px-3 py-2 rounded-lg border",
-                    isDarkTheme
-                      ? "bg-zinc-800 border-zinc-700 text-white"
-                      : "bg-white border-gray-300 text-gray-900"
-                  )}
-                >
-                  <option value="">
-                    {uiLanguage === "zh" ? "-- 请选择 --" : "-- Select --"}
-                  </option>
-                  {data.competitors.map((comp, index) => (
-                    <option key={index} value={comp.domain}>
-                      {comp.domain} ({comp.commonKeywords} {uiLanguage === "zh" ? "共同关键词" : "common keywords"})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              {selectedCompetitor && (
-                <DomainIntersectionView
-                  websiteId={websiteId}
-                  competitorDomain={selectedCompetitor}
-                  isDarkTheme={isDarkTheme}
-                  uiLanguage={uiLanguage}
-                />
-              )}
-            </>
-          ) : (
-            <div className={cn(
-              "text-center py-8 rounded-lg border",
-              isDarkTheme
-                ? "bg-zinc-900/50 border-zinc-800 text-zinc-400"
-                : "bg-gray-50 border-gray-200 text-gray-500"
-            )}>
-              <p className="text-sm">
-                {uiLanguage === "zh"
-                  ? "请先在总览页面加载竞争对手数据"
-                  : "Please load competitor data in the overview page first"}
-              </p>
-            </div>
-          )}
+          <div className={cn(
+            "text-center py-8 rounded-lg border",
+            isDarkTheme
+              ? "bg-zinc-900/50 border-zinc-800 text-zinc-400"
+              : "bg-gray-50 border-gray-200 text-gray-500"
+          )}>
+            <p className="text-sm">
+              {uiLanguage === "zh"
+                ? "域名交集功能已禁用"
+                : "Domain intersection feature is disabled"}
+            </p>
+          </div>
         </div>
       ) : null}
     </div>

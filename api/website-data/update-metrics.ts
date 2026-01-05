@@ -245,9 +245,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ${kw.positionChange},
             ${kw.searchVolume},
             ${kw.cpc},
-            ${kw.competition},
+            ${kw.competition !== null && kw.competition !== undefined ? Math.min(Math.max(Number(kw.competition) || 0, 0), 99999999.99) : null},
             ${kw.difficulty},
-            ${kw.trafficPercentage},
+            ${kw.trafficPercentage !== null && kw.trafficPercentage !== undefined ? Math.min(Math.max(Number(kw.trafficPercentage) || 0, 0), 99999999.99) : null},
             ${kw.url || ''},
             NOW(),
             NOW() + INTERVAL '24 hours'
@@ -258,9 +258,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             position_change = EXCLUDED.position_change,
             search_volume = EXCLUDED.search_volume,
             cpc = EXCLUDED.cpc,
-            competition = EXCLUDED.competition,
+            competition = CASE 
+              WHEN EXCLUDED.competition IS NULL THEN NULL
+              ELSE LEAST(GREATEST(EXCLUDED.competition, 0), 99999999.99)
+            END,
             difficulty = EXCLUDED.difficulty,
-            traffic_percentage = EXCLUDED.traffic_percentage,
+            traffic_percentage = CASE 
+              WHEN EXCLUDED.traffic_percentage IS NULL THEN NULL
+              ELSE LEAST(GREATEST(EXCLUDED.traffic_percentage, 0), 99999999.99)
+            END,
             ranking_url = EXCLUDED.ranking_url,
             data_updated_at = NOW(),
             cache_expires_at = EXCLUDED.cache_expires_at
@@ -275,6 +281,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         competitors.map(comp => sql`
           INSERT INTO domain_competitors_cache (
             website_id,
+            domain,
             competitor_domain,
             competitor_title,
             common_keywords,
@@ -286,6 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             cache_expires_at
           ) VALUES (
             ${body.websiteId},
+            ${website.website_domain},
             ${comp.domain},
             ${comp.title || comp.domain},
             ${comp.commonKeywords},
@@ -297,6 +305,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             NOW() + INTERVAL '7 days'
           )
           ON CONFLICT (website_id, competitor_domain) DO UPDATE SET
+            domain = EXCLUDED.domain,
             competitor_title = EXCLUDED.competitor_title,
             common_keywords = EXCLUDED.common_keywords,
             organic_traffic = EXCLUDED.organic_traffic,

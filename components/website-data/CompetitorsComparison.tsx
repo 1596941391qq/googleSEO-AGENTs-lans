@@ -41,14 +41,35 @@ export const CompetitorsComparison: React.FC<CompetitorsComparisonProps> = ({
       )}
     >
       <CardHeader>
-        <CardTitle
-          className={cn(
-            "text-base font-semibold",
-            isDarkTheme ? "text-white" : "text-gray-900"
-          )}
-        >
-          {uiLanguage === "zh" ? "竞争对手" : "Competitors"}
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle
+            className={cn(
+              "text-base font-semibold",
+              isDarkTheme ? "text-white" : "text-gray-900"
+            )}
+          >
+            {uiLanguage === "zh" ? "竞争对手" : "Competitors"}
+          </CardTitle>
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-xs",
+              isDarkTheme
+                ? "border-blue-500/30 text-blue-400 bg-blue-500/10"
+                : "border-blue-200 text-blue-600 bg-blue-50"
+            )}
+          >
+            {uiLanguage === "zh" ? "反向链接" : "Backlinks"}
+          </Badge>
+        </div>
+        <p className={cn(
+          "text-xs mt-2",
+          isDarkTheme ? "text-zinc-400" : "text-gray-500"
+        )}>
+          {uiLanguage === "zh" 
+            ? "通过反向链接分析发现的竞争对手" 
+            : "Competitors discovered via backlink analysis"}
+        </p>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -145,7 +166,7 @@ export const CompetitorsComparison: React.FC<CompetitorsComparisonProps> = ({
                         isDarkTheme ? "text-zinc-500" : "text-gray-500"
                       )}
                     >
-                      {uiLanguage === "zh" ? "共同关键词" : "Common"}
+                      {uiLanguage === "zh" ? "共同反向链接" : "Common Links"}
                     </div>
                     <div
                       className={cn(
@@ -169,7 +190,7 @@ export const CompetitorsComparison: React.FC<CompetitorsComparisonProps> = ({
                         isDarkTheme ? "text-zinc-500" : "text-gray-500"
                       )}
                     >
-                      {uiLanguage === "zh" ? "有机流量" : "Traffic"}
+                      {uiLanguage === "zh" ? "反向链接" : "Backlinks"}
                     </div>
                     <div
                       className={cn(
@@ -193,15 +214,17 @@ export const CompetitorsComparison: React.FC<CompetitorsComparisonProps> = ({
                         isDarkTheme ? "text-zinc-500" : "text-gray-500"
                       )}
                     >
-                      {uiLanguage === "zh" ? "差距关键词" : "Gap"}
+                      {uiLanguage === "zh" ? "排名" : "Rank"}
                     </div>
                     <div
                       className={cn(
-                        "font-semibold text-amber-500",
-                        isDarkTheme ? "text-white" : "text-gray-900"
+                        "font-semibold",
+                        competitor.visibilityScore 
+                          ? (isDarkTheme ? "text-emerald-400" : "text-emerald-600")
+                          : (isDarkTheme ? "text-zinc-400" : "text-gray-400")
                       )}
                     >
-                      {formatNumber(competitor.gapKeywords)}
+                      {competitor.visibilityScore ? `#${competitor.visibilityScore}` : '-'}
                     </div>
                   </div>
 
@@ -217,7 +240,7 @@ export const CompetitorsComparison: React.FC<CompetitorsComparisonProps> = ({
                         isDarkTheme ? "text-zinc-500" : "text-gray-500"
                       )}
                     >
-                      {uiLanguage === "zh" ? "总关键词" : "Total"}
+                      {uiLanguage === "zh" ? "引用域名" : "Ref. Domains"}
                     </div>
                     <div
                       className={cn(

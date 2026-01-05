@@ -943,12 +943,12 @@ export async function discoverCompetitorsByBacklinks(
 }
 
 /**
- * 获取域名竞争对手对比
+ * 获取域名竞争对手（通过反向链接）
  *
  * @param domain - 域名
- * @param locationCode - 地区代码，默认 2840 (美国)
+ * @param locationCode - 地区代码（已废弃，保留以兼容）
  * @param limit - 返回数量限制，默认 5
- * @param intersectingDomains - 可选的竞争对手域名数组，如果不提供则自动通过反向链接发现
+ * @param intersectingDomains - 已废弃，不再使用
  * @returns 竞争对手数组
  */
 export async function getDomainCompetitors(
@@ -958,59 +958,28 @@ export async function getDomainCompetitors(
   intersectingDomains?: string[]
 ): Promise<DomainCompetitor[]> {
   try {
-    console.log(`[DataForSEO Domain] Getting competitors for ${domain}`);
+    console.log(`[DataForSEO Domain] Getting competitors via backlinks for ${domain}`);
 
     const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0];
-
-    // 如果未提供 intersecting_domains，自动通过反向链接发现竞争对手
-    let competitorsToCompare = intersectingDomains;
-    if (!competitorsToCompare || competitorsToCompare.length === 0) {
-      console.log(`[DataForSEO Domain] 🔍 Auto-discovering competitors via backlinks...`);
-      competitorsToCompare = await discoverCompetitorsByBacklinks(cleanDomain, limit);
-      
-      if (competitorsToCompare.length === 0) {
-        console.log(`[DataForSEO Domain] ⚠️ No competitors discovered via backlinks. Returning empty array.`);
-        return [];
-      }
-      
-      console.log(`[DataForSEO Domain] ✅ Discovered ${competitorsToCompare.length} competitors:`, competitorsToCompare);
-    }
 
     // Add timeout control (30 seconds)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
-      // 使用 DataForSEO Labs Competitors Domain API
-      // 注意：此API需要 intersecting_domains 参数（要对比的竞争对手域名列表）
-      const endpoint = `${DATAFORSEO_BASE_URL}/dataforseo_labs/google/competitors_domain/live`;
-      
-      // 清理域名格式（使用 competitorsToCompare，它已经包含了发现的或传入的竞争对手）
-      if (!competitorsToCompare || competitorsToCompare.length === 0) {
-        console.log(`[DataForSEO Domain] ⚠️ No competitors to compare`);
-        return [];
-      }
-
-      const cleanIntersectingDomains = competitorsToCompare.map(d => 
-        d.replace(/^https?:\/\//, '').split('/')[0]
-      ).filter(d => d && d !== cleanDomain); // 移除空值和目标域名本身
-
-      if (cleanIntersectingDomains.length === 0) {
-        console.log(`[DataForSEO Domain] ⚠️ No valid intersecting domains after cleaning`);
-        return [];
-      }
+      // 直接使用 DataForSEO Backlinks Competitors API
+      const endpoint = `${DATAFORSEO_BASE_URL}/backlinks/competitors/live`;
 
       const requestBody = [
         {
           target: cleanDomain,
-          intersecting_domains: cleanIntersectingDomains.slice(0, Math.min(limit, 10)), // 限制数量，最多10个
-          location_code: locationCode,
           limit: limit,
+          filters: ["intersections", ">", 10], // 至少10个共同反向链接
+          order_by: ["rank,desc"], // 按排名降序
         }
       ];
 
-      console.log(`[DataForSEO Domain] 📡 Making competitors API request to: ${endpoint}`);
-      console.log(`[DataForSEO Domain] 📦 Request body:`, JSON.stringify(requestBody));
+      console.log(`[DataForSEO Domain] 📡 Making backlinks competitors API request to: ${endpoint}`);
 
       const response = await fetchWithRetry(
         endpoint,
@@ -1029,18 +998,18 @@ export async function getDomainCompetitors(
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[DataForSEO Domain] API error:', response.status, errorText);
+        console.error('[DataForSEO Domain] Backlinks competitors API error:', response.status, errorText);
         if (response.status === 404 || response.status === 400) {
-          console.log(`[DataForSEO Domain] Competitors domain API returned 404/400. Check if intersecting_domains parameter is correct.`);
+          console.log(`[DataForSEO Domain] Backlinks competitors API returned 404/400`);
           return [];
         }
-        throw new Error(`DataForSEO Domain API error: ${response.status}`);
+        throw new Error(`DataForSEO Backlinks Competitors API error: ${response.status}`);
       }
 
       const data = await response.json();
 
       // 调试：打印响应结构
-      console.log('[DataForSEO Domain] 📥 API Response structure:', {
+      console.log('[DataForSEO Domain] 📥 Backlinks competitors API Response structure:', {
         hasTasks: !!data.tasks,
         tasksCount: data.tasks?.length || 0,
         hasResult: !!data.tasks?.[0]?.result,
@@ -1049,108 +1018,62 @@ export async function getDomainCompetitors(
         itemsCount: data.tasks?.[0]?.result?.[0]?.items?.length || 0,
       });
 
-      if (!data.tasks || !data.tasks[0]) {
-        console.warn('[DataForSEO Domain] No tasks in response');
+      if (!data.tasks || !data.tasks[0] || !data.tasks[0].result) {
+        console.warn('[DataForSEO Domain] No backlinks competitors in response');
         return [];
       }
 
-      if (!data.tasks[0].result) {
-        console.warn('[DataForSEO Domain] No result in tasks[0]');
-        return [];
-      }
-
-      if (!data.tasks[0].result[0]) {
-        console.warn('[DataForSEO Domain] No result[0] in tasks[0].result');
-        return [];
-      }
-
-      // 处理 Labs API 响应格式：tasks[0].result[0].items[]
-      // 根据用户提供的 API 文档，响应格式是：
-      // tasks[0].result[0].items[] - 每个竞争对手
+      // 解析响应：result[0].items[]
       const resultData = data.tasks[0].result[0] || {};
-      let competitorsList: any[] = [];
+      const items = resultData.items || [];
       
-      if (resultData.items && Array.isArray(resultData.items)) {
-        competitorsList = resultData.items;
-        console.log(`[DataForSEO Domain] ✅ Found ${competitorsList.length} competitors in items array`);
-      } else if (Array.isArray(resultData)) {
-        competitorsList = resultData;
-        console.log(`[DataForSEO Domain] ✅ Found ${competitorsList.length} competitors in result array`);
-      } else {
-        console.warn('[DataForSEO Domain] ⚠️ Unexpected response structure:', {
-          resultDataType: typeof resultData,
-          resultDataKeys: Object.keys(resultData),
-          hasItems: !!resultData.items,
-          itemsType: Array.isArray(resultData.items) ? 'array' : typeof resultData.items,
-        });
-      }
-
-      if (competitorsList.length === 0) {
-        console.warn('[DataForSEO Domain] No competitors items in response');
+      if (!Array.isArray(items) || items.length === 0) {
+        console.warn('[DataForSEO Domain] No items in backlinks competitors response');
         return [];
       }
 
-      const competitors: DomainCompetitor[] = competitorsList.map((comp: any, index: number) => {
-        // 解析响应数据，根据用户提供的示例格式
-        // API 返回格式：tasks[0].result[0].items[]
-        // 每个 item 包含：
-        // - domain: 竞争对手域名
-        // - intersections: 共同关键词数
-        // - avg_position: 平均位置
-        // - metrics: 目标域名在交集关键词上的指标
-        // - competitor_metrics: 竞争对手在交集关键词上的指标
-        // - full_domain_metrics: 竞争对手的完整域名指标
-        const organicMetrics = comp.metrics?.organic || {};
-        const competitorMetrics = comp.competitor_metrics?.organic || {};
-        const fullDomainMetrics = comp.full_domain_metrics?.organic || {};
+      // 解析 backlinks/competitors API 响应格式
+      // 每个 item 包含：
+      // - target: 竞争对手域名
+      // - rank: 排名
+      // - intersections: 共同反向链接数
+      // - backlinks: 反向链接数
+      // - referring_domains: 引用域名数
+      const competitors: DomainCompetitor[] = items.map((item: any, index: number) => {
+        const competitorDomain = item.target || item.domain || '';
         
-        // 共同关键词数（intersections）
-        const commonKeywords = comp.intersections || 0;
-        
-        // 竞争对手的总关键词数（从 full_domain_metrics 获取）
-        const competitorTotalKeywords = Number(fullDomainMetrics?.count) || 0;
-        
-        // 计算 gap keywords（对手有而目标域名没有的关键词）
-        // gap = 竞争对手总关键词数 - 共同关键词数
-        const gapKeywords = Math.max(0, competitorTotalKeywords - commonKeywords);
-        
-        // 计算 gap_traffic（竞争对手在 gap keywords 上的流量）
-        // gap_traffic = 竞争对手总流量 - 竞争对手在交集关键词上的流量
-        // 这样可以得到竞争对手在那些我们还没有排名的关键词上的流量
-        const competitorTotalTraffic = Number(fullDomainMetrics?.etv) || 0;
-        const competitorIntersectionTraffic = Number(competitorMetrics?.etv) || 0;
-        const gapTraffic = Math.max(0, competitorTotalTraffic - competitorIntersectionTraffic);
+        // backlinks API 返回的数据结构
+        const intersections = Number(item.intersections) || 0; // 共同反向链接数
+        const backlinks = Number(item.backlinks) || 0; // 反向链接总数
+        const referringDomains = Number(item.referring_domains) || 0; // 引用域名数
         
         // 调试日志：打印第一个竞争对手的详细数据
         if (index === 0) {
-          console.log('[DataForSEO Domain] 📊 Sample competitor data:', {
-            domain: comp.domain,
-            intersections: comp.intersections,
-            competitorTotalKeywords,
-            commonKeywords,
-            gapKeywords,
-            competitorTotalTraffic,
-            competitorIntersectionTraffic,
-            gapTraffic,
-            fullDomainMetricsKeys: Object.keys(fullDomainMetrics),
-            competitorMetricsKeys: Object.keys(competitorMetrics),
-            organicMetricsKeys: Object.keys(organicMetrics),
+          console.log('[DataForSEO Domain] 📊 Sample backlinks competitor data:', {
+            target: item.target,
+            domain: item.domain,
+            rank: item.rank,
+            intersections: item.intersections,
+            backlinks: item.backlinks,
+            referring_domains: item.referring_domains,
+            itemKeys: Object.keys(item),
           });
         }
         
+        // 由于 backlinks API 不提供关键词和流量数据，我们使用反向链接数据作为替代指标
         return {
-          domain: comp.domain || '',
-          title: comp.domain || '', // API 响应中没有 title 字段，使用 domain
-          commonKeywords: commonKeywords, // 共同关键词数（intersections）
-          organicTraffic: competitorTotalTraffic, // 竞争对手的完整域名流量（full_domain_metrics.etv）
-          totalKeywords: competitorTotalKeywords, // 竞争对手的总关键词数（full_domain_metrics.count）
-          gapKeywords: gapKeywords, // 对手有而目标没有的关键词数
-          gapTraffic: gapTraffic, // gap keywords 的预估流量
-          visibilityScore: undefined, // API 响应中没有 visibility 字段
+          domain: competitorDomain,
+          title: competitorDomain, // 使用域名作为标题
+          commonKeywords: intersections, // 使用共同反向链接数作为共同关键词数的替代
+          organicTraffic: backlinks, // 使用反向链接数作为流量的替代指标
+          totalKeywords: referringDomains, // 使用引用域名数作为总关键词数的替代
+          gapKeywords: 0, // backlinks API 不提供此数据
+          gapTraffic: 0, // backlinks API 不提供此数据
+          visibilityScore: item.rank || undefined, // 使用 rank 作为可见度评分
         };
-      });
+      }).filter((comp: DomainCompetitor) => comp.domain && comp.domain !== cleanDomain); // 过滤掉空值和目标域名本身
 
-      console.log(`[DataForSEO Domain] ✅ Found ${competitors.length} competitors`);
+      console.log(`[DataForSEO Domain] ✅ Found ${competitors.length} competitors via backlinks`);
 
       return competitors;
     } catch (fetchError: any) {

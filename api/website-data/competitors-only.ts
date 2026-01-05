@@ -98,6 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               data.map(comp => sql`
                 INSERT INTO domain_competitors_cache (
                   website_id,
+                  domain,
                   competitor_domain,
                   competitor_title,
                   common_keywords,
@@ -109,6 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   cache_expires_at
                 ) VALUES (
                   ${body.websiteId},
+                  ${domain},
                   ${comp.domain},
                   ${comp.title || comp.domain},
                   ${comp.commonKeywords},
@@ -120,6 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   NOW() + INTERVAL '7 days'
                 )
                 ON CONFLICT (website_id, competitor_domain) DO UPDATE SET
+                  domain = EXCLUDED.domain,
                   competitor_title = EXCLUDED.competitor_title,
                   common_keywords = EXCLUDED.common_keywords,
                   organic_traffic = EXCLUDED.organic_traffic,

@@ -47,6 +47,11 @@ if (pool) {
   });
 }
 
+// 原始 SQL 标记类，用于标记不应该参数化的值
+class RawSQL {
+  constructor(public value: string) {}
+}
+
 // 导出 SQL 查询函数 (tagged template 语法)
 // 使用连接池而不是每次创建新连接，大大提高性能
 export const sql = async <T extends QueryResultRow = any>(
@@ -67,9 +72,14 @@ export const sql = async <T extends QueryResultRow = any>(
   for (let i = 0; i < strings.length; i++) {
     queryText += strings[i];
     if (i < values.length) {
-      queryText += `$${paramIndex}`;
-      params.push(values[i]);
-      paramIndex++;
+      // 如果值是 RawSQL 实例，直接插入 SQL，不参数化
+      if (values[i] instanceof RawSQL) {
+        queryText += values[i].value;
+      } else {
+        queryText += `$${paramIndex}`;
+        params.push(values[i]);
+        paramIndex++;
+      }
     }
   }
 
@@ -93,6 +103,11 @@ export const sql = async <T extends QueryResultRow = any>(
     throw error;
   }
 };
+
+// 辅助函数：创建原始 SQL 标记
+export function raw(sql: string): RawSQL {
+  return new RawSQL(sql);
+}
 
 // 测试数据库连接
 export async function testConnection() {
@@ -589,7 +604,7 @@ export async function initWebsiteKeywordsTable() {
           estimated_volume INTEGER,
           seranking_volume INTEGER,
           seranking_cpc DECIMAL(10,2),
-          seranking_competition DECIMAL(5,2),
+          seranking_competition DECIMAL(10,2),
           seranking_difficulty INTEGER,
           seranking_history_trend JSONB,
           seranking_data_found BOOLEAN DEFAULT false,
@@ -607,6 +622,37 @@ export async function initWebsiteKeywordsTable() {
 
       await sql`CREATE INDEX IF NOT EXISTS idx_website_keywords_website ON website_keywords(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_website_keywords_page ON website_keywords(page_id)`;
+
+      // 迁移现有表：将 seranking_competition 从 DECIMAL(5,2) 改为 DECIMAL(10,2)
+      try {
+        const tableCheck = await sql`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'website_keywords'
+          )
+        `;
+        
+        if (tableCheck.rows[0].exists) {
+          const competitionCheck = await sql`
+            SELECT numeric_precision, numeric_scale
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'website_keywords' 
+            AND column_name = 'seranking_competition'
+          `;
+          
+          if (competitionCheck.rows.length > 0) {
+            const precision = competitionCheck.rows[0].numeric_precision;
+            if (precision && precision < 10) {
+              await sql`ALTER TABLE website_keywords ALTER COLUMN seranking_competition TYPE DECIMAL(10,2)`;
+              console.log('[Database] ✅ Updated seranking_competition precision to DECIMAL(10,2) in website_keywords');
+            }
+          }
+        }
+      } catch (error: any) {
+        console.warn('[Database] Could not migrate website_keywords columns:', error.message);
+      }
       await sql`CREATE INDEX IF NOT EXISTS idx_website_keywords_opportunity ON website_keywords(ranking_opportunity_score DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_website_keywords_seranking ON website_keywords(seranking_data_found)`;
 
@@ -835,9 +881,9 @@ export async function initDomainCacheTables() {
           position_change INTEGER,
           search_volume INTEGER,
           cpc DECIMAL(10,2),
-          competition DECIMAL(5,2),
+          competition DECIMAL(10,2),
           difficulty INTEGER,
-          traffic_percentage DECIMAL(5,2),
+          traffic_percentage DECIMAL(10,2),
           data_updated_at TIMESTAMP,
           cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
           created_at TIMESTAMP DEFAULT NOW()
@@ -848,6 +894,76 @@ export async function initDomainCacheTables() {
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_keyword ON domain_keywords_cache(keyword)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_position ON domain_keywords_cache(current_position)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_expires ON domain_keywords_cache(cache_expires_at)`;
+
+      // 迁移现有表：将 competition 和 traffic_percentage 从 DECIMAL(5,2) 改为 DECIMAL(10,2)
+      try {
+        const tableCheck = await sql`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'domain_keywords_cache'
+          )
+        `;
+        
+        if (tableCheck.rows[0].exists) {
+          // 检查并迁移 competition 字段
+          const competitionCheck = await sql`
+            SELECT numeric_precision, numeric_scale
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'domain_keywords_cache' 
+            AND column_name = 'competition'
+          `;
+          
+          if (competitionCheck.rows.length > 0) {
+            const precision = Number(competitionCheck.rows[0].numeric_precision);
+            const scale = Number(competitionCheck.rows[0].numeric_scale);
+            // 如果 precision < 10 或者 scale 不是 2，执行迁移
+            if (precision < 10 || scale !== 2) {
+              await sql`ALTER TABLE domain_keywords_cache ALTER COLUMN competition TYPE DECIMAL(10,2)`;
+              console.log('[Database] ✅ Updated competition precision to DECIMAL(10,2) in domain_keywords_cache');
+            } else {
+              console.log('[Database] ℹ️ competition column already has correct precision');
+            }
+          }
+
+          // 检查并迁移 traffic_percentage 字段
+          const trafficCheck = await sql`
+            SELECT numeric_precision, numeric_scale
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'domain_keywords_cache' 
+            AND column_name = 'traffic_percentage'
+          `;
+          
+          if (trafficCheck.rows.length > 0) {
+            const precision = Number(trafficCheck.rows[0].numeric_precision);
+            const scale = Number(trafficCheck.rows[0].numeric_scale);
+            // 如果 precision < 10 或者 scale 不是 2，执行迁移
+            if (precision < 10 || scale !== 2) {
+              await sql`ALTER TABLE domain_keywords_cache ALTER COLUMN traffic_percentage TYPE DECIMAL(10,2)`;
+              console.log('[Database] ✅ Updated traffic_percentage precision to DECIMAL(10,2) in domain_keywords_cache');
+            } else {
+              console.log('[Database] ℹ️ traffic_percentage column already has correct precision');
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('[Database] ❌ Could not migrate domain_keywords_cache columns:', error.message);
+        // 即使迁移失败，也尝试直接执行 ALTER TABLE（可能表结构已经正确）
+        try {
+          await sql`ALTER TABLE domain_keywords_cache ALTER COLUMN competition TYPE DECIMAL(10,2)`;
+          console.log('[Database] ✅ Force updated competition column');
+        } catch (e: any) {
+          // 忽略错误，可能字段不存在或已经是正确类型
+        }
+        try {
+          await sql`ALTER TABLE domain_keywords_cache ALTER COLUMN traffic_percentage TYPE DECIMAL(10,2)`;
+          console.log('[Database] ✅ Force updated traffic_percentage column');
+        } catch (e: any) {
+          // 忽略错误，可能字段不存在或已经是正确类型
+        }
+      }
 
       await sql`
         CREATE TABLE IF NOT EXISTS domain_competitors_cache (
@@ -909,7 +1025,7 @@ export async function initDomainCacheTables() {
           serp_features JSONB,
           ranking_url TEXT,
           cpc DECIMAL(10,2),
-          competition DECIMAL(5,2),
+          competition DECIMAL(10,2),
           difficulty INTEGER,
           data_updated_at TIMESTAMP,
           cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
@@ -935,6 +1051,37 @@ export async function initDomainCacheTables() {
       await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_keyword ON ranked_keywords_cache(keyword)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_position ON ranked_keywords_cache(current_position)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_expires ON ranked_keywords_cache(cache_expires_at)`;
+
+      // 迁移现有表：将 competition 从 DECIMAL(5,2) 改为 DECIMAL(10,2)
+      try {
+        const tableCheck = await sql`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'ranked_keywords_cache'
+          )
+        `;
+        
+        if (tableCheck.rows[0].exists) {
+          const competitionCheck = await sql`
+            SELECT numeric_precision, numeric_scale
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'ranked_keywords_cache' 
+            AND column_name = 'competition'
+          `;
+          
+          if (competitionCheck.rows.length > 0) {
+            const precision = competitionCheck.rows[0].numeric_precision;
+            if (precision && precision < 10) {
+              await sql`ALTER TABLE ranked_keywords_cache ALTER COLUMN competition TYPE DECIMAL(10,2)`;
+              console.log('[Database] ✅ Updated competition precision to DECIMAL(10,2) in ranked_keywords_cache');
+            }
+          }
+        }
+      } catch (error: any) {
+        console.warn('[Database] Could not migrate ranked_keywords_cache columns:', error.message);
+      }
 
       // 创建历史排名概览缓存表
       await sql`

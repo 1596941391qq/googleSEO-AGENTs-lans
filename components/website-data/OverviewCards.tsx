@@ -32,10 +32,6 @@ interface OverviewCardsProps {
     totalTraffic?: number;
     totalKeywords: number;
     avgPosition: number;
-    improvedKeywords: number;
-    newKeywords: number;
-    lostKeywords?: number;
-    declinedKeywords?: number;
     trafficCost?: number;
   };
   isLoading?: boolean;
@@ -90,30 +86,6 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
       value: metrics.avgPosition.toFixed(1),
       icon: <Target className="w-4 h-4" />,
       unit: uiLanguage === "zh" ? "名" : "#",
-    },
-    {
-      label: uiLanguage === "zh" ? "提升关键词" : "Improved",
-      value: formatNumber(metrics.improvedKeywords),
-      icon: <TrendingUp className="w-4 h-4" />,
-      changeType: "increase",
-    },
-    {
-      label: uiLanguage === "zh" ? "新增关键词" : "New Keywords",
-      value: formatNumber(metrics.newKeywords),
-      icon: <BarChart3 className="w-4 h-4" />,
-      changeType: "increase",
-    },
-    {
-      label: uiLanguage === "zh" ? "丢失关键词" : "Lost Keywords",
-      value: formatNumber(metrics.lostKeywords || 0),
-      icon: <TrendingDown className="w-4 h-4" />,
-      changeType: "decrease",
-    },
-    {
-      label: uiLanguage === "zh" ? "下降关键词" : "Declined Keywords",
-      value: formatNumber(metrics.declinedKeywords || 0),
-      icon: <ArrowDown className="w-4 h-4" />,
-      changeType: "decrease",
     },
     {
       label: uiLanguage === "zh" ? "流量成本" : "Traffic Cost",

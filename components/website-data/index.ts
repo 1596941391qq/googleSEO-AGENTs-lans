@@ -6,5 +6,4 @@ export { WebsiteDataDashboard } from './WebsiteDataDashboard';
 export { KeywordIntelligenceView } from './KeywordIntelligenceView';
 export { RankedKeywordsTable } from './RankedKeywordsTable';
 export { RelevantPagesTable } from './RelevantPagesTable';
-export { HistoricalRankChart } from './HistoricalRankChart';
 export { DomainIntersectionView } from './DomainIntersectionView';
