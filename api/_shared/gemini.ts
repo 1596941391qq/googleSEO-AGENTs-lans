@@ -123,6 +123,12 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
     if (data.candidates && data.candidates.length > 0) {
       const candidate = data.candidates[0];
 
+      // 检查 finishReason 以检测截断
+      const finishReason = candidate.finishReason || candidate.finish_reason;
+      if (finishReason === 'LENGTH' || finishReason === 'MAX_TOKENS') {
+        console.warn('⚠️  API 响应因达到 token 限制而被截断 (finishReason: ' + finishReason + ')');
+      }
+
       // 提取文本内容
       if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
         content = candidate.content.parts[0].text || '';
@@ -185,10 +191,14 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
       throw new Error('API 响应中没有找到文本内容');
     }
 
+    // 提取 finishReason 以便调用方检测截断
+    const finishReason = data.candidates?.[0]?.finishReason || data.candidates?.[0]?.finish_reason;
+
     return {
       text: content,
       raw: data,
       searchResults: searchResults.length > 0 ? searchResults : undefined,
+      finishReason: finishReason, // 添加 finishReason 以便检测截断
     };
   } catch (error: any) {
     console.error('调用 Gemini API 失败:', error);

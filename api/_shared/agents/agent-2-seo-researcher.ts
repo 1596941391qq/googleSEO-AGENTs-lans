@@ -630,6 +630,134 @@ function extractJSONRobust(text: string): string {
 }
 
 /**
+ * 修复截断的 JSON，特别是处理未闭合的字符串
+ * 这个函数会尝试修复字符串被截断的情况
+ */
+function fixTruncatedJSON(text: string): string {
+  if (!text || text.trim() === '') return '{}';
+
+  let fixed = text.trim();
+  let inString = false;
+  let escapeNext = false;
+  let lastStringStart = -1;
+  let braceCount = 0;
+  let bracketCount = 0;
+
+  // 找到第一个 {
+  const firstBrace = fixed.indexOf('{');
+  if (firstBrace === -1) return fixed;
+
+  // 从第一个 { 开始扫描
+  for (let i = firstBrace; i < fixed.length; i++) {
+    const char = fixed[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+
+    if (char === '"' && !escapeNext) {
+      if (!inString) {
+        inString = true;
+        lastStringStart = i;
+      } else {
+        inString = false;
+        lastStringStart = -1;
+      }
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{') braceCount++;
+      if (char === '}') braceCount--;
+      if (char === '[') bracketCount++;
+      if (char === ']') bracketCount--;
+    }
+  }
+
+  // 如果字符串未闭合，尝试修复
+  if (inString && lastStringStart !== -1) {
+    // 找到字符串开始的位置，尝试找到合理的结束位置
+    // 如果字符串在字段值中，添加闭合引号
+    const beforeString = fixed.substring(0, lastStringStart);
+    const afterStringStart = fixed.substring(lastStringStart);
+    
+    // 检查是否是字段值（前面有 :）
+    const colonIndex = beforeString.lastIndexOf(':');
+    if (colonIndex !== -1) {
+      // 这是一个字段值，添加闭合引号
+      fixed = fixed.substring(0, fixed.length) + '"';
+    }
+  }
+
+  // 修复未闭合的括号
+  if (bracketCount > 0) {
+    fixed += ']'.repeat(bracketCount);
+  }
+  if (braceCount > 0) {
+    // 在添加闭合括号之前，确保最后一个字段有正确的格式
+    // 如果最后一个字符不是 } 或 ]，可能需要添加逗号或闭合引号
+    const lastChar = fixed[fixed.length - 1];
+    if (lastChar !== '"' && lastChar !== '}' && lastChar !== ']' && lastChar !== '[') {
+      // 可能是一个未闭合的字符串或字段，尝试修复
+      if (!fixed.endsWith('"')) {
+        fixed += '"';
+      }
+    }
+    fixed += '}'.repeat(braceCount);
+  }
+
+  return fixed;
+}
+
+/**
+ * 尝试从截断的 JSON 中提取部分字段
+ * 返回一个包含已解析字段的对象
+ */
+function extractPartialJSON(text: string): any {
+  const partial: any = {};
+  
+  // 尝试提取关键字段
+  const probabilityMatch = text.match(/"probability"\s*:\s*"([^"]+)"/);
+  if (probabilityMatch) {
+    partial.probability = probabilityMatch[1];
+  }
+
+  const reasoningMatch = text.match(/"reasoning"\s*:\s*"([^"]*)"?/);
+  if (reasoningMatch) {
+    // 如果字符串被截断，使用已提取的部分
+    partial.reasoning = reasoningMatch[1] || '';
+  }
+
+  const searchIntentMatch = text.match(/"searchIntent"\s*:\s*"([^"]*)"?/);
+  if (searchIntentMatch) {
+    partial.searchIntent = searchIntentMatch[1] || '';
+  }
+
+  const intentAnalysisMatch = text.match(/"intentAnalysis"\s*:\s*"([^"]*)"?/);
+  if (intentAnalysisMatch) {
+    partial.intentAnalysis = intentAnalysisMatch[1] || '';
+  }
+
+  const serpResultCountMatch = text.match(/"serpResultCount"\s*:\s*(-?\d+)/);
+  if (serpResultCountMatch) {
+    partial.serpResultCount = parseInt(serpResultCountMatch[1], 10);
+  }
+
+  const topDomainTypeMatch = text.match(/"topDomainType"\s*:\s*"([^"]+)"/);
+  if (topDomainTypeMatch) {
+    partial.topDomainType = topDomainTypeMatch[1];
+  }
+
+  return partial;
+}
+
+/**
  * Analyze Ranking Probability
  * Moved from gemini.ts
  */
@@ -775,6 +903,12 @@ IMPORTANT ANALYSIS RULES:
 
 CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, reasoning process, or markdown formatting. Return ONLY the JSON object.
 
+IMPORTANT OUTPUT LENGTH LIMITS:
+- "reasoning": Keep concise, maximum 300 characters in ${uiLangName}
+- "searchIntent": Brief, maximum 150 characters
+- "intentAnalysis": Concise, maximum 200 characters
+- "topSerpSnippets": Include only first 3 results, keep titles and snippets short
+
 Return a JSON object:
 {
   "searchIntent": "Brief description of predicted user search intent in ${uiLangName}",
@@ -782,7 +916,7 @@ Return a JSON object:
   "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
-  "reasoning": "explanation string in ${uiLangName} based on the real SERP results",
+  "reasoning": "explanation string in ${uiLangName} based on the real SERP results (keep concise, max 300 chars)",
   "topSerpSnippets": ${topSerpSnippetsJson}
 }`;
 
@@ -857,6 +991,13 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
       }
 
       let text = response.text || "{}";
+      const finishReason = (response as any).finishReason; // 检查是否被截断
+
+      // 检查是否因 token 限制被截断
+      const isTruncated = finishReason === 'LENGTH' || finishReason === 'MAX_TOKENS';
+      if (isTruncated) {
+        console.warn(`⚠️  Response truncated for keyword "${keywordData.keyword}" (finishReason: ${finishReason})`);
+      }
 
       // 如果响应以 Markdown 格式开头（如 "**Refining..."），先清理
       // 移除 Markdown 格式标记和思考过程
@@ -884,43 +1025,32 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         throw new Error("Empty JSON response from model");
       }
 
-      let analysis;
+      // 声明 analysis 变量在 try 块外，以便在整个作用域内使用
+      let analysis: any = null;
       try {
         analysis = JSON.parse(text);
       } catch (e: any) {
         console.error("JSON Parse Error for keyword:", keywordData.keyword);
         console.error("Extracted text (first 500 chars):", text.substring(0, 500));
+        if (isTruncated) {
+          console.error("⚠️  Response was truncated (finishReason: " + finishReason + "), attempting recovery...");
+        }
 
         // Enhanced fallback: try multiple strategies to extract JSON
         let recovered = false;
 
-        // Strategy 0: 尝试修复常见的 JSON 截断问题
-        let fixedText = text.trim();
-        const openBraces = (fixedText.match(/\{/g) || []).length;
-        const closeBraces = (fixedText.match(/\}/g) || []).length;
-        if (openBraces > closeBraces) {
-          // 添加缺失的闭合括号和可能的数组闭合
-          const missingBraces = openBraces - closeBraces;
-          // 检查是否有未闭合的数组
-          const openBrackets = (fixedText.match(/\[/g) || []).length;
-          const closeBrackets = (fixedText.match(/\]/g) || []).length;
-          if (openBrackets > closeBrackets) {
-            fixedText += ']'.repeat(openBrackets - closeBrackets);
-          }
-          // 添加缺失的闭合大括号
-          fixedText += '}'.repeat(missingBraces);
-
-          try {
-            analysis = JSON.parse(fixedText);
-            console.log("✓ Fixed truncated JSON by adding missing braces");
-            recovered = true;
-          } catch (fixError) {
-            // 继续使用其他恢复策略
-          }
+        // Strategy 0: 使用新的智能修复函数处理字符串截断
+        try {
+          const fixedText = fixTruncatedJSON(text);
+          analysis = JSON.parse(fixedText);
+          console.log("✓ Fixed truncated JSON using smart string repair");
+          recovered = true;
+        } catch (fixError) {
+          // 继续使用其他恢复策略
         }
 
+        // Strategy 0.5: 尝试修复常见的 JSON 截断问题（括号不匹配）
         if (!recovered) {
-          // Strategy 0.5: 尝试修复截断的 JSON（在尝试其他策略之前）
           let fixedText = text.trim();
           const openBraces = (fixedText.match(/\{/g) || []).length;
           const closeBraces = (fixedText.match(/\}/g) || []).length;
@@ -944,6 +1074,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
               // 继续使用其他恢复策略
             }
           }
+        }
 
           // Strategy 1: Try to find JSON object with "probability" field
           if (!recovered) {
@@ -1016,8 +1147,40 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           }
 
           if (!recovered) {
+            // Strategy 3: 尝试提取部分字段（即使 JSON 不完整）
+            const partialJSON = extractPartialJSON(text);
+            if (Object.keys(partialJSON).length > 0) {
+              console.log("✓ Extracted partial JSON fields:", Object.keys(partialJSON));
+              // 使用提取的部分字段，缺失的字段使用默认值
+              const defaultSearchIntent = uiLanguage === 'zh'
+                ? '无法确定搜索意图'
+                : 'Unable to determine intent';
+              const defaultIntentAnalysis = uiLanguage === 'zh'
+                ? '分析失败：AI返回了不完整的JSON响应'
+                : 'Analysis failed due to incomplete JSON response';
+              const defaultReasoning = uiLanguage === 'zh'
+                ? `AI响应被截断，已提取部分字段。原始错误: ${e.message}`
+                : `AI response was truncated, extracted partial fields. Original error: ${e.message}`;
+
+              analysis = {
+                searchIntent: partialJSON.searchIntent || defaultSearchIntent,
+                intentAnalysis: partialJSON.intentAnalysis || defaultIntentAnalysis,
+                serpResultCount: partialJSON.serpResultCount !== undefined ? partialJSON.serpResultCount : (serpResultCount > 0 ? serpResultCount : -1),
+                topDomainType: partialJSON.topDomainType || "Unknown",
+                probability: partialJSON.probability || "Medium",
+                reasoning: partialJSON.reasoning || defaultReasoning,
+                topSerpSnippets: []
+              };
+              recovered = true;
+            }
+          }
+
+          if (!recovered) {
             // 如果所有恢复策略都失败，使用默认值并记录错误
             console.error("All JSON recovery strategies failed. Using default values.");
+            if (isTruncated) {
+              console.error("⚠️  Response was truncated, consider reducing output length or splitting the request");
+            }
             // 根据 uiLanguage 设置默认值
             const defaultSearchIntent = uiLanguage === 'zh'
               ? '无法确定搜索意图'
@@ -1026,8 +1189,8 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
               ? '分析失败：AI返回了无效的JSON响应'
               : 'Analysis failed due to invalid JSON response';
             const defaultReasoning = uiLanguage === 'zh'
-              ? `AI响应解析失败。原始错误: ${e.message}。响应预览: ${text.substring(0, 200)}`
-              : `Failed to parse AI response. Original error: ${e.message}. Response preview: ${text.substring(0, 200)}`;
+              ? `AI响应解析失败。${isTruncated ? '响应被截断。' : ''}原始错误: ${e.message}。响应预览: ${text.substring(0, 200)}`
+              : `Failed to parse AI response. ${isTruncated ? 'Response was truncated. ' : ''}Original error: ${e.message}. Response preview: ${text.substring(0, 200)}`;
 
             analysis = {
               searchIntent: defaultSearchIntent,
@@ -1041,7 +1204,6 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
             // 不抛出错误，而是使用默认值继续处理
           }
         }
-      }
 
       if (typeof analysis !== 'object' || analysis === null) {
         throw new Error("Response is not a valid JSON object");

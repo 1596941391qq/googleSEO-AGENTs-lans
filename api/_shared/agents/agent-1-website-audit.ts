@@ -15,7 +15,7 @@
 import { callGeminiAPI } from '../gemini.js';
 import { scrapeWebsite } from '../tools/firecrawl.js';
 import { getDomainKeywords, getDomainCompetitors } from '../tools/dataforseo-domain.js';
-import { getDataForSEOLocationAndLanguage } from '../tools/dataforseo.js';
+import { getDataForSEOLocationAndLanguage, fetchKeywordData } from '../tools/dataforseo.js';
 import { KeywordData, TargetLanguage } from '../types.js';
 import { getExistingWebsiteAuditPrompt } from '../../../services/prompts/index.js';
 
@@ -49,9 +49,20 @@ function extractKeywordsFromMarkdown(text: string): any[] {
         .trim();
 
       // 过滤掉太短、太长或明显不是关键词的内容
+      // 排除字段名和常见占位符
+      const excludedKeywords = [
+        'keyword', 'translation', 'intent', 'volume', 'difficulty', 'reasoning', 
+        'priority', 'opportunity_type', 'commercial', 'informational', 'transactional',
+        'local', '关键词', '翻译', '意图', '搜索量', '难度', '推理', '优先级',
+        '机会类型', '商业', '信息', '交易', '本地'
+      ];
+      
       if (keyword.length > 2 && keyword.length < 100 &&
         !keyword.match(/^(关键词|keyword|建议|suggestion|机会|opportunity)/i) &&
-        !keyword.includes('：') && !keyword.includes(':')) {
+        !keyword.includes('：') && !keyword.includes(':') &&
+        !excludedKeywords.some(excluded => keyword.toLowerCase() === excluded.toLowerCase()) &&
+        !keyword.match(/^[a-z_]+$/i) && // 排除纯英文单词（可能是字段名）
+        keyword.split(' ').length <= 10) { // 排除过长的短语
         keywords.push({
           keyword: keyword,
           volume: 0,
@@ -77,6 +88,13 @@ function extractKeywordsFromMarkdown(text: string): any[] {
         /^(关键词|keyword|intent|volume|translation|reasoning|priority|opportunity_type|difficulty)$/i,
         /^(Informational|Transactional|Local|Commercial)$/i,
       ];
+      
+      const excludedKeywords = [
+        'keyword', 'translation', 'intent', 'volume', 'difficulty', 'reasoning', 
+        'priority', 'opportunity_type', 'commercial', 'informational', 'transactional',
+        'local', '关键词', '翻译', '意图', '搜索量', '难度', '推理', '优先级',
+        '机会类型', '商业', '信息', '交易', '本地'
+      ];
 
       const extracted = section
         .split(/[,，\n]/)
@@ -85,8 +103,14 @@ function extractKeywordsFromMarkdown(text: string): any[] {
           if (k.length < 3 || k.length >= 100) return false;
           // 排除字段名
           if (excludedPatterns.some(pattern => pattern.test(k))) return false;
+          // 排除常见占位符
+          if (excludedKeywords.some(excluded => k.toLowerCase() === excluded.toLowerCase())) return false;
           // 排除包含冒号的格式（如 "keyword: value"）
           if (k.includes(':') || k.includes('：')) return false;
+          // 排除纯英文单词（可能是字段名）
+          if (k.match(/^[a-z_]+$/i) && k.length < 15) return false;
+          // 排除过长的短语
+          if (k.split(' ').length > 10) return false;
           return true;
         });
 
@@ -480,7 +504,7 @@ export async function auditWebsiteForKeywords(
     const extractedKeywords = extractKeywordsFromMarkdown(analysisReport);
 
     // 转换为 KeywordData 格式
-    const keywords: KeywordData[] = extractedKeywords
+    let keywords: KeywordData[] = extractedKeywords
       .map((kw: any, index: number) => ({
         id: `audit-${Date.now()}-${index}`,
         keyword: kw.keyword || '',
@@ -492,6 +516,61 @@ export async function auditWebsiteForKeywords(
       }))
       .filter((kw: KeywordData) => kw.keyword && kw.keyword.trim() !== '')
       .slice(0, wordsPerRound); // 限制数量
+
+    // 获取 DataForSEO 数据以丰富关键词信息
+    if (keywords.length > 0) {
+      try {
+        emit('strategist', 'log', uiLanguage === 'zh' 
+          ? `正在获取 DataForSEO 关键词数据...` 
+          : 'Fetching DataForSEO keyword data...');
+        
+        const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
+        const keywordStrings = keywords.map(k => k.keyword);
+        const dataForSEOResults = await fetchKeywordData(keywordStrings, locationCode, languageCode);
+        
+        // 创建 DataForSEO 数据映射
+        const dataForSEODataMap = new Map<string, any>();
+        dataForSEOResults.forEach(data => {
+          if (data.keyword) {
+            dataForSEODataMap.set(data.keyword.toLowerCase(), data);
+          }
+        });
+        
+        // 将 DataForSEO 数据附加到关键词
+        keywords = keywords.map(kw => {
+          const dataForSEOData = dataForSEODataMap.get(kw.keyword.toLowerCase());
+          
+          if (dataForSEOData) {
+            kw.dataForSEOData = {
+              is_data_found: dataForSEOData.is_data_found || false,
+              volume: dataForSEOData.volume,
+              cpc: dataForSEOData.cpc,
+              competition: dataForSEOData.competition,
+              difficulty: dataForSEOData.difficulty,
+              history_trend: dataForSEOData.history_trend,
+            };
+            kw.serankingData = kw.dataForSEOData; // 向后兼容
+            
+            // 更新 volume 如果 DataForSEO 有数据
+            if (dataForSEOData.volume) {
+              kw.volume = dataForSEOData.volume;
+            }
+          }
+          
+          return kw;
+        });
+        
+        emit('strategist', 'log', uiLanguage === 'zh' 
+          ? `✓ DataForSEO 数据已获取` 
+          : '✓ DataForSEO data fetched');
+      } catch (dataForSEOError: any) {
+        console.warn(`[Website Audit] DataForSEO API call failed: ${dataForSEOError.message}`);
+        emit('strategist', 'log', uiLanguage === 'zh' 
+          ? `⚠️ DataForSEO 数据获取失败，继续使用默认值` 
+          : '⚠️ DataForSEO data fetch failed, using defaults');
+        // 继续处理，不中断流程
+      }
+    }
 
     console.log(`[Website Audit] Generated analysis report (${analysisReport.length} characters, extracted ${keywords.length} keywords)`);
 
