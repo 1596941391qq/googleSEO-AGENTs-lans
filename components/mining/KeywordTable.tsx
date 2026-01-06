@@ -102,15 +102,70 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                     <td colSpan={7} className="px-4 py-6">
                       <div className="flex flex-col md:flex-row gap-6">
                         <div className="flex-1 space-y-4">
-                          {(item.searchIntent || item.intentAnalysis) && (
-                            <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/30" : "bg-white border-slate-200")}>
-                              <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><BrainCircuit className="w-4 h-4 text-emerald-500" /><span className={cn(isDarkTheme ? "text-white" : "text-slate-900")}>{t.searchIntentAnalysis || (uiLanguage === "zh" ? "搜索意图分析" : "Search Intent Analysis")}</span></CardTitle></CardHeader>
-                              <CardContent className="space-y-3">
-                                {item.searchIntent && <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/30" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-semibold mb-2", isDarkTheme ? "text-emerald-400" : "text-emerald-700")}>{t.userIntent || (uiLanguage === "zh" ? "用户意图" : "USER INTENT")}</div><p className={cn("text-sm leading-relaxed", isDarkTheme ? "text-white" : "text-slate-700")}>{item.searchIntent}</p></CardContent></Card>}
-                                {item.intentAnalysis && <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/30" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-semibold mb-2", isDarkTheme ? "text-emerald-400" : "text-emerald-700")}>{t.intentVsSerpMatch || (uiLanguage === "zh" ? "意图与SERP匹配" : "INTENT vs SERP MATCH")}</div><p className={cn("text-sm leading-relaxed", isDarkTheme ? "text-white" : "text-slate-700")}>{item.intentAnalysis}</p></CardContent></Card>}
-                              </CardContent>
-                            </Card>
-                          )}
+                          {(item.searchIntent || item.intentAnalysis) && (() => {
+                            // 过滤掉错误信息，只显示有效内容
+                            const hasErrorKeywords = (text: string | undefined): boolean => {
+                              if (!text) return false;
+                              const errorKeywords = [
+                                '无法确定', 'Unable to determine', 
+                                '分析失败', 'Analysis failed', 
+                                'AI响应被截断', 'AI response was truncated',
+                                '原始错误', 'Original error',
+                                '不完整的JSON', 'incomplete JSON',
+                                '无效的JSON', 'invalid JSON',
+                                '解析失败', 'Failed to parse',
+                                'Unterminated string'
+                              ];
+                              return errorKeywords.some(keyword => text.includes(keyword));
+                            };
+
+                            const isValidSearchIntent = item.searchIntent && !hasErrorKeywords(item.searchIntent);
+                            const isValidIntentAnalysis = item.intentAnalysis && !hasErrorKeywords(item.intentAnalysis);
+
+                            // 如果都包含错误信息，不显示这个卡片
+                            if (!isValidSearchIntent && !isValidIntentAnalysis) {
+                              return null;
+                            }
+
+                            return (
+                              <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/30" : "bg-white border-slate-200")}>
+                                <CardHeader className="pb-3">
+                                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                    <BrainCircuit className="w-4 h-4 text-emerald-500" />
+                                    <span className={cn(isDarkTheme ? "text-white" : "text-slate-900")}>
+                                      {t.searchIntentAnalysis || (uiLanguage === "zh" ? "搜索意图分析" : "Search Intent Analysis")}
+                                    </span>
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                  {isValidSearchIntent && (
+                                    <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/30" : "bg-emerald-50 border-emerald-200")}>
+                                      <CardContent className="p-4">
+                                        <div className={cn("text-xs font-semibold mb-2", isDarkTheme ? "text-emerald-400" : "text-emerald-700")}>
+                                          {t.userIntent || (uiLanguage === "zh" ? "用户意图" : "USER INTENT")}
+                                        </div>
+                                        <p className={cn("text-sm leading-relaxed", isDarkTheme ? "text-white" : "text-slate-700")}>
+                                          {item.searchIntent}
+                                        </p>
+                                      </CardContent>
+                                    </Card>
+                                  )}
+                                  {isValidIntentAnalysis && (
+                                    <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/30" : "bg-emerald-50 border-emerald-200")}>
+                                      <CardContent className="p-4">
+                                        <div className={cn("text-xs font-semibold mb-2", isDarkTheme ? "text-emerald-400" : "text-emerald-700")}>
+                                          {t.intentVsSerpMatch || (uiLanguage === "zh" ? "意图与SERP匹配" : "INTENT vs SERP MATCH")}
+                                        </div>
+                                        <p className={cn("text-sm leading-relaxed", isDarkTheme ? "text-white" : "text-slate-700")}>
+                                          {item.intentAnalysis}
+                                        </p>
+                                      </CardContent>
+                                    </Card>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            );
+                          })()}
                           {item.serankingData && item.serankingData.is_data_found && (
                             <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/30" : "bg-white border-slate-200")}>
                               <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-500" /><span className={cn(isDarkTheme ? "text-white" : "text-slate-900")}>{t.keywordResearchTool || (uiLanguage === "zh" ? "SEO词研究工具 (DataForSEO)" : "Keyword Research Tool (DataForSEO)")}</span></CardTitle></CardHeader>
@@ -127,7 +182,45 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                               </CardContent>
                             </Card>
                           )}
-                          <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-white border-slate-200")}><CardHeader className="pb-3"><CardTitle className={cn("text-sm font-semibold", isDarkTheme ? "text-white" : "text-slate-900")}>{t.analysisReasoning || (uiLanguage === "zh" ? "分析推理" : "Analysis Reasoning")}</CardTitle></CardHeader><CardContent><div className={cn("prose prose-sm max-w-none", isDarkTheme ? "prose-invert prose-emerald prose-headings:text-white prose-p:text-white prose-strong:text-white prose-li:text-white" : "prose-slate")}><MarkdownContent content={item.reasoning || (uiLanguage === "zh" ? "未提供推理" : "No reasoning provided")} isDarkTheme={isDarkTheme} /></div></CardContent></Card>
+                          {(() => {
+                            // 过滤掉错误信息
+                            const hasErrorKeywords = (text: string | undefined): boolean => {
+                              if (!text) return false;
+                              const errorKeywords = [
+                                '无法确定', 'Unable to determine', 
+                                '分析失败', 'Analysis failed', 
+                                'AI响应被截断', 'AI response was truncated',
+                                '原始错误', 'Original error',
+                                '不完整的JSON', 'incomplete JSON',
+                                '无效的JSON', 'invalid JSON',
+                                '解析失败', 'Failed to parse',
+                                'Unterminated string', '响应预览'
+                              ];
+                              return errorKeywords.some(keyword => text.includes(keyword));
+                            };
+
+                            const isValidReasoning = item.reasoning && !hasErrorKeywords(item.reasoning);
+                            const displayReasoning = isValidReasoning 
+                              ? item.reasoning 
+                              : (uiLanguage === "zh" 
+                                  ? "分析结果正在生成中，请稍候..." 
+                                  : "Analysis results are being generated, please wait...");
+
+                            return (
+                              <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-white border-slate-200")}>
+                                <CardHeader className="pb-3">
+                                  <CardTitle className={cn("text-sm font-semibold", isDarkTheme ? "text-white" : "text-slate-900")}>
+                                    {t.analysisReasoning || (uiLanguage === "zh" ? "分析推理" : "Analysis Reasoning")}
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className={cn("prose prose-sm max-w-none", isDarkTheme ? "prose-invert prose-emerald prose-headings:text-white prose-p:text-white prose-strong:text-white prose-li:text-white" : "prose-slate")}>
+                                    <MarkdownContent content={displayReasoning} isDarkTheme={isDarkTheme} />
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })()}
                           <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-white border-slate-200")}><CardContent className="p-4"><div className="grid grid-cols-2 gap-4"><div><span className={cn("text-xs block mb-1", isDarkTheme ? "text-white/70" : "text-slate-600")}>{t.referenceSerpCount || (uiLanguage === "zh" ? "参考SERP数量" : "Reference SERP Count")}</span><span className={cn("text-sm font-semibold", isDarkTheme ? "text-white" : "text-slate-900")}>{item.serpResultCount === -1 ? (uiLanguage === "zh" ? "未知（很多）" : "Unknown (Many)") : item.serpResultCount ?? (uiLanguage === "zh" ? "未知" : "Unknown")}</span></div><div><span className={cn("text-xs block mb-1", isDarkTheme ? "text-white/70" : "text-slate-600")}>{t.topCompetitorType || (uiLanguage === "zh" ? "顶级竞争对手类型" : "Top Competitor Type")}</span><Badge variant="outline" className={cn("text-xs", isDarkTheme ? "border-emerald-500/30 text-white" : "border-slate-300 text-slate-700")}>{item.topDomainType ?? "-"}</Badge></div></div></CardContent></Card>
                           {item.serpResultCount === 0 ? (<Card className={cn("border-amber-200 dark:border-amber-800/50", isDarkTheme ? "bg-amber-950/20" : "bg-amber-50")}><CardContent className="p-4"><div className="flex items-center gap-2 text-sm font-medium text-amber-800 dark:text-amber-300"><Lightbulb className="w-4 h-4" />{uiLanguage === "zh" ? "搜索中未找到直接竞争对手。" : "No direct competitors found in search."}</div></CardContent></Card>) : (item.topSerpSnippets && item.topSerpSnippets.length > 0 && (<Card className={cn(isDarkTheme ? "bg-slate-900/50 border-slate-800" : "bg-white border-slate-200")}><CardHeader className="pb-3"><div className="flex justify-between items-center"><CardTitle className={cn("text-sm font-semibold", isDarkTheme ? "text-slate-200" : "text-slate-900")}>{t.serpEvidence}</CardTitle><Badge variant="outline" className={cn("text-[10px]", isDarkTheme ? "border-amber-800/50 text-amber-400" : "border-amber-200 text-amber-700")}>{t.serpEvidenceDisclaimer}</Badge></div></CardHeader><CardContent><div className="space-y-3">{item.topSerpSnippets.slice(0, 3).map((snip, i) => (<Card key={i} className={cn(isDarkTheme ? "bg-slate-800/50 border-slate-700" : "bg-slate-50 border-slate-200")}><CardContent className="p-3"><div className={cn("text-sm font-semibold mb-1 truncate", isDarkTheme ? "text-emerald-400" : "text-emerald-700")}>{snip.title}</div><div className={cn("text-xs mb-2 truncate", isDarkTheme ? "text-emerald-400" : "text-emerald-700")}>{snip.url}</div><div className={cn("text-xs line-clamp-2 leading-relaxed", isDarkTheme ? "text-slate-400" : "text-slate-600")}>{snip.snippet}</div></CardContent></Card>))}</div></CardContent></Card>))}
                         </div>

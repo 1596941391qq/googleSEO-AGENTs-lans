@@ -658,8 +658,31 @@ const SearchPreferencesCard: React.FC<{
 }> = ({ data, uiLanguage }) => {
   const t = AGENT_TEXT[uiLanguage];
 
-  // If markdown field exists, render markdown directly
-  if (data.markdown) {
+  // Try to parse JSON string if markdown is a JSON string
+  let parsedData = data;
+  if (data.markdown && typeof data.markdown === 'string') {
+    // Check if markdown is a JSON string
+    const trimmedMarkdown = data.markdown.trim();
+    if ((trimmedMarkdown.startsWith('{') && trimmedMarkdown.endsWith('}')) ||
+        (trimmedMarkdown.startsWith('[') && trimmedMarkdown.endsWith(']'))) {
+      try {
+        const jsonParsed = JSON.parse(trimmedMarkdown);
+        // Merge parsed JSON with existing data
+        parsedData = {
+          ...data,
+          ...jsonParsed,
+          // Preserve original markdown for fallback
+          _originalMarkdown: data.markdown
+        };
+      } catch (e) {
+        // If parsing fails, treat as markdown
+        console.warn('[SearchPreferencesCard] Failed to parse JSON markdown:', e);
+      }
+    }
+  }
+
+  // If markdown field exists and is not JSON, render markdown directly
+  if (parsedData.markdown && !parsedData._originalMarkdown) {
     return (
       <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
         <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center mb-3">
@@ -668,13 +691,16 @@ const SearchPreferencesCard: React.FC<{
         <div className="prose prose-sm prose-invert max-w-none">
           <div className="text-xs text-gray-300 leading-relaxed">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {data.markdown}
+              {parsedData.markdown}
             </ReactMarkdown>
           </div>
         </div>
       </div>
     );
   }
+
+  // Use parsed data for rendering
+  data = parsedData;
 
   // Fallback: render old structured format
   return (
@@ -1036,10 +1062,26 @@ const FinalArticleCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
 }> = ({ data, uiLanguage }) => {
-  const markdown = data.markdown || data.content || data.article_body || "";
-  const title = data.title || "";
+  // Try to parse JSON string if data is a string
+  let parsedData = data;
+  if (typeof data === 'string') {
+    try {
+      parsedData = JSON.parse(data);
+    } catch (e) {
+      // If parsing fails, treat as markdown content
+      parsedData = { article_body: data, content: data };
+    }
+  }
 
-  if (!markdown) {
+  // Extract fields from parsed data
+  const articleBody = parsedData.article_body || parsedData.content || parsedData.markdown || "";
+  const title = parsedData.title || parsedData.seo_meta?.title || "";
+  const seoMeta = parsedData.seo_meta;
+  const geoScore = parsedData.geo_score;
+  const logicCheck = parsedData.logic_check;
+  const qualityReview = parsedData.qualityReview || parsedData.quality_review;
+
+  if (!articleBody && !title) {
     return (
       <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
         <div className="text-xs text-gray-500 italic">
@@ -1052,16 +1094,85 @@ const FinalArticleCard: React.FC<{
   }
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center mb-3">
+    <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 space-y-4">
+      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
         <FileText size={12} className="mr-1" />
         {uiLanguage === "zh" ? "最终文章" : "Final Article"}
       </h4>
-      <div className="prose prose-sm prose-invert max-w-none">
-        <div className="text-xs text-gray-300 leading-relaxed max-h-96 overflow-y-auto">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+
+      {/* Title */}
+      {title && (
+        <div className="text-sm font-bold text-white">{title}</div>
+      )}
+
+      {/* SEO Meta */}
+      {seoMeta && (
+        <div className="space-y-1">
+          <div className="text-[10px] text-purple-400/70 uppercase tracking-wider">
+            {uiLanguage === "zh" ? "SEO 元数据" : "SEO Meta"}
+          </div>
+          <div className="bg-purple-500/5 border border-purple-500/20 rounded p-2 space-y-1 text-xs">
+            {seoMeta.title && (
+              <div>
+                <span className="text-purple-400/70">
+                  {uiLanguage === "zh" ? "标题:" : "Title:"}
+                </span>{" "}
+                <span className="text-gray-300">{seoMeta.title}</span>
+              </div>
+            )}
+            {seoMeta.description && (
+              <div>
+                <span className="text-purple-400/70">
+                  {uiLanguage === "zh" ? "描述:" : "Description:"}
+                </span>{" "}
+                <span className="text-gray-300">{seoMeta.description}</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Article Body */}
+      {articleBody && (
+        <div className="prose prose-sm prose-invert max-w-none">
+          <div className="text-xs text-gray-300 leading-relaxed max-h-96 overflow-y-auto">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{articleBody}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {/* Quality Review */}
+      {qualityReview && (
+        <QualityReviewCard data={qualityReview} uiLanguage={uiLanguage} />
+      )}
+
+      {/* GEO Score (if not in quality review) */}
+      {geoScore && !qualityReview && (
+        <div className="space-y-1">
+          <div className="text-[10px] text-blue-400/70 uppercase tracking-wider">
+            {uiLanguage === "zh" ? "GEO 评分" : "GEO Score"}
+          </div>
+          <div className="bg-blue-500/5 border border-blue-500/20 rounded p-2 text-xs">
+            {geoScore.total_score !== undefined && (
+              <div className="text-blue-400 font-bold">
+                {uiLanguage === "zh" ? "总分:" : "Total Score:"} {geoScore.total_score}/100
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Logic Check */}
+      {logicCheck && (
+        <div className="space-y-1">
+          <div className="text-[10px] text-emerald-400/70 uppercase tracking-wider">
+            {uiLanguage === "zh" ? "逻辑检查" : "Logic Check"}
+          </div>
+          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2 text-xs text-gray-300 leading-relaxed">
+            {logicCheck}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

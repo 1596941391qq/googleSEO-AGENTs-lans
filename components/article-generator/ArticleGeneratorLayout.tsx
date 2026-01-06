@@ -60,11 +60,13 @@ function getTargetLanguageFromMarket(targetMarket: string, keyword?: string): Ta
 interface ArticleGeneratorLayoutProps {
   onBack: () => void;
   uiLanguage?: 'en' | 'zh';
+  isDarkTheme?: boolean;
   articleGeneratorState?: {
     keyword: string;
     tone: string;
     targetAudience: string;
     visualStyle: string;
+    targetMarket?: string;
     isGenerating: boolean;
     progress: number;
     currentStage: 'input' | 'research' | 'strategy' | 'writing' | 'visualizing' | 'complete';
@@ -279,7 +281,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                     </div>
                 )}
                 
-                {stage === 'preview' && finalArticle && (
+                {                stage === 'preview' && finalArticle && (
                     <ArticlePreview 
                        finalArticle={finalArticle} 
                        onClose={() => updateState({ 
@@ -295,6 +297,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                          targetMarket: state.targetMarket,
                        }}
                        uiLanguage={uiLanguage}
+                       isDarkTheme={isDarkTheme}
                     />
                 )}
             </div>

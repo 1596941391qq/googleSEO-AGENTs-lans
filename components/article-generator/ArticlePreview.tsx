@@ -24,13 +24,15 @@ interface ArticlePreviewProps {
     targetMarket?: string;
   };
   uiLanguage?: 'en' | 'zh';
+  isDarkTheme?: boolean;
 }
 
 export const ArticlePreview: React.FC<ArticlePreviewProps> = ({ 
   finalArticle, 
   onClose,
   articleConfig,
-  uiLanguage = 'en'
+  uiLanguage = 'en',
+  isDarkTheme = true
 }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -136,7 +138,7 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
             </div>
           )}
           
-          <MarkdownContent content={content} isDarkTheme={true} />
+          <MarkdownContent content={content} isDarkTheme={isDarkTheme} />
       </div>
     );
   };

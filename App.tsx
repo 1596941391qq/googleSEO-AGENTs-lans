@@ -1150,30 +1150,54 @@ const renderAgentDataTable = (
             )}
 
             {/* Reasoning */}
-            {data.reasoning && (
-              <div
-                className={`p-3 rounded-lg border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/20"
-                    : "bg-white border-gray-200"
-                }`}
-              >
+            {data.reasoning && (() => {
+              // 过滤掉错误信息
+              const hasErrorKeywords = (text: string): boolean => {
+                const errorKeywords = [
+                  '无法确定', 'Unable to determine', 
+                  '分析失败', 'Analysis failed', 
+                  'AI响应被截断', 'AI response was truncated',
+                  '原始错误', 'Original error',
+                  '不完整的JSON', 'incomplete JSON',
+                  '无效的JSON', 'invalid JSON',
+                  '解析失败', 'Failed to parse',
+                  'Unterminated string', '响应预览', 'Response preview'
+                ];
+                return errorKeywords.some(keyword => text.includes(keyword));
+              };
+
+              const isValidReasoning = !hasErrorKeywords(data.reasoning);
+              const displayReasoning = isValidReasoning 
+                ? data.reasoning 
+                : (uiLanguage === "zh" 
+                    ? "分析结果正在生成中，请稍候..." 
+                    : "Analysis results are being generated, please wait...");
+
+              return (
                 <div
-                  className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
-                    isDarkTheme ? "text-white/70" : "text-gray-600"
+                  className={`p-3 rounded-lg border ${
+                    isDarkTheme
+                      ? "bg-black border-emerald-500/20"
+                      : "bg-white border-gray-200"
                   }`}
                 >
-                  ANALYSIS REASONING
+                  <div
+                    className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
+                      isDarkTheme ? "text-white/70" : "text-gray-600"
+                    }`}
+                  >
+                    ANALYSIS REASONING
+                  </div>
+                  <div
+                    className={`text-xs leading-relaxed ${
+                      isDarkTheme ? "text-white" : "text-gray-700"
+                    }`}
+                  >
+                    {displayReasoning}
+                  </div>
                 </div>
-                <div
-                  className={`text-xs leading-relaxed ${
-                    isDarkTheme ? "text-white" : "text-gray-700"
-                  }`}
-                >
-                  {data.reasoning}
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         ))}
       </div>
@@ -1809,54 +1833,84 @@ const BatchAnalysisStream = ({
             )}
 
             {/* Intent Analysis Display */}
-            {thought.type === "intent-analysis" && thought.intentData && (
-              <div className="mt-2 space-y-2">
-                <div
-                  className={`p-2 rounded border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-emerald-50 border-emerald-200"
-                  }`}
-                >
-                  <div
-                    className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                    }`}
-                  >
-                    USER INTENT
-                  </div>
-                  <p
-                    className={`text-xs ${
-                      isDarkTheme ? "text-white" : "text-gray-700"
-                    }`}
-                  >
-                    {thought.intentData.searchIntent}
-                  </p>
+            {thought.type === "intent-analysis" && thought.intentData && (() => {
+              // 过滤掉错误信息
+              const hasErrorKeywords = (text: string | undefined): boolean => {
+                if (!text) return false;
+                const errorKeywords = [
+                  '无法确定', 'Unable to determine', 
+                  '分析失败', 'Analysis failed', 
+                  'AI响应被截断', 'AI response was truncated',
+                  '原始错误', 'Original error',
+                  '不完整的JSON', 'incomplete JSON',
+                  '无效的JSON', 'invalid JSON',
+                  '解析失败', 'Failed to parse',
+                  'Unterminated string', '响应预览', 'Response preview'
+                ];
+                return errorKeywords.some(keyword => text.includes(keyword));
+              };
+
+              const isValidSearchIntent = thought.intentData.searchIntent && !hasErrorKeywords(thought.intentData.searchIntent);
+              const isValidIntentAnalysis = thought.intentData.intentAnalysis && !hasErrorKeywords(thought.intentData.intentAnalysis);
+
+              // 如果都包含错误信息，不显示
+              if (!isValidSearchIntent && !isValidIntentAnalysis) {
+                return null;
+              }
+
+              return (
+                <div className="mt-2 space-y-2">
+                  {isValidSearchIntent && (
+                    <div
+                      className={`p-2 rounded border ${
+                        isDarkTheme
+                          ? "bg-black border-emerald-500/30"
+                          : "bg-emerald-50 border-emerald-200"
+                      }`}
+                    >
+                      <div
+                        className={`text-[10px] font-bold mb-1 ${
+                          isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                        }`}
+                      >
+                        USER INTENT
+                      </div>
+                      <p
+                        className={`text-xs ${
+                          isDarkTheme ? "text-white" : "text-gray-700"
+                        }`}
+                      >
+                        {thought.intentData.searchIntent}
+                      </p>
+                    </div>
+                  )}
+                  {isValidIntentAnalysis && (
+                    <div
+                      className={`p-2 rounded border ${
+                        isDarkTheme
+                          ? "bg-black border-emerald-500/30"
+                          : "bg-emerald-50 border-emerald-200"
+                      }`}
+                    >
+                      <div
+                        className={`text-[10px] font-bold mb-1 ${
+                          isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                        }`}
+                      >
+                        INTENT vs SERP
+                      </div>
+                      <p
+                        className={`text-xs ${
+                          isDarkTheme ? "text-white" : "text-gray-700"
+                        }`}
+                      >
+                        {thought.intentData.intentAnalysis}
+                      </p>
+                    </div>
+                  )}
                 </div>
-                <div
-                  className={`p-2 rounded border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-emerald-50 border-emerald-200"
-                  }`}
-                >
-                  <div
-                    className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                    }`}
-                  >
-                    INTENT vs SERP
-                  </div>
-                  <p
-                    className={`text-xs ${
-                      isDarkTheme ? "text-white" : "text-gray-700"
-                    }`}
-                  >
-                    {thought.intentData.intentAnalysis}
-                  </p>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* SERP Snippets */}
             {thought.type === "serp-search" &&
@@ -8455,6 +8509,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 }
               }}
               uiLanguage={state.uiLanguage}
+              isDarkTheme={isDarkTheme}
               articleGeneratorState={{
                 keyword: state.articleGeneratorState.keyword,
                 tone: state.articleGeneratorState.tone,

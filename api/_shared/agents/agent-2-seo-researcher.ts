@@ -939,21 +939,14 @@ IMPORTANT ANALYSIS RULES:
 
 CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, reasoning process, or markdown formatting. Return ONLY the JSON object.
 
-CRITICAL OUTPUT LENGTH LIMITS (STRICTLY ENFORCE):
-- "reasoning": Maximum 250 characters in ${uiLangName} - be concise and focused
-- "searchIntent": Maximum 120 characters - brief description only
-- "intentAnalysis": Maximum 180 characters - concise analysis only
-- "topSerpSnippets": Include ONLY first 3 results, keep titles under 80 chars and snippets under 100 chars each
-- DO NOT exceed these limits - prioritize brevity over detail
-
 Return a JSON object:
 {
-  "searchIntent": "Brief description of predicted user search intent in ${uiLangName}",
-  "intentAnalysis": "Analysis of whether SERP results match the intent in ${uiLangName}",
+  "searchIntent": "Detailed description of predicted user search intent in ${uiLangName}",
+  "intentAnalysis": "Comprehensive analysis of whether SERP results match the intent in ${uiLangName}",
   "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
-  "reasoning": "explanation string in ${uiLangName} based on the real SERP results (keep concise, max 300 chars)",
+  "reasoning": "Detailed explanation in ${uiLangName} based on the real SERP results - provide comprehensive analysis",
   "topSerpSnippets": ${topSerpSnippetsJson}
 }`;
 
@@ -992,9 +985,9 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
             },
             // 禁用 Google 搜索以避免 JSON 解析错误（联网模式会导致返回非纯 JSON 格式）
             enableGoogleSearch: false,
-            // 显式设置更高的 maxOutputTokens 以避免截断（Gemini 2.5 Flash 支持最大 65536）
-            // 设置为 32768 以确保有足够空间输出完整的 JSON（包括 reasoning 和 topSerpSnippets）
-            maxOutputTokens: 32768
+            // 设置最大输出token限制（Gemini 2.5 Flash 支持最大 65536）
+            // 设置为最大值以确保有足够空间输出完整的 JSON（包括详细的 reasoning 和完整的 topSerpSnippets）
+            maxOutputTokens: 65536
           }
         );
       } catch (apiError: any) {
@@ -1189,24 +1182,49 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           const partialJSON = extractPartialJSON(text);
           if (Object.keys(partialJSON).length > 0) {
             console.log("✓ Extracted partial JSON fields:", Object.keys(partialJSON));
-            // 使用提取的部分字段，缺失的字段使用默认值
-            const defaultSearchIntent = uiLanguage === 'zh'
-              ? '无法确定搜索意图'
-              : 'Unable to determine intent';
-            const defaultIntentAnalysis = uiLanguage === 'zh'
-              ? '分析失败：AI返回了不完整的JSON响应'
-              : 'Analysis failed due to incomplete JSON response';
-            const defaultReasoning = uiLanguage === 'zh'
-              ? `AI响应被截断，已提取部分字段。原始错误: ${e.message}`
-              : `AI response was truncated, extracted partial fields. Original error: ${e.message}`;
+            // 使用提取的部分字段，缺失的字段使用友好的默认值
+            // 检查提取的字段是否包含错误信息，如果有则使用更友好的提示
+            const hasErrorInField = (field: string | undefined): boolean => {
+              if (!field) return false;
+              const errorKeywords = ['无法确定', 'Unable to determine', '分析失败', 'Analysis failed', 'AI响应被截断', 'AI response was truncated', '原始错误', 'Original error', '不完整的JSON', 'incomplete JSON'];
+              return errorKeywords.some(keyword => field.includes(keyword));
+            };
+
+            const getFriendlySearchIntent = (extracted: string | undefined): string => {
+              if (extracted && !hasErrorInField(extracted)) return extracted;
+              return uiLanguage === 'zh' 
+                ? '正在分析用户搜索意图...' 
+                : 'Analyzing user search intent...';
+            };
+
+            const getFriendlyIntentAnalysis = (extracted: string | undefined): string => {
+              if (extracted && !hasErrorInField(extracted)) return extracted;
+              return uiLanguage === 'zh'
+                ? '正在评估搜索结果与用户意图的匹配度...'
+                : 'Evaluating how well search results match user intent...';
+            };
+
+            const getFriendlyReasoning = (extracted: string | undefined): string => {
+              if (extracted && !hasErrorInField(extracted)) return extracted;
+              // 如果提取了probability，基于它生成友好的推理
+              if (partialJSON.probability) {
+                const prob = partialJSON.probability;
+                return uiLanguage === 'zh'
+                  ? `基于SERP分析，该关键词的排名概率为${prob === 'High' ? '高' : prob === 'Medium' ? '中' : '低'}。详细分析正在生成中...`
+                  : `Based on SERP analysis, ranking probability is ${prob}. Detailed analysis is being generated...`;
+              }
+              return uiLanguage === 'zh'
+                ? '正在分析SERP竞争情况和排名概率...'
+                : 'Analyzing SERP competition and ranking probability...';
+            };
 
             analysis = {
-              searchIntent: partialJSON.searchIntent || defaultSearchIntent,
-              intentAnalysis: partialJSON.intentAnalysis || defaultIntentAnalysis,
+              searchIntent: getFriendlySearchIntent(partialJSON.searchIntent),
+              intentAnalysis: getFriendlyIntentAnalysis(partialJSON.intentAnalysis),
               serpResultCount: partialJSON.serpResultCount !== undefined ? partialJSON.serpResultCount : (serpResultCount > 0 ? serpResultCount : -1),
               topDomainType: partialJSON.topDomainType || "Unknown",
               probability: partialJSON.probability || "Medium",
-              reasoning: partialJSON.reasoning || defaultReasoning,
+              reasoning: getFriendlyReasoning(partialJSON.reasoning),
               topSerpSnippets: []
             };
             recovered = true;
@@ -1219,16 +1237,16 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           if (isTruncated) {
             console.error("⚠️  Response was truncated, consider reducing output length or splitting the request");
           }
-          // 根据 uiLanguage 设置默认值
+          // 根据 uiLanguage 设置友好的默认值（不显示技术性错误信息）
           const defaultSearchIntent = uiLanguage === 'zh'
-            ? '无法确定搜索意图'
-            : 'Unable to determine intent';
+            ? '正在分析用户搜索意图...'
+            : 'Analyzing user search intent...';
           const defaultIntentAnalysis = uiLanguage === 'zh'
-            ? '分析失败：AI返回了无效的JSON响应'
-            : 'Analysis failed due to invalid JSON response';
+            ? '正在评估搜索结果与用户意图的匹配度...'
+            : 'Evaluating how well search results match user intent...';
           const defaultReasoning = uiLanguage === 'zh'
-            ? `AI响应解析失败。${isTruncated ? '响应被截断。' : ''}原始错误: ${e.message}。响应预览: ${text.substring(0, 200)}`
-            : `Failed to parse AI response. ${isTruncated ? 'Response was truncated. ' : ''}Original error: ${e.message}. Response preview: ${text.substring(0, 200)}`;
+            ? '正在分析SERP竞争情况和排名概率，请稍候...'
+            : 'Analyzing SERP competition and ranking probability, please wait...';
 
           analysis = {
             searchIntent: defaultSearchIntent,
