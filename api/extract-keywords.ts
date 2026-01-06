@@ -147,19 +147,34 @@ Please return only the JSON, nothing else.`;
 
       // Call Gemini API
       const result = await callGeminiAPI(prompt, 'extract-keywords', {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            keywords: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  keyword: { type: 'string' },
+                  intent: { type: 'string' },
+                  estimatedVolume: { type: 'number' }
+                },
+                required: ['keyword']
+              }
+            },
+            websiteSummary: { type: 'string' }
+          },
+          required: ['keywords']
+        },
         enableGoogleSearch: true  // 启用联网搜索以获取最新关键词趋势
       });
 
       // Parse the response
       try {
-        // Try to extract JSON from markdown code blocks
+        // Try to extract JSON from markdown code blocks (fallback)
         let jsonStr = result.text;
-
-        // Remove markdown code blocks if present
-        const codeBlockMatch = result.text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
-          jsonStr = codeBlockMatch[1];
-        }
+        jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
 
         // Try to find JSON object
         const objectMatch = jsonStr.match(/\{[\s\S]*\}/);

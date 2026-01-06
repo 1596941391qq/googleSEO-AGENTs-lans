@@ -2,22 +2,16 @@ import React, { useState, useEffect } from "react";
 import {
   ArrowUp,
   ArrowDown,
-  Minus,
   ExternalLink,
-  Sparkles,
-  FileText,
-  HelpCircle,
-  Video,
-  Image,
   Loader2,
   ArrowUpDown,
-  ArrowUpIcon,
-  ArrowDownIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
+import { useAuth } from "../../contexts/AuthContext";
+import { getUserId } from "./utils";
 
 interface RankedKeyword {
   keyword: string;
@@ -25,22 +19,16 @@ interface RankedKeyword {
   previousPosition: number;
   positionChange: number;
   searchVolume: number;
-  etv: number;
-  serpFeatures: {
-    aiOverview?: boolean;
-    featuredSnippet?: boolean;
-    peopleAlsoAsk?: boolean;
-    relatedQuestions?: boolean;
-    video?: boolean;
-    image?: boolean;
-  };
-  url: string;
+  etv?: number; // 可选，使用 trafficPercentage 替代
+  trafficPercentage?: number; // 从 keywords-only 接口获取
+  url?: string;
   cpc?: number;
   competition?: number;
   difficulty?: number;
+  serpFeatures?: Record<string, any>; // SERP特性数据
 }
 
-type SortField = 'cpc' | 'difficulty' | 'searchVolume'; // 移除 position
+type SortField = 'difficulty' | 'searchVolume' | 'cpc' | 'position'; // 支持更多排序字段
 type SortOrder = 'asc' | 'desc';
 
 interface RankedKeywordsTableProps {
@@ -61,11 +49,48 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
   const [keywords, setKeywords] = useState<RankedKeyword[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortField>('searchVolume');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [sortBy, setSortBy] = useState<SortField>('searchVolume'); // 默认按搜索量排序
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc'); // 默认降序（搜索量最高的在前）
+
+  // localStorage 缓存
+  const getCacheKey = () => `keywords_only_${websiteId}_${sortBy}_${sortOrder}`;
+  const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时
+
+  const getCachedData = (): RankedKeyword[] | null => {
+    try {
+      const cached = localStorage.getItem(getCacheKey());
+      if (!cached) return null;
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        localStorage.removeItem(getCacheKey());
+        return null;
+      }
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
+  const setCachedData = (data: RankedKeyword[]) => {
+    try {
+      localStorage.setItem(getCacheKey(), JSON.stringify({
+        data,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      console.warn('[RankedKeywords] Failed to cache data:', error);
+    }
+  };
 
   useEffect(() => {
     if (websiteId) {
+      // 先尝试从缓存加载
+      const cached = getCachedData();
+      if (cached && cached.length > 0) {
+        setKeywords(cached);
+        setLoading(false);
+        return;
+      }
       loadKeywords();
     }
   }, [websiteId, sortBy, sortOrder]);
@@ -89,7 +114,16 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
 
       if (response.ok) {
         const result = await response.json();
-        setKeywords(result.data || []);
+        const keywordsData = (result.data || []).map((kw: any) => ({
+          ...kw,
+          etv: kw.trafficPercentage || kw.etv || 0, // 使用 trafficPercentage 作为 etv
+          url: kw.url || '', // 确保 url 字段存在
+        }));
+        setKeywords(keywordsData);
+        // 保存到缓存
+        if (keywordsData.length > 0) {
+          setCachedData(keywordsData);
+        }
       } else {
         setError(uiLanguage === "zh" ? "加载失败" : "Failed to load");
       }
@@ -105,9 +139,10 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
       // 如果点击的是当前排序字段，切换排序方向
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
-      // 如果点击的是新字段，设置为该字段并默认升序
+      // 如果点击的是新字段，设置为该字段
       setSortBy(field);
-      setSortOrder('asc');
+      // 排名和搜索量默认降序，其他字段默认升序
+      setSortOrder(field === 'position' || field === 'searchVolume' ? 'desc' : 'asc');
     }
   };
 
@@ -120,90 +155,8 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
       : <ArrowDown className="w-3 h-3 ml-1" />;
   };
 
-  const getSerpFeatureBadges = (features: RankedKeyword["serpFeatures"]) => {
-    const badges = [];
-    if (features.aiOverview) {
-      badges.push(
-        <Badge
-          key="ai"
-          className={cn(
-            "text-xs mr-1",
-            isDarkTheme
-              ? "bg-purple-500/20 text-purple-400 border-purple-500/30"
-              : "bg-purple-100 text-purple-700 border-purple-200"
-          )}
-        >
-          <Sparkles className="w-3 h-3 mr-1" />
-          AI
-        </Badge>
-      );
-    }
-    if (features.featuredSnippet) {
-      badges.push(
-        <Badge
-          key="snippet"
-          className={cn(
-            "text-xs mr-1",
-            isDarkTheme
-              ? "bg-blue-500/20 text-blue-400 border-blue-500/30"
-              : "bg-blue-100 text-blue-700 border-blue-200"
-          )}
-        >
-          <FileText className="w-3 h-3 mr-1" />
-          {uiLanguage === "zh" ? "摘要" : "Snippet"}
-        </Badge>
-      );
-    }
-    if (features.peopleAlsoAsk) {
-      badges.push(
-        <Badge
-          key="paa"
-          className={cn(
-            "text-xs mr-1",
-            isDarkTheme
-              ? "bg-green-500/20 text-green-400 border-green-500/30"
-              : "bg-green-100 text-green-700 border-green-200"
-          )}
-        >
-          <HelpCircle className="w-3 h-3 mr-1" />
-          PAA
-        </Badge>
-      );
-    }
-    if (features.video) {
-      badges.push(
-        <Badge
-          key="video"
-          className={cn(
-            "text-xs mr-1",
-            isDarkTheme
-              ? "bg-red-500/20 text-red-400 border-red-500/30"
-              : "bg-red-100 text-red-700 border-red-200"
-          )}
-        >
-          <Video className="w-3 h-3 mr-1" />
-          {uiLanguage === "zh" ? "视频" : "Video"}
-        </Badge>
-      );
-    }
-    if (features.image) {
-      badges.push(
-        <Badge
-          key="image"
-          className={cn(
-            "text-xs mr-1",
-            isDarkTheme
-              ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
-              : "bg-yellow-100 text-yellow-700 border-yellow-200"
-          )}
-        >
-          <Image className="w-3 h-3 mr-1" />
-          {uiLanguage === "zh" ? "图片" : "Image"}
-        </Badge>
-      );
-    }
-    return badges;
-  };
+  // 移除 SERP 特性显示（keywords-only 接口不提供此数据）
+  // 如果需要，可以从其他数据源获取
 
   if (loading || isLoading) {
     return (
@@ -286,6 +239,12 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
                   {uiLanguage === "zh" ? "关键词" : "Keyword"}
                 </th>
                 <th className={cn(
+                  "text-center py-2 px-3 text-xs font-medium",
+                  isDarkTheme ? "text-zinc-400" : "text-gray-500"
+                )}>
+                  {uiLanguage === "zh" ? "排名" : "Position"}
+                </th>
+                <th className={cn(
                   "text-center py-2 px-3 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity",
                   isDarkTheme ? "text-zinc-400" : "text-gray-500"
                 )} onClick={() => handleSort('searchVolume')}>
@@ -295,13 +254,10 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
                   </div>
                 </th>
                 <th className={cn(
-                  "text-center py-2 px-3 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity",
+                  "text-center py-2 px-3 text-xs font-medium",
                   isDarkTheme ? "text-zinc-400" : "text-gray-500"
-                )} onClick={() => handleSort('cpc')}>
-                  <div className="flex items-center justify-center">
-                    CPC
-                    {getSortIcon('cpc')}
-                  </div>
+                )}>
+                  CPC
                 </th>
                 <th className={cn(
                   "text-center py-2 px-3 text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity",
@@ -329,7 +285,7 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
             <tbody>
               {keywords.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className={cn(
+                  <td colSpan={7} className={cn(
                     "text-center py-8 text-sm",
                     isDarkTheme ? "text-zinc-500" : "text-gray-500"
                   )}>
@@ -372,30 +328,63 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
                       "py-3 px-3 text-center text-sm",
                       isDarkTheme ? "text-zinc-300" : "text-gray-700"
                     )}>
+                      <span className={cn(
+                        "inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-semibold",
+                        kw.currentPosition <= 3
+                          ? "bg-emerald-500 text-white"
+                          : kw.currentPosition <= 10
+                          ? "bg-blue-500 text-white"
+                          : kw.currentPosition <= 50
+                          ? "bg-amber-500 text-white"
+                          : "bg-gray-500 text-white"
+                      )}>
+                        {kw.currentPosition || "-"}
+                      </span>
+                    </td>
+                    <td className={cn(
+                      "py-3 px-3 text-center text-sm",
+                      isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                    )}>
                       {kw.searchVolume?.toLocaleString() || "-"}
                     </td>
                     <td className={cn(
                       "py-3 px-3 text-center text-sm",
                       isDarkTheme ? "text-zinc-300" : "text-gray-700"
                     )}>
-                      {kw.cpc ? `$${kw.cpc.toFixed(2)}` : "-"}
+                      {kw.cpc !== undefined && kw.cpc !== null 
+                        ? `$${Number(kw.cpc).toFixed(2)}` 
+                        : "-"}
                     </td>
                     <td className={cn(
                       "py-3 px-3 text-center text-sm",
                       isDarkTheme ? "text-zinc-300" : "text-gray-700"
                     )}>
-                      {kw.difficulty !== undefined ? kw.difficulty : "-"}
+                      {kw.difficulty !== undefined && kw.difficulty !== null ? kw.difficulty : "-"}
                     </td>
                     <td className={cn(
                       "py-3 px-3 text-center text-sm font-medium",
                       isDarkTheme ? "text-emerald-400" : "text-emerald-600"
                     )}>
-                      {kw.etv?.toLocaleString() || "-"}
+                      {(kw.etv || kw.trafficPercentage) ? Number(kw.etv || kw.trafficPercentage).toLocaleString() : "-"}
                     </td>
-                    <td className="py-3 px-3">
-                      <div className="flex items-center justify-center flex-wrap gap-1">
-                        {getSerpFeatureBadges(kw.serpFeatures)}
-                      </div>
+                    <td className={cn(
+                      "py-3 px-3 text-center text-sm",
+                      isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                    )}>
+                      {kw.serpFeatures && typeof kw.serpFeatures === 'object' && Object.keys(kw.serpFeatures).length > 0 ? (
+                        <div className="flex flex-wrap gap-1 justify-center">
+                          {Object.entries(kw.serpFeatures).map(([key, value]: [string, any]) => 
+                            value ? (
+                              <Badge key={key} variant="outline" className={cn(
+                                "text-xs",
+                                isDarkTheme ? "border-zinc-700 text-zinc-400" : "border-gray-300 text-gray-500"
+                              )}>
+                                {key}
+                              </Badge>
+                            ) : null
+                          )}
+                        </div>
+                      ) : "-"}
                     </td>
                   </tr>
                 ))

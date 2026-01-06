@@ -370,7 +370,7 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto px-4 animate-in fade-in zoom-in-95 duration-500">
+    <div className="flex flex-col items-center justify-start pt-24 min-h-screen max-w-2xl mx-auto px-4 animate-in fade-in zoom-in-95 duration-500">
       {/* Header */}
       <div className="text-center mb-10 space-y-4">
         <div className="inline-flex items-center justify-center p-3 bg-emerald-500/10 rounded-2xl mb-4 ring-1 ring-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">

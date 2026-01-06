@@ -1714,21 +1714,32 @@ ${additionalSuggestions}
 </evaluation_criteria>
 
 <output_format>
-Return JSON array with **maximum ${wordsPerRound} keywords**:
-[
-  {
-    "keyword": "keyword",
-    "translation": "translation (if needed)",
-    "intent": "Informational" | "Transactional" | "Local" | "Commercial",
-    "volume": estimated monthly volume,
-    "difficulty": difficulty score (1-100),
-    "reasoning": "Why is this keyword suitable for this website? Based on what analysis?",
-    "opportunity_type": "content_gap" | "optimization" | "expansion",
-    "priority": "high" | "medium" | "low"
-  }
-]
+Return a detailed SEO analysis report containing the following:
 
-CRITICAL: Return ONLY a valid JSON array with **maximum ${wordsPerRound} keywords**. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
+## 1. Website Content Analysis Summary
+- Current content coverage topics
+- Content depth and timeliness assessment
+- Content strengths and weaknesses
+
+## 2. Competitor Analysis
+- Analysis of competitor keyword strategies
+- Content gaps identified (competitors are doing but this website lacks)
+- Optimization opportunities identified (website has related content but not optimized for specific keywords)
+
+## 3. Keyword Opportunity Recommendations
+Based on the above analysis, provide approximately **${wordsPerRound} keyword recommendations**, each including:
+- The keyword itself
+- Why this keyword is suitable for this website (based on what analysis)
+- Opportunity type (content gap / optimization opportunity / expansion direction)
+- Priority (high / medium / low)
+
+**Format Requirements**:
+- Use clear headings and paragraph structure
+- Keyword recommendations can be presented in list or table format
+- Emphasize "why" and "opportunity type"
+- Use natural English expression, do NOT use JSON format
+
+**Note**: This report will be used for subsequent keyword generation and analysis workflows, so ensure keyword recommendations are clear, specific, and actionable.
 </output_format>
 `
   }

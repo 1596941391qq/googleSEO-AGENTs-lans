@@ -329,8 +329,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const rankedKeywords = await getRankedKeywords(website.website_domain, locationCode, 50, true);
       if (rankedKeywords.length > 0) {
+        // 清理关键词函数（确保保存到数据库的关键词是干净的）
+        const cleanKeywordForDB = (rawKeyword: string): string => {
+          if (!rawKeyword) return '';
+          let cleaned = rawKeyword.trim();
+          cleaned = cleaned.replace(/^\d{1,3}-[a-z0-9-]+-\d+(\s+|$)/i, '');
+          cleaned = cleaned.replace(/^\d{1,3}\s+(?=[a-zA-Z\u4e00-\u9fa5])/, '');
+          cleaned = cleaned.replace(/^\d+\s+/, '');
+          if (/^\d+$/.test(cleaned)) return '';
+          cleaned = cleaned.replace(/\s+\d{1,3}$/, '');
+          return cleaned.trim();
+        };
+
+        // 清理并过滤无效关键词
+        const cleanedKeywords = rankedKeywords
+          .map(kw => ({
+            ...kw,
+            keyword: cleanKeywordForDB(kw.keyword || '')
+          }))
+          .filter(kw => kw.keyword && kw.keyword.length > 0 && !/^\d+$/.test(kw.keyword))
+          .slice(0, 50);
+
         await Promise.all(
-          rankedKeywords.slice(0, 50).map(kw => sql`
+          cleanedKeywords.map(kw => sql`
             INSERT INTO ranked_keywords_cache (
               website_id,
               keyword,
@@ -374,7 +395,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               cache_expires_at = EXCLUDED.cache_expires_at
           `)
         );
-        console.log(`[update-metrics] ✅ Cached ${rankedKeywords.length} ranked keywords`);
+        console.log(`[update-metrics] ✅ Cached ${cleanedKeywords.length} ranked keywords (cleaned from ${rankedKeywords.length} raw keywords)`);
       }
     } catch (error: any) {
       console.warn('[update-metrics] ⚠️ Failed to cache ranked keywords (non-critical):', error.message);

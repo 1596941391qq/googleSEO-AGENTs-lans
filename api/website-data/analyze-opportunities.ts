@@ -104,10 +104,34 @@ Return in JSON format:
 Return only JSON, nothing else.`;
 
     const aiResult = await callGeminiAPI(prompt, 'analyze-ranking-opportunities', {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          opportunities: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                keyword: { type: 'string' },
+                score: { type: 'number' },
+                reasoning: { type: 'string' },
+                optimization: { type: 'string' }
+              },
+              required: ['keyword', 'score', 'reasoning', 'optimization']
+            }
+          }
+        },
+        required: ['opportunities']
+      },
       enableGoogleSearch: true  // 启用联网搜索以获取最新SEO趋势和排名机会
     });
-    const jsonMatch = aiResult.text.match(/\{[\s\S]*\}/);
-
+    
+    // Extract JSON (with fallback for compatibility)
+    let jsonText = aiResult.text.trim();
+    jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+    const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+    
     if (!jsonMatch) {
       throw new Error('Failed to parse AI response');
     }

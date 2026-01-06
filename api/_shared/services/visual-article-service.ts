@@ -98,7 +98,12 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     const serpData = await fetchSerpResults(keyword, targetLanguage, serpCountryCode);
     emit('researcher', 'card', undefined, 'serp', { results: serpData.results });
 
-    const searchPrefs = await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket);
+    const searchPrefs = await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket, (searchResults) => {
+      // Emit Google search results if available
+      if (searchResults && searchResults.length > 0) {
+        emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
+      }
+    });
     
     // Emit search preferences analysis results
     if (searchPrefs) {
@@ -110,7 +115,12 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       });
     }
 
-    const competitorAnalysis = await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket);
+    const competitorAnalysis = await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, (searchResults) => {
+      // Emit Google search results if available
+      if (searchResults && searchResults.length > 0) {
+        emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
+      }
+    });
 
     // Emit competitor analysis results
     if (competitorAnalysis) {
@@ -301,7 +311,13 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       uiLanguage,
       targetMarket,
       targetLanguage,
-      reference
+      reference,
+      (searchResults) => {
+        // Emit Google search results if available
+        if (searchResults && searchResults.length > 0) {
+          emit('writer', 'card', undefined, 'google-search-results', { results: searchResults });
+        }
+      }
     );
 
     // Update streaming text with final content

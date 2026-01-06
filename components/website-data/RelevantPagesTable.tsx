@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { ExternalLink, Loader2, TrendingUp } from "lucide-react";
+import { ExternalLink, Loader2, TrendingUp, FileText, Globe } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
+import { useAuth } from "../../contexts/AuthContext";
+import { getUserId } from "./utils";
 
 interface RelevantPage {
   url: string;
@@ -14,6 +16,9 @@ interface RelevantPage {
     position: number;
     searchVolume: number;
   }>;
+  title?: string;
+  description?: string;
+  pageType?: string;
 }
 
 interface RelevantPagesTableProps {
@@ -31,12 +36,50 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
   uiLanguage,
   limit = 20,
 }) => {
+  const { user } = useAuth();
   const [pages, setPages] = useState<RelevantPage[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // localStorage 缓存
+  const getCacheKey = () => `relevant_pages_${websiteId}`;
+  const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时
+
+  const getCachedData = (): RelevantPage[] | null => {
+    try {
+      const cached = localStorage.getItem(getCacheKey());
+      if (!cached) return null;
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp > CACHE_DURATION) {
+        localStorage.removeItem(getCacheKey());
+        return null;
+      }
+      return data;
+    } catch {
+      return null;
+    }
+  };
+
+  const setCachedData = (data: RelevantPage[]) => {
+    try {
+      localStorage.setItem(getCacheKey(), JSON.stringify({
+        data,
+        timestamp: Date.now(),
+      }));
+    } catch (error) {
+      console.warn('[RelevantPages] Failed to cache data:', error);
+    }
+  };
+
   useEffect(() => {
     if (websiteId) {
+      // 先尝试从缓存加载
+      const cached = getCachedData();
+      if (cached && cached.length > 0) {
+        setPages(cached);
+        setLoading(false);
+        return;
+      }
       loadPages();
     }
   }, [websiteId]);
@@ -51,7 +94,7 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           websiteId,
-          userId: 1,
+          userId: getUserId(user),
           limit,
         }),
       });
@@ -157,41 +200,71 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <a
-                      href={page.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={cn(
-                        "text-sm font-medium hover:underline flex items-center gap-2",
-                        isDarkTheme ? "text-blue-400" : "text-blue-600"
-                      )}
-                    >
-                      {page.url}
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                    <div className="flex items-start gap-2 mb-2">
+                      <Globe className={cn(
+                        "w-4 h-4 mt-0.5 flex-shrink-0",
+                        isDarkTheme ? "text-zinc-500" : "text-gray-400"
+                      )} />
+                      <div className="flex-1 min-w-0">
+                        {page.title ? (
+                          <a
+                            href={page.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn(
+                              "text-sm font-semibold hover:underline block mb-1",
+                              isDarkTheme ? "text-blue-400" : "text-blue-600"
+                            )}
+                          >
+                            {page.title}
+                          </a>
+                        ) : null}
+                        <a
+                          href={page.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cn(
+                            "text-xs hover:underline flex items-center gap-1 break-all",
+                            isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                          )}
+                        >
+                          {page.url}
+                          <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                        </a>
+                        {page.description && (
+                          <p className={cn(
+                            "text-xs mt-2 line-clamp-2",
+                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                          )}>
+                            {page.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 mt-3">
                   <div>
                     <div className={cn(
-                      "text-xs mb-1",
+                      "text-xs mb-1 flex items-center gap-1",
                       isDarkTheme ? "text-zinc-400" : "text-gray-500"
                     )}>
+                      <TrendingUp className="w-3 h-3" />
                       {uiLanguage === "zh" ? "自然流量" : "Organic Traffic"}
                     </div>
                     <div className={cn(
-                      "text-lg font-semibold flex items-center gap-1",
+                      "text-lg font-semibold",
                       isDarkTheme ? "text-emerald-400" : "text-emerald-600"
                     )}>
-                      <TrendingUp className="w-4 h-4" />
                       {page.organicTraffic?.toLocaleString() || 0}
                     </div>
                   </div>
                   <div>
                     <div className={cn(
-                      "text-xs mb-1",
+                      "text-xs mb-1 flex items-center gap-1",
                       isDarkTheme ? "text-zinc-400" : "text-gray-500"
                     )}>
+                      <FileText className="w-3 h-3" />
                       {uiLanguage === "zh" ? "关键词数" : "Keywords"}
                     </div>
                     <div className={cn(
@@ -212,7 +285,15 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
                       "text-lg font-semibold",
                       isDarkTheme ? "text-white" : "text-gray-900"
                     )}>
-                      {page.avgPosition?.toFixed(1) || "-"}
+                      {page.avgPosition ? (
+                        <span className={cn(
+                          page.avgPosition <= 10 ? (isDarkTheme ? "text-emerald-400" : "text-emerald-600") :
+                          page.avgPosition <= 30 ? (isDarkTheme ? "text-amber-400" : "text-amber-600") :
+                          isDarkTheme ? "text-zinc-400" : "text-gray-500"
+                        )}>
+                          {page.avgPosition.toFixed(1)}
+                        </span>
+                      ) : "-"}
                     </div>
                   </div>
                 </div>

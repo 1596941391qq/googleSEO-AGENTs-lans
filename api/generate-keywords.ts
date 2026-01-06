@@ -29,7 +29,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       additionalSuggestions
     } = body;
 
-    if (!seedKeyword || !targetLanguage || !systemInstruction) {
+    // Check if this is website audit mode (seedKeyword can be empty in this case)
+    const isWebsiteAuditMode = additionalSuggestions && additionalSuggestions.includes('--- Website Audit Analysis Report ---');
+    
+    // In website audit mode, seedKeyword can be empty/placeholder, but we still need targetLanguage and systemInstruction
+    if ((!seedKeyword && !isWebsiteAuditMode) || !targetLanguage || !systemInstruction) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 

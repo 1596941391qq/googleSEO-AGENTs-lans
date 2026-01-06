@@ -127,9 +127,9 @@ import {
 const TEXT = {
   en: {
     title: "Mine Hidden Alpha",
-    step1: "1. Input",
-    step2: "2. process",
-    step3: "3. Results",
+    step1: "Input",
+    step2: "process",
+    step3: "Results",
     inputTitle: "Define Your Niche",
     inputDesc:
       'Enter a seed keyword. The Agent will iterate until it finds a HIGH probability "Blue Ocean" keyword or "Weak Competitor" gap.',
@@ -273,12 +273,17 @@ const TEXT = {
     cardDifficulty: "KD",
     cardAngle: "Angle",
     cardWeakness: "Weakness",
+    // Content Generation Tabs
+    tabMyWebsite: "My Website",
+    tabWebsiteData: "Website Data",
+    tabArticleRankings: "Article Rankings",
+    tabPublish: "Publish",
   },
   zh: {
     title: "Mine Hidden Alpha",
-    step1: "1. 输入",
-    step2: "2. 过程",
-    step3: "3. 结果",
+    step1: "输入",
+    step2: "过程",
+    step3: "结果",
     inputTitle: "定义您的 利基市场",
     inputDesc:
       "输入核心关键词。Agent 将循环挖掘，直到发现“蓝海词”或“弱竞争对手”（如论坛、PDF）占位的机会。",
@@ -420,6 +425,11 @@ const TEXT = {
     cardDifficulty: "难度",
     cardAngle: "角度",
     cardWeakness: "弱点",
+    // Content Generation Tabs
+    tabMyWebsite: "我的网站",
+    tabWebsiteData: "网站数据",
+    tabArticleRankings: "文章排名",
+    tabPublish: "发布",
   },
 };
 
@@ -5140,7 +5150,7 @@ export default function App() {
         currentTaskId
       );
 
-      // Call website audit API
+      // Call website audit API (streaming)
       const response = await fetch("/api/website-audit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -5161,7 +5171,69 @@ export default function App() {
         throw new Error(`API error: ${response.status}`);
       }
 
-      const result = await response.json();
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No reader available");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: any = null;
+      let currentEvents: any[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim() || !line.startsWith("data: ")) continue;
+
+          try {
+            const json = JSON.parse(line.replace("data: ", ""));
+
+            if (json.type === "event") {
+              const event = json.data;
+              currentEvents = [...currentEvents, event];
+
+              // Add to agent thoughts for visualization
+              if (event.type === "log" && event.message) {
+                addLog(event.message, "info", currentTaskId);
+              } else if (event.type === "card" && event.cardType) {
+                addThought(
+                  event.agentId === "researcher"
+                    ? "analysis"
+                    : event.agentId === "strategist"
+                    ? "generation"
+                    : "analysis",
+                  event.message || "",
+                  {
+                    data: event.data,
+                    dataType: event.cardType,
+                  },
+                  currentTaskId
+                );
+              } else if (event.type === "error") {
+                addLog(
+                  event.message || "Error occurred",
+                  "error",
+                  currentTaskId
+                );
+              }
+            } else if (json.type === "done") {
+              result = json.data;
+            } else if (json.type === "error") {
+              throw new Error(json.message || "Website audit failed");
+            }
+          } catch (parseError) {
+            console.error("[Website Audit] Parse error:", parseError);
+          }
+        }
+      }
 
       if (result.success && result.keywords) {
         // Step 1.2: 显示网站内容摘要（更详细的显示）
@@ -5316,11 +5388,30 @@ export default function App() {
           currentTaskId
         );
 
-        // 使用初始关键词作为种子，进行循环挖掘
-        const initialKeywords = result.keywords.map(
-          (k: KeywordData) => k.keyword
+        // 保存分析报告到任务状态，以便在挖掘循环中使用
+        setState((prev) => {
+          const updatedTasks = prev.taskManager.tasks.map((task) => {
+            if (task.id === currentTaskId && task.miningState) {
+              task.miningState.websiteAuditReport = result.analysisReport;
+            }
+            return task;
+          });
+          return {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        });
+
+        // 开始循环挖掘（第一轮会使用分析报告，后续轮次使用生成的关键词作为种子）
+        // 第一轮不需要种子关键词，因为会使用分析报告
+        await runWebsiteAuditMiningLoop(
+          [],
+          currentTaskId,
+          result.analysisReport
         );
-        await runWebsiteAuditMiningLoop(initialKeywords, currentTaskId);
       } else {
         throw new Error(result.error || "Website audit failed");
       }
@@ -5845,7 +5936,8 @@ export default function App() {
   // Website Audit Mining Loop (存量拓新的关键词挖掘循环)
   const runWebsiteAuditMiningLoop = async (
     seedKeywords: string[],
-    taskId: string
+    taskId: string,
+    analysisReport?: string
   ) => {
     let currentRound = 0;
     const allKeywords: KeywordData[] = [];
@@ -5902,21 +5994,80 @@ export default function App() {
         taskId
       );
 
-      // 使用种子关键词（初始关键词）进行挖掘
-      const seedKeyword = seedKeywords.join(", ");
-      addLog(
-        state.uiLanguage === "zh"
-          ? `💭 基于初始关键词 "${seedKeyword}" 进行挖掘`
-          : `💭 Mining based on initial keywords "${seedKeyword}"`,
-        "info",
-        taskId
-      );
+      // 获取分析报告（优先使用传入的参数，否则从任务状态中获取）
+      const currentTask = state.taskManager.tasks.find((t) => t.id === taskId);
+      const auditReport =
+        analysisReport || currentTask?.miningState?.websiteAuditReport || "";
+
+      // 第一轮且有待分析报告：使用报告模式（不需要种子关键词）
+      // 后续轮次或没有报告：使用种子关键词模式
+      const isFirstRoundWithReport = currentRound === 1 && auditReport;
+
+      let seedKeyword = "";
+      let combinedAdditionalSuggestions =
+        state.miningConfig?.additionalSuggestions || "";
+
+      if (isFirstRoundWithReport) {
+        // 网站审计模式：将分析报告作为 additionalSuggestions 传递
+        // 使用网站域名或行业作为 seedKeyword（API要求非空，但实际不使用）
+        const websiteUrl = currentTask?.miningState?.websiteUrl || "";
+        const websiteDomain = websiteUrl
+          ? new URL(websiteUrl).hostname.replace("www.", "")
+          : "";
+        seedKeyword =
+          state.miningConfig?.industry ||
+          websiteDomain ||
+          "website opportunities";
+
+        combinedAdditionalSuggestions = `--- Website Audit Analysis Report ---
+${auditReport}
+--- End of Report ---
+
+Please generate keywords based on the opportunities and keyword suggestions mentioned in the above analysis report.${
+          combinedAdditionalSuggestions
+            ? `\n\nAdditional user suggestions:\n${combinedAdditionalSuggestions}`
+            : ""
+        }`;
+
+        addLog(
+          state.uiLanguage === "zh"
+            ? `💭 基于网站分析报告生成关键词（第 ${currentRound} 轮）`
+            : `💭 Generating keywords based on website audit report (Round ${currentRound})`,
+          "info",
+          taskId
+        );
+      } else {
+        // 常规模式：使用种子关键词
+        seedKeyword =
+          seedKeywords.length > 0
+            ? seedKeywords.join(", ")
+            : allKeywords.length > 0
+            ? allKeywords
+                .slice(-5)
+                .map((k) => k.keyword)
+                .join(", ")
+            : state.miningConfig?.industry || "general topics";
+        combinedAdditionalSuggestions =
+          state.miningConfig?.additionalSuggestions || "";
+
+        addLog(
+          state.uiLanguage === "zh"
+            ? `💭 基于关键词 "${seedKeyword}" 进行挖掘（第 ${currentRound} 轮）`
+            : `💭 Mining based on keywords "${seedKeyword}" (Round ${currentRound})`,
+          "info",
+          taskId
+        );
+      }
 
       addThought(
         "generation",
         state.uiLanguage === "zh"
-          ? `轮次 ${currentRound}: 基于网站分析发现的初始关键词进行扩展挖掘`
-          : `Round ${currentRound}: Expanding mining based on initial keywords from website audit`,
+          ? isFirstRoundWithReport
+            ? `轮次 ${currentRound}: 基于网站分析报告生成关键词`
+            : `轮次 ${currentRound}: 基于已有关键词进行扩展挖掘`
+          : isFirstRoundWithReport
+          ? `Round ${currentRound}: Generating keywords based on website audit report`
+          : `Round ${currentRound}: Expanding mining based on existing keywords`,
         undefined,
         taskId
       );
@@ -5941,7 +6092,7 @@ export default function App() {
           state.userSuggestion || "",
           state.uiLanguage,
           state.miningConfig?.industry,
-          state.miningConfig?.additionalSuggestions
+          combinedAdditionalSuggestions
         );
 
         const generatedKeywords = result.keywords;
@@ -6627,7 +6778,7 @@ export default function App() {
     const MAIN_APP_URL =
       import.meta.env.VITE_MAIN_APP_URL || "https://www.nichedigger.ai";
 
-    // 1. 先检查 localStorage 中是否有保存的 API key
+    // 先检查 localStorage 中是否有保存的 API key
     const savedApiKey = localStorage.getItem("nichedigger_api_key");
     if (savedApiKey && savedApiKey.startsWith("nm_live_")) {
       console.log("[checkAndGetApiKey] Found saved API key in localStorage");
@@ -6635,7 +6786,7 @@ export default function App() {
     }
 
     try {
-      // 2. 检查用户登录状态（按照文档要求）
+      // 检查用户登录状态（按照文档要求）
       const sessionResponse = await fetch(`${MAIN_APP_URL}/api/auth/session`, {
         method: "GET",
         credentials: "include", // 重要：发送 cookie
@@ -6651,7 +6802,7 @@ export default function App() {
         "[checkAndGetApiKey] User authenticated, checking API keys..."
       );
 
-      // 3. 获取用户的 API Keys（按照文档要求）
+      // 获取用户的 API Keys（按照文档要求）
       const keysResponse = await fetch(`${MAIN_APP_URL}/api/v1/api-keys`, {
         method: "GET",
         credentials: "include", // 重要：发送 cookie（包含 JWT token）
@@ -6880,10 +7031,10 @@ export default function App() {
               window.location.origin
             }\n目标域名: ${
               new URL(url).origin
-            }\n\n可能的原因：\n1. 主应用 ${MAIN_APP_URL} 未配置允许来自 ${
+            }\n\n可能的原因：\n主应用 ${MAIN_APP_URL} 未配置允许来自 ${
               window.location.origin
-            } 的跨域请求\n2. 需要检查主应用的 CORS 配置（Access-Control-Allow-Origin）\n3. 或者需要通过本地 API 代理转发请求`
-          : `网络请求失败。请检查：\n1. 主应用 ${MAIN_APP_URL} 是否可访问\n2. 网络连接是否正常\n3. 浏览器控制台是否有其他错误`;
+            } 的跨域请求\n需要检查主应用的 CORS 配置（Access-Control-Allow-Origin）\n或者需要通过本地 API 代理转发请求`
+          : `网络请求失败。请检查：\n主应用 ${MAIN_APP_URL} 是否可访问\n网络连接是否正常\n浏览器控制台是否有其他错误`;
         throw new Error(errorMsg);
       }
       throw fetchError;
@@ -7011,7 +7162,7 @@ export default function App() {
         error.message?.includes("Failed to fetch")
       ) {
         alert(
-          `保存失败：${errorMessage}\n\n请检查：\n1. 网络连接是否正常\n2. 主应用 https://www.nichedigger.ai 是否可访问\n3. 浏览器控制台是否有 CORS 错误\n4. 是否已登录`
+          `保存失败：${errorMessage}\n\n请检查：\n网络连接是否正常\n主应用 https://www.nichedigger.ai 是否可访问\n浏览器控制台是否有 CORS 错误\n4. 是否已登录`
         );
       }
     }
@@ -7828,40 +7979,99 @@ export default function App() {
           >
             {/* Left: Step Indicators */}
             <div className="flex items-center space-x-8">
-              <StepItem
-                number={1}
-                label={t.step1}
-                active={state.step === "input"}
-                isDarkTheme={isDarkTheme}
-              />
-              <ChevronRight
-                size={14}
-                className={isDarkTheme ? "text-neutral-800" : "text-gray-300"}
-              />
-              <StepItem
-                number={2}
-                label={t.step2}
-                active={
-                  state.step === "mining" ||
-                  state.step === "batch-analyzing" ||
-                  state.step === "deep-dive-analyzing"
-                }
-                isDarkTheme={isDarkTheme}
-              />
-              <ChevronRight
-                size={14}
-                className={isDarkTheme ? "text-neutral-800" : "text-gray-300"}
-              />
-              <StepItem
-                number={3}
-                label={t.step3}
-                active={
-                  state.step === "results" ||
-                  state.step === "batch-results" ||
-                  state.step === "deep-dive-results"
-                }
-                isDarkTheme={isDarkTheme}
-              />
+              {state.step === "content-generation" ? (
+                // Content Generation Mode: Show tabs as steps
+                <>
+                  <StepItem
+                    number={1}
+                    label={t.tabMyWebsite}
+                    active={state.contentGeneration.activeTab === "my-website"}
+                    isDarkTheme={isDarkTheme}
+                  />
+                  <ChevronRight
+                    size={14}
+                    className={
+                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                    }
+                  />
+                  <StepItem
+                    number={2}
+                    label={t.tabWebsiteData}
+                    active={
+                      state.contentGeneration.activeTab === "website-data"
+                    }
+                    isDarkTheme={isDarkTheme}
+                  />
+                  <ChevronRight
+                    size={14}
+                    className={
+                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                    }
+                  />
+                  <StepItem
+                    number={3}
+                    label={t.tabArticleRankings}
+                    active={
+                      state.contentGeneration.activeTab === "article-rankings"
+                    }
+                    isDarkTheme={isDarkTheme}
+                  />
+                  <ChevronRight
+                    size={14}
+                    className={
+                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                    }
+                  />
+                  <StepItem
+                    number={4}
+                    label={t.tabPublish}
+                    active={state.contentGeneration.activeTab === "publish"}
+                    isDarkTheme={isDarkTheme}
+                  />
+                </>
+              ) : (
+                // Default Mode: Show input/process/results
+                <>
+                  <StepItem
+                    number={1}
+                    label={t.step1}
+                    active={state.step === "input"}
+                    isDarkTheme={isDarkTheme}
+                  />
+                  <ChevronRight
+                    size={14}
+                    className={
+                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                    }
+                  />
+                  <StepItem
+                    number={2}
+                    label={t.step2}
+                    active={
+                      state.step === "mining" ||
+                      state.step === "batch-analyzing" ||
+                      state.step === "deep-dive-analyzing"
+                    }
+                    isDarkTheme={isDarkTheme}
+                  />
+                  <ChevronRight
+                    size={14}
+                    className={
+                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                    }
+                  />
+                  <StepItem
+                    number={3}
+                    label={t.step3}
+                    active={
+                      state.step === "results" ||
+                      state.step === "batch-results" ||
+                      state.step === "deep-dive-results"
+                    }
+                    isDarkTheme={isDarkTheme}
+                  />
+                </>
+              )}
             </div>
 
             {/* Right: Credits + User Info */}
@@ -8123,6 +8333,54 @@ export default function App() {
               }
               isDarkTheme={isDarkTheme}
               uiLanguage={state.uiLanguage}
+              onGenerateArticle={(keyword: KeywordData) => {
+                // 检查认证
+                if (!authenticated) {
+                  setState((prev) => ({
+                    ...prev,
+                    error:
+                      state.uiLanguage === "zh"
+                        ? "请先登录才能使用生成图文功能"
+                        : "Please login to use article generation",
+                  }));
+                  return;
+                }
+
+                // 检查任务数量限制
+                if (
+                  state.taskManager.tasks.length >= state.taskManager.maxTasks
+                ) {
+                  setState((prev) => ({
+                    ...prev,
+                    error:
+                      state.uiLanguage === "zh"
+                        ? "最多只能同时开启5个任务。请先关闭一些任务再继续。"
+                        : "Maximum 5 tasks allowed. Please close some tasks first.",
+                  }));
+                  return;
+                }
+
+                // 创建图文工场任务
+                addTask({
+                  type: "article-generator",
+                  keyword: keyword,
+                  targetLanguage: state.targetLanguage,
+                  targetMarket:
+                    state.contentGeneration.website?.location || "global",
+                  name: `${keyword.keyword.slice(0, 30)}${
+                    keyword.keyword.length > 30 ? "..." : ""
+                  }`,
+                });
+
+                // 成功提示
+                setState((prev) => ({
+                  ...prev,
+                  successMessage:
+                    state.uiLanguage === "zh"
+                      ? `已创建图文生成任务: ${keyword.keyword}`
+                      : `Created article generation task: ${keyword.keyword}`,
+                }));
+              }}
             />
           )}
 

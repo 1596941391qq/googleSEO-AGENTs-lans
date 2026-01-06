@@ -46,162 +46,161 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
   uiLanguage,
 }) => {
   // Format numbers
-  const formatNumber = (num: number): string => {
+  const formatNumber = (num: number | undefined | null): string => {
+    if (num === undefined || num === null || isNaN(num)) {
+      return "0";
+    }
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toString();
   };
 
   // Format currency
-  const formatCurrency = (num: number): string => {
+  const formatCurrency = (num: number | undefined | null): string => {
+    if (num === undefined || num === null || isNaN(num)) {
+      return "$0.00";
+    }
     if (num >= 1000000) return `$${(num / 1000000).toFixed(2)}M`;
     if (num >= 1000) return `$${(num / 1000).toFixed(2)}K`;
     return `$${num.toFixed(2)}`;
   };
 
-  // Define cards
+  // Define cards - 移除 Paid Traffic, Traffic Cost, Average Position
   const cards: OverviewMetric[] = metrics ? [
     {
       label: uiLanguage === "zh" ? "有机流量" : "Organic Traffic",
-      value: formatNumber(metrics.organicTraffic),
+      value: formatNumber(metrics.organicTraffic ?? 0),
       icon: <Users className="w-4 h-4" />,
     },
     {
-      label: uiLanguage === "zh" ? "付费流量" : "Paid Traffic",
-      value: formatNumber(metrics.paidTraffic || 0),
-      icon: <CreditCard className="w-4 h-4" />,
-    },
-    {
       label: uiLanguage === "zh" ? "总流量" : "Total Traffic",
-      value: formatNumber(metrics.totalTraffic || 0),
+      value: formatNumber(metrics.totalTraffic ?? 0),
       icon: <Activity className="w-4 h-4" />,
     },
     {
       label: uiLanguage === "zh" ? "总关键词数" : "Total Keywords",
-      value: formatNumber(metrics.totalKeywords),
+      value: formatNumber(metrics.totalKeywords ?? 0),
       icon: <Hash className="w-4 h-4" />,
-    },
-    {
-      label: uiLanguage === "zh" ? "平均排名" : "Avg Position",
-      value: metrics.avgPosition.toFixed(1),
-      icon: <Target className="w-4 h-4" />,
-      unit: uiLanguage === "zh" ? "名" : "#",
-    },
-    {
-      label: uiLanguage === "zh" ? "流量成本" : "Traffic Cost",
-      value: formatCurrency(metrics.trafficCost || 0),
-      icon: <DollarSign className="w-4 h-4" />,
     },
   ] : [];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {isLoading || !metrics ? (
         // 加载骨架屏
-        Array.from({ length: 5 }).map((_, index) => (
+        Array.from({ length: 3 }).map((_, index) => (
           <Card
             key={index}
             className={cn(
-              "overflow-hidden",
+              "overflow-hidden rounded-2xl",
               isDarkTheme
-                ? "bg-zinc-900 border-zinc-800"
+                ? "bg-[#1a1a1a] border border-zinc-800/50"
                 : "bg-white border-gray-200"
             )}
           >
-            <CardContent className="p-4">
+            <CardContent className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div
                     className={cn(
-                      "h-3 w-20 mb-2 rounded animate-pulse",
+                      "h-4 w-24 mb-3 rounded animate-pulse",
                       isDarkTheme ? "bg-zinc-800" : "bg-gray-200"
                     )}
                   />
                   <div
                     className={cn(
-                      "h-8 w-16 rounded animate-pulse",
+                      "h-10 w-32 rounded animate-pulse",
                       isDarkTheme ? "bg-zinc-800" : "bg-gray-200"
                     )}
                   />
                 </div>
                 <div
                   className={cn(
-                    "p-2 rounded-lg animate-pulse",
+                    "w-10 h-10 rounded-xl animate-pulse",
                     isDarkTheme ? "bg-zinc-800" : "bg-gray-200"
                   )}
-                >
-                  <div className="w-4 h-4" />
-                </div>
+                />
               </div>
             </CardContent>
           </Card>
         ))
       ) : (
-        cards.map((card, index) => (
-          <Card
-            key={index}
-            className={cn(
-              "overflow-hidden",
-              isDarkTheme
-                ? "bg-zinc-900 border-zinc-800"
-                : "bg-white border-gray-200"
-            )}
-          >
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <p
-                    className={cn(
-                      "text-xs font-medium mb-1",
-                      isDarkTheme ? "text-zinc-400" : "text-gray-500"
-                    )}
-                  >
-                    {card.label}
-                  </p>
-                  <div className="flex items-baseline gap-1">
-                    <h3
-                      className={cn(
-                        "text-2xl font-bold",
-                        isDarkTheme ? "text-white" : "text-gray-900"
-                      )}
-                    >
-                      {card.unit && `${card.unit} `}
-                      {card.value}
-                    </h3>
-                  </div>
-                </div>
-                <div
-                  className={cn(
-                    "p-2 rounded-lg",
-                    card.changeType === "decrease"
-                      ? isDarkTheme
-                        ? "bg-red-500/10"
-                        : "bg-red-50"
-                      : card.changeType === "increase"
-                      ? isDarkTheme
-                        ? "bg-emerald-500/10"
-                        : "bg-emerald-50"
-                      : isDarkTheme
-                      ? "bg-blue-500/10"
-                      : "bg-blue-50"
-                  )}
-                >
+        cards.map((card, index) => {
+          const isHighlighted = index === 0; // 第一个卡片高亮
+          return (
+            <Card
+              key={index}
+              className={cn(
+                "overflow-hidden rounded-2xl transition-all duration-300",
+                isDarkTheme
+                  ? "bg-[#1a1a1a] border"
+                  : "bg-white border-gray-200",
+                isHighlighted && isDarkTheme
+                  ? "border-emerald-500/50 shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+                  : isDarkTheme
+                  ? "border-zinc-800/50"
+                  : "border-gray-200"
+              )}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-4">
+                  {/* 图标 */}
                   <div
                     className={cn(
-                      card.changeType === "decrease"
-                        ? "text-red-500"
-                        : card.changeType === "increase"
-                        ? "text-emerald-500"
-                        : "text-blue-500"
+                      "w-10 h-10 rounded-xl flex items-center justify-center",
+                      isDarkTheme
+                        ? "bg-zinc-800/50 text-white"
+                        : "bg-gray-100 text-gray-700"
                     )}
                   >
                     {card.icon}
                   </div>
+                  {/* 趋势指示器 - 右上角 */}
+                  <div className="flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3 text-emerald-400" />
+                    <span className="text-sm font-medium text-emerald-400">
+                      +12.5%
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))
+
+                {/* 中文标签 */}
+                <p
+                  className={cn(
+                    "text-base font-semibold mb-2",
+                    isDarkTheme ? "text-white" : "text-gray-900"
+                  )}
+                >
+                  {uiLanguage === "zh" 
+                    ? (card.label === "有机流量" ? "月度自然流量" : 
+                       card.label === "总流量" ? "总流量" : 
+                       card.label === "总关键词数" ? "关键词总数" : card.label)
+                    : card.label}
+                </p>
+
+                {/* 大号数字 */}
+                <h3
+                  className={cn(
+                    "text-4xl font-bold mb-2",
+                    isDarkTheme ? "text-white" : "text-gray-900"
+                  )}
+                >
+                  {card.value}
+                </h3>
+
+                {/* 英文标签 */}
+                <p
+                  className={cn(
+                    "text-xs uppercase tracking-wider",
+                    isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                  )}
+                >
+                  {card.label.toUpperCase()}
+                </p>
+              </CardContent>
+            </Card>
+          );
+        })
       )}
     </div>
   );

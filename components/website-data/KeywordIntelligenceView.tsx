@@ -7,11 +7,15 @@ import {
   Sparkles,
   Download,
   Rocket,
+  ArrowRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
+import { KeywordData, IntentType, ProbabilityLevel } from "../../types";
+import { useAuth } from "../../contexts/AuthContext";
+import { getUserId } from "./utils";
 
 interface KeywordRecommendation {
   keyword: string;
@@ -32,6 +36,11 @@ interface KeywordRecommendation {
     monthly_traffic_est: string;
   };
   recommendation_index?: number;
+  serpFeatures?: {
+    ai_overview?: boolean;
+    featured_snippet?: boolean;
+    people_also_ask?: boolean;
+  };
 }
 
 interface KeywordRecommendationList {
@@ -72,48 +81,59 @@ interface KeywordIntelligenceViewProps {
   websiteId: string;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
+  onGenerateArticle?: (keyword: KeywordData) => void;
 }
 
-export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = ({
-  websiteId,
-  isDarkTheme,
-  uiLanguage,
-}) => {
+export const KeywordIntelligenceView: React.FC<
+  KeywordIntelligenceViewProps
+> = ({ websiteId, isDarkTheme, uiLanguage, onGenerateArticle }) => {
+  const { user } = useAuth();
   const [data, setData] = useState<KeywordIntelligenceData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
+  const [analysisTriggered, setAnalysisTriggered] = useState(false);
 
-  useEffect(() => {
-    loadKeywordRecommendations();
-  }, [websiteId]);
+  // 移除自动加载，改为手动触发
+  // useEffect(() => {
+  //   loadKeywordRecommendations();
+  // }, [websiteId]);
 
   const loadKeywordRecommendations = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch("/api/website-data/analyze-keyword-recommendations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          userId: 1, // TODO: Get from session
-          topN: 10,
-        }),
-      });
+      const response = await fetch(
+        "/api/website-data/analyze-keyword-recommendations",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            websiteId,
+            userId: getUserId(user),
+            topN: 10,
+          }),
+        }
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to load keyword recommendations");
+        throw new Error(
+          errorData.error || "Failed to load keyword recommendations"
+        );
       }
 
       const result = await response.json();
       if (result.success && result.data) {
         setData(result.data);
         // 默认选择第一个推荐的关键词
-        if (result.data.keyword_recommendation_list && result.data.keyword_recommendation_list.length > 0) {
-          const firstKeyword = result.data.keyword_recommendation_list[0]?.keywords?.[0];
+        if (
+          result.data.keyword_recommendation_list &&
+          result.data.keyword_recommendation_list.length > 0
+        ) {
+          const firstKeyword =
+            result.data.keyword_recommendation_list[0]?.keywords?.[0];
           if (firstKeyword) {
             setSelectedKeyword(firstKeyword.keyword);
           }
@@ -121,9 +141,11 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
       } else {
         // 如果没有关键词数据，显示友好提示
         if (result.error && result.error.includes("No keywords found")) {
-          setError(uiLanguage === "zh" 
-            ? "未找到关键词数据。请先在总览页面更新网站指标。"
-            : "No keywords found. Please update website metrics in the Overview page first.");
+          setError(
+            uiLanguage === "zh"
+              ? "未找到关键词数据。请先在总览页面更新网站指标。"
+              : "No keywords found. Please update website metrics in the Overview page first."
+          );
         } else {
           throw new Error(result.error || "No data returned");
         }
@@ -188,6 +210,53 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
     ));
   };
 
+  // 手动触发分析
+  const handleAnalyzeClick = () => {
+    setAnalysisTriggered(true);
+    loadKeywordRecommendations();
+  };
+
+  // 生成文章
+  const handleGenerateArticle = (recommendation: KeywordRecommendation) => {
+    if (!onGenerateArticle) return;
+
+    // 构建 KeywordData 对象
+    const keywordData: KeywordData = {
+      id: `kw-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      keyword: recommendation.keyword,
+      translation: recommendation.keyword,
+      intent: mapIntentType(recommendation.metrics.intent),
+      volume: recommendation.metrics.msv,
+      source: "website-audit",
+      dataForSEOData: {
+        volume: recommendation.metrics.msv,
+        cpc: recommendation.metrics.cpc,
+        competition: recommendation.metrics.competition,
+        difficulty: recommendation.metrics.kd,
+      },
+      probability: mapDifficultyToProbability(recommendation.metrics.kd),
+    };
+
+    onGenerateArticle(keywordData);
+  };
+
+  // 意图类型映射
+  const mapIntentType = (intent: string): IntentType => {
+    const upper = intent.toUpperCase();
+    if (upper.includes("INFORMATIONAL")) return "informational";
+    if (upper.includes("COMMERCIAL")) return "commercial";
+    if (upper.includes("TRANSACTIONAL")) return "transactional";
+    if (upper.includes("NAVIGATIONAL")) return "navigational";
+    return "informational";
+  };
+
+  // 难度转概率
+  const mapDifficultyToProbability = (kd: number): ProbabilityLevel => {
+    if (kd <= 30) return ProbabilityLevel.HIGH;
+    if (kd <= 60) return ProbabilityLevel.MEDIUM;
+    return ProbabilityLevel.LOW;
+  };
+
   // 导出CSV
   const handleExportCSV = () => {
     const allKeywords = getAllKeywords();
@@ -230,6 +299,112 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
     document.body.removeChild(link);
   };
 
+  // 空状态 - 未触发分析
+  if (!analysisTriggered && !data && !loading && !error) {
+    return (
+      <div
+        className={cn(
+          "flex flex-col items-center justify-center py-20 px-6",
+          "bg-zinc-950 rounded-[40px] border border-white/5",
+          "relative overflow-hidden",
+          !isDarkTheme && "bg-white border-gray-200"
+        )}
+      >
+        {/* 背景网格 */}
+        <div
+          className={cn(
+            "absolute inset-0 opacity-10",
+            isDarkTheme
+              ? 'bg-[url(\'data:image/svg+xml,%3Csvg width="40" height="40" xmlns="http://www.w3.org/2000/svg"%3E%3Cdefs%3E%3Cpattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"%3E%3Cpath d="M 40 0 L 0 0 0 40" fill="none" stroke="white" stroke-width="1"/%3E%3C/pattern%3E%3C/defs%3E%3Crect width="100%25" height="100%25" fill="url(%23grid)" /%3E%3C/svg%3E\')]'
+              : 'bg-[url(\'data:image/svg+xml,%3Csvg width="40" height="40" xmlns="http://www.w3.org/2000/svg"%3E%3Cdefs%3E%3Cpattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"%3E%3Cpath d="M 40 0 L 0 0 0 40" fill="none" stroke="gray" stroke-width="1"/%3E%3C/pattern%3E%3C/defs%3E%3Crect width="100%25" height="100%25" fill="url(%23grid)" /%3E%3C/svg%3E\')]'
+          )}
+        />
+
+        {/* 渐变光晕 */}
+        <div
+          className={cn(
+            "absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full blur-3xl",
+            isDarkTheme ? "bg-emerald-500/10" : "bg-emerald-500/5"
+          )}
+        />
+
+        {/* 内容 */}
+        <div className="relative z-10 flex flex-col items-center">
+          <div
+            className={cn(
+              "w-20 h-20 rounded-full mb-6 flex items-center justify-center",
+              isDarkTheme
+                ? "bg-emerald-500/20 shadow-[0_0_40px_rgba(16,185,129,0.3)]"
+                : "bg-emerald-100 shadow-lg"
+            )}
+          >
+            <Sparkles
+              className={cn(
+                "w-10 h-10",
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            />
+          </div>
+
+          <h3
+            className={cn(
+              "text-xl font-semibold mb-2",
+              isDarkTheme ? "text-white" : "text-gray-900"
+            )}
+          >
+            {uiLanguage === "zh"
+              ? "发现高价值关键词机会"
+              : "Discover High-Value Keywords"}
+          </h3>
+
+          <p
+            className={cn(
+              "text-sm text-center max-w-md mb-8",
+              isDarkTheme ? "text-zinc-400" : "text-gray-500"
+            )}
+          >
+            {uiLanguage === "zh"
+              ? "AI将基于您的排名前10关键词,分析搜索意图和竞争格局,推荐最具潜力的内容方向。"
+              : "AI analyzes your top 10 ranked keywords to identify high-potential content opportunities."}
+          </p>
+
+          <Button
+            onClick={handleAnalyzeClick}
+            disabled={loading}
+            className={cn(
+              "relative overflow-hidden group",
+              "bg-emerald-500 hover:bg-emerald-600 text-white",
+              "shadow-[0_0_30px_rgba(16,185,129,0.4)]",
+              "hover:shadow-[0_0_50px_rgba(16,185,129,0.6)]",
+              "transition-all duration-300",
+              "px-8 py-4 text-base font-medium rounded-2xl"
+            )}
+          >
+            <div className="flex items-center gap-2 relative z-10">
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <TrendingUp className="w-5 h-5" />
+              )}
+              <span>
+                {loading
+                  ? uiLanguage === "zh"
+                    ? "分析中..."
+                    : "Analyzing..."
+                  : uiLanguage === "zh"
+                  ? "分析关键词机会"
+                  : "Analyze Keywords"}
+              </span>
+            </div>
+
+            {/* 能量流动画 */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -267,12 +442,15 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
       >
         <AlertCircle className="w-6 h-6 mx-auto mb-2" />
         <p className="text-sm mb-1">{error}</p>
-        {error.includes("未找到关键词") || error.includes("No keywords found") ? (
-          <p className={cn(
-            "text-xs mt-2",
-            isDarkTheme ? "text-amber-300" : "text-amber-600"
-          )}>
-            {uiLanguage === "zh" 
+        {error.includes("未找到关键词") ||
+        error.includes("No keywords found") ? (
+          <p
+            className={cn(
+              "text-xs mt-2",
+              isDarkTheme ? "text-amber-300" : "text-amber-600"
+            )}
+          >
+            {uiLanguage === "zh"
               ? "提示：请先切换到「总览」页面，点击「刷新」按钮更新网站指标数据。"
               : "Tip: Please switch to the Overview page and click the Refresh button to update website metrics."}
           </p>
@@ -303,9 +481,7 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
           isDarkTheme ? "text-zinc-500" : "text-gray-500"
         )}
       >
-        {uiLanguage === "zh"
-          ? "暂无数据"
-          : "No data available"}
+        {uiLanguage === "zh" ? "暂无数据" : "No data available"}
       </div>
     );
   }
@@ -353,9 +529,7 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
           </Button>
           <Button
             size="sm"
-            className={cn(
-              "bg-emerald-500 hover:bg-emerald-600 text-white"
-            )}
+            className={cn("bg-emerald-500 hover:bg-emerald-600 text-white")}
           >
             <Rocket className="w-4 h-4 mr-2" />
             {uiLanguage === "zh" ? "全部部署" : "Deploy All"}
@@ -366,7 +540,9 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
       {/* Keywords Table */}
       <Card
         className={cn(
-          isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white border-gray-200"
+          isDarkTheme
+            ? "bg-zinc-900 border-zinc-800"
+            : "bg-white border-gray-200"
         )}
       >
         <CardHeader>
@@ -402,6 +578,9 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
                   </th>
                   <th className="pb-3 text-center font-medium">
                     {uiLanguage === "zh" ? "意图" : "Intent"}
+                  </th>
+                  <th className="pb-3 text-center font-medium">
+                    {uiLanguage === "zh" ? "SERP机会" : "SERP Opp."}
                   </th>
                   <th className="pb-3 text-center font-medium">
                     {uiLanguage === "zh" ? "推荐" : "Recommendation"}
@@ -470,7 +649,9 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
                                 ? "bg-amber-500"
                                 : "bg-red-500"
                             )}
-                            style={{ width: `${Math.min(100, kw.metrics.kd)}%` }}
+                            style={{
+                              width: `${Math.min(100, kw.metrics.kd)}%`,
+                            }}
                           />
                         </div>
                         <span
@@ -493,6 +674,46 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
                       >
                         {kw.metrics.intent}
                       </Badge>
+                    </td>
+                    {/* SERP机会列 */}
+                    <td className="py-3 px-2">
+                      <div className="flex items-center justify-center gap-1">
+                        {kw.serpFeatures?.ai_overview && (
+                          <div
+                            className={cn(
+                              "px-2 py-1 rounded-lg text-[10px] font-medium",
+                              isDarkTheme
+                                ? "bg-purple-500/20 text-purple-300 border border-purple-500/30 shadow-[0_0_10px_rgba(168,85,247,0.2)]"
+                                : "bg-purple-100 text-purple-700 border border-purple-300"
+                            )}
+                          >
+                            AI
+                          </div>
+                        )}
+                        {kw.serpFeatures?.featured_snippet && (
+                          <div
+                            className={cn(
+                              "px-2 py-1 rounded-lg text-[10px] font-medium",
+                              isDarkTheme
+                                ? "bg-blue-500/20 text-blue-300 border border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.2)]"
+                                : "bg-blue-100 text-blue-700 border border-blue-300"
+                            )}
+                          >
+                            FS
+                          </div>
+                        )}
+                        {!kw.serpFeatures?.ai_overview &&
+                          !kw.serpFeatures?.featured_snippet && (
+                            <span
+                              className={cn(
+                                "text-xs",
+                                isDarkTheme ? "text-zinc-600" : "text-gray-400"
+                              )}
+                            >
+                              -
+                            </span>
+                          )}
+                      </div>
                     </td>
                     <td className="py-3 px-2 text-center">
                       <div className="flex items-center justify-center gap-0.5">
@@ -528,7 +749,9 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card
             className={cn(
-              isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white border-gray-200"
+              isDarkTheme
+                ? "bg-zinc-900 border-zinc-800"
+                : "bg-white border-gray-200"
             )}
           >
             <CardHeader>
@@ -597,7 +820,9 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
                       isDarkTheme ? "text-white" : "text-gray-900"
                     )}
                   >
-                    {uiLanguage === "zh" ? "优势差异化" : "Edge Differentiation"}
+                    {uiLanguage === "zh"
+                      ? "优势差异化"
+                      : "Edge Differentiation"}
                   </h4>
                 </div>
                 <p
@@ -609,94 +834,137 @@ export const KeywordIntelligenceView: React.FC<KeywordIntelligenceViewProps> = (
                   {selectedDeployment.strategy.differentiation}
                 </p>
               </div>
+
+              {/* 生成按钮 */}
+              {onGenerateArticle && (
+                <div className="pt-4 mt-4 border-t border-white/5">
+                  <Button
+                    onClick={() => handleGenerateArticle(selectedDeployment)}
+                    className={cn(
+                      "w-full relative overflow-hidden group",
+                      "bg-gradient-to-r from-emerald-500 to-emerald-600",
+                      "hover:from-emerald-600 hover:to-emerald-700",
+                      "text-white font-medium",
+                      "shadow-[0_0_30px_rgba(16,185,129,0.4)]",
+                      "hover:shadow-[0_0_50px_rgba(16,185,129,0.6)]",
+                      "transition-all duration-300",
+                      "rounded-2xl py-3 text-sm"
+                    )}
+                  >
+                    <div className="flex items-center justify-center gap-2 relative z-10">
+                      <Sparkles className="w-4 h-4" />
+                      <span>
+                        {uiLanguage === "zh" ? "生成文章" : "Generate Article"}
+                      </span>
+                      <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    </div>
+
+                    {/* 能量流动画 */}
+                    <div
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                      style={{
+                        animation: "shimmer 2s linear infinite",
+                      }}
+                    />
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Second card for additional keywords (if any) */}
-          {allKeywords.length > 1 && allKeywords[1] && allKeywords[1].keyword !== selectedDeployment.keyword && (
-            <Card
-              className={cn(
-                isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white border-gray-200"
-              )}
-            >
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle
-                    className={cn(
-                      "text-base font-semibold",
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-                    )}
-                  >
-                    {allKeywords[1].keyword}
-                  </CardTitle>
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-emerald-400" />
-                  </div>
-                </div>
-                <p
-                  className={cn(
-                    "text-xs mt-1",
-                    isDarkTheme ? "text-zinc-400" : "text-gray-500"
-                  )}
-                >
-                  {uiLanguage === "zh" ? "推荐部署" : "Recommended Deployment"}
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-blue-400" />
-                    <h4
+          {allKeywords.length > 1 &&
+            allKeywords[1] &&
+            allKeywords[1].keyword !== selectedDeployment.keyword && (
+              <Card
+                className={cn(
+                  isDarkTheme
+                    ? "bg-zinc-900 border-zinc-800"
+                    : "bg-white border-gray-200"
+                )}
+              >
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle
                       className={cn(
-                        "text-sm font-medium",
-                        isDarkTheme ? "text-white" : "text-gray-900"
+                        "text-base font-semibold",
+                        isDarkTheme ? "text-emerald-400" : "text-emerald-600"
                       )}
                     >
-                      {uiLanguage === "zh" ? "内容策略" : "Content Strategy"}
-                    </h4>
+                      {allKeywords[1].keyword}
+                    </CardTitle>
+                    <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                      <Sparkles className="w-4 h-4 text-emerald-400" />
+                    </div>
                   </div>
                   <p
                     className={cn(
-                      "text-sm mb-1",
-                      isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                      "text-xs mt-1",
+                      isDarkTheme ? "text-zinc-400" : "text-gray-500"
                     )}
                   >
-                    {allKeywords[1].strategy.content_type}
+                    {uiLanguage === "zh"
+                      ? "推荐部署"
+                      : "Recommended Deployment"}
                   </p>
-                  <p
-                    className={cn(
-                      "text-xs",
-                      isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                    )}
-                  >
-                    {uiLanguage === "zh" ? "建议字数：" : "Suggested: "}
-                    {allKeywords[1].strategy.suggested_word_count}
-                  </p>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="w-4 h-4 text-purple-400" />
-                    <h4
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="w-4 h-4 text-blue-400" />
+                      <h4
+                        className={cn(
+                          "text-sm font-medium",
+                          isDarkTheme ? "text-white" : "text-gray-900"
+                        )}
+                      >
+                        {uiLanguage === "zh" ? "内容策略" : "Content Strategy"}
+                      </h4>
+                    </div>
+                    <p
                       className={cn(
-                        "text-sm font-medium",
-                        isDarkTheme ? "text-white" : "text-gray-900"
+                        "text-sm mb-1",
+                        isDarkTheme ? "text-zinc-300" : "text-gray-700"
                       )}
                     >
-                      {uiLanguage === "zh" ? "优势差异化" : "Edge Differentiation"}
-                    </h4>
+                      {allKeywords[1].strategy.content_type}
+                    </p>
+                    <p
+                      className={cn(
+                        "text-xs",
+                        isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                      )}
+                    >
+                      {uiLanguage === "zh" ? "建议字数：" : "Suggested: "}
+                      {allKeywords[1].strategy.suggested_word_count}
+                    </p>
                   </div>
-                  <p
-                    className={cn(
-                      "text-sm",
-                      isDarkTheme ? "text-zinc-300" : "text-gray-700"
-                    )}
-                  >
-                    {allKeywords[1].strategy.differentiation}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Sparkles className="w-4 h-4 text-purple-400" />
+                      <h4
+                        className={cn(
+                          "text-sm font-medium",
+                          isDarkTheme ? "text-white" : "text-gray-900"
+                        )}
+                      >
+                        {uiLanguage === "zh"
+                          ? "优势差异化"
+                          : "Edge Differentiation"}
+                      </h4>
+                    </div>
+                    <p
+                      className={cn(
+                        "text-sm",
+                        isDarkTheme ? "text-zinc-300" : "text-gray-700"
+                      )}
+                    >
+                      {allKeywords[1].strategy.differentiation}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
         </div>
       )}
     </div>

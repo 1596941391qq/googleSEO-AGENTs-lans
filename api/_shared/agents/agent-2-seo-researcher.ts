@@ -12,9 +12,11 @@ import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport } from
 import { fetchKeywordData } from '../tools/dataforseo.js';
 
 /**
- * 搜索引擎偏好分析结果
+ * 搜索引擎偏好分析结果（Markdown格式）
  */
 export interface SearchPreferencesResult {
+  markdown: string;  // Markdown格式的完整分析
+  // 保留向后兼容的字段（可选）
   semantic_landscape?: string;
   engine_strategies?: {
     google?: {
@@ -55,9 +57,11 @@ export interface SearchPreferencesResult {
 }
 
 /**
- * 竞争对手分析结果
+ * 竞争对手分析结果（Markdown格式）
  */
 export interface CompetitorAnalysisResult {
+  markdown: string;  // Markdown格式的完整分析
+  // 保留向后兼容的字段（可选）
   competitor_benchmark?: Array<{
     domain?: string;
     content_angle?: string;
@@ -84,10 +88,10 @@ export interface CompetitorAnalysisResult {
  */
 function extractJSON(text: string): string {
   if (!text) return '{}';
-  
+
   // 移除 Markdown 代码块标记
   text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-  
+
   // 移除可能的 Markdown 格式标记（如 ** 等）
   // 但保留 JSON 内部的字符串内容
   // 先尝试找到 JSON 对象或数组
@@ -98,54 +102,54 @@ function extractJSON(text: string): string {
     // 但要注意不要破坏 JSON 内部的字符串
     return extracted.trim();
   }
-  
+
   // 如果没有找到 JSON，尝试移除开头的 Markdown 标记
   // 查找第一个 { 或 [
   const firstBrace = text.indexOf('{');
   const firstBracket = text.indexOf('[');
-  
+
   if (firstBrace !== -1 || firstBracket !== -1) {
     const startIdx = firstBrace !== -1 && firstBracket !== -1
       ? Math.min(firstBrace, firstBracket)
       : (firstBrace !== -1 ? firstBrace : firstBracket);
-    
+
     // 从第一个 { 或 [ 开始，找到匹配的 } 或 ]
     let braceCount = 0;
     let bracketCount = 0;
     let inString = false;
     let escapeNext = false;
-    
+
     for (let i = startIdx; i < text.length; i++) {
       const char = text[i];
-      
+
       if (escapeNext) {
         escapeNext = false;
         continue;
       }
-      
+
       if (char === '\\') {
         escapeNext = true;
         continue;
       }
-      
+
       if (char === '"' && !escapeNext) {
         inString = !inString;
         continue;
       }
-      
+
       if (!inString) {
         if (char === '{') braceCount++;
         if (char === '}') braceCount--;
         if (char === '[') bracketCount++;
         if (char === ']') bracketCount--;
-        
+
         if (braceCount === 0 && bracketCount === 0 && (char === '}' || char === ']')) {
           return text.substring(startIdx, i + 1).trim();
         }
       }
     }
   }
-  
+
   return text.trim() || '{}';
 }
 
@@ -163,7 +167,8 @@ export async function analyzeSearchPreferences(
   keyword: string,
   language: 'zh' | 'en' = 'en',
   targetLanguage: TargetLanguage = 'en',
-  targetMarket: string = 'global'
+  targetMarket: string = 'global',
+  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void
 ): Promise<SearchPreferencesResult> {
   try {
     // 获取 SEO Researcher prompt
@@ -181,42 +186,24 @@ export async function analyzeSearchPreferences(
 目标语言：${targetLanguage}
 目标市场：${marketLabel}
 
-请提供详细的搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。
-
-**重要：必须返回有效的 JSON 格式，不要包含任何 Markdown 格式标记、解释性文字或 JSON 对象之外的文本。只返回 JSON 对象本身。**`
+请以详细的Markdown格式提供搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。
+使用清晰的标题、列表和表格来组织内容。`
       : `Please analyze optimization strategies for the keyword "${keyword}" across different search engines for the ${marketLabel} market.
 
 Keyword: ${keyword}
 Target Language: ${targetLanguage}
 Target Market: ${marketLabel}
 
-Please provide detailed search engine preference analysis and optimization recommendations, with special attention to localization needs for the target market.
+Please provide detailed search engine preference analysis and optimization recommendations in well-structured Markdown format, with special attention to localization needs for the target market. Use clear headings, lists, and tables to organize the content.`;
 
-CRITICAL: You MUST respond with valid JSON only. Do NOT include any markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object.`;
-
-    // 调用 Gemini API
+    // 调用 Gemini API（直接返回Markdown，不强制JSON）
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json',
-      enableGoogleSearch: true  // 启用联网搜索以获取最新搜索引擎策略
     });
 
-    let text = response.text || '{}';
-    text = extractJSON(text);
-
-    // 解析 JSON
-    try {
-      const result = JSON.parse(text);
-      return result as SearchPreferencesResult;
-    } catch (e: any) {
-      console.error('JSON Parse Error in analyzeSearchPreferences:', e.message);
-      console.error('Extracted text (first 500 chars):', text.substring(0, 500));
-
-      // 返回默认结构
-      return {
-        semantic_landscape: text.substring(0, 500),
-        engine_strategies: {}
-      };
-    }
+    // 直接返回Markdown结果，确保 markdown 字段始终是字符串
+    return {
+      markdown: (response?.text && typeof response.text === 'string') ? response.text : ''
+    };
   } catch (error: any) {
     console.error('Analyze Search Preferences Error:', error);
     throw new Error(`Failed to analyze search preferences: ${error.message}`);
@@ -258,7 +245,8 @@ export async function analyzeCompetitors(
   serpData?: SerpData,
   language: 'zh' | 'en' = 'en',
   targetLanguage: TargetLanguage = 'en',
-  targetMarket: string = 'global'
+  targetMarket: string = 'global',
+  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void
 ): Promise<CompetitorAnalysisResult> {
   try {
     // 如果没有提供 SERP 数据，则获取
@@ -367,38 +355,22 @@ Target Market: ${marketLabel}
 ${serpSnippetsContext}
 ${deepContentContext}
 
-Task Requirements:
-1. **Structure Analysis**: Analyze the H2/H3 structure based on the scraped deep content.
-2. **Content Gap**: Identify key topics they are missing, with special attention to localization needs for the target market.
-3. **Word Count & Type**: Estimate word count and page type (Blog, Product, Tool, etc.).
-4. **Winning Formula**: Summarize why they are ranking #1, analyzing competitive characteristics of the target market.
+Please provide a comprehensive competitor analysis in well-structured Markdown format with:
+1. **Structure Analysis**: Analyze the H2/H3 structure based on the scraped deep content
+2. **Content Gap**: Identify key topics they are missing
+3. **Word Count & Type**: Estimate word count and page type
+4. **Winning Formula**: Summarize why they are ranking #1
 
-CRITICAL: You MUST respond with valid JSON only. Do NOT include any markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object.`;
+Use clear headings, lists, and tables to organize the content.`;
 
-    // 调用 Gemini API
+    // 调用 Gemini API（直接返回Markdown，不强制JSON）
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json',
-      enableGoogleSearch: true  // 启用联网搜索以获取最新搜索引擎策略
     });
 
-    let text = response.text || '{}';
-    text = extractJSON(text);
-
-    // 解析 JSON
-    try {
-      const result = JSON.parse(text);
-      return result as CompetitorAnalysisResult;
-    } catch (e: any) {
-      console.error('JSON Parse Error in analyzeCompetitors:', e.message);
-      console.error('Extracted text (first 500 chars):', text.substring(0, 500));
-
-      // 返回默认结构
-      return {
-        competitor_benchmark: [],
-        winning_formula: text.substring(0, 500),
-        recommended_structure: []
-      };
-    }
+    // 直接返回Markdown结果，确保 markdown 字段始终是字符串
+    return {
+      markdown: (response?.text && typeof response.text === 'string') ? response.text : ''
+    };
   } catch (error: any) {
     console.error('Analyze Competitors Error:', error);
     throw new Error(`Failed to analyze competitors: ${error.message}`);
@@ -423,66 +395,66 @@ function getLanguageName(code: TargetLanguage): string {
 
 function extractJSONRobust(text: string): string {
   if (!text) return '{}';
-  
+
   // 移除 Markdown 代码块标记
   text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
-  
+
   // 移除可能的 Markdown 格式标记（如 ** 等）在 JSON 外部
   // 先尝试找到 JSON 对象或数组
   const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
   if (jsonMatch) {
     let extracted = jsonMatch[1];
-    
+
     // 使用更精确的方法提取完整的 JSON
     // 查找第一个 { 或 [
     const firstBrace = extracted.indexOf('{');
     const firstBracket = extracted.indexOf('[');
-    
+
     if (firstBrace !== -1 || firstBracket !== -1) {
       const startIdx = firstBrace !== -1 && firstBracket !== -1
         ? Math.min(firstBrace, firstBracket)
         : (firstBrace !== -1 ? firstBrace : firstBracket);
-      
+
       // 从第一个 { 或 [ 开始，找到匹配的 } 或 ]
       let braceCount = 0;
       let bracketCount = 0;
       let inString = false;
       let escapeNext = false;
-      
+
       for (let i = startIdx; i < extracted.length; i++) {
         const char = extracted[i];
-        
+
         if (escapeNext) {
           escapeNext = false;
           continue;
         }
-        
+
         if (char === '\\') {
           escapeNext = true;
           continue;
         }
-        
+
         if (char === '"' && !escapeNext) {
           inString = !inString;
           continue;
         }
-        
+
         if (!inString) {
           if (char === '{') braceCount++;
           if (char === '}') braceCount--;
           if (char === '[') bracketCount++;
           if (char === ']') bracketCount--;
-          
+
           if (braceCount === 0 && bracketCount === 0 && (char === '}' || char === ']')) {
             return extracted.substring(startIdx, i + 1).trim();
           }
         }
       }
     }
-    
+
     return extracted.trim();
   }
-  
+
   return text.trim() || '{}';
 }
 
@@ -644,15 +616,31 @@ Return a JSON object:
 
     try {
       const response = await callGeminiAPI(
-        `Analyze SEO competition for: ${keywordData.keyword}`,
+        `Analyze SEO competition for: ${keywordData.keyword}
+
+CRITICAL: Return ONLY a valid JSON object in the exact format specified. No markdown, no explanations, just the JSON object starting with {`,
         fullSystemInstruction,
         {
-          responseMimeType: "application/json",
-          enableGoogleSearch: true  // 启用联网搜索以获取最新竞争分析
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'object',
+            properties: {
+              searchIntent: { type: 'string' },
+              intentAnalysis: { type: 'string' },
+              serpResultCount: { type: 'number' },
+              topDomainType: { type: 'string' },
+              probability: { type: 'string' },
+              reasoning: { type: 'string' },
+              topSerpSnippets: { type: 'array' }
+            },
+            required: ['probability', 'reasoning']
+          }
         }
       );
 
       let text = response.text || "{}";
+
+      // Enhanced JSON extraction - try to find JSON even if wrapped in markdown
       text = extractJSONRobust(text);
 
       if (!text || text.trim() === '') {
@@ -665,7 +653,73 @@ Return a JSON object:
       } catch (e: any) {
         console.error("JSON Parse Error for keyword:", keywordData.keyword);
         console.error("Extracted text (first 500 chars):", text.substring(0, 500));
-        throw new Error(`Invalid JSON response from model: ${e.message}`);
+
+        // Enhanced fallback: try multiple strategies to extract JSON
+        let recovered = false;
+
+        // Strategy 1: Try to find JSON object with "probability" field
+        const jsonMatch1 = response.text.match(/\{[\s\S]*?"probability"[\s\S]*?\}/);
+        if (jsonMatch1) {
+          try {
+            analysis = JSON.parse(jsonMatch1[0]);
+            console.log("✓ Recovered JSON using probability field match");
+            recovered = true;
+          } catch (recoveryError) {
+            // Continue to next strategy
+          }
+        }
+
+        // Strategy 2: Try to find any JSON object that looks complete
+        if (!recovered) {
+          // Find the first { and try to extract complete JSON
+          const firstBrace = response.text.indexOf('{');
+          if (firstBrace !== -1) {
+            // Try to find matching closing brace
+            let braceCount = 0;
+            let inString = false;
+            let escapeNext = false;
+
+            for (let i = firstBrace; i < response.text.length; i++) {
+              const char = response.text[i];
+
+              if (escapeNext) {
+                escapeNext = false;
+                continue;
+              }
+
+              if (char === '\\') {
+                escapeNext = true;
+                continue;
+              }
+
+              if (char === '"' && !escapeNext) {
+                inString = !inString;
+                continue;
+              }
+
+              if (!inString) {
+                if (char === '{') braceCount++;
+                if (char === '}') braceCount--;
+
+                if (braceCount === 0 && char === '}') {
+                  const candidate = response.text.substring(firstBrace, i + 1);
+                  try {
+                    analysis = JSON.parse(candidate);
+                    console.log("✓ Recovered JSON using brace matching");
+                    recovered = true;
+                    break;
+                  } catch (recoveryError) {
+                    // Continue searching
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (!recovered) {
+          throw new Error(`Invalid JSON response from model: ${e.message}`);
+        }
       }
 
       if (typeof analysis !== 'object' || analysis === null) {
@@ -800,7 +854,6 @@ CRITICAL: Return ONLY the JSON array, nothing else. No explanations.`;
 
   try {
     const response = await callGeminiAPI(prompt, undefined, {
-      enableGoogleSearch: true  // 启用联网搜索以获取最新关键词信息
     });
     const text = response.text.trim();
     const jsonMatch = text.match(/\[.*?\]/s);
@@ -908,59 +961,70 @@ STRATEGIC INSTRUCTIONS:
 `) + analysisContext + referenceContext;
 
   const prompt = `
-Create a detailed Content Strategy Report for the keyword: "${keyword.keyword}".
+Create a comprehensive Content Strategy Report in Markdown format for the keyword: "${keyword.keyword}".
 
 Target Language: ${targetLangName}
 User Interface Language: ${uiLangName}
+Target Market: ${marketLabel}
 
 Your goal is to outline a page that WILL rank #1 on Google by exploiting competitor weaknesses found in the analysis.
 
-CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON object.
+Please structure your strategy report with the following sections using clear Markdown formatting:
 
-Return a JSON object:
-{
-  "targetKeyword": "string",
-  "pageTitleH1": "H1 in ${targetLangName}",
-  "pageTitleH1_trans": "translation in ${uiLangName}",
-  "metaDescription": "160 chars max in ${targetLangName}",
-  "metaDescription_trans": "translation in ${uiLangName}",
-  "urlSlug": "seo-friendly-slug",
-  "userIntentSummary": "string",
-  "contentStructure": [
-    {"header": "H2 in ${targetLangName}", "header_trans": "trans", "description": "guide", "description_trans": "trans"}
-  ],
-  "longTailKeywords": ["keyword1", "keyword2"],
-  "longTailKeywords_trans": ["trans1", "trans2"],
-  "recommendedWordCount": 2000
-}`;
+# Content Strategy: [Keyword]
+
+## Page Title (H1)
+- Provide the optimized H1 title in ${targetLangName}
+- Include translation in ${uiLangName}
+
+## Meta Description
+- Write a compelling 150-160 character meta description in ${targetLangName}
+- Include translation in ${uiLangName}
+
+## URL Slug
+- Provide clean, SEO-friendly URL slug
+
+## User Intent Analysis
+- Detail what users in ${marketLabel} market expect when searching this keyword
+- Analyze search intent and user journey stage
+
+## Content Structure
+For each H2 section, provide:
+- **Header** (in ${targetLangName} with ${uiLangName} translation)
+- **Description**: What to cover in this section
+- **Key Points**: Bullet list of important elements
+
+### Example format:
+### H2: [Section Title in ${targetLangName}]
+*Translation: [${uiLangName} translation]*
+
+**Description**: What this section covers...
+
+**Key Points**:
+- Point 1
+- Point 2
+
+## Long-tail Keywords
+List 5-10 semantic variations and related queries relevant to ${marketLabel} market (in ${targetLangName})
+
+## Recommended Word Count
+Based on SERP analysis and topic complexity
+
+## Strategic Notes
+- Key insights from competitor analysis
+- Unique angles to exploit
+- Content gaps to fill
+
+Use clear headings, bullet points, and formatting to make the strategy easy to follow.`;
 
   try {
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: "application/json",
-      enableGoogleSearch: true  // 启用联网搜索以获取最新SEO策略
     });
 
-    let text = response.text || "{}";
-    text = extractJSONRobust(text);
-
-    if (!text || text.trim() === '') {
-      throw new Error("Empty JSON response from model");
-    }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch (e: any) {
-      console.error("JSON Parse Error in generateDeepDiveStrategy:", e.message);
-      console.error("Extracted text (first 500 chars):", text.substring(0, 500));
-      throw new Error(`Invalid JSON response from model: ${e.message}`);
-    }
-
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      throw new Error("Response is not a valid JSON object");
-    }
-
-    return parsed;
+    // Return Markdown strategy report
+    return {
+      markdown: response.text || ''
+    };
   } catch (error: any) {
     console.error("Deep Dive Error:", error);
     throw new Error(`Failed to generate strategy report: ${error.message || error}`);

@@ -52,23 +52,25 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
     requestBody.tools = [
       {
         googleSearchRetrieval: {
-          // disableAttribution: true  // 可选：禁用来源归属
+          disableAttribution: true  // 禁用来源归属，减少响应中的引用标记
         }
       }
     ];
   }
 
   if (config?.responseMimeType === 'application/json') {
-    // 在 prompt 中明确要求 JSON 格式（如果 prompt 中没有提到）
-    if (!prompt.includes('JSON') && !prompt.includes('json') && !systemInstruction?.includes('JSON') && !systemInstruction?.includes('json')) {
-      contents[contents.length - 1].parts[0].text += '\n\nCRITICAL: You MUST respond with valid JSON only. Do NOT include any markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object.';
-    }
+    // 官方推荐方式：无条件设置 response_mime_type="application/json"
+    // 这是最简单、最强制的方法，模型会自动关闭多余的解释文字，只返回纯 JSON 字符串
+    requestBody.generationConfig.responseMimeType = 'application/json';
 
-    // 只有当提供了 responseSchema 时才设置 responseMimeType（代理 API 可能要求同时提供）
+    // 如果提供了 responseSchema，也一并设置
     if (config?.responseSchema) {
       requestBody.generationConfig.responseSchema = config.responseSchema;
-      requestBody.generationConfig.responseMimeType = 'application/json';
     }
+
+    // 注意：根据官方推荐，设置 response_mime_type="application/json" 已经足够强制 JSON 输出
+    // 模型会自动关闭多余的解释文字，只返回纯 JSON 字符串
+    // 因此不需要在 prompt 中额外添加 JSON 指令
   }
 
   try {
@@ -119,6 +121,11 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
       // 提取文本内容
       if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
         content = candidate.content.parts[0].text || '';
+
+        // 如果启用了 Google 搜索且要求 JSON 格式，清理响应中的搜索引用标记
+        if (config?.enableGoogleSearch && config?.responseMimeType === 'application/json') {
+          content = cleanJSONFromSearchReferences(content);
+        }
       }
 
       // 提取联网搜索结果（groundingMetadata）
@@ -169,6 +176,50 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
   } finally {
     // Ensure function completes even if there's an error
   }
+}
+
+/**
+ * 清理 JSON 响应中的 Google 搜索引用标记
+ * 移除常见的引用格式，如 [1], (source), 等
+ */
+function cleanJSONFromSearchReferences(text: string): string {
+  if (!text) return text;
+
+  // 移除常见的搜索引用格式
+  // 1. 移除方括号引用，如 [1], [2], [source]
+  text = text.replace(/\[\d+\]/g, '');
+  text = text.replace(/\[source\]/gi, '');
+  text = text.replace(/\[citation\]/gi, '');
+
+  // 2. 移除括号引用，如 (source: url), (from: ...)
+  text = text.replace(/\(source[^)]*\)/gi, '');
+  text = text.replace(/\(from[^)]*\)/gi, '');
+  text = text.replace(/\(citation[^)]*\)/gi, '');
+
+  // 3. 移除 URL 引用（保留 JSON 字符串中的 URL）
+  // 只移除独立出现的 URL（不在引号内的）
+  text = text.replace(/(?<!["'])\bhttps?:\/\/[^\s)]+(?!["'])/g, '');
+
+  // 4. 移除 "根据搜索结果"、"Based on search results" 等前缀
+  text = text.replace(/^(根据|基于|来自).{0,20}(搜索结果|搜索|资料)[:：]\s*/i, '');
+  text = text.replace(/^(According to|Based on|From).{0,30}(search results|search|sources)[:：]\s*/i, '');
+
+  // 5. 移除常见的引用标记行
+  const lines = text.split('\n');
+  const cleanedLines = lines.filter(line => {
+    const trimmed = line.trim();
+    // 移除只包含引用标记的行
+    if (/^(\[\d+\]|\(source|\(from|\(citation|来源|参考)/i.test(trimmed)) {
+      return false;
+    }
+    // 移除只包含 URL 的行
+    if (/^https?:\/\/.+$/.test(trimmed)) {
+      return false;
+    }
+    return true;
+  });
+
+  return cleanedLines.join('\n').trim();
 }
 
 /**

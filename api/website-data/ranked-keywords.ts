@@ -184,9 +184,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             `)
           );
           
-          keywords = apiKeywords;
+          keywords = cleanedKeywords;
           fromApi = true;
-          console.log(`[ranked-keywords] ✅ Successfully fetched and cached ${keywords.length} keywords from API`);
+          console.log(`[ranked-keywords] ✅ Successfully fetched and cached ${keywords.length} keywords from API (cleaned from ${apiKeywords.length} raw keywords)`);
         }
       } catch (error: any) {
         console.error('[ranked-keywords] ❌ API call failed:', error.message);
@@ -196,19 +196,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 如果 API 调用失败或返回空数据，从数据库缓存读取
     if (keywords.length === 0 && cacheResult.rows.length > 0) {
       console.log('[ranked-keywords] 📦 Using database cache');
-      keywords = cacheResult.rows.map((row: any) => ({
-        keyword: row.keyword,
-        currentPosition: row.current_position,
-        previousPosition: row.previous_position,
-        positionChange: (row.previous_position || 0) - (row.current_position || 0),
-        searchVolume: row.search_volume,
-        etv: Number(row.etv) || 0,
-        serpFeatures: row.serp_features || {},
-        url: row.ranking_url,
-        cpc: row.cpc,
-        competition: row.competition,
-        difficulty: row.difficulty,
-      }));
+      // 清理关键词函数（与 dataforseo-domain.ts 中的逻辑一致）
+      const cleanKeyword = (rawKeyword: string): string => {
+        if (!rawKeyword) return '';
+        let cleaned = rawKeyword.trim();
+        // 1. 移除类似 "001-qk7yulqsx9esalil5mxjkg-3342555957" 的完整ID格式
+        cleaned = cleaned.replace(/^\d{1,3}-[a-z0-9-]+-\d+(\s+|$)/i, '');
+        // 2. 移除开头的数字编号（如 "051 "、"0 "、"09 "）
+        cleaned = cleaned.replace(/^\d{1,3}\s+(?=[a-zA-Z\u4e00-\u9fa5])/, '');
+        // 3. 移除纯数字开头的项
+        cleaned = cleaned.replace(/^\d+\s+/, '');
+        // 4. 如果清理后只剩下纯数字，返回空字符串
+        if (/^\d+$/.test(cleaned)) {
+          return '';
+        }
+        // 5. 移除末尾的数字后缀
+        cleaned = cleaned.replace(/\s+\d{1,3}$/, '');
+        return cleaned.trim();
+      };
+
+      // 清理并更新数据库中的关键词（自动修复旧数据）
+      const cleanedKeywords = cacheResult.rows
+        .map((row: any) => {
+          const originalKeyword = row.keyword || '';
+          const cleanedKeyword = cleanKeyword(originalKeyword);
+          
+          // 如果关键词被清理了，异步更新数据库（不阻塞响应）
+          if (cleanedKeyword !== originalKeyword && cleanedKeyword && cleanedKeyword.length > 0 && !/^\d+$/.test(cleanedKeyword)) {
+            // 检查是否已存在清理后的关键词（避免重复）
+            sql`
+              SELECT 1 FROM ranked_keywords_cache
+              WHERE website_id = ${body.websiteId} AND keyword = ${cleanedKeyword}
+            `.then(existing => {
+              if (existing.rows.length === 0) {
+                // 更新为清理后的关键词
+                sql`
+                  UPDATE ranked_keywords_cache
+                  SET keyword = ${cleanedKeyword}
+                  WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
+                `.catch(err => console.warn('[ranked-keywords] Failed to update cleaned keyword:', err));
+              } else {
+                // 如果已存在，删除旧记录
+                sql`
+                  DELETE FROM ranked_keywords_cache
+                  WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
+                `.catch(err => console.warn('[ranked-keywords] Failed to delete duplicate keyword:', err));
+              }
+            }).catch(() => {
+              // 如果查询失败，直接更新
+              sql`
+                UPDATE ranked_keywords_cache
+                SET keyword = ${cleanedKeyword}
+                WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
+              `.catch(err => console.warn('[ranked-keywords] Failed to update cleaned keyword:', err));
+            });
+          } else if (cleanedKeyword !== originalKeyword && (!cleanedKeyword || /^\d+$/.test(cleanedKeyword))) {
+            // 如果清理后为空或纯数字，删除该记录
+            sql`
+              DELETE FROM ranked_keywords_cache
+              WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
+            `.catch(err => console.warn('[ranked-keywords] Failed to delete invalid keyword:', err));
+          }
+          
+          return {
+            keyword: cleanedKeyword,
+            currentPosition: row.current_position,
+            previousPosition: row.previous_position,
+            positionChange: (row.previous_position || 0) - (row.current_position || 0),
+            searchVolume: row.search_volume,
+            etv: Number(row.etv) || 0,
+            serpFeatures: row.serp_features || {},
+            url: row.ranking_url,
+            cpc: row.cpc,
+            competition: row.competition,
+            difficulty: row.difficulty,
+          };
+        })
+        .filter((kw: any) => kw.keyword && kw.keyword.length > 0 && !/^\d+$/.test(kw.keyword)); // 过滤空关键词和纯数字
+      
+      keywords = cleanedKeywords;
     } else if (keywords.length > 0) {
       // 如果 API 调用成功，转换数据格式并应用排序
       keywords = keywords.map(kw => ({

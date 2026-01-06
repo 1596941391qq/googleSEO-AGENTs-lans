@@ -86,22 +86,25 @@ export interface KeywordData {
 }
 
 export interface SEOStrategyReport {
-  targetKeyword: string;
-  pageTitleH1: string;
+  targetKeyword?: string;
+  pageTitleH1?: string;
   pageTitleH1_trans?: string;
-  metaDescription: string;
+  metaDescription?: string;
   metaDescription_trans?: string;
-  urlSlug: string;
-  userIntentSummary: string;
-  contentStructure: {
+  urlSlug?: string;
+  userIntentSummary?: string;
+  contentStructure?: {
     header: string;
     header_trans?: string;
     description: string;
     description_trans?: string;
   }[];
-  longTailKeywords: string[];
+  longTailKeywords?: string[];
   longTailKeywords_trans?: string[];
-  recommendedWordCount: number;
+  recommendedWordCount?: number;
+
+  // Markdown format support (new)
+  markdown?: string;
 
   // New fields for deep dive analysis
   coreKeywords?: string[];

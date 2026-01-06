@@ -152,15 +152,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       return res.status(200).json({
         success: true,
-        data: responseData,
+        data: {
+          ...responseData,
+          domain: domain, // 添加域名到响应中
+        },
         cached: true,
       });
     }
 
-    // 如果没有缓存数据
+    // 如果没有缓存数据，至少返回域名
     return res.status(200).json({
       success: true,
-      data: null,
+      data: {
+        domain: domain,
+      },
       cached: false,
     });
 

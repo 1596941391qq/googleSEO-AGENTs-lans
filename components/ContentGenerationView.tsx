@@ -23,7 +23,21 @@ import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
-import { ContentGenerationState, WebsiteBinding, KeywordData } from "./types";
+import { KeywordData } from "../../types";
+
+// 定义本地类型
+interface WebsiteBinding {
+  id: string;
+  url: string;
+  domain?: string;
+  location?: string;
+}
+
+interface ContentGenerationState {
+  activeTab: "my-website" | "website-data" | "article-rankings" | "publish";
+  website: WebsiteBinding | null;
+  [key: string]: any;
+}
 import {
   LineChart,
   Line,
@@ -42,12 +56,14 @@ interface WebsiteDataTabProps {
   website: WebsiteBinding | null;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
+  onGenerateArticle?: (keyword: KeywordData) => void;
 }
 
 const WebsiteDataTab: React.FC<WebsiteDataTabProps> = ({
   website,
   isDarkTheme,
   uiLanguage,
+  onGenerateArticle,
 }) => {
   if (!website) {
     return (
@@ -86,8 +102,10 @@ const WebsiteDataTab: React.FC<WebsiteDataTabProps> = ({
     return (
       <WebsiteDataDashboard
         websiteId={website.id}
+        websiteUrl={website.url}
         isDarkTheme={isDarkTheme}
         uiLanguage={uiLanguage}
+        onGenerateArticle={onGenerateArticle}
       />
     );
   } catch (error: any) {
@@ -964,6 +982,7 @@ interface ContentGenerationViewProps {
   setState: (update: Partial<ContentGenerationState>) => void;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
+  onGenerateArticle?: (keyword: KeywordData) => void;
 }
 
 export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
@@ -971,6 +990,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
   setState,
   isDarkTheme,
   uiLanguage,
+  onGenerateArticle,
 }) => {
   const [urlInput, setUrlInput] = useState("");
   const [tempUrl, setTempUrl] = useState(""); // Store URL during onboarding
@@ -1384,7 +1404,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   },
                   onboardingStep: 1, // Stay on loading step
                 });
-                
+
                 // After a short delay, move to step 2 (GPT demo)
                 setTimeout(() => {
                   setState((prev) => ({
@@ -1465,7 +1485,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             },
             onboardingStep: 1, // Stay on loading step
           });
-          
+
           // After a short delay, move to step 2 (GPT demo)
           setTimeout(() => {
             setState((prev) => ({
@@ -1650,7 +1670,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   },
                   onboardingStep: 1, // Stay on loading step
                 });
-                
+
                 // After a short delay, move to step 2 (GPT demo)
                 setTimeout(() => {
                   setState((prev) => ({
@@ -1731,7 +1751,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             },
             onboardingStep: 1, // Stay on loading step
           });
-          
+
           // After a short delay, move to step 2 (GPT demo)
           setTimeout(() => {
             setState((prev) => ({
@@ -3200,6 +3220,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           website={state.website}
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
+          onGenerateArticle={onGenerateArticle}
         />
       )}
       {state.activeTab === "article-rankings" && (

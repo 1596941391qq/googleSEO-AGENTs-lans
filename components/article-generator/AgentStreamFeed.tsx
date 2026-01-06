@@ -1,7 +1,9 @@
 
 import React, { useRef, useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { AgentStreamEvent, UILanguage } from '../../types';
-import { CheckCircle, Search, FileText, PenTool, Image as ImageIcon, Loader2, Target, TrendingUp, Minus, Square, X } from 'lucide-react';
+import { CheckCircle, Search, FileText, PenTool, Image as ImageIcon, Loader2, Target, TrendingUp, Minus, Square, X, Globe, Database, ExternalLink } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { EnhancedImageGenCard, ImageGenerationStatus } from './EnhancedImageGenCard';
 import { StreamingTextCard } from './StreamingTextCard';
@@ -128,6 +130,26 @@ const DataCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLan
 
 const OutlineCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
   const t = AGENT_TEXT[uiLanguage];
+
+  // If markdown field exists, render markdown directly
+  if (data.markdown) {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
+        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center mb-3">
+          <FileText size={12} className="mr-1" /> {t.cardStrategicOutline}
+        </h4>
+        <div className="prose prose-sm prose-invert max-w-none">
+          <div className="text-xs text-gray-300 leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {data.markdown}
+            </ReactMarkdown>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback: render old structured format
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 font-mono text-xs text-gray-300">
       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center">
@@ -153,14 +175,301 @@ const OutlineCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, ui
   );
 };
 
+const FirecrawlResultCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
+      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+        <Globe size={12} className="mr-1" /> 
+        {uiLanguage === 'zh' ? 'Firecrawl 抓取结果' : 'Firecrawl Scrape Result'}
+      </h4>
+      <div className="space-y-2">
+        <div className="p-2 bg-black/20 rounded">
+          <div className="text-xs font-medium text-emerald-400 truncate flex items-center">
+            <ExternalLink size={10} className="mr-1" />
+            {data.title || data.url}
+          </div>
+          <div className="text-[10px] text-gray-500 truncate mt-0.5">{data.url}</div>
+          <div className="flex items-center gap-2 mt-2 text-[10px] text-gray-400">
+            <span>{uiLanguage === 'zh' ? '内容长度' : 'Content'}: {data.contentLength?.toLocaleString()} {uiLanguage === 'zh' ? '字符' : 'chars'}</span>
+            {data.hasScreenshot && (
+              <span className="text-emerald-400">📸 {uiLanguage === 'zh' ? '含截图' : 'Screenshot'}</span>
+            )}
+            {data.images && data.images.length > 0 && (
+              <span className="text-blue-400">🖼️ {data.images.length} {uiLanguage === 'zh' ? '图片' : 'images'}</span>
+            )}
+          </div>
+          {data.preview && (
+            <div className="text-[10px] text-gray-400 mt-2 line-clamp-3 bg-black/20 p-2 rounded">
+              {data.preview}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DataForSEOCompetitorsCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
+      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+        <Database size={12} className="mr-1" /> 
+        {uiLanguage === 'zh' ? 'DataForSEO 竞争对手' : 'DataForSEO Competitors'}
+      </h4>
+      <div className="text-[10px] text-gray-500 mb-2">
+        {uiLanguage === 'zh' ? '分析域名' : 'Analyzing domain'}: <span className="text-emerald-400">{data.domain}</span>
+      </div>
+      <div className="space-y-1.5">
+        {data.competitors?.slice(0, 5).map((competitor: any, i: number) => (
+          <div key={i} className="p-2 bg-black/20 rounded text-[10px]">
+            <div className="text-emerald-400 font-medium truncate">{competitor.domain}</div>
+            <div className="flex items-center gap-2 mt-1 text-gray-400">
+              {competitor.commonKeywords > 0 && (
+                <span>{uiLanguage === 'zh' ? '共同关键词' : 'Common Keywords'}: {competitor.commonKeywords}</span>
+              )}
+              {competitor.domainRating > 0 && (
+                <span>DR: {competitor.domainRating}</span>
+              )}
+            </div>
+          </div>
+        ))}
+        {data.totalCompetitors > 5 && (
+          <div className="text-[10px] text-gray-500 text-center pt-1">
+            {uiLanguage === 'zh' 
+              ? `还有 ${data.totalCompetitors - 5} 个竞争对手...` 
+              : `+ ${data.totalCompetitors - 5} more competitors...`}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const DataForSEOKeywordsCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
+      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+        <Database size={12} className="mr-1" /> 
+        {uiLanguage === 'zh' ? 'DataForSEO 关键词数据' : 'DataForSEO Keywords'}
+      </h4>
+      <div className="text-[10px] text-gray-500 mb-2">
+        {uiLanguage === 'zh' ? '域名' : 'Domain'}: <span className="text-emerald-400">{data.domain}</span>
+        <span className="ml-2">{uiLanguage === 'zh' ? '关键词数' : 'Keywords'}: {data.keywordCount}</span>
+      </div>
+      <div className="space-y-1">
+        {data.sampleKeywords?.slice(0, 5).map((kw: any, i: number) => (
+          <div key={i} className="p-1.5 bg-black/20 rounded text-[10px] flex items-center justify-between">
+            <span className="text-emerald-300 truncate flex-1">{kw.keyword}</span>
+            <div className="flex items-center gap-2 ml-2 text-gray-400">
+              {kw.position > 0 && <span>Pos: {kw.position}</span>}
+              {kw.volume > 0 && <span>Vol: {kw.volume}</span>}
+              {kw.difficulty > 0 && <span>KD: {kw.difficulty}</span>}
+            </div>
+          </div>
+        ))}
+        {data.keywordCount > 5 && (
+          <div className="text-[10px] text-gray-500 text-center pt-1">
+            {uiLanguage === 'zh' 
+              ? `还有 ${data.keywordCount - 5} 个关键词...` 
+              : `+ ${data.keywordCount - 5} more keywords...`}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const WebsiteAuditReportCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const report = data.report || '';
+  const maxPreviewLength = 500;
+
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3 mt-2">
+      <div className="flex items-center justify-between">
+        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+          <FileText size={12} className="mr-1" /> 
+          {uiLanguage === 'zh' ? '网站审计分析报告' : 'Website Audit Analysis Report'}
+        </h4>
+        <div className="flex items-center gap-2 text-[10px] text-gray-500">
+          <span>{data.reportLength?.toLocaleString()} {uiLanguage === 'zh' ? '字符' : 'chars'}</span>
+          {data.extractedKeywordsCount > 0 && (
+            <span className="text-emerald-400">
+              {data.extractedKeywordsCount} {uiLanguage === 'zh' ? '个关键词建议' : 'keyword suggestions'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Summary Info */}
+      <div className="grid grid-cols-2 gap-2 text-[10px]">
+        {data.websiteUrl && (
+          <div className="p-2 bg-black/20 rounded">
+            <div className="text-gray-500">{uiLanguage === 'zh' ? '网站' : 'Website'}</div>
+            <div className="text-emerald-400 truncate">{data.websiteUrl}</div>
+          </div>
+        )}
+        {data.competitorKeywordsCount !== undefined && (
+          <div className="p-2 bg-black/20 rounded">
+            <div className="text-gray-500">{uiLanguage === 'zh' ? '竞争对手关键词' : 'Competitor Keywords'}</div>
+            <div className="text-emerald-400">{data.competitorKeywordsCount}</div>
+          </div>
+        )}
+        {data.industry && (
+          <div className="p-2 bg-black/20 rounded">
+            <div className="text-gray-500">{uiLanguage === 'zh' ? '行业' : 'Industry'}</div>
+            <div className="text-emerald-400">{data.industry}</div>
+          </div>
+        )}
+        {data.miningStrategy && (
+          <div className="p-2 bg-black/20 rounded">
+            <div className="text-gray-500">{uiLanguage === 'zh' ? '挖掘策略' : 'Mining Strategy'}</div>
+            <div className="text-emerald-400">
+              {data.miningStrategy === 'horizontal' 
+                ? (uiLanguage === 'zh' ? '横向挖掘' : 'Horizontal')
+                : (uiLanguage === 'zh' ? '纵向挖掘' : 'Vertical')}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Extracted Keywords Preview */}
+      {data.keywords && data.keywords.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[10px] text-gray-500">
+            {uiLanguage === 'zh' ? '提取的关键词建议' : 'Extracted Keyword Suggestions'}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {data.keywords.slice(0, 10).map((kw: any, i: number) => (
+              <span key={i} className="px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded text-[10px]">
+                {kw.keyword}
+              </span>
+            ))}
+            {data.keywords.length > 10 && (
+              <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-[10px]">
+                +{data.keywords.length - 10}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Report Content */}
+      {report && (
+        <div className="space-y-2">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="w-full text-left text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center justify-between p-2 bg-black/20 rounded hover:bg-black/30 transition-colors"
+          >
+            <span>
+              {uiLanguage === 'zh' ? '查看完整分析报告' : 'View Full Analysis Report'}
+            </span>
+            <span>{isExpanded ? '▼' : '▶'}</span>
+          </button>
+          
+          {isExpanded && (
+            <div className="max-h-96 overflow-y-auto p-3 bg-black/20 rounded text-xs text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {report}
+              </ReactMarkdown>
+            </div>
+          )}
+          
+          {!isExpanded && report.length > maxPreviewLength && (
+            <div className="p-3 bg-black/20 rounded text-xs text-gray-400 leading-relaxed line-clamp-6">
+              {report.substring(0, maxPreviewLength)}...
+            </div>
+          )}
+          
+          {!isExpanded && report.length <= maxPreviewLength && (
+            <div className="p-3 bg-black/20 rounded text-xs text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {report}
+              </ReactMarkdown>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const GoogleSearchResultsCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
+  const t = AGENT_TEXT[uiLanguage];
+  const searchResults = data.results || data.searchResults || [];
+  
+  if (!searchResults || searchResults.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
+      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+        <Search size={12} className="mr-1" /> 
+        {uiLanguage === 'zh' ? 'Google 搜索结果' : 'Google Search Results'}
+      </h4>
+      <div className="space-y-2">
+        {searchResults.slice(0, 5).map((result: any, i: number) => (
+          <a 
+            key={i} 
+            href={result.url} 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="block p-2 bg-black/20 rounded hover:bg-black/30 transition-colors group"
+          >
+            <div className="text-xs font-medium text-emerald-400 truncate group-hover:text-emerald-300">
+              {result.title || result.url}
+            </div>
+            <div className="text-[10px] text-gray-500 truncate mt-0.5">
+              {result.url}
+            </div>
+            {result.snippet && (
+              <div className="text-[10px] text-gray-400 mt-1 line-clamp-2">
+                {result.snippet}
+              </div>
+            )}
+          </a>
+        ))}
+        {searchResults.length > 5 && (
+          <div className="text-[10px] text-gray-500 text-center pt-1">
+            {uiLanguage === 'zh' 
+              ? `还有 ${searchResults.length - 5} 个结果...` 
+              : `+ ${searchResults.length - 5} more results...`}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const SearchPreferencesCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
   const t = AGENT_TEXT[uiLanguage];
+
+  // If markdown field exists, render markdown directly
+  if (data.markdown) {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
+        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center mb-3">
+          <Search size={12} className="mr-1" /> {t.cardSearchPreferences}
+        </h4>
+        <div className="prose prose-sm prose-invert max-w-none">
+          <div className="text-xs text-gray-300 leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {data.markdown}
+            </ReactMarkdown>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback: render old structured format
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 space-y-4">
       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
         <Search size={12} className="mr-1" /> {t.cardSearchPreferences}
       </h4>
-      
+
       {/* Semantic Landscape */}
       {data.semantic_landscape && (
         <div className="space-y-1">
@@ -257,12 +566,32 @@ const SearchPreferencesCard: React.FC<{ data: any; uiLanguage: UILanguage }> = (
 
 const CompetitorAnalysisCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({ data, uiLanguage }) => {
   const t = AGENT_TEXT[uiLanguage];
+
+  // If markdown field exists, render markdown directly
+  if (data.markdown) {
+    return (
+      <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
+        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center mb-3">
+          <Target size={12} className="mr-1" /> {t.cardCompetitorAnalysis}
+        </h4>
+        <div className="prose prose-sm prose-invert max-w-none">
+          <div className="text-xs text-gray-300 leading-relaxed">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {data.markdown}
+            </ReactMarkdown>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback: render old structured format
   return (
     <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 space-y-4">
       <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
         <Target size={12} className="mr-1" /> {t.cardCompetitorAnalysis}
       </h4>
-      
+
       {/* Winning Formula */}
       {data.winning_formula && (
         <div className="space-y-1">
@@ -327,6 +656,11 @@ const StreamEventDetails: React.FC<{
         case 'outline': return <OutlineCard data={event.data} uiLanguage={uiLanguage} />;
         case 'competitor-analysis': return <CompetitorAnalysisCard data={event.data} uiLanguage={uiLanguage} />;
         case 'search-preferences': return <SearchPreferencesCard data={event.data} uiLanguage={uiLanguage} />;
+        case 'google-search-results': return <GoogleSearchResultsCard data={event.data} uiLanguage={uiLanguage} />;
+        case 'firecrawl-result': return <FirecrawlResultCard data={event.data} uiLanguage={uiLanguage} />;
+        case 'dataforseo-competitors': return <DataForSEOCompetitorsCard data={event.data} uiLanguage={uiLanguage} />;
+        case 'dataforseo-keywords': return <DataForSEOKeywordsCard data={event.data} uiLanguage={uiLanguage} />;
+        case 'website-audit-report': return <WebsiteAuditReportCard data={event.data} uiLanguage={uiLanguage} />;
         case 'image-gen': 
             // Determine status from event data
             const imageStatus: ImageGenerationStatus = event.data.status || 
@@ -355,6 +689,7 @@ const StreamEventDetails: React.FC<{
                 <div className="mt-2">
                     <StreamingTextCard
                         content={event.data.content || ''}
+                        markdown={event.data.markdown}
                         speed={event.data.speed}
                         interval={event.data.interval}
                         onComplete={event.data.onComplete}

@@ -43,6 +43,16 @@
       .custom-scrollbar::-webkit-scrollbar {
         display: none;  /* Chrome, Safari and Opera */
       }
+      
+      /* Shimmer animation for energy flow effect */
+      @keyframes shimmer {
+        0% {
+          transform: translateX(-100%);
+        }
+        100% {
+          transform: translateX(100%);
+        }
+      }
     </style>
     <script type="importmap">
       {

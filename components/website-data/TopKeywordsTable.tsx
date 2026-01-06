@@ -7,6 +7,7 @@ import {
   TrendingUp,
   TrendingDown,
   Loader2,
+  ArrowUpDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -47,15 +48,90 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
   const [allKeywords, setAllKeywords] =
     React.useState<DomainKeyword[]>(keywords);
   const [showAll, setShowAll] = React.useState(false);
+  const [sortBy, setSortBy] = React.useState<
+    "searchVolume" | "difficulty" | "cpc" | "position"
+  >("searchVolume"); // 默认按搜索量排序
+  const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("desc"); // 默认降序
+
+  // 排序关键词
+  const sortedKeywords = React.useMemo(() => {
+    const sorted = [...allKeywords].sort((a, b) => {
+      let aValue: number | null = null;
+      let bValue: number | null = null;
+
+      switch (sortBy) {
+        case "cpc":
+          aValue = a.cpc || 0;
+          bValue = b.cpc || 0;
+          break;
+        case "difficulty":
+          aValue = a.difficulty || 0;
+          bValue = b.difficulty || 0;
+          break;
+        case "position":
+          aValue = a.currentPosition || 999;
+          bValue = b.currentPosition || 999;
+          break;
+        case "searchVolume":
+        default:
+          aValue = a.searchVolume || 0;
+          bValue = b.searchVolume || 0;
+          break;
+      }
+
+      if (aValue === null && bValue === null) return 0;
+      if (aValue === null) return 1;
+      if (bValue === null) return -1;
+
+      if (sortOrder === "asc") {
+        return aValue - bValue;
+      } else {
+        return bValue - aValue;
+      }
+    });
+
+    return sorted;
+  }, [allKeywords, sortBy, sortOrder]);
 
   const hasMore = totalKeywordsCount && totalKeywordsCount > 20;
-  const displayedKeywords = showAll ? allKeywords : allKeywords.slice(0, 20);
+  const displayedKeywords = showAll
+    ? sortedKeywords
+    : sortedKeywords.slice(0, 20);
 
   const handleViewAll = () => {
     if (onViewAll) {
       // 跳转到排名关键词页面
       onViewAll();
     }
+  };
+
+  const handleSort = (
+    field: "searchVolume" | "difficulty" | "cpc" | "position"
+  ) => {
+    if (sortBy === field) {
+      // 如果点击的是当前排序字段，切换排序方向
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      // 如果点击的是新字段，设置为该字段
+      setSortBy(field);
+      // 排名和搜索量默认降序，其他字段默认升序
+      setSortOrder(
+        field === "position" || field === "searchVolume" ? "desc" : "asc"
+      );
+    }
+  };
+
+  const getSortIcon = (
+    field: "searchVolume" | "difficulty" | "cpc" | "position"
+  ) => {
+    if (sortBy !== field) {
+      return <ArrowUpDown className="w-3 h-3 ml-1 opacity-50" />;
+    }
+    return sortOrder === "asc" ? (
+      <ArrowUp className="w-3 h-3 ml-1" />
+    ) : (
+      <ArrowDown className="w-3 h-3 ml-1" />
+    );
   };
 
   // 当 keywords prop 变化时，更新 state
@@ -94,23 +170,25 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
   return (
     <Card
       className={cn(
-        "col-span-1 lg:col-span-2",
-        isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white border-gray-200"
+        "col-span-1 lg:col-span-2 rounded-2xl",
+        isDarkTheme
+          ? "bg-[#1a1a1a] border border-zinc-800/50"
+          : "bg-white border-gray-200 shadow-sm"
       )}
     >
-      <CardHeader>
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle
             className={cn(
-              "text-base font-semibold",
+              "text-lg font-semibold uppercase tracking-wider",
               isDarkTheme ? "text-white" : "text-gray-900"
             )}
           >
-            {uiLanguage === "zh" ? "Top 关键词" : "Top Keywords"}
+            {uiLanguage === "zh" ? "热门关键词" : "TOP KEYWORDS"}
             {totalKeywordsCount && (
               <span
                 className={cn(
-                  "ml-2 text-xs font-normal",
+                  "ml-2 text-xs font-normal normal-case",
                   isDarkTheme ? "text-zinc-400" : "text-gray-500"
                 )}
               >
@@ -123,6 +201,12 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
               variant="outline"
               size="sm"
               onClick={handleViewAll}
+              className={cn(
+                "rounded-xl transition-all",
+                isDarkTheme
+                  ? "border-zinc-700/50 text-zinc-300 hover:bg-zinc-800/50 hover:border-zinc-600"
+                  : "border-gray-300 text-gray-700 hover:bg-gray-50"
+              )}
             >
               {uiLanguage === "zh"
                 ? `查看全部 (${totalKeywordsCount! - 20})`
@@ -175,20 +259,56 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
                   <th className="pb-3 text-left font-medium">
                     {uiLanguage === "zh" ? "关键词" : "Keyword"}
                   </th>
-                  <th className="pb-3 text-center font-medium">
-                    {uiLanguage === "zh" ? "排名" : "Position"}
+                  <th
+                    className={cn(
+                      "pb-3 text-center font-medium cursor-pointer hover:opacity-80 transition-opacity",
+                      isDarkTheme ? "text-zinc-400" : "text-gray-500"
+                    )}
+                    onClick={() => handleSort("position")}
+                  >
+                    <div className="flex items-center justify-center">
+                      {uiLanguage === "zh" ? "排名" : "Position"}
+                      {getSortIcon("position")}
+                    </div>
                   </th>
                   <th className="pb-3 text-center font-medium">
                     {uiLanguage === "zh" ? "变化" : "Change"}
                   </th>
-                  <th className="pb-3 text-right font-medium">
-                    {uiLanguage === "zh" ? "搜索量" : "Volume"}
+                  <th
+                    className={cn(
+                      "pb-3 text-right font-medium cursor-pointer hover:opacity-80 transition-opacity",
+                      isDarkTheme ? "text-zinc-400" : "text-gray-500"
+                    )}
+                    onClick={() => handleSort("searchVolume")}
+                  >
+                    <div className="flex items-center justify-end">
+                      {uiLanguage === "zh" ? "搜索量" : "Volume"}
+                      {getSortIcon("searchVolume")}
+                    </div>
                   </th>
-                  <th className="pb-3 text-right font-medium">
-                    {uiLanguage === "zh" ? "CPC" : "CPC"}
+                  <th
+                    className={cn(
+                      "pb-3 text-right font-medium cursor-pointer hover:opacity-80 transition-opacity",
+                      isDarkTheme ? "text-zinc-400" : "text-gray-500"
+                    )}
+                    onClick={() => handleSort("cpc")}
+                  >
+                    <div className="flex items-center justify-end">
+                      {uiLanguage === "zh" ? "CPC" : "CPC"}
+                      {getSortIcon("cpc")}
+                    </div>
                   </th>
-                  <th className="pb-3 text-center font-medium">
-                    {uiLanguage === "zh" ? "难度" : "Difficulty"}
+                  <th
+                    className={cn(
+                      "pb-3 text-center font-medium cursor-pointer hover:opacity-80 transition-opacity",
+                      isDarkTheme ? "text-zinc-400" : "text-gray-500"
+                    )}
+                    onClick={() => handleSort("difficulty")}
+                  >
+                    <div className="flex items-center justify-center">
+                      {uiLanguage === "zh" ? "难度" : "Difficulty"}
+                      {getSortIcon("difficulty")}
+                    </div>
                   </th>
                 </tr>
               </thead>
@@ -197,10 +317,10 @@ export const TopKeywordsTable: React.FC<TopKeywordsTableProps> = ({
                   <tr
                     key={index}
                     className={cn(
-                      "border-b text-sm",
+                      "border-b text-sm transition-colors",
                       isDarkTheme
-                        ? "border-zinc-800 hover:bg-zinc-800/50"
-                        : "border-gray-100 hover:bg-gray-50"
+                        ? "border-zinc-800/50 hover:bg-zinc-800/30"
+                        : "border-gray-100 hover:bg-gray-50/50"
                     )}
                   >
                     <td className="py-3 pr-2">

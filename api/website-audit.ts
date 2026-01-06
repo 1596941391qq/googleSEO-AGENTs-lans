@@ -43,26 +43,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[Website Audit API] Starting audit for website: ${websiteUrl}`);
 
-    const result = await auditWebsiteForKeywords({
-      websiteId,
-      websiteUrl,
-      websiteDomain,
-      targetLanguage,
-      uiLanguage,
-      industry,
-      wordsPerRound,
-      miningStrategy,
-      additionalSuggestions,
-    });
+    // Set up Server-Sent Events for streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
-    return res.json({
-      success: true,
-      keywords: result.keywords,
-      rawResponse: result.rawResponse,
-      analysis: result.analysis,
-    });
+    const sendEvent = (event: any) => {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+    };
+
+    try {
+      const result = await auditWebsiteForKeywords({
+        websiteId,
+        websiteUrl,
+        websiteDomain,
+        targetLanguage,
+        uiLanguage,
+        industry,
+        wordsPerRound,
+        miningStrategy,
+        additionalSuggestions,
+        onEvent: (event) => {
+          sendEvent({ type: 'event', data: event });
+        }
+      });
+
+      sendEvent({ 
+        type: 'done', 
+        data: {
+          success: true, // 添加 success 字段
+          analysisReport: result.analysisReport,
+          keywords: result.keywords, // 添加关键词列表
+          rawResponse: result.rawResponse,
+          analysis: result.analysis,
+        }
+      });
+      res.end();
+    } catch (error: any) {
+      console.error('[Website Audit API] Error:', error);
+      sendEvent({ type: 'error', message: error?.message || String(error) });
+      res.end();
+    }
   } catch (error: any) {
-    console.error('[Website Audit API] Error:', error);
+    console.error('[Website Audit API] Handler Error:', error);
+    
+    if (res.headersSent) {
+      try {
+        res.write(`data: ${JSON.stringify({ type: 'error', message: error?.message || String(error) })}\n\n`);
+      } catch {
+        // Ignore streaming write errors
+      }
+      res.end();
+      return;
+    }
+
     return sendErrorResponse(res, error, 'Failed to audit website');
   }
 }

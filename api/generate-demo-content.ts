@@ -305,9 +305,39 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
     let chatGPTData;
     try {
       const chatGPTResult = await callGeminiAPI(chatGPTPrompt, 'generate-chatgpt-demo', {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            userQuestion: { type: 'string' },
+            aiAnswer: {
+              type: 'object',
+              properties: {
+                introduction: { type: 'string' },
+                keyPoints: { type: 'array', items: { type: 'string' } },
+                recommendation: { type: 'string' },
+                ctaText: { type: 'string' }
+              },
+              required: ['introduction', 'keyPoints', 'recommendation']
+            },
+            comparisonTable: {
+              type: 'object',
+              properties: {
+                columns: { type: 'array', items: { type: 'string' } },
+                rows: { type: 'array', items: { type: 'object' } }
+              },
+              required: ['columns', 'rows']
+            }
+          },
+          required: ['userQuestion', 'aiAnswer', 'comparisonTable']
+        },
         enableGoogleSearch: true  // 启用联网搜索以获取最新内容趋势
       });
-      const jsonMatch = chatGPTResult.text.match(/\{[\s\S]*\}/);
+      
+      // Extract JSON (with fallback for compatibility)
+      let jsonText = chatGPTResult.text.trim();
+      jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         chatGPTData = JSON.parse(jsonMatch[0]);
       } else {
@@ -323,9 +353,33 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
     let articleData;
     try {
       const articleResult = await callGeminiAPI(articlePrompt, 'generate-article-demo', {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            article: {
+              type: 'object',
+              properties: {
+                authorName: { type: 'string' },
+                authorTitle: { type: 'string' },
+                publishedDate: { type: 'string' },
+                title: { type: 'string' },
+                preview: { type: 'string' },
+                screenshotAlt: { type: 'string' },
+                screenshotPosition: { type: 'string' }
+              },
+              required: ['authorName', 'authorTitle', 'title', 'preview']
+            }
+          },
+          required: ['article']
+        },
         enableGoogleSearch: true  // 启用联网搜索以获取最新内容趋势
       });
-      const jsonMatch = articleResult.text.match(/\{[\s\S]*\}/);
+      
+      // Extract JSON (with fallback for compatibility)
+      let jsonText = articleResult.text.trim();
+      jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         articleData = JSON.parse(jsonMatch[0]);
       } else {

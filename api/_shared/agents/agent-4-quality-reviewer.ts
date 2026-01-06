@@ -129,7 +129,24 @@ Please provide detailed review results and improvement suggestions.`;
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
       responseMimeType: 'application/json',
-      enableGoogleSearch: true  // 启用联网搜索以验证事实和检查信息准确性
+      responseSchema: {
+        type: 'object',
+        properties: {
+          total_score: { type: 'number' },
+          verdict: { type: 'string' },
+          fix_list: { type: 'array', items: { type: 'string' } },
+          ai_footprint_analysis: { type: 'string' },
+          keywordDensity: { type: 'object' },
+          aiDetection: { type: 'object' },
+          geoCompliance: { type: 'object' },
+          aioCompliance: { type: 'object' },
+          readability: { type: 'object' },
+          overallScore: { type: 'number' },
+          passed: { type: 'boolean' },
+          suggestions: { type: 'array', items: { type: 'string' } }
+        },
+        required: ['verdict']
+      }
     });
 
     let text = response.text || '{}';

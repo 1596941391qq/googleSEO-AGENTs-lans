@@ -173,6 +173,45 @@ function getAuthHeader(): string {
  * 将 location_code 转换为 location_name 和 language_name
  * 用于 DataForSEO ranked_keywords API
  */
+/**
+ * 清理关键词：移除数字前缀和ID格式
+ * 
+ * 移除格式如：
+ * - "001-qk7yulqsx9esalil5mxjkg-3342555957" (完整ID格式)
+ * - "051 keyword" (编号前缀)
+ * - "0 keyword" (单个数字前缀)
+ * - "050" (纯数字，如果后面没有有效内容则返回空)
+ */
+function cleanKeyword(rawKeyword: string): string {
+  if (!rawKeyword) return '';
+  
+  let cleaned = rawKeyword.trim();
+  
+  // 1. 移除类似 "001-qk7yulqsx9esalil5mxjkg-3342555957" 的完整ID格式
+  // 匹配：数字-字母数字-数字 格式（更宽松的匹配）
+  cleaned = cleaned.replace(/^\d{1,3}-[a-z0-9-]+-\d+(\s+|$)/i, '');
+  
+  // 2. 移除开头的数字编号（如 "051 "、"0 "、"09 "、"08 "）
+  // 匹配：开头的数字（1-3位）+ 空格，后面跟着字母或中文
+  cleaned = cleaned.replace(/^\d{1,3}\s+(?=[a-zA-Z\u4e00-\u9fa5])/, '');
+  
+  // 3. 移除纯数字开头的项（如果后面有文本，移除数字部分）
+  // 匹配：开头的数字（任意长度）+ 空格
+  cleaned = cleaned.replace(/^\d+\s+/, '');
+  
+  // 4. 如果清理后只剩下纯数字（如 "050"、"069"），返回空字符串
+  // 因为这些不是有效的关键词
+  if (/^\d+$/.test(cleaned)) {
+    return '';
+  }
+  
+  // 5. 移除末尾的数字后缀（如果存在）
+  // 例如 "keyword 001" -> "keyword"
+  cleaned = cleaned.replace(/\s+\d{1,3}$/, '');
+  
+  return cleaned.trim();
+}
+
 function getLocationAndLanguageNames(locationCode: number): { locationName: string; languageName: string } {
   const locationMap: { [key: number]: { location: string; language: string } } = {
     2840: { location: 'United States', language: 'English' },
@@ -726,7 +765,8 @@ export async function getDomainKeywords(
 
       const keywords: DomainKeyword[] = items.map((item: any) => {
         // 从新 API 响应格式中提取数据
-        const keyword = item.keyword || '';
+        const rawKeyword = item.keyword || '';
+        const keyword = cleanKeyword(rawKeyword);
         const keywordInfo = item.keyword_info || {};
         const keywordProperties = item.keyword_properties || {};
         const serpInfo = item.serp_info || {};
@@ -777,7 +817,11 @@ export async function getDomainKeywords(
           trafficPercentage: Number(trafficPercentage) || 0,
           url: url,
         };
-      }).filter((kw: DomainKeyword) => kw.keyword && kw.keyword.length > 0); // 过滤掉空关键词
+      }).filter((kw: DomainKeyword) => {
+        // 过滤掉空关键词和纯数字关键词
+        const cleaned = kw.keyword && kw.keyword.trim();
+        return cleaned && cleaned.length > 0 && !/^\d+$/.test(cleaned);
+      });
 
       console.log(`[DataForSEO Domain] ✅ Parsed ${keywords.length} keywords (filtered from ${items.length} items)`);
       
@@ -788,6 +832,11 @@ export async function getDomainKeywords(
           volume: keywords[0].searchVolume,
           difficulty: keywords[0].difficulty,
         });
+        // 如果清理后的关键词与原始关键词不同，记录警告
+        const firstItem = items[0];
+        if (firstItem && firstItem.keyword && cleanKeyword(firstItem.keyword) !== firstItem.keyword) {
+          console.log(`[DataForSEO Domain] ⚠️ Cleaned keyword prefix: "${firstItem.keyword}" -> "${keywords[0].keyword}"`);
+        }
       } else {
         console.warn(`[DataForSEO Domain] ⚠️ No valid keywords found after parsing`);
       }
@@ -1280,6 +1329,8 @@ export async function getRankedKeywords(
       
       const keywords: RankedKeyword[] = items.map((item: any, index: number) => {
         const keywordData = item.keyword_data || {};
+        const rawKeyword = keywordData.keyword || '';
+        const keyword = cleanKeyword(rawKeyword);
         const keywordInfo = keywordData.keyword_info || {};
         const keywordProperties = keywordData.keyword_properties || {};
         const rankedSerpElement = item.ranked_serp_element || {};
@@ -1335,7 +1386,7 @@ export async function getRankedKeywords(
         };
         
         return {
-          keyword: keywordData.keyword || '',
+          keyword: keyword || '',
           currentPosition: currentPosition || 0, // 如果没有排名数据，设为 0
           previousPosition: previousPosition || 0,
           positionChange: positionChange || 0, // 如果没有变化数据，设为 0
@@ -1347,7 +1398,11 @@ export async function getRankedKeywords(
           competition: keywordInfo.competition || undefined,
           difficulty: difficulty,
         };
-      }).filter((kw: RankedKeyword) => kw.keyword && kw.keyword.length > 0);
+      }).filter((kw: RankedKeyword) => {
+        // 过滤掉空关键词和纯数字关键词
+        const cleaned = kw.keyword && kw.keyword.trim();
+        return cleaned && cleaned.length > 0 && !/^\d+$/.test(cleaned);
+      });
 
       console.log(`[DataForSEO Domain] ✅ Parsed ${keywords.length} ranked keywords`);
       return keywords;

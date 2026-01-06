@@ -14,6 +14,7 @@ import { SearchPreferencesResult, CompetitorAnalysisResult } from './agent-2-seo
  * 内容生成结果
  */
 export interface ContentGenerationResult {
+  markdown?: string;  // 完整的 Markdown 内容（新格式）
   title?: string;
   metaDescription?: string;
   content?: string;
@@ -58,7 +59,7 @@ function extractJSON(text: string): string {
  * @returns 内容生成结果
  */
 export async function generateContent(
-  seoStrategyReport: SEOStrategyReport,
+  seoStrategyReport: SEOStrategyReport | { markdown: string },  // Support both formats
   searchPreferences?: SearchPreferencesResult,
   competitorAnalysis?: CompetitorAnalysisResult,
   uiLanguage: 'zh' | 'en' = 'en',
@@ -76,30 +77,61 @@ export async function generateContent(
       screenshot?: string;
       title?: string;
     };
-  }
+  },
+  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void
 ): Promise<ContentGenerationResult> {
   try {
     // 获取 Content Writer prompt - 使用 targetLanguage 来确定生成内容的语言
     // uiLanguage 仅用于UI显示，targetLanguage 用于实际内容生成
     const contentLanguage = targetLanguage === 'zh' ? 'zh' : 'en';
-    const systemInstruction = getContentWriterPrompt(contentLanguage);
+
+    let systemInstruction: string;
+    try {
+      systemInstruction = getContentWriterPrompt(contentLanguage);
+      if (!systemInstruction || typeof systemInstruction !== 'string') {
+        console.warn('[Content Writer] Invalid systemInstruction, using fallback');
+        systemInstruction = contentLanguage === 'zh'
+          ? '你是一位专业的SEO内容写手。'
+          : 'You are a professional SEO content writer.';
+      }
+    } catch (e) {
+      console.error('[Content Writer] Failed to get system instruction:', e);
+      systemInstruction = contentLanguage === 'zh'
+        ? '你是一位专业的SEO内容写手。'
+        : 'You are a professional SEO content writer.';
+    }
+
+    // Check if strategy report is in Markdown format
+    const isMarkdownStrategy = 'markdown' in seoStrategyReport && seoStrategyReport.markdown;
 
     // 构建SEO研究上下文
-    const seoContext = `
+    let seoContext = '';
+    if (isMarkdownStrategy) {
+      // Use Markdown strategy directly
+      seoContext = `
+SEO Strategy Report (Markdown Format):
+
+${seoStrategyReport.markdown}
+`;
+    } else {
+      // Use old structured format
+      const structuredReport = seoStrategyReport as SEOStrategyReport;
+      seoContext = `
 SEO Strategy Report:
-- Target Keyword: ${seoStrategyReport.targetKeyword}
-- Page Title (H1): ${seoStrategyReport.pageTitleH1}
-- Meta Description: ${seoStrategyReport.metaDescription}
-- URL Slug: ${seoStrategyReport.urlSlug}
-- User Intent: ${seoStrategyReport.userIntentSummary}
-- Recommended Word Count: ${seoStrategyReport.recommendedWordCount} words
-- Long-tail Keywords: ${seoStrategyReport.longTailKeywords?.join(', ') || 'N/A'}
+- Target Keyword: ${structuredReport.targetKeyword}
+- Page Title (H1): ${structuredReport.pageTitleH1}
+- Meta Description: ${structuredReport.metaDescription}
+- URL Slug: ${structuredReport.urlSlug}
+- User Intent: ${structuredReport.userIntentSummary}
+- Recommended Word Count: ${structuredReport.recommendedWordCount} words
+- Long-tail Keywords: ${structuredReport.longTailKeywords?.join(', ') || 'N/A'}
 
 Content Structure:
-${seoStrategyReport.contentStructure.map((section, i) => 
+${structuredReport.contentStructure.map((section, i) =>
   `${i + 1}. ${section.header}\n   ${section.description}`
 ).join('\n\n')}
 `;
+    }
 
     // 添加搜索引擎偏好分析上下文（如果提供）
     let searchPreferencesContext = '';
@@ -192,10 +224,23 @@ IMPORTANT: While the user provided this reference URL, the core theme of the art
     }
 
     // 构建生成提示
-    const marketLabel = targetMarket === 'global' 
+    const marketLabel = targetMarket === 'global'
       ? (contentLanguage === 'zh' ? '全球市场' : 'Global Market')
       : targetMarket.toUpperCase();
-    
+
+    // 对于 Markdown 格式的策略报告，直接使用报告文本；对于结构化格式，提取字段
+    let wordCountHint = '1500-2000'; // 默认字数
+    if (!isMarkdownStrategy) {
+      const structuredReport = seoStrategyReport as SEOStrategyReport;
+      wordCountHint = structuredReport.recommendedWordCount?.toString() || wordCountHint;
+    }
+
+    // 验证必要参数
+    if (!seoContext || seoContext.length === 0) {
+      console.error('[Content Writer] Empty SEO context');
+      throw new Error('SEO strategy report is empty or invalid');
+    }
+
     const prompt = contentLanguage === 'zh'
       ? `基于以下SEO研究结果，为 ${marketLabel} 市场撰写一篇高质量的文章内容。
 
@@ -207,9 +252,12 @@ ${seoContext}${searchPreferencesContext}${competitorContext}${referenceContext}
 3. 前100字必须直接击中 ${marketLabel} 市场用户的搜索痛点
 4. 每段不超过3行，多使用列表、粗体和引言
 5. 确保内容流畅自然，有价值，符合 ${marketLabel} 市场的文化和习惯
-6. 字数约 ${seoStrategyReport.recommendedWordCount} 字
+6. 字数约 ${wordCountHint} 字
 
-请以Markdown格式输出完整文章。`
+请以Markdown格式输出完整文章，包括以下部分：
+- **H1 标题**（文章主标题）
+- **文章正文**（使用 H2、H3 标题组织结构）
+- **关键要点总结**（在文章末尾）`;
       : `Generate a high-quality article based on the following SEO research findings for the ${marketLabel} market.
 
 ${seoContext}${searchPreferencesContext}${competitorContext}${referenceContext}
@@ -220,51 +268,59 @@ Requirements:
 3. First 100 words must directly address search pain points of users in ${marketLabel} market
 4. Keep paragraphs under 3 lines, use lists, bold, and quotes
 5. Ensure content flows naturally and provides value, aligned with ${marketLabel} market culture and habits
-6. Target word count: approximately ${seoStrategyReport.recommendedWordCount} words
+6. Target word count: approximately ${wordCountHint} words
 
-Please output the complete article in Markdown format.`;
+Please output the complete article in Markdown format, including:
+- **H1 Title** (main article title)
+- **Article Body** (organized with H2, H3 headings)
+- **Key Takeaways** (at the end of the article)`;
 
-    // 调用 Gemini API
-    const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json',
-      enableGoogleSearch: true  // 启用联网搜索以获取最新内容和事实信息
-    });
-
-    let text = response.text || '{}';
-    text = extractJSON(text);
-
-    // 解析 JSON
-    try {
-      const result = JSON.parse(text);
-      
-      // 处理不同的输出格式（中文和英文可能有不同的结构）
-      const contentResult: ContentGenerationResult = {
-        title: result.title || result.seo_meta?.title || seoStrategyReport.pageTitleH1,
-        metaDescription: result.metaDescription || result.seo_meta?.description || seoStrategyReport.metaDescription,
-        content: result.content || result.article_body || '',
-        structure: result.structure || seoStrategyReport.contentStructure.map(s => s.header),
-        seo_meta: result.seo_meta,
-        article_body: result.article_body,
-        logic_check: result.logic_check,
-        appliedOptimizations: result.appliedOptimizations
-      };
-
-      return contentResult;
-    } catch (e: any) {
-      console.error('JSON Parse Error in generateContent:', e.message);
-      console.error('Extracted text (first 500 chars):', text.substring(0, 500));
-      
-      // 如果JSON解析失败，尝试提取Markdown内容
-      const markdownMatch = text.match(/```markdown\n([\s\S]*?)\n```/) || text.match(/# .*[\s\S]*/);
-      const markdownContent = markdownMatch ? markdownMatch[1] || markdownMatch[0] : text;
-      
-      return {
-        title: seoStrategyReport.pageTitleH1,
-        metaDescription: seoStrategyReport.metaDescription,
-        content: markdownContent,
-        structure: seoStrategyReport.contentStructure.map(s => s.header)
-      };
+    // 验证 prompt
+    if (!prompt || prompt.length === 0) {
+      console.error('[Content Writer] Empty prompt generated');
+      throw new Error('Failed to generate content prompt');
     }
+
+    if (!systemInstruction || systemInstruction.length === 0) {
+      console.error('[Content Writer] Empty system instruction');
+      throw new Error('Failed to get system instruction');
+    }
+
+    // 调用 Gemini API - 不要求 JSON 格式，直接返回 Markdown
+    let response;
+    try {
+      console.log('[Content Writer] Calling Gemini API with prompt length:', prompt.length);
+      response = await callGeminiAPI(prompt, systemInstruction, {
+      });
+      console.log('[Content Writer] API response received, text length:', response.text?.length || 0);
+    } catch (apiError: any) {
+      console.error('[Content Writer] API call failed:', apiError.message);
+      throw new Error(`Failed to call Gemini API: ${apiError.message}`);
+    }
+
+    // 直接返回 Markdown 内容，不需要 JSON 解析
+    const markdownContent = response?.text || '';
+
+    if (!markdownContent || markdownContent.length === 0) {
+      console.error('[Content Writer] Empty response from API');
+      throw new Error('Empty response from Gemini API');
+    }
+
+    // 从 Markdown 中提取标题（第一个 # 标题）
+    const titleMatch = markdownContent.match(/^#\s+(.+)$/m);
+    const extractedTitle = titleMatch ? titleMatch[1].trim() : '';
+
+    // 移除 H1 标题后的内容（用于正文部分）
+    const contentBody = titleMatch
+      ? markdownContent.replace(/^#\s+.+$/m, '').trim()
+      : markdownContent;
+
+    return {
+      markdown: markdownContent,
+      content: contentBody,
+      article_body: contentBody,
+      title: extractedTitle
+    };
   } catch (error: any) {
     console.error('Generate Content Error:', error);
     throw new Error(`Failed to generate content: ${error.message}`);

@@ -8,7 +8,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { initWebsiteDataTables, sql, raw } from '../lib/database.js';
 import { getDomainKeywords } from '../_shared/tools/dataforseo-domain.js';
 
 interface KeywordsOnlyRequestBody {
@@ -16,6 +16,8 @@ interface KeywordsOnlyRequestBody {
   userId?: number;
   limit?: number;
   region?: string;
+  sortBy?: 'searchVolume' | 'difficulty' | 'cpc' | 'position'; // 排序字段
+  sortOrder?: 'asc' | 'desc'; // 排序方向
 }
 
 // 内存缓存，防止重复调用（5分钟内）
@@ -146,8 +148,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   cache_expires_at = EXCLUDED.cache_expires_at
               `)
             );
-            console.log(`[keywords-only] ✅ Successfully fetched and cached ${keywordsToCache.length} keywords from API`);
-            return data.slice(0, limit); // 返回请求的数量
+            const cleanedCount = keywordsToCache.length;
+            console.log(`[keywords-only] ✅ Successfully fetched and cached ${cleanedCount} keywords from API (cleaned from ${data.length} raw keywords)`);
+            // 返回清理后的关键词（已经限制数量）
+            return keywordsToCache;
           }
           return [];
         })
@@ -177,6 +181,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       fromApi = true;
     }
 
+    // 构建排序 SQL
+    let orderByClause = '';
+    switch (sortBy) {
+      case 'cpc':
+        orderByClause = sortOrder === 'asc' 
+          ? 'ORDER BY cpc ASC NULLS LAST' 
+          : 'ORDER BY cpc DESC NULLS LAST';
+        break;
+      case 'difficulty':
+        orderByClause = sortOrder === 'asc' 
+          ? 'ORDER BY difficulty ASC NULLS LAST' 
+          : 'ORDER BY difficulty DESC NULLS LAST';
+        break;
+      case 'position':
+        orderByClause = sortOrder === 'asc' 
+          ? 'ORDER BY current_position ASC NULLS LAST' 
+          : 'ORDER BY current_position DESC NULLS LAST';
+        break;
+      case 'searchVolume':
+      default:
+        orderByClause = sortOrder === 'asc' 
+          ? 'ORDER BY search_volume ASC NULLS LAST' 
+          : 'ORDER BY search_volume DESC NULLS LAST';
+        break;
+    }
+    // 添加二级排序：如果主排序字段相同，按更新时间排序
+    orderByClause += ', data_updated_at DESC';
+
     // 如果 API 调用失败或返回空数据，从数据库缓存读取
     if (keywords.length === 0) {
       console.log('[keywords-only] 📦 Falling back to database cache');
@@ -190,26 +222,72 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           cpc,
           competition,
           difficulty,
-          traffic_percentage
+          traffic_percentage,
+          ranking_url
         FROM domain_keywords_cache
         WHERE website_id = ${body.websiteId}
-        ORDER BY search_volume DESC NULLS LAST, data_updated_at DESC
+        ${raw(orderByClause)}
         LIMIT ${limit}
       `;
 
-      keywords = cacheResult.rows.map((row: any) => ({
-        keyword: row.keyword,
-        currentPosition: row.current_position,
-        previousPosition: row.previous_position,
-        positionChange: row.position_change,
-        searchVolume: row.search_volume,
-        cpc: row.cpc,
-        competition: row.competition,
-        difficulty: row.difficulty,
-        trafficPercentage: row.traffic_percentage,
-      }));
+      // 清理关键词函数（与 dataforseo-domain.ts 中的逻辑一致）
+      const cleanKeyword = (rawKeyword: string): string => {
+        if (!rawKeyword) return '';
+        let cleaned = rawKeyword.trim();
+        // 1. 移除类似 "001-qk7yulqsx9esalil5mxjkg-3342555957" 的完整ID格式
+        cleaned = cleaned.replace(/^\d{1,3}-[a-z0-9-]+-\d+(\s+|$)/i, '');
+        // 2. 移除开头的数字编号（如 "051 "、"0 "、"09 "）
+        cleaned = cleaned.replace(/^\d{1,3}\s+(?=[a-zA-Z\u4e00-\u9fa5])/, '');
+        // 3. 移除纯数字开头的项
+        cleaned = cleaned.replace(/^\d+\s+/, '');
+        // 4. 如果清理后只剩下纯数字，返回空字符串
+        if (/^\d+$/.test(cleaned)) {
+          return '';
+        }
+        // 5. 移除末尾的数字后缀
+        cleaned = cleaned.replace(/\s+\d{1,3}$/, '');
+        return cleaned.trim();
+      };
+
+      // 清理并更新数据库中的关键词（自动修复旧数据）
+      const cleanedKeywords = cacheResult.rows
+        .map((row: any) => {
+          const originalKeyword = row.keyword || '';
+          const cleanedKeyword = cleanKeyword(originalKeyword);
+          
+          // 如果关键词被清理了，异步更新数据库（不阻塞响应）
+          if (cleanedKeyword !== originalKeyword && cleanedKeyword && cleanedKeyword.length > 0 && !/^\d+$/.test(cleanedKeyword)) {
+            sql`
+              UPDATE domain_keywords_cache
+              SET keyword = ${cleanedKeyword}
+              WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
+            `.catch(err => console.warn('[keywords-only] Failed to update cleaned keyword:', err));
+          } else if (cleanedKeyword !== originalKeyword && (!cleanedKeyword || /^\d+$/.test(cleanedKeyword))) {
+            // 如果清理后为空或纯数字，删除该记录
+            sql`
+              DELETE FROM domain_keywords_cache
+              WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
+            `.catch(err => console.warn('[keywords-only] Failed to delete invalid keyword:', err));
+          }
+          
+          return {
+            keyword: cleanedKeyword,
+            currentPosition: row.current_position,
+            previousPosition: row.previous_position,
+            positionChange: row.position_change,
+            searchVolume: row.search_volume,
+            cpc: row.cpc,
+            competition: row.competition,
+            difficulty: row.difficulty,
+            trafficPercentage: row.traffic_percentage,
+            url: row.ranking_url || '',
+          };
+        })
+        .filter((kw: any) => kw.keyword && kw.keyword.length > 0 && !/^\d+$/.test(kw.keyword)); // 过滤空关键词和纯数字
+      
+      keywords = cleanedKeywords;
     } else {
-      // API 调用成功，转换数据格式
+      // API 调用成功，转换数据格式并应用排序
       keywords = keywords.map(kw => ({
         keyword: kw.keyword,
         currentPosition: kw.currentPosition,
@@ -220,7 +298,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         competition: kw.competition,
         difficulty: kw.difficulty,
         trafficPercentage: kw.trafficPercentage,
+        url: kw.url || '',
       }));
+
+      // 应用排序（只支持 searchVolume, difficulty, cpc, position）
+      keywords.sort((a, b) => {
+        let aValue: number | null = null;
+        let bValue: number | null = null;
+
+        switch (sortBy) {
+          case 'cpc':
+            aValue = a.cpc || 0;
+            bValue = b.cpc || 0;
+            break;
+          case 'difficulty':
+            aValue = a.difficulty || 0;
+            bValue = b.difficulty || 0;
+            break;
+          case 'position':
+            aValue = a.currentPosition || 999;
+            bValue = b.currentPosition || 999;
+            break;
+          case 'searchVolume':
+          default:
+            aValue = a.searchVolume || 0;
+            bValue = b.searchVolume || 0;
+            break;
+        }
+
+        if (aValue === null && bValue === null) return 0;
+        if (aValue === null) return 1;
+        if (bValue === null) return -1;
+
+        if (sortOrder === 'asc') {
+          return aValue - bValue;
+        } else {
+          return bValue - aValue;
+        }
+      });
+
+      // 限制数量
+      keywords = keywords.slice(0, limit);
     }
 
     return res.status(200).json({

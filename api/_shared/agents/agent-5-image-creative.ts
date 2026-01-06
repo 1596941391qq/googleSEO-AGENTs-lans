@@ -114,7 +114,32 @@ Ensure themes are highly relevant to article content and SEO-friendly.`;
 
     // 调用 Gemini API
     const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json'
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          visual_strategy: { type: 'string' },
+          themes: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                title: { type: 'string' },
+                visual_metaphor: { type: 'string' },
+                text_overlay: { type: 'string' },
+                composition: { type: 'string' },
+                color_palette: { type: 'array', items: { type: 'string' } },
+                description: { type: 'string' },
+                visualElements: { type: 'array', items: { type: 'string' } },
+                style: { type: 'string' },
+                position: { type: 'string' }
+              }
+            }
+          }
+        },
+        required: ['themes']
+      }
     });
 
     let text = response.text || '{}';
