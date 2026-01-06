@@ -217,8 +217,19 @@ const TEXT = {
     backToResults: "Back to Results",
     rankingProbability: "Ranking Probability",
     searchIntent: "Search Intent",
+    searchIntentAnalysis: "Search Intent Analysis",
+    userIntent: "USER INTENT",
+    intentVsSerpMatch: "INTENT vs SERP MATCH",
     intentMatch: "Content-Intent Match",
     rankingAnalysis: "Analysis",
+    keywordResearchTool: "Keyword Research Tool (DataForSEO)",
+    searchVolume: "SEARCH VOLUME",
+    keywordDifficulty: "KEYWORD DIFFICULTY",
+    competition: "COMPETITION",
+    searchVolumeTrend: "SEARCH VOLUME TREND (Last 12 Months)",
+    analysisReasoning: "Analysis Reasoning",
+    referenceSerpCount: "Reference SERP Count",
+    topCompetitorType: "Top Competitor Type",
     translationReference: "Translation Reference",
     pageTitleTranslation: "Page Title Translation",
     metaDescriptionTranslation: "Meta Description Translation",
@@ -370,8 +381,19 @@ const TEXT = {
     backToResults: "返回结果",
     rankingProbability: "上首页概率",
     searchIntent: "搜索意图",
+    searchIntentAnalysis: "搜索意图分析",
+    userIntent: "用户意图",
+    intentVsSerpMatch: "意图与SERP匹配",
     intentMatch: "内容匹配度",
     rankingAnalysis: "分析结果",
+    keywordResearchTool: "SEO词研究工具 (DataForSEO)",
+    searchVolume: "搜索量",
+    keywordDifficulty: "关键词难度",
+    competition: "竞争度",
+    searchVolumeTrend: "搜索量趋势（过去12个月）",
+    analysisReasoning: "分析推理",
+    referenceSerpCount: "参考SERP数量",
+    topCompetitorType: "顶级竞争对手类型",
     translationReference: "翻译对照",
     pageTitleTranslation: "页面标题翻译",
     metaDescriptionTranslation: "描述翻译",
@@ -6327,6 +6349,76 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             },
             taskId
           );
+
+          // 找到高概率关键词，停止挖掘并显示成功提示（与蓝海模式一致）
+          const highProbCandidate = highProbKeywords[0];
+          addThought(
+            "decision",
+            state.uiLanguage === "zh"
+              ? `发现高概率机会: "${highProbCandidate.keyword}"。停止挖掘。`
+              : `Found HIGH probability opportunity: "${highProbCandidate.keyword}". Stopping.`,
+            undefined,
+            taskId
+          );
+          addLog(
+            state.uiLanguage === "zh"
+              ? "成功！发现机会。"
+              : "Success! Opportunity found.",
+            "success",
+            taskId
+          );
+
+          setState((prev) => {
+            // Update task object
+            const updatedTasks = prev.taskManager.tasks.map((task) => {
+              if (task.id === taskId && task.miningState) {
+                return {
+                  ...task,
+                  miningState: {
+                    ...task.miningState,
+                    isMining: false,
+                    miningSuccess: true,
+                    showSuccessPrompt: true,
+                  },
+                };
+              }
+              return task;
+            });
+
+            // Save archive before updating state
+            saveToArchive(prev);
+
+            // Only update global state if this is the active task
+            if (taskId === prev.taskManager.activeTaskId) {
+              return {
+                ...prev,
+                isMining: false,
+                miningSuccess: true,
+                showSuccessPrompt: true,
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            } else {
+              // Background task - only update task object
+              return {
+                ...prev,
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            }
+          });
+
+          playCompletionSound(); // Play sound on mining completion
+
+          // Only scroll if this is the active task
+          if (taskId === state.taskManager.activeTaskId) {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+          return;
         }
 
         // 显示所有关键词
