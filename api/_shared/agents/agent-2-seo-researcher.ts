@@ -686,7 +686,7 @@ function fixTruncatedJSON(text: string): string {
     // 如果字符串在字段值中，添加闭合引号
     const beforeString = fixed.substring(0, lastStringStart);
     const afterStringStart = fixed.substring(lastStringStart);
-    
+
     // 检查是否是字段值（前面有 :）
     const colonIndex = beforeString.lastIndexOf(':');
     if (colonIndex !== -1) {
@@ -721,7 +721,7 @@ function fixTruncatedJSON(text: string): string {
  */
 function extractPartialJSON(text: string): any {
   const partial: any = {};
-  
+
   // 尝试提取关键字段
   const probabilityMatch = text.match(/"probability"\s*:\s*"([^"]+)"/);
   if (probabilityMatch) {
@@ -1076,134 +1076,134 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           }
         }
 
-          // Strategy 1: Try to find JSON object with "probability" field
-          if (!recovered) {
-            const jsonMatch1 = response.text.match(/\{[\s\S]*?"probability"[\s\S]*?\}/);
-            if (jsonMatch1) {
-              try {
-                analysis = JSON.parse(jsonMatch1[0]);
-                console.log("✓ Recovered JSON using probability field match");
-                recovered = true;
-              } catch (recoveryError) {
-                // Continue to next strategy
-              }
+        // Strategy 1: Try to find JSON object with "probability" field
+        if (!recovered) {
+          const jsonMatch1 = response.text.match(/\{[\s\S]*?"probability"[\s\S]*?\}/);
+          if (jsonMatch1) {
+            try {
+              analysis = JSON.parse(jsonMatch1[0]);
+              console.log("✓ Recovered JSON using probability field match");
+              recovered = true;
+            } catch (recoveryError) {
+              // Continue to next strategy
             }
           }
+        }
 
-          // Strategy 2: Try to find any JSON object that looks complete (使用清理后的文本)
-          if (!recovered) {
-            // 先清理 Markdown，再查找 JSON
-            let cleanedText = response.text;
-            // 移除 Markdown 格式标记
-            cleanedText = cleanedText.replace(/^\*\*[^*]+\*\*/gm, '');
-            cleanedText = cleanedText.replace(/^\*[^*]+/gm, '');
-            cleanedText = cleanedText.replace(/^#+\s+/gm, '');
-            cleanedText = cleanedText.replace(/^```[\s\S]*?```/gm, '');
+        // Strategy 2: Try to find any JSON object that looks complete (使用清理后的文本)
+        if (!recovered) {
+          // 先清理 Markdown，再查找 JSON
+          let cleanedText = response.text;
+          // 移除 Markdown 格式标记
+          cleanedText = cleanedText.replace(/^\*\*[^*]+\*\*/gm, '');
+          cleanedText = cleanedText.replace(/^\*[^*]+/gm, '');
+          cleanedText = cleanedText.replace(/^#+\s+/gm, '');
+          cleanedText = cleanedText.replace(/^```[\s\S]*?```/gm, '');
 
-            // Find the first { and try to extract complete JSON
-            const firstBrace = cleanedText.indexOf('{');
-            if (firstBrace !== -1) {
-              // Try to find matching closing brace
-              let braceCount = 0;
-              let inString = false;
-              let escapeNext = false;
+          // Find the first { and try to extract complete JSON
+          const firstBrace = cleanedText.indexOf('{');
+          if (firstBrace !== -1) {
+            // Try to find matching closing brace
+            let braceCount = 0;
+            let inString = false;
+            let escapeNext = false;
 
-              for (let i = firstBrace; i < cleanedText.length; i++) {
-                const char = cleanedText[i];
+            for (let i = firstBrace; i < cleanedText.length; i++) {
+              const char = cleanedText[i];
 
-                if (escapeNext) {
-                  escapeNext = false;
-                  continue;
-                }
+              if (escapeNext) {
+                escapeNext = false;
+                continue;
+              }
 
-                if (char === '\\') {
-                  escapeNext = true;
-                  continue;
-                }
+              if (char === '\\') {
+                escapeNext = true;
+                continue;
+              }
 
-                if (char === '"' && !escapeNext) {
-                  inString = !inString;
-                  continue;
-                }
+              if (char === '"' && !escapeNext) {
+                inString = !inString;
+                continue;
+              }
 
-                if (!inString) {
-                  if (char === '{') braceCount++;
-                  if (char === '}') braceCount--;
+              if (!inString) {
+                if (char === '{') braceCount++;
+                if (char === '}') braceCount--;
 
-                  if (braceCount === 0 && char === '}') {
-                    const candidate = cleanedText.substring(firstBrace, i + 1);
-                    try {
-                      analysis = JSON.parse(candidate);
-                      console.log("✓ Recovered JSON using brace matching");
-                      recovered = true;
-                      break;
-                    } catch (recoveryError) {
-                      // Continue searching
-                    }
+                if (braceCount === 0 && char === '}') {
+                  const candidate = cleanedText.substring(firstBrace, i + 1);
+                  try {
+                    analysis = JSON.parse(candidate);
+                    console.log("✓ Recovered JSON using brace matching");
+                    recovered = true;
+                    break;
+                  } catch (recoveryError) {
+                    // Continue searching
                   }
                 }
               }
             }
           }
+        }
 
-          if (!recovered) {
-            // Strategy 3: 尝试提取部分字段（即使 JSON 不完整）
-            const partialJSON = extractPartialJSON(text);
-            if (Object.keys(partialJSON).length > 0) {
-              console.log("✓ Extracted partial JSON fields:", Object.keys(partialJSON));
-              // 使用提取的部分字段，缺失的字段使用默认值
-              const defaultSearchIntent = uiLanguage === 'zh'
-                ? '无法确定搜索意图'
-                : 'Unable to determine intent';
-              const defaultIntentAnalysis = uiLanguage === 'zh'
-                ? '分析失败：AI返回了不完整的JSON响应'
-                : 'Analysis failed due to incomplete JSON response';
-              const defaultReasoning = uiLanguage === 'zh'
-                ? `AI响应被截断，已提取部分字段。原始错误: ${e.message}`
-                : `AI response was truncated, extracted partial fields. Original error: ${e.message}`;
-
-              analysis = {
-                searchIntent: partialJSON.searchIntent || defaultSearchIntent,
-                intentAnalysis: partialJSON.intentAnalysis || defaultIntentAnalysis,
-                serpResultCount: partialJSON.serpResultCount !== undefined ? partialJSON.serpResultCount : (serpResultCount > 0 ? serpResultCount : -1),
-                topDomainType: partialJSON.topDomainType || "Unknown",
-                probability: partialJSON.probability || "Medium",
-                reasoning: partialJSON.reasoning || defaultReasoning,
-                topSerpSnippets: []
-              };
-              recovered = true;
-            }
-          }
-
-          if (!recovered) {
-            // 如果所有恢复策略都失败，使用默认值并记录错误
-            console.error("All JSON recovery strategies failed. Using default values.");
-            if (isTruncated) {
-              console.error("⚠️  Response was truncated, consider reducing output length or splitting the request");
-            }
-            // 根据 uiLanguage 设置默认值
+        if (!recovered) {
+          // Strategy 3: 尝试提取部分字段（即使 JSON 不完整）
+          const partialJSON = extractPartialJSON(text);
+          if (Object.keys(partialJSON).length > 0) {
+            console.log("✓ Extracted partial JSON fields:", Object.keys(partialJSON));
+            // 使用提取的部分字段，缺失的字段使用默认值
             const defaultSearchIntent = uiLanguage === 'zh'
               ? '无法确定搜索意图'
               : 'Unable to determine intent';
             const defaultIntentAnalysis = uiLanguage === 'zh'
-              ? '分析失败：AI返回了无效的JSON响应'
-              : 'Analysis failed due to invalid JSON response';
+              ? '分析失败：AI返回了不完整的JSON响应'
+              : 'Analysis failed due to incomplete JSON response';
             const defaultReasoning = uiLanguage === 'zh'
-              ? `AI响应解析失败。${isTruncated ? '响应被截断。' : ''}原始错误: ${e.message}。响应预览: ${text.substring(0, 200)}`
-              : `Failed to parse AI response. ${isTruncated ? 'Response was truncated. ' : ''}Original error: ${e.message}. Response preview: ${text.substring(0, 200)}`;
+              ? `AI响应被截断，已提取部分字段。原始错误: ${e.message}`
+              : `AI response was truncated, extracted partial fields. Original error: ${e.message}`;
 
             analysis = {
-              searchIntent: defaultSearchIntent,
-              intentAnalysis: defaultIntentAnalysis,
-              serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
-              topDomainType: "Unknown",
-              probability: "Medium", // 默认中等概率
-              reasoning: defaultReasoning,
+              searchIntent: partialJSON.searchIntent || defaultSearchIntent,
+              intentAnalysis: partialJSON.intentAnalysis || defaultIntentAnalysis,
+              serpResultCount: partialJSON.serpResultCount !== undefined ? partialJSON.serpResultCount : (serpResultCount > 0 ? serpResultCount : -1),
+              topDomainType: partialJSON.topDomainType || "Unknown",
+              probability: partialJSON.probability || "Medium",
+              reasoning: partialJSON.reasoning || defaultReasoning,
               topSerpSnippets: []
             };
-            // 不抛出错误，而是使用默认值继续处理
+            recovered = true;
           }
         }
+
+        if (!recovered) {
+          // 如果所有恢复策略都失败，使用默认值并记录错误
+          console.error("All JSON recovery strategies failed. Using default values.");
+          if (isTruncated) {
+            console.error("⚠️  Response was truncated, consider reducing output length or splitting the request");
+          }
+          // 根据 uiLanguage 设置默认值
+          const defaultSearchIntent = uiLanguage === 'zh'
+            ? '无法确定搜索意图'
+            : 'Unable to determine intent';
+          const defaultIntentAnalysis = uiLanguage === 'zh'
+            ? '分析失败：AI返回了无效的JSON响应'
+            : 'Analysis failed due to invalid JSON response';
+          const defaultReasoning = uiLanguage === 'zh'
+            ? `AI响应解析失败。${isTruncated ? '响应被截断。' : ''}原始错误: ${e.message}。响应预览: ${text.substring(0, 200)}`
+            : `Failed to parse AI response. ${isTruncated ? 'Response was truncated. ' : ''}Original error: ${e.message}. Response preview: ${text.substring(0, 200)}`;
+
+          analysis = {
+            searchIntent: defaultSearchIntent,
+            intentAnalysis: defaultIntentAnalysis,
+            serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
+            topDomainType: "Unknown",
+            probability: "Medium", // 默认中等概率
+            reasoning: defaultReasoning,
+            topSerpSnippets: []
+          };
+          // 不抛出错误，而是使用默认值继续处理
+        }
+      }
 
       if (typeof analysis !== 'object' || analysis === null) {
         throw new Error("Response is not a valid JSON object");

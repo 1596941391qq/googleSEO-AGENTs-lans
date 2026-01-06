@@ -5,7 +5,8 @@ import remarkGfm from 'remark-gfm';
 import { AgentStreamEvent, UILanguage } from '../../types';
 import { CheckCircle, Search, FileText, PenTool, Image as ImageIcon, Loader2, Target, TrendingUp, Minus, Square, X, Globe, Database, ExternalLink } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import { EnhancedImageGenCard, ImageGenerationStatus } from './EnhancedImageGenCard';
+import { EnhancedImageGenCard } from './EnhancedImageGenCard';
+import { ImageGenerationStatus } from './ImageGenerationProgressCard';
 import { StreamingTextCard } from './StreamingTextCard';
 import { ErrorCard, ErrorType } from './ErrorCard';
 import { ImageLightbox } from './ImageLightbox';
@@ -333,23 +334,93 @@ const WebsiteAuditReportCard: React.FC<{ data: any; uiLanguage: UILanguage }> = 
         )}
       </div>
 
-      {/* Extracted Keywords Preview */}
+      {/* Extracted Keywords Preview - Enhanced with full JSON data */}
       {data.keywords && data.keywords.length > 0 && (
-        <div className="space-y-1">
-          <div className="text-[10px] text-gray-500">
-            {uiLanguage === 'zh' ? '提取的关键词建议' : 'Extracted Keyword Suggestions'}
+        <div className="space-y-2">
+          <div className="text-[10px] text-gray-500 flex items-center justify-between">
+            <span>{uiLanguage === 'zh' ? '提取的关键词建议' : 'Extracted Keyword Suggestions'}</span>
+            <span className="text-emerald-400">{data.keywords.length} {uiLanguage === 'zh' ? '个关键词' : 'keywords'}</span>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {data.keywords.slice(0, 10).map((kw: any, i: number) => (
-              <span key={i} className="px-2 py-1 bg-emerald-500/20 text-emerald-300 rounded text-[10px]">
-                {kw.keyword}
-              </span>
-            ))}
-            {data.keywords.length > 10 && (
-              <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-[10px]">
-                +{data.keywords.length - 10}
-              </span>
-            )}
+          
+          {/* Keywords Table */}
+          <div className="max-h-96 overflow-y-auto space-y-2">
+            {data.keywords.map((kw: any, i: number) => {
+              const probability = kw.probability || kw.priority || 'Unknown';
+              const probabilityColor = 
+                probability === 'High' || probability === 'high' ? 'text-green-400' :
+                probability === 'Medium' || probability === 'medium' ? 'text-yellow-400' :
+                probability === 'Low' || probability === 'low' ? 'text-red-400' : 'text-gray-400';
+              
+              const opportunityType = kw.opportunity_type || kw.opportunityType || 'N/A';
+              const intent = kw.intent || 'Informational';
+              
+              return (
+                <div key={i} className="p-3 bg-black/20 rounded border border-white/5 hover:border-emerald-500/30 transition-colors">
+                  {/* Header Row */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-emerald-300 truncate" title={kw.keyword}>
+                        {kw.keyword}
+                      </div>
+                      {kw.translation && (
+                        <div className="text-[10px] text-gray-400 mt-0.5">
+                          {kw.translation}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {probability !== 'Unknown' && (
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${probabilityColor} bg-black/30`}>
+                          {probability}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Metadata Row */}
+                  <div className="grid grid-cols-2 gap-2 text-[10px] mt-2">
+                    {kw.volume !== undefined && kw.volume > 0 && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500">{uiLanguage === 'zh' ? '搜索量' : 'Volume'}:</span>
+                        <span className="text-emerald-400">{kw.volume.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {kw.difficulty !== undefined && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500">{uiLanguage === 'zh' ? '难度' : 'Difficulty'}:</span>
+                        <span className={kw.difficulty > 40 ? 'text-red-400' : kw.difficulty > 20 ? 'text-yellow-400' : 'text-green-400'}>
+                          {kw.difficulty}
+                        </span>
+                      </div>
+                    )}
+                    {intent && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500">{uiLanguage === 'zh' ? '意图' : 'Intent'}:</span>
+                        <span className="text-blue-400">{intent}</span>
+                      </div>
+                    )}
+                    {opportunityType !== 'N/A' && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-gray-500">{uiLanguage === 'zh' ? '机会类型' : 'Type'}:</span>
+                        <span className="text-purple-400 capitalize">{opportunityType}</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Reasoning */}
+                  {kw.reasoning && (
+                    <div className="mt-2 pt-2 border-t border-white/5">
+                      <div className="text-[10px] text-gray-500 mb-1">
+                        {uiLanguage === 'zh' ? '分析原因' : 'Reasoning'}:
+                      </div>
+                      <div className="text-[10px] text-gray-300 leading-relaxed line-clamp-2">
+                        {kw.reasoning}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

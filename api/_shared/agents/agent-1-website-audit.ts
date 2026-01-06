@@ -18,6 +18,7 @@ import { getDomainKeywords, getDomainCompetitors } from '../tools/dataforseo-dom
 import { getDataForSEOLocationAndLanguage, fetchKeywordData } from '../tools/dataforseo.js';
 import { KeywordData, TargetLanguage } from '../types.js';
 import { getExistingWebsiteAuditPrompt } from '../../../services/prompts/index.js';
+import { analyzeRankingProbability } from './agent-2-seo-researcher.js';
 
 /**
  * 从Markdown文本中提取关键词（改进版，支持多种格式）
@@ -500,8 +501,31 @@ export async function auditWebsiteForKeywords(
 
     const analysisReport = aiResponse.text.trim();
 
-    // 从分析报告中提取关键词
-    const extractedKeywords = extractKeywordsFromMarkdown(analysisReport);
+    // 从分析报告中提取关键词 - 优先尝试提取JSON格式
+    let extractedKeywords: any[] = [];
+    
+    // 首先尝试提取JSON格式的关键词数组
+    try {
+      const jsonStr = extractJSON(analysisReport);
+      if (jsonStr && jsonStr !== '[]') {
+        const parsed = JSON.parse(jsonStr);
+        if (Array.isArray(parsed)) {
+          extractedKeywords = parsed;
+          console.log(`[Website Audit] Extracted ${extractedKeywords.length} keywords from JSON format`);
+        } else if (parsed.keywords && Array.isArray(parsed.keywords)) {
+          extractedKeywords = parsed.keywords;
+          console.log(`[Website Audit] Extracted ${extractedKeywords.length} keywords from JSON object with keywords field`);
+        }
+      }
+    } catch (jsonError: any) {
+      console.warn(`[Website Audit] Failed to extract JSON keywords: ${jsonError.message}`);
+    }
+    
+    // 如果JSON提取失败，回退到Markdown提取
+    if (extractedKeywords.length === 0) {
+      extractedKeywords = extractKeywordsFromMarkdown(analysisReport);
+      console.log(`[Website Audit] Extracted ${extractedKeywords.length} keywords from Markdown format`);
+    }
 
     // 转换为 KeywordData 格式
     let keywords: KeywordData[] = extractedKeywords
@@ -574,18 +598,61 @@ export async function auditWebsiteForKeywords(
 
     console.log(`[Website Audit] Generated analysis report (${analysisReport.length} characters, extracted ${keywords.length} keywords)`);
 
-    // Emit analysis report visualization card
+    // Step 6: 对提取的关键词进行 SERP 分析和概率分析
+    let analyzedKeywords = keywords;
+    if (keywords.length > 0) {
+      try {
+        emit('strategist', 'log', uiLanguage === 'zh'
+          ? `🔍 步骤 6: 正在对这 ${keywords.length} 个关键词进行 SERP 分析和排名概率分析...`
+          : `🔍 Step 6: Analyzing SERP and ranking probability for ${keywords.length} keywords...`);
+        
+        const systemInstruction = `You are an SEO expert analyzing keyword ranking opportunities for an existing website. Use the website's content themes and competitor analysis to provide accurate probability assessments.`;
+        
+        analyzedKeywords = await analyzeRankingProbability(
+          keywords,
+          systemInstruction,
+          uiLanguage,
+          targetLanguage
+        );
+        
+        const highProbCount = analyzedKeywords.filter(k => k.probability === 'High').length;
+        const mediumProbCount = analyzedKeywords.filter(k => k.probability === 'Medium').length;
+        const lowProbCount = analyzedKeywords.filter(k => k.probability === 'Low').length;
+        
+        emit('strategist', 'log', uiLanguage === 'zh'
+          ? `✓ SERP 分析完成：高概率 ${highProbCount} 个，中概率 ${mediumProbCount} 个，低概率 ${lowProbCount} 个`
+          : `✓ SERP analysis complete: ${highProbCount} High, ${mediumProbCount} Medium, ${lowProbCount} Low probability`);
+      } catch (analysisError: any) {
+        console.warn(`[Website Audit] SERP analysis failed: ${analysisError.message}`);
+        emit('strategist', 'log', uiLanguage === 'zh'
+          ? `⚠️ SERP 分析失败，使用原始关键词数据: ${analysisError.message}`
+          : `⚠️ SERP analysis failed, using original keywords: ${analysisError.message}`);
+        // 继续使用原始关键词，不中断流程
+      }
+    }
+
+    // Emit analysis report visualization card with analyzed keywords
     emit('strategist', 'card', uiLanguage === 'zh'
-      ? `网站审计分析报告（${keywords.length} 个关键词建议）`
-      : `Website Audit Analysis Report (${keywords.length} keyword suggestions)`,
+      ? `网站审计分析报告（${analyzedKeywords.length} 个关键词建议）`
+      : `Website Audit Analysis Report (${analyzedKeywords.length} keyword suggestions)`,
       'website-audit-report', {
       report: analysisReport,
       reportLength: analysisReport.length,
-      extractedKeywordsCount: keywords.length,
-      keywords: keywords.map(k => ({
+      extractedKeywordsCount: analyzedKeywords.length,
+      keywords: analyzedKeywords.map(k => ({
         keyword: k.keyword,
+        translation: k.translation,
         intent: k.intent,
-        reasoning: k.reasoning
+        volume: k.volume,
+        difficulty: k.dataForSEOData?.difficulty || (k as any).difficulty,
+        reasoning: k.reasoning,
+        probability: k.probability,
+        opportunity_type: (k as any).opportunity_type || 'optimization',
+        priority: (k as any).priority || (k.probability === 'High' ? 'high' : k.probability === 'Medium' ? 'medium' : 'low'),
+        serpResultCount: k.serpResultCount,
+        topDomainType: k.topDomainType,
+        searchIntent: k.searchIntent,
+        intentAnalysis: k.intentAnalysis
       })),
       websiteUrl: websiteUrl,
       websiteDomain: websiteDomain,
@@ -595,18 +662,18 @@ export async function auditWebsiteForKeywords(
     });
 
     emit('strategist', 'log', uiLanguage === 'zh'
-      ? `✓ 分析报告已生成（${analysisReport.length} 字符，提取了 ${keywords.length} 个关键词）`
-      : `✓ Analysis report generated (${analysisReport.length} chars, extracted ${keywords.length} keywords)`);
+      ? `✓ 分析报告已生成（${analysisReport.length} 字符，提取了 ${analyzedKeywords.length} 个关键词，已完成 SERP 分析）`
+      : `✓ Analysis report generated (${analysisReport.length} chars, extracted ${analyzedKeywords.length} keywords, SERP analysis completed)`);
 
     return {
       analysisReport,
-      keywords, // 添加关键词列表，供 App.tsx 使用
+      keywords: analyzedKeywords, // 返回分析后的关键词列表
       rawResponse: aiResponse.text,
       analysis: {
         websiteContentSummary: websiteContent.substring(0, 500),
         competitorKeywordsCount: competitorKeywords.length,
-        suggestedKeywordsCount: keywords.length,
-        opportunitiesFound: keywords.length, // 为了兼容性
+        suggestedKeywordsCount: analyzedKeywords.length,
+        opportunitiesFound: analyzedKeywords.length, // 为了兼容性
       },
     };
   } catch (error: any) {

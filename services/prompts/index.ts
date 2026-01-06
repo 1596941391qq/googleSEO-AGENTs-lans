@@ -504,7 +504,18 @@ CRITICAL: Return ONLY a valid JSON object. Do NOT include any Markdown formattin
 你是一位资深竞争情报分析官。
 
 # 任务
-通过扫描 Top 10 竞争对手的页面结构，寻找“内容防御力”薄弱的切入点。
+请分析关键词 "${keyword}" 在 ${marketLabel} 市场的 Top 10 竞争对手。
+我已经为你抓取了顶级竞争对手的详细网页内容。请使用这些有效数据进行深度结构分析。
+
+关键词：${keyword}
+目标语言：${targetLanguage}
+目标市场：${marketLabel}
+
+=== SERP 概览 (Top 10) ===
+${serpSnippetsContext}
+${deepContentContext}
+
+通过扫描 Top 10 竞争对手的页面结构，寻找"内容防御力"薄弱的切入点。
 
 <rules>
 1. **结构提取**：不仅是标题，还要分析其“叙事逻辑”（如：它是以数据驱动还是以经验驱动？）。
@@ -1125,7 +1136,57 @@ Output in Markdown format (do not wrap entire article in code blocks, output Mar
   }
 };
 
-export function getContentWriterPrompt(language: 'zh' | 'en'): string {
+export function getContentWriterPrompt(
+  language: 'zh' | 'en',
+  variables?: {
+    marketLabel?: string;
+    seoContext?: string;
+    searchPreferencesContext?: string;
+    competitorContext?: string;
+    referenceContext?: string;
+    wordCountHint?: string;
+  }
+): string {
+  // 如果提供了变量，返回生成文章的 prompt
+  if (variables) {
+    const template = language === 'zh'
+      ? `基于以下SEO研究结果，为 ${variables.marketLabel || '全球'} 市场撰写一篇高质量的文章内容。
+
+${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}
+
+要求：
+1. 严格按照推荐的内容结构撰写，特别关注 ${variables.marketLabel || '全球'} 市场的本地化需求
+2. 自然融入目标关键词和长尾关键词（关键词密度1-2%），使用适合 ${variables.marketLabel || '全球'} 市场的表达方式
+3. 前100字必须直接击中 ${variables.marketLabel || '全球'} 市场用户的搜索痛点
+4. 每段不超过3行，多使用列表、粗体和引言
+5. 确保内容流畅自然，有价值，符合 ${variables.marketLabel || '全球'} 市场的文化和习惯
+6. 字数约 ${variables.wordCountHint || '1500-2000'} 字
+
+请以Markdown格式输出完整文章，包括以下部分：
+- **H1 标题**（文章主标题）
+- **文章正文**（使用 H2、H3 标题组织结构）
+- **关键要点总结**（在文章末尾）`
+      : `Generate a high-quality article based on the following SEO research findings for the ${variables.marketLabel || 'Global'} market.
+
+${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}
+
+Requirements:
+1. Follow the recommended content structure strictly, with special attention to localization needs for ${variables.marketLabel || 'Global'} market
+2. Naturally integrate target keyword and long-tail keywords (1-2% density), using expressions appropriate for ${variables.marketLabel || 'Global'} market
+3. First 100 words must directly address search pain points of users in ${variables.marketLabel || 'Global'} market
+4. Keep paragraphs under 3 lines, use lists, bold, and quotes
+5. Ensure content flows naturally and provides value, aligned with ${variables.marketLabel || 'Global'} market culture and habits
+6. Target word count: approximately ${variables.wordCountHint || '1500-2000'} words
+
+Please output the complete article in Markdown format, including:
+- **H1 Title** (main article title)
+- **Article Body** (organized with H2, H3 headings)
+- **Key Takeaways** (at the end of the article)`;
+
+    return template;
+  }
+
+  // 否则返回基础的 system instruction
   return language === 'zh' ? CONTENT_WRITER_PROMPTS.base.zh : CONTENT_WRITER_PROMPTS.base.en;
 }
 

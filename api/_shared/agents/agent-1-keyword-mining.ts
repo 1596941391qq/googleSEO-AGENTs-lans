@@ -296,6 +296,11 @@ Return a JSON array with objects containing:
 Example format:
 ${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`;
   } else {
+    // For subsequent rounds, if we have website audit report, use it to guide keyword generation
+    const websiteAuditContext = isWebsiteAuditMode && websiteAuditReport
+      ? `\n\nIMPORTANT CONTEXT - Website Audit Analysis Report:\n${websiteAuditReport.substring(0, 1500)}${websiteAuditReport.length > 1500 ? '...' : ''}\n\nWhen generating keywords, prioritize opportunities mentioned in the above report (content gaps, optimization opportunities, expansion directions).`
+      : '';
+    
     promptContext = `
 The user is looking for "Blue Ocean" opportunities in the ${targetLangName} market.
 We have already generated these: ${existingKeywords.slice(-20).join(', ')}.
@@ -303,7 +308,7 @@ We have already generated these: ${existingKeywords.slice(-20).join(', ')}.
 CRITICAL: Do NOT generate similar words.
 Think LATERALLY. Use the "SCAMPER" method.
 Example: If seed is "AI Pet Photos", think "Pet ID Cards", "Fake Dog Passport", "Cat Genealogy".
-${strategyGuidance}${industryGuidance}${userGuidance}
+${strategyGuidance}${industryGuidance}${userGuidance}${websiteAuditContext}
 
 Generate ${wordsPerRound} NEW, UNEXPECTED, but SEARCHABLE keywords related to "${seedKeyword}" in ${targetLangName}.
 

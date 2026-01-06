@@ -173,7 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 |--------|------|------|------|
 | `getKeywordMiningPrompt(language, industry?)` | 挖词Prompt | `'zh'\|'en'`, 行业（可选） | prompt字符串 |
 | `getSEOResearcherPrompt(task, language)` | SEO研究员 | `'searchPreferences'\|'competitorAnalysis'`, 语言 | prompt字符串 |
-| `getContentWriterPrompt(language)` | 内容写手 | 语言 | prompt字符串 |
+| `getContentWriterPrompt(language, variables?)` | 内容写手 | 语言, 变量对象（可选） | prompt字符串或system instruction |
 | `getQualityReviewerPrompt(language)` | 质量审查 | 语言 | prompt字符串 |
 | `getImageCreativePrompt(task, language)` | 图像创意 | 任务类型, 语言 | prompt字符串 |
 | `getWebsiteAnalysisPrompt(url, industry, language)` | 网站分析 | URL, 行业, 语言 | prompt字符串 |
