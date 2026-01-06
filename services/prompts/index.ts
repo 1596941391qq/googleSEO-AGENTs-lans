@@ -752,7 +752,8 @@ export function getSEOResearcherPrompt(
         return promptTextGetter(variables.targetLangName, variables.report);
       }
     }
-    return promptTextGetter();
+    // 如果没有 variables，对于函数类型的 prompt，返回空字符串（因为函数需要参数才能调用）
+    return '';
   } else if (variables) {
     // 替换变量占位符
     let promptText = promptTextGetter;

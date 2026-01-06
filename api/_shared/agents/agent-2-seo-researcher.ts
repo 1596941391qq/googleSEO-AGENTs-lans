@@ -718,30 +718,57 @@ function fixTruncatedJSON(text: string): string {
 /**
  * 尝试从截断的 JSON 中提取部分字段
  * 返回一个包含已解析字段的对象
+ * 优化版本：能处理字符串被截断的情况
  */
 function extractPartialJSON(text: string): any {
   const partial: any = {};
 
-  // 尝试提取关键字段
-  const probabilityMatch = text.match(/"probability"\s*:\s*"([^"]+)"/);
-  if (probabilityMatch) {
+  // 尝试提取关键字段 - 使用更宽松的正则表达式处理截断情况
+  const probabilityMatch = text.match(/"probability"\s*:\s*"([^"]*)"?/);
+  if (probabilityMatch && probabilityMatch[1]) {
     partial.probability = probabilityMatch[1];
   }
 
-  const reasoningMatch = text.match(/"reasoning"\s*:\s*"([^"]*)"?/);
+  // reasoning 可能被截断，提取到文本末尾的所有内容
+  const reasoningMatch = text.match(/"reasoning"\s*:\s*"([^"]*)/);
   if (reasoningMatch) {
-    // 如果字符串被截断，使用已提取的部分
-    partial.reasoning = reasoningMatch[1] || '';
+    // 提取从 "reasoning": " 开始到文本末尾或下一个引号的所有内容
+    const reasoningStart = reasoningMatch.index! + reasoningMatch[0].length;
+    let reasoningEnd = text.length;
+    // 查找下一个未转义的引号或文本末尾
+    for (let i = reasoningStart; i < text.length; i++) {
+      if (text[i] === '"' && (i === reasoningStart || text[i - 1] !== '\\')) {
+        reasoningEnd = i;
+        break;
+      }
+    }
+    partial.reasoning = text.substring(reasoningStart, reasoningEnd).trim();
   }
 
-  const searchIntentMatch = text.match(/"searchIntent"\s*:\s*"([^"]*)"?/);
+  const searchIntentMatch = text.match(/"searchIntent"\s*:\s*"([^"]*)/);
   if (searchIntentMatch) {
-    partial.searchIntent = searchIntentMatch[1] || '';
+    const start = searchIntentMatch.index! + searchIntentMatch[0].length;
+    let end = text.length;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === '"' && (i === start || text[i - 1] !== '\\')) {
+        end = i;
+        break;
+      }
+    }
+    partial.searchIntent = text.substring(start, end).trim();
   }
 
-  const intentAnalysisMatch = text.match(/"intentAnalysis"\s*:\s*"([^"]*)"?/);
+  const intentAnalysisMatch = text.match(/"intentAnalysis"\s*:\s*"([^"]*)/);
   if (intentAnalysisMatch) {
-    partial.intentAnalysis = intentAnalysisMatch[1] || '';
+    const start = intentAnalysisMatch.index! + intentAnalysisMatch[0].length;
+    let end = text.length;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === '"' && (i === start || text[i - 1] !== '\\')) {
+        end = i;
+        break;
+      }
+    }
+    partial.intentAnalysis = text.substring(start, end).trim();
   }
 
   const serpResultCountMatch = text.match(/"serpResultCount"\s*:\s*(-?\d+)/);
@@ -749,8 +776,8 @@ function extractPartialJSON(text: string): any {
     partial.serpResultCount = parseInt(serpResultCountMatch[1], 10);
   }
 
-  const topDomainTypeMatch = text.match(/"topDomainType"\s*:\s*"([^"]+)"/);
-  if (topDomainTypeMatch) {
+  const topDomainTypeMatch = text.match(/"topDomainType"\s*:\s*"([^"]*)"?/);
+  if (topDomainTypeMatch && topDomainTypeMatch[1]) {
     partial.topDomainType = topDomainTypeMatch[1];
   }
 
@@ -786,8 +813,14 @@ export const analyzeRankingProbability = async (
     }
 
     // Step 2: Build system instruction with real SERP data
+    // 限制SERP结果数量和数据长度，避免输入token过多
+    const maxSerpResults = 5; // 只使用前5个结果
+    const maxSerpSnippetLength = 150; // 限制snippet长度（用于SERP上下文）
     const serpContext = serpResults.length > 0
-      ? `\n\nTOP GOOGLE SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\nNote: These are the TOP ranking results provided to you for competition analysis, NOT all search results.\n\n${serpResults.map((r, i) => `${i + 1}. Title: ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.snippet}`).join('\n\n')}\n\nEstimated Total Results on Google: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: The results shown above are only the TOP-RANKING pages from Google's first page. There may be thousands of other lower-ranking results not shown here. Use these top results to assess the QUALITY of competition you need to beat.`
+      ? `\n\nTOP GOOGLE SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\nNote: These are the TOP ranking results provided to you for competition analysis, NOT all search results.\n\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
+        const snippet = r.snippet ? (r.snippet.length > maxSerpSnippetLength ? r.snippet.substring(0, maxSerpSnippetLength) + '...' : r.snippet) : '';
+        return `${i + 1}. Title: ${r.title}\n   URL: ${r.url}\n   Snippet: ${snippet}`;
+      }).join('\n\n')}\n\nEstimated Total Results on Google: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: The results shown above are only the TOP-RANKING pages from Google's first page. There may be thousands of other lower-ranking results not shown here. Use these top results to assess the QUALITY of competition you need to beat.`
       : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
 
     // Add DataForSEO data context if available (use dataForSEOData or serankingData for backward compatibility)
@@ -828,11 +861,14 @@ When DataForSEO has no data for a keyword, it could mean:
 ACTION: Analyze SERP results first. Do NOT automatically assign HIGH probability just because DataForSEO has no data.`
         : `\n\nNote: DataForSEO keyword data not available for this keyword (API call failed or not attempted).`;
 
+    // 限制topSerpSnippets的长度，避免JSON过大
+    const maxTitleLengthForJson = 80;
+    const maxSnippetLengthForJson = 100;
     const topSerpSnippetsJson = serpResults.length > 0
       ? JSON.stringify(serpResults.slice(0, 3).map(r => ({
-        title: r.title,
-        url: r.url,
-        snippet: r.snippet
+        title: r.title ? (r.title.length > maxTitleLengthForJson ? r.title.substring(0, maxTitleLengthForJson) + '...' : r.title) : '',
+        url: r.url || '',
+        snippet: r.snippet ? (r.snippet.length > maxSnippetLengthForJson ? r.snippet.substring(0, maxSnippetLengthForJson) + '...' : r.snippet) : ''
       })))
       : '[]';
 
@@ -903,11 +939,12 @@ IMPORTANT ANALYSIS RULES:
 
 CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, reasoning process, or markdown formatting. Return ONLY the JSON object.
 
-IMPORTANT OUTPUT LENGTH LIMITS:
-- "reasoning": Keep concise, maximum 300 characters in ${uiLangName}
-- "searchIntent": Brief, maximum 150 characters
-- "intentAnalysis": Concise, maximum 200 characters
-- "topSerpSnippets": Include only first 3 results, keep titles and snippets short
+CRITICAL OUTPUT LENGTH LIMITS (STRICTLY ENFORCE):
+- "reasoning": Maximum 250 characters in ${uiLangName} - be concise and focused
+- "searchIntent": Maximum 120 characters - brief description only
+- "intentAnalysis": Maximum 180 characters - concise analysis only
+- "topSerpSnippets": Include ONLY first 3 results, keep titles under 80 chars and snippets under 100 chars each
+- DO NOT exceed these limits - prioritize brevity over detail
 
 Return a JSON object:
 {
@@ -955,8 +992,9 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
             },
             // 禁用 Google 搜索以避免 JSON 解析错误（联网模式会导致返回非纯 JSON 格式）
             enableGoogleSearch: false,
-            // 增加 maxOutputTokens 以支持更长的 JSON 响应（包含详细 reasoning 和多个 topSerpSnippets）
-            maxOutputTokens: 16384
+            // 显式设置更高的 maxOutputTokens 以避免截断（Gemini 2.5 Flash 支持最大 65536）
+            // 设置为 32768 以确保有足够空间输出完整的 JSON（包括 reasoning 和 topSerpSnippets）
+            maxOutputTokens: 32768
           }
         );
       } catch (apiError: any) {

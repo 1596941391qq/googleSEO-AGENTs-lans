@@ -516,6 +516,6 @@ export interface AgentStreamEvent {
   message?: string;
 
   // For 'card' type
-  cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' | 'image-gen' | 'competitor-analysis' | 'search-preferences' | 'google-search-results' | 'firecrawl-result' | 'dataforseo-competitors' | 'dataforseo-keywords' | 'website-audit-report';
+  cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' | 'image-gen' | 'competitor-analysis' | 'search-preferences' | 'google-search-results' | 'firecrawl-result' | 'dataforseo-competitors' | 'dataforseo-keywords' | 'website-audit-report' | 'quality-review' | 'final-article';
   data?: any;
 }
