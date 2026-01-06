@@ -171,39 +171,115 @@ export async function analyzeSearchPreferences(
   onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void
 ): Promise<SearchPreferencesResult> {
   try {
-    // 获取 SEO Researcher prompt
-    const systemInstruction = getSEOResearcherPrompt('searchPreferences', language);
-
-    // 构建分析提示
+    // 构建市场标签
     const marketLabel = targetMarket === 'global'
       ? (language === 'zh' ? '全球市场' : 'Global Market')
       : targetMarket.toUpperCase();
 
-    const prompt = language === 'zh'
-      ? `请分析关键词 "${keyword}" 在目标市场 ${marketLabel} 的不同搜索引擎中的优化策略。
+    // 从 prompts 文件获取 system instruction 和 prompt
+    const systemInstruction = getSEOResearcherPrompt('searchPreferences', language) as string;
+    const prompt = getSEOResearcherPrompt('searchPreferences', language, {
+      keyword,
+      targetLanguage,
+      marketLabel
+    }) as string;
 
-关键词：${keyword}
-目标语言：${targetLanguage}
-目标市场：${marketLabel}
-
-请以详细的Markdown格式提供搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。
-使用清晰的标题、列表和表格来组织内容。`
-      : `Please analyze optimization strategies for the keyword "${keyword}" across different search engines for the ${marketLabel} market.
-
-Keyword: ${keyword}
-Target Language: ${targetLanguage}
-Target Market: ${marketLabel}
-
-Please provide detailed search engine preference analysis and optimization recommendations in well-structured Markdown format, with special attention to localization needs for the target market. Use clear headings, lists, and tables to organize the content.`;
-
-    // 调用 Gemini API（直接返回Markdown，不强制JSON）
+    // 调用 Gemini API（使用 JSON 模式）
     const response = await callGeminiAPI(prompt, systemInstruction, {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          semantic_landscape: { type: 'string' },
+          engine_strategies: {
+            type: 'object',
+            properties: {
+              google: {
+                type: 'object',
+                properties: {
+                  ranking_logic: { type: 'string' },
+                  content_gap: { type: 'string' },
+                  action_item: { type: 'string' }
+                }
+              },
+              perplexity: {
+                type: 'object',
+                properties: {
+                  citation_logic: { type: 'string' },
+                  structure_hint: { type: 'string' }
+                }
+              },
+              generative_ai: {
+                type: 'object',
+                properties: {
+                  llm_preference: { type: 'string' }
+                }
+              }
+            }
+          },
+          geo_recommendations: { type: 'string' },
+          searchPreferences: {
+            type: 'object',
+            properties: {
+              google: {
+                type: 'object',
+                properties: {
+                  rankingFactors: { type: 'array', items: { type: 'string' } },
+                  contentPreferences: { type: 'string' },
+                  optimizationStrategy: { type: 'string' }
+                }
+              },
+              chatgpt: {
+                type: 'object',
+                properties: {
+                  rankingFactors: { type: 'array', items: { type: 'string' } },
+                  contentPreferences: { type: 'string' },
+                  optimizationStrategy: { type: 'string' }
+                }
+              },
+              claude: {
+                type: 'object',
+                properties: {
+                  rankingFactors: { type: 'array', items: { type: 'string' } },
+                  contentPreferences: { type: 'string' },
+                  optimizationStrategy: { type: 'string' }
+                }
+              },
+              perplexity: {
+                type: 'object',
+                properties: {
+                  rankingFactors: { type: 'array', items: { type: 'string' } },
+                  contentPreferences: { type: 'string' },
+                  optimizationStrategy: { type: 'string' }
+                }
+              }
+            }
+          },
+          markdown: { type: 'string' }
+        },
+        required: ['markdown']
+      }
     });
 
-    // 直接返回Markdown结果，确保 markdown 字段始终是字符串
-    return {
-      markdown: (response?.text && typeof response.text === 'string') ? response.text : ''
-    };
+    // 提取并解析 JSON
+    let text = response?.text || '{}';
+    text = extractJSONRobust(text);
+
+    try {
+      const parsed = JSON.parse(text);
+      // 确保 markdown 字段存在，如果没有则从其他字段生成
+      if (!parsed.markdown) {
+        parsed.markdown = JSON.stringify(parsed, null, 2);
+      }
+      return parsed as SearchPreferencesResult;
+    } catch (parseError: any) {
+      console.error('[Agent 2] Failed to parse search preferences JSON:', parseError);
+      console.error('[Agent 2] Response text:', text.substring(0, 500));
+      // 返回默认结构
+      return {
+        markdown: text || `Search preferences analysis for "${keyword}" in ${marketLabel} market.`
+      };
+    }
   } catch (error: any) {
     console.error('Analyze Search Preferences Error:', error);
     throw new Error(`Failed to analyze search preferences: ${error.message}`);
@@ -255,9 +331,6 @@ export async function analyzeCompetitors(
       console.log(`Fetching SERP results for competitor analysis: ${keyword}`);
       serpResults = await fetchSerpResults(keyword, targetLanguage);
     }
-
-    // 获取 SEO Researcher prompt
-    const systemInstruction = getSEOResearcherPrompt('competitorAnalysis', language);
 
     // 1. 构建 SERP 结果上下文 (Snippet based)
     const serpSnippetsContext = serpResults.results && serpResults.results.length > 0
@@ -320,57 +393,86 @@ export async function analyzeCompetitors(
       }
     }
 
-    // 构建分析提示
+    // 构建市场标签
     const marketLabel = targetMarket === 'global'
       ? (language === 'zh' ? '全球市场' : 'Global Market')
       : targetMarket.toUpperCase();
 
-    const prompt = language === 'zh'
-      ? `请分析关键词 "${keyword}" 在目标市场 ${marketLabel} 的 Top 10 竞争对手。
-由于我已经为你抓取了前几名竞争对手的详细网页内容，请根据这些详细内容进行深度的结构化分析。
+    // 从 prompts 文件获取 system instruction 和 prompt
+    const systemInstruction = getSEOResearcherPrompt('competitorAnalysis', language) as string;
+    const prompt = getSEOResearcherPrompt('competitorAnalysis', language, {
+      keyword,
+      targetLanguage,
+      marketLabel,
+      serpSnippetsContext,
+      deepContentContext
+    }) as string;
 
-关键词：${keyword}
-目标语言：${targetLanguage}
-目标市场：${marketLabel}
-
-=== SERP 概览 (Top 10) ===
-${serpSnippetsContext}
-${deepContentContext}
-
-任务要求：
-1. **结构分析**：基于抓取的详细内容，分析 Top 页面的 H2/H3 结构。
-2. **内容缺口 (Content Gap)**：找出他们遗漏了什么关键话题，特别关注目标市场的本地化需求。
-3. **字数与类型**：预估他们的字数和页面类型（博客、产品页、工具等）。
-4. **制胜策略**：总结他们为什么能排在第一，分析目标市场的竞争特点。
-
-**重要：必须返回有效的 JSON 格式，不要包含任何 Markdown 格式标记、解释性文字或 JSON 对象之外的文本。只返回 JSON 对象本身。**`
-      : `Please analyze the Top 10 competitors for the keyword "${keyword}" in the ${marketLabel} market.
-I have scraped the detailed web content of the top competitors for you. Please use this valid data for deep structural analysis.
-
-Keyword: ${keyword}
-Target Language: ${targetLanguage}
-Target Market: ${marketLabel}
-
-=== SERP OVERVIEW (Top 10) ===
-${serpSnippetsContext}
-${deepContentContext}
-
-Please provide a comprehensive competitor analysis in well-structured Markdown format with:
-1. **Structure Analysis**: Analyze the H2/H3 structure based on the scraped deep content
-2. **Content Gap**: Identify key topics they are missing
-3. **Word Count & Type**: Estimate word count and page type
-4. **Winning Formula**: Summarize why they are ranking #1
-
-Use clear headings, lists, and tables to organize the content.`;
-
-    // 调用 Gemini API（直接返回Markdown，不强制JSON）
+    // 调用 Gemini API（使用 JSON 模式）
     const response = await callGeminiAPI(prompt, systemInstruction, {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          winning_formula: { type: 'string' },
+          recommended_structure: { type: 'array', items: { type: 'string' } },
+          competitor_benchmark: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                domain: { type: 'string' },
+                content_angle: { type: 'string' },
+                weakness: { type: 'string' }
+              }
+            }
+          },
+          competitorAnalysis: {
+            type: 'object',
+            properties: {
+              top10: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    url: { type: 'string' },
+                    title: { type: 'string' },
+                    structure: { type: 'array', items: { type: 'string' } },
+                    wordCount: { type: 'number' },
+                    contentGaps: { type: 'array', items: { type: 'string' } }
+                  }
+                }
+              },
+              commonPatterns: { type: 'array', items: { type: 'string' } },
+              contentGaps: { type: 'array', items: { type: 'string' } },
+              recommendations: { type: 'array', items: { type: 'string' } }
+            }
+          },
+          markdown: { type: 'string' }
+        },
+        required: ['markdown']
+      }
     });
 
-    // 直接返回Markdown结果，确保 markdown 字段始终是字符串
-    return {
-      markdown: (response?.text && typeof response.text === 'string') ? response.text : ''
-    };
+    // 提取并解析 JSON
+    let text = response?.text || '{}';
+    text = extractJSONRobust(text);
+
+    try {
+      const parsed = JSON.parse(text);
+      // 确保 markdown 字段存在，如果没有则从其他字段生成
+      if (!parsed.markdown) {
+        parsed.markdown = JSON.stringify(parsed, null, 2);
+      }
+      return parsed as CompetitorAnalysisResult;
+    } catch (parseError: any) {
+      console.error('[Agent 2] Failed to parse competitor analysis JSON:', parseError);
+      console.error('[Agent 2] Response text:', text.substring(0, 500));
+      // 返回默认结构
+      return {
+        markdown: text || `Competitor analysis for "${keyword}" in ${marketLabel} market.`
+      };
+    }
   } catch (error: any) {
     console.error('Analyze Competitors Error:', error);
     throw new Error(`Failed to analyze competitors: ${error.message}`);
@@ -615,30 +717,61 @@ Return a JSON object:
 }`;
 
     try {
-      const response = await callGeminiAPI(
-        `Analyze SEO competition for: ${keywordData.keyword}
+      let response;
+      try {
+        response = await callGeminiAPI(
+          `Analyze SEO competition for: ${keywordData.keyword}
 
 CRITICAL: Return ONLY a valid JSON object in the exact format specified. No markdown, no explanations, no thinking process, just the JSON object starting with {`,
-        fullSystemInstruction,
-        {
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: 'object',
-            properties: {
-              searchIntent: { type: 'string' },
-              intentAnalysis: { type: 'string' },
-              serpResultCount: { type: 'number' },
-              topDomainType: { type: 'string' },
-              probability: { type: 'string' },
-              reasoning: { type: 'string' },
-              topSerpSnippets: { type: 'array' }
+          fullSystemInstruction,
+          {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: 'object',
+              properties: {
+                searchIntent: { type: 'string' },
+                intentAnalysis: { type: 'string' },
+                serpResultCount: { type: 'number' },
+                topDomainType: { type: 'string' },
+                probability: { type: 'string', enum: ['High', 'Medium', 'Low'] },
+                reasoning: { type: 'string' },
+                topSerpSnippets: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      title: { type: 'string' },
+                      url: { type: 'string' },
+                      snippet: { type: 'string' }
+                    }
+                  }
+                }
+              },
+              required: ['probability', 'reasoning']
             },
-            required: ['probability', 'reasoning']
-          },
-          // 注意：启用 Google 搜索时，即使设置了 responseMimeType，AI 仍可能返回 Markdown
-          // 所以我们需要在 JSON 提取时处理这种情况
-        }
-      );
+            // 注意：启用 Google 搜索时，即使设置了 responseMimeType，AI 仍可能返回 Markdown
+            // 所以我们需要在 JSON 提取时处理这种情况
+          }
+        );
+      } catch (apiError: any) {
+        // 如果API调用失败（如400错误），使用默认值并继续
+        console.error(`API call failed for keyword ${keywordData.keyword}:`, apiError.message);
+        // 返回默认分析结果
+        return {
+          ...keywordData,
+          probability: ProbabilityLevel.MEDIUM,
+          reasoning: `API调用失败: ${apiError.message}. 使用默认分析结果。`,
+          searchIntent: "Unable to determine intent due to API error",
+          intentAnalysis: "Analysis skipped due to API error",
+          serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
+          topDomainType: "Unknown",
+          topSerpSnippets: serpResults.slice(0, 3).map((r: any) => ({
+            title: r.title || '',
+            url: r.url || '',
+            snippet: r.snippet || ''
+          }))
+        };
+      }
 
       let text = response.text || "{}";
 
@@ -699,7 +832,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           cleanedText = cleanedText.replace(/^\*[^*]+/gm, '');
           cleanedText = cleanedText.replace(/^#+\s+/gm, '');
           cleanedText = cleanedText.replace(/^```[\s\S]*?```/gm, '');
-          
+
           // Find the first { and try to extract complete JSON
           const firstBrace = cleanedText.indexOf('{');
           if (firstBrace !== -1) {
@@ -747,7 +880,18 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         }
 
         if (!recovered) {
-          throw new Error(`Invalid JSON response from model: ${e.message}`);
+          // 如果所有恢复策略都失败，使用默认值并记录错误
+          console.error("All JSON recovery strategies failed. Using default values.");
+          analysis = {
+            searchIntent: "Unable to determine intent",
+            intentAnalysis: "Analysis failed due to invalid JSON response",
+            serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
+            topDomainType: "Unknown",
+            probability: "Medium", // 默认中等概率
+            reasoning: `Failed to parse AI response. Original error: ${e.message}. Response preview: ${text.substring(0, 200)}`,
+            topSerpSnippets: []
+          };
+          // 不抛出错误，而是使用默认值继续处理
         }
       }
 
@@ -864,22 +1008,11 @@ export const extractCoreKeywords = async (
 ): Promise<string[]> => {
   const targetLangName = getLanguageName(targetLanguage);
 
-  const prompt = `Extract 5-8 core keywords from this SEO content strategy that are most important for ranking verification.
-
-Target Keyword: ${report.targetKeyword}
-Page Title: ${report.pageTitleH1}
-Content Structure Headers:
-${report.contentStructure.map((s: any) => `- ${s.header}`).join('\n')}
-Long-tail Keywords: ${report.longTailKeywords?.join(', ')}
-
-Return ONLY a JSON array of keywords, like: ["keyword1", "keyword2", "keyword3"]
-These should be in ${targetLangName} language.
-Focus on:
-1. The main target keyword
-2. Important keywords from H2 headers
-3. High-value long-tail keywords
-
-CRITICAL: Return ONLY the JSON array, nothing else. No explanations.`;
+  // 从 prompts 文件获取 prompt
+  const prompt = getSEOResearcherPrompt('extractCoreKeywords', uiLanguage, {
+    targetLangName,
+    report
+  }) as string;
 
   try {
     const response = await callGeminiAPI(prompt, undefined, {
@@ -970,92 +1103,99 @@ export const generateDeepDiveStrategy = async (
     ? 'Global'
     : targetMarket.toUpperCase();
 
-  const systemInstruction = (customPrompt || `
-You are a Strategic SEO Content Manager for Google ${targetLangName}, targeting the ${marketLabel} market.
-Your mission: Design a comprehensive content strategy that BEATS the competition in the ${marketLabel} market.
+  // 从 prompts 文件获取 system instruction 和 prompt
+  const promptConfig = getSEOResearcherPrompt('deepDiveStrategy', uiLanguage, {
+    keyword: keyword.keyword,
+    targetLangName,
+    uiLangName,
+    marketLabel,
+    analysisContext,
+    referenceContext
+  }) as { systemInstruction: string; prompt: string };
 
-Content Strategy Requirements:
-1. **Page Title (H1)**: Compelling, keyword-rich title that matches search intent for ${marketLabel} market
-2. **Meta Description**: 150-160 characters, persuasive, includes target keyword, localized for ${marketLabel}
-3. **URL Slug**: Clean, readable, keyword-focused URL structure
-4. **User Intent**: Detailed analysis of what users in ${marketLabel} market expect when searching this keyword
-5. **Content Structure**: Logical H2 sections that cover the topic comprehensively, with ${marketLabel} market-specific considerations
-6. **Long-tail Keywords**: Semantic variations and related queries relevant to ${marketLabel} market
-7. **Recommended Word Count**: Based on SERP analysis and topic complexity for ${marketLabel} market
-
-STRATEGIC INSTRUCTIONS:
-- Review the provided COMPETITOR ANALYSIS carefully, focusing on ${marketLabel} market competitors.
-- Identify CONTENT GAPS and ensure your structure covers them, with special attention to ${marketLabel} market localization needs.
-- If competitors have weak content, outline a "Skyscraper" strategy tailored for ${marketLabel}.
-- If competitors are strong, find a unique angle or "Blue Ocean" sub-topic specific to ${marketLabel} market.
-- Your goal is to be 10x better than the current top result in the ${marketLabel} market.
-`) + analysisContext + referenceContext;
-
-  const prompt = `
-Create a comprehensive Content Strategy Report in Markdown format for the keyword: "${keyword.keyword}".
-
-Target Language: ${targetLangName}
-User Interface Language: ${uiLangName}
-Target Market: ${marketLabel}
-
-Your goal is to outline a page that WILL rank #1 on Google by exploiting competitor weaknesses found in the analysis.
-
-Please structure your strategy report with the following sections using clear Markdown formatting:
-
-# Content Strategy: [Keyword]
-
-## Page Title (H1)
-- Provide the optimized H1 title in ${targetLangName}
-- Include translation in ${uiLangName}
-
-## Meta Description
-- Write a compelling 150-160 character meta description in ${targetLangName}
-- Include translation in ${uiLangName}
-
-## URL Slug
-- Provide clean, SEO-friendly URL slug
-
-## User Intent Analysis
-- Detail what users in ${marketLabel} market expect when searching this keyword
-- Analyze search intent and user journey stage
-
-## Content Structure
-For each H2 section, provide:
-- **Header** (in ${targetLangName} with ${uiLangName} translation)
-- **Description**: What to cover in this section
-- **Key Points**: Bullet list of important elements
-
-### Example format:
-### H2: [Section Title in ${targetLangName}]
-*Translation: [${uiLangName} translation]*
-
-**Description**: What this section covers...
-
-**Key Points**:
-- Point 1
-- Point 2
-
-## Long-tail Keywords
-List 5-10 semantic variations and related queries relevant to ${marketLabel} market (in ${targetLangName})
-
-## Recommended Word Count
-Based on SERP analysis and topic complexity
-
-## Strategic Notes
-- Key insights from competitor analysis
-- Unique angles to exploit
-- Content gaps to fill
-
-Use clear headings, bullet points, and formatting to make the strategy easy to follow.`;
+  const systemInstruction = customPrompt || (promptConfig.systemInstruction + analysisContext + referenceContext);
+  const prompt = promptConfig.prompt;
 
   try {
     const response = await callGeminiAPI(prompt, systemInstruction, {
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          targetKeyword: { type: 'string' },
+          pageTitleH1: { type: 'string' },
+          pageTitleH1_trans: { type: 'string' },
+          metaDescription: { type: 'string' },
+          metaDescription_trans: { type: 'string' },
+          urlSlug: { type: 'string' },
+          userIntentSummary: { type: 'string' },
+          contentStructure: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                header: { type: 'string' },
+                header_trans: { type: 'string' },
+                description: { type: 'string' },
+                description_trans: { type: 'string' }
+              },
+              required: ['header', 'description']
+            }
+          },
+          longTailKeywords: { type: 'array', items: { type: 'string' } },
+          longTailKeywords_trans: { type: 'array', items: { type: 'string' } },
+          recommendedWordCount: { type: 'number' },
+          markdown: { type: 'string' }
+        },
+        required: ['pageTitleH1', 'metaDescription', 'contentStructure', 'markdown']
+      }
     });
 
-    // Return Markdown strategy report
-    return {
-      markdown: response.text || ''
-    };
+    // 提取并解析 JSON
+    let text = response?.text || '{}';
+    text = extractJSONRobust(text);
+
+    try {
+      const parsed = JSON.parse(text);
+      // 确保 markdown 字段存在，如果没有则从其他字段生成
+      if (!parsed.markdown) {
+        // 从结构化数据生成 Markdown
+        const mdParts: string[] = [];
+        mdParts.push(`# Content Strategy: ${parsed.pageTitleH1 || keyword.keyword}\n\n`);
+        mdParts.push(`## Page Title (H1)\n${parsed.pageTitleH1 || ''}\n*Translation: ${parsed.pageTitleH1_trans || ''}*\n\n`);
+        mdParts.push(`## Meta Description\n${parsed.metaDescription || ''}\n*Translation: ${parsed.metaDescription_trans || ''}*\n\n`);
+        if (parsed.urlSlug) mdParts.push(`## URL Slug\n${parsed.urlSlug}\n\n`);
+        if (parsed.userIntentSummary) mdParts.push(`## User Intent Analysis\n${parsed.userIntentSummary}\n\n`);
+        if (parsed.contentStructure && Array.isArray(parsed.contentStructure)) {
+          mdParts.push(`## Content Structure\n`);
+          parsed.contentStructure.forEach((section: any, idx: number) => {
+            mdParts.push(`### H2 ${idx + 1}: ${section.header || ''}\n*Translation: ${section.header_trans || ''}*\n\n`);
+            mdParts.push(`**Description**: ${section.description || ''}\n\n`);
+            if (section.description_trans) {
+              mdParts.push(`*Translation: ${section.description_trans}*\n\n`);
+            }
+          });
+        }
+        if (parsed.longTailKeywords && Array.isArray(parsed.longTailKeywords)) {
+          mdParts.push(`## Long-tail Keywords\n${parsed.longTailKeywords.join(', ')}\n\n`);
+        }
+        if (parsed.recommendedWordCount) {
+          mdParts.push(`## Recommended Word Count\n${parsed.recommendedWordCount} words\n\n`);
+        }
+        parsed.markdown = mdParts.join('');
+      }
+      return parsed as SEOStrategyReport;
+    } catch (parseError: any) {
+      console.error('[Agent 2] Failed to parse strategy report JSON:', parseError);
+      console.error('[Agent 2] Response text:', text.substring(0, 500));
+      // 返回默认结构
+      return {
+        targetKeyword: keyword.keyword,
+        pageTitleH1: keyword.keyword,
+        contentStructure: [],
+        markdown: text || `Content strategy for "${keyword.keyword}" in ${marketLabel} market.`
+      };
+    }
   } catch (error: any) {
     console.error("Deep Dive Error:", error);
     throw new Error(`Failed to generate strategy report: ${error.message || error}`);

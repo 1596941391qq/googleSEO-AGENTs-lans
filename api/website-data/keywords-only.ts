@@ -49,6 +49,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!userId) userId = 1;
 
     const limit = body.limit || 20;
+    const sortBy = body.sortBy || 'searchVolume';
+    const sortOrder = body.sortOrder || 'desc';
 
     await initWebsiteDataTables();
 

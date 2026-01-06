@@ -104,6 +104,17 @@ export async function generateContent(
     // Check if strategy report is in Markdown format
     const isMarkdownStrategy = 'markdown' in seoStrategyReport && seoStrategyReport.markdown;
 
+    // Extract target keyword for reference context
+    let targetKeyword = '';
+    if (isMarkdownStrategy) {
+      // Try to extract keyword from markdown (look for "Target Keyword:" or similar patterns)
+      const keywordMatch = seoStrategyReport.markdown.match(/(?:目标关键词|Target Keyword|关键词)[:：]\s*(.+?)(?:\n|$)/i);
+      targetKeyword = keywordMatch ? keywordMatch[1].trim() : 'the target keyword';
+    } else {
+      const structuredReport = seoStrategyReport as SEOStrategyReport;
+      targetKeyword = structuredReport.targetKeyword || 'the target keyword';
+    }
+
     // 构建SEO研究上下文
     let seoContext = '';
     if (isMarkdownStrategy) {
@@ -184,7 +195,7 @@ ${competitorAnalysis.competitorAnalysis ? JSON.stringify(competitorAnalysis.comp
 内容：
 ${docContent}
 
-重要提示：虽然用户提供了参考文档，但文章的核心主题必须是"${seoStrategyReport.targetKeyword}"。从文档中提取与关键词相关的信息、数据和案例，但如果文档内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${seoStrategyReport.targetKeyword}"展开。
+重要提示：虽然用户提供了参考文档，但文章的核心主题必须是"${targetKeyword}"。从文档中提取与关键词相关的信息、数据和案例，但如果文档内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${targetKeyword}"展开。
 `;
         } else {
           referenceContext = `
@@ -193,7 +204,7 @@ Filename: ${reference.document.filename}
 Content:
 ${docContent}
 
-IMPORTANT: While the user provided this reference document, the core theme of the article must be "${seoStrategyReport.targetKeyword}". Extract relevant information, data, and examples from the document that relate to the keyword. If the document content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${seoStrategyReport.targetKeyword}".
+IMPORTANT: While the user provided this reference document, the core theme of the article must be "${targetKeyword}". Extract relevant information, data, and examples from the document that relate to the keyword. If the document content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${targetKeyword}".
 `;
         }
       } else if (reference.type === 'url' && reference.url?.content && reference.url?.url) {
@@ -210,7 +221,7 @@ URL：${urlString}
 ${titleString ? `标题：${titleString}\n` : ''}内容：
 ${urlContent}
 
-重要提示：虽然用户提供了参考URL，但文章的核心主题必须是"${seoStrategyReport.targetKeyword}"。从URL中提取与关键词相关的信息、数据和案例，但如果URL内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${seoStrategyReport.targetKeyword}"展开。
+重要提示：虽然用户提供了参考URL，但文章的核心主题必须是"${targetKeyword}"。从URL中提取与关键词相关的信息、数据和案例，但如果URL内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${targetKeyword}"展开。
 `;
         } else {
           referenceContext = `
@@ -219,7 +230,7 @@ URL: ${urlString}
 ${titleString ? `Title: ${titleString}\n` : ''}Content:
 ${urlContent}
 
-IMPORTANT: While the user provided this reference URL, the core theme of the article must be "${seoStrategyReport.targetKeyword}". Extract relevant information, data, and examples from the URL that relate to the keyword. If the URL content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${seoStrategyReport.targetKeyword}".
+IMPORTANT: While the user provided this reference URL, the core theme of the article must be "${targetKeyword}". Extract relevant information, data, and examples from the URL that relate to the keyword. If the URL content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${targetKeyword}".
 `;
         }
       }

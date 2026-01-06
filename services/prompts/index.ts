@@ -363,10 +363,16 @@ export const SEO_RESEARCHER_PROMPTS = {
    * 搜索引擎偏好分析
    */
   searchPreferences: {
-    zh: `
+    zh: (keyword: string, targetLanguage: string, marketLabel: string) => `
 你是一位全渠道搜索算法专家，专注于解析 2026 年主流 AI 搜索引擎 (SGE, Perplexity) 与传统索引引擎的底层逻辑，特别擅长GEO（Generative Engine Optimization）优化策略。
 
 # 任务
+请分析关键词 "${keyword}" 在目标市场 ${marketLabel} 的不同搜索引擎中的优化策略。
+
+关键词：${keyword}
+目标语言：${targetLanguage}
+目标市场：${marketLabel}
+
 深度解构目标关键词在不同分发渠道的"可见度算法"差异，并提供针对性的GEO优化建议。
 
 <analysis_dimensions>
@@ -416,12 +422,22 @@ export const SEO_RESEARCHER_PROMPTS = {
     "structure_optimization": "结构优化建议（首屏摘要、对比区、FAQ等）"
   }
 }
+
+请以结构化的JSON格式提供搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。
+
+CRITICAL: 必须返回有效的 JSON 对象，不要包含任何 Markdown 格式标记、解释性文字或 JSON 对象之外的文本。只返回 JSON 对象本身。
 </output_format>
 `,
-    en: `
+    en: (keyword: string, targetLanguage: string, marketLabel: string) => `
 You are a full-channel search algorithm expert, specializing in analyzing the underlying logic of mainstream AI search engines (SGE, Perplexity) and traditional index engines in 2026, with particular expertise in GEO (Generative Engine Optimization) optimization strategies.
 
 # Task
+Please analyze optimization strategies for the keyword "${keyword}" across different search engines for the ${marketLabel} market.
+
+Keyword: ${keyword}
+Target Language: ${targetLanguage}
+Target Market: ${marketLabel}
+
 Deeply deconstruct the "visibility algorithm" differences of target keywords across different distribution channels, and provide targeted GEO optimization recommendations.
 
 <analysis_dimensions>
@@ -472,6 +488,10 @@ Return JSON:
     "structure_optimization": "Structure optimization recommendations (first-screen summary, comparison section, FAQ, etc.)"
   }
 }
+
+Please provide detailed search engine preference analysis and optimization recommendations in structured JSON format, with special attention to localization needs for the target market.
+
+CRITICAL: Return ONLY a valid JSON object. Do NOT include any Markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object itself.
 `
   },
 
@@ -479,7 +499,7 @@ Return JSON:
    * 竞争对手分析
    */
   competitorAnalysis: {
-    zh: `
+    zh: (keyword: string, targetLanguage: string, marketLabel: string, serpSnippetsContext: string, deepContentContext: string) => `
 # 角色
 你是一位资深竞争情报分析官。
 
@@ -504,14 +524,48 @@ Return JSON:
     }
   ],
   "winning_formula": "如果你要超越他们，你的文章必须具备哪 3 个特质？",
-  "recommended_structure": ["H1: ...", "H2: ..."]
+  "recommended_structure": ["H1: ...", "H2: ..."],
+  "competitorAnalysis": {
+    "top10": [
+      {
+        "url": "URL",
+        "title": "Title",
+        "structure": ["H1", "H2", "H3"],
+        "wordCount": 数字,
+        "contentGaps": ["缺口1"]
+      }
+    ],
+    "commonPatterns": ["模式1", "模式2"],
+    "contentGaps": ["缺口1", "缺口2"],
+    "recommendations": ["建议1", "建议2"]
+  },
+  "markdown": "Markdown格式的分析报告"
 }
+
+任务要求：
+1. **结构分析**：基于抓取的详细内容，分析 Top 页面的 H2/H3 结构。
+2. **内容缺口 (Content Gap)**：找出他们遗漏了什么关键话题，特别关注目标市场 ${marketLabel} 的本地化需求。
+3. **字数与类型**：预估他们的字数和页面类型（博客、产品页、工具等）。
+4. **制胜策略**：总结他们为什么能排在第一，分析目标市场 ${marketLabel} 的竞争特点。
+
+CRITICAL: 必须返回有效的 JSON 对象，不要包含任何 Markdown 格式标记、解释性文字或 JSON 对象之外的文本。只返回 JSON 对象本身。
 </output_format>
 `,
-    en: `
+    en: (keyword: string, targetLanguage: string, marketLabel: string, serpSnippetsContext: string, deepContentContext: string) => `
 You are an SEO competitor analysis expert.
 
 ## Your Task
+Please analyze the Top 10 competitors for the keyword "${keyword}" in the ${marketLabel} market.
+I have scraped the detailed web content of the top competitors for you. Please use this valid data for deep structural analysis.
+
+Keyword: ${keyword}
+Target Language: ${targetLanguage}
+Target Market: ${marketLabel}
+
+=== SERP OVERVIEW (Top 10) ===
+${serpSnippetsContext}
+${deepContentContext}
+
 Analyze content structure and strategies of Top 10 competitors.
 
 ## Requirements
@@ -536,18 +590,169 @@ Return JSON:
     "commonPatterns": ["pattern1", "pattern2"],
     "contentGaps": ["gap1", "gap2"],
     "recommendations": ["rec1", "rec2"]
-  }
+  },
+  "markdown": "Markdown format analysis report"
 }
+
+Please provide a comprehensive competitor analysis in structured JSON format with:
+1. **Structure Analysis**: Analyze the H2/H3 structure based on the scraped deep content
+2. **Content Gap**: Identify key topics they are missing
+3. **Word Count & Type**: Estimate word count and page type
+4. **Winning Formula**: Summarize why they are ranking #1
+
+CRITICAL: Return ONLY a valid JSON object. Do NOT include any Markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object itself.
 `
+  },
+
+  /**
+   * 深度策略生成
+   */
+  deepDiveStrategy: {
+    systemInstruction: (targetLangName: string, marketLabel: string, analysisContext: string, referenceContext: string) => `
+You are a Strategic SEO Content Manager for Google ${targetLangName}, targeting the ${marketLabel} market.
+Your mission: Design a comprehensive content strategy that BEATS the competition in the ${marketLabel} market.
+
+Content Strategy Requirements:
+1. **Page Title (H1)**: Compelling, keyword-rich title that matches search intent for ${marketLabel} market
+2. **Meta Description**: 150-160 characters, persuasive, includes target keyword, localized for ${marketLabel}
+3. **URL Slug**: Clean, readable, keyword-focused URL structure
+4. **User Intent**: Detailed analysis of what users in ${marketLabel} market expect when searching this keyword
+5. **Content Structure**: Logical H2 sections that cover the topic comprehensively, with ${marketLabel} market-specific considerations
+6. **Long-tail Keywords**: Semantic variations and related queries relevant to ${marketLabel} market
+7. **Recommended Word Count**: Based on SERP analysis and topic complexity for ${marketLabel} market
+
+STRATEGIC INSTRUCTIONS:
+- Review the provided COMPETITOR ANALYSIS carefully, focusing on ${marketLabel} market competitors.
+- Identify CONTENT GAPS and ensure your structure covers them, with special attention to ${marketLabel} market localization needs.
+- If competitors have weak content, outline a "Skyscraper" strategy tailored for ${marketLabel}.
+- If competitors are strong, find a unique angle or "Blue Ocean" sub-topic specific to ${marketLabel} market.
+- Your goal is to be 10x better than the current top result in the ${marketLabel} market.
+${analysisContext}${referenceContext}`,
+    prompt: (keyword: string, targetLangName: string, uiLangName: string, marketLabel: string) => `
+Create a comprehensive Content Strategy Report in JSON format for the keyword: "${keyword}".
+
+Target Language: ${targetLangName}
+User Interface Language: ${uiLangName}
+Target Market: ${marketLabel}
+
+Your goal is to outline a page that WILL rank #1 on Google by exploiting competitor weaknesses found in the analysis.
+
+CRITICAL: Return ONLY a valid JSON object. Do NOT include any Markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object itself.
+
+The JSON must include:
+- pageTitleH1: Optimized H1 title in ${targetLangName}
+- pageTitleH1_trans: Translation in ${uiLangName}
+- metaDescription: Compelling 150-160 character meta description in ${targetLangName}
+- metaDescription_trans: Translation in ${uiLangName}
+- urlSlug: Clean, SEO-friendly URL slug
+- userIntentSummary: What users in ${marketLabel} market expect when searching this keyword
+- contentStructure: Array of H2 sections, each with header, header_trans, description, description_trans
+- longTailKeywords: Array of 5-10 semantic variations in ${targetLangName}
+- longTailKeywords_trans: Array of translations in ${uiLangName}
+- recommendedWordCount: Recommended word count based on SERP analysis
+- markdown: Formatted Markdown version of the strategy report`
+  },
+
+  /**
+   * 提取核心关键词
+   */
+  extractCoreKeywords: {
+    zh: (targetLangName: string, report: any) => `从这个SEO内容策略中提取5-8个最重要的核心关键词，用于排名验证。
+
+目标关键词：${report.targetKeyword}
+页面标题：${report.pageTitleH1}
+内容结构标题：
+${report.contentStructure.map((s: any) => `- ${s.header}`).join('\n')}
+长尾关键词：${report.longTailKeywords?.join(', ')}
+
+只返回 JSON 数组格式的关键词，例如：["关键词1", "关键词2", "关键词3"]
+这些关键词应该是 ${targetLangName} 语言。
+重点关注：
+1. 主要目标关键词
+2. H2 标题中的重要关键词
+3. 高价值长尾关键词
+
+CRITICAL: 只返回 JSON 数组，不要其他内容。不要解释。`,
+    en: (targetLangName: string, report: any) => `Extract 5-8 core keywords from this SEO content strategy that are most important for ranking verification.
+
+Target Keyword: ${report.targetKeyword}
+Page Title: ${report.pageTitleH1}
+Content Structure Headers:
+${report.contentStructure.map((s: any) => `- ${s.header}`).join('\n')}
+Long-tail Keywords: ${report.longTailKeywords?.join(', ')}
+
+Return ONLY a JSON array of keywords, like: ["keyword1", "keyword2", "keyword3"]
+These should be in ${targetLangName} language.
+Focus on:
+1. The main target keyword
+2. Important keywords from H2 headers
+3. High-value long-tail keywords
+
+CRITICAL: Return ONLY the JSON array, nothing else. No explanations.`
   }
 };
 
 export function getSEOResearcherPrompt(
-  task: 'searchPreferences' | 'competitorAnalysis',
-  language: 'zh' | 'en'
-): string {
-  const prompt = SEO_RESEARCHER_PROMPTS[task];
-  return language === 'zh' ? prompt.zh : prompt.en;
+  task: 'searchPreferences' | 'competitorAnalysis' | 'deepDiveStrategy' | 'extractCoreKeywords',
+  language: 'zh' | 'en',
+  variables?: Record<string, any>
+): string | { systemInstruction: string; prompt: string } {
+  const promptConfig = SEO_RESEARCHER_PROMPTS[task] as any;
+
+  // 处理 deepDiveStrategy 特殊结构
+  if (task === 'deepDiveStrategy') {
+    if (variables) {
+      return {
+        systemInstruction: promptConfig.systemInstruction(
+          variables.targetLangName,
+          variables.marketLabel,
+          variables.analysisContext || '',
+          variables.referenceContext || ''
+        ),
+        prompt: promptConfig.prompt(
+          variables.keyword,
+          variables.targetLangName,
+          variables.uiLangName,
+          variables.marketLabel
+        )
+      };
+    }
+    return { systemInstruction: '', prompt: '' };
+  }
+
+  // 处理其他任务
+  const promptTextGetter = language === 'zh' ? promptConfig.zh : promptConfig.en;
+
+  // 如果是函数类型，调用函数并传入变量
+  if (typeof promptTextGetter === 'function') {
+    if (variables) {
+      // 根据函数签名传递参数
+      if (task === 'searchPreferences') {
+        return promptTextGetter(variables.keyword, variables.targetLanguage, variables.marketLabel);
+      } else if (task === 'competitorAnalysis') {
+        return promptTextGetter(
+          variables.keyword,
+          variables.targetLanguage,
+          variables.marketLabel,
+          variables.serpSnippetsContext || '',
+          variables.deepContentContext || ''
+        );
+      } else if (task === 'extractCoreKeywords') {
+        return promptTextGetter(variables.targetLangName, variables.report);
+      }
+    }
+    return promptTextGetter();
+  } else if (variables) {
+    // 替换变量占位符
+    let promptText = promptTextGetter;
+    Object.keys(variables).forEach(key => {
+      const regex = new RegExp(`\\$\\{${key}\\}`, 'g');
+      promptText = promptText.replace(regex, String(variables[key]));
+    });
+    return promptText;
+  }
+
+  return promptTextGetter as string;
 }
 
 // ============================================================================

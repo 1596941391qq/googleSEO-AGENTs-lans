@@ -166,7 +166,7 @@ export async function generateKeywords(
   uiLanguage: 'en' | 'zh' = 'en',
   industry?: string,
   additionalSuggestions?: string
-): Promise<{ keywords: KeywordData[]; rawResponse: string }> {
+): Promise<{ keywords: KeywordData[]; rawResponse: string; searchResults?: any }> {
   const targetLangName = getLanguageName(targetLanguage);
   const translationLang = uiLanguage === 'zh' ? 'Chinese' : 'English';
 

@@ -644,7 +644,7 @@ const CompetitorAnalysisCard: React.FC<{ data: any; uiLanguage: UILanguage }> = 
   );
 };
 
-const StreamEventDetails: React.FC<{ 
+export const StreamEventDetails: React.FC<{ 
   event: AgentStreamEvent; 
   uiLanguage: UILanguage;
   onImageFullscreen?: (url: string, prompt?: string, theme?: string) => void;

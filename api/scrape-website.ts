@@ -14,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Only accept POST requests
   if (req.method !== 'POST') {
-    return sendErrorResponse(res, 'Method not allowed', 405);
+    return sendErrorResponse(res, null, 'Method not allowed', 405);
   }
 
   try {
@@ -23,14 +23,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Validate required fields
     if (!url || typeof url !== 'string') {
-      return sendErrorResponse(res, 'URL is required and must be a string', 400);
+      return sendErrorResponse(res, null, 'URL is required and must be a string', 400);
     }
 
     // Validate URL format
     try {
       new URL(url);
     } catch {
-      return sendErrorResponse(res, 'Invalid URL format', 400);
+      return sendErrorResponse(res, null, 'Invalid URL format', 400);
     }
 
     // Scrape website with screenshot
@@ -43,6 +43,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error('[Scrape Website] Error:', error);
-    return sendErrorResponse(res, error.message || 'Failed to scrape website', 500);
+    return sendErrorResponse(res, error, 'Failed to scrape website', 500);
   }
 }

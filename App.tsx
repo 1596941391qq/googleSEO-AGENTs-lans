@@ -74,6 +74,8 @@ import { TestAgentPanel } from "./components/TestAgentPanel";
 import { ContentGenerationView } from "./components/ContentGenerationView";
 import { WebsiteSelector } from "./components/WebsiteSelector";
 import { GoogleSearchResults } from "./components/article-generator/GoogleSearchResults";
+import { AgentStreamEvent } from "./types";
+import { StreamEventDetails } from "./components/article-generator/AgentStreamFeed";
 import {
   KeywordMiningGuide,
   MiningConfig,
@@ -1200,290 +1202,345 @@ const AgentStream = ({
         ref={scrollRef}
         className="overflow-y-auto custom-scrollbar flex-1 space-y-4 pr-2"
       >
-        {thoughts.map((thought) => (
-          <div key={thought.id} className="animate-fade-in">
-            <div className="flex items-center gap-2 mb-1">
-              <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  thought.type === "generation"
-                    ? isDarkTheme
+        {thoughts
+          .filter((thought) => {
+            // 过滤掉空的analysis显示：如果type是analysis但没有content且没有data，则不显示
+            if (
+              thought.type === "analysis" &&
+              !thought.content &&
+              !thought.data
+            ) {
+              return false;
+            }
+            return true;
+          })
+          .map((thought) => (
+            <div key={thought.id} className="animate-fade-in">
+              <div className="flex items-center gap-2 mb-1">
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    thought.type === "generation"
+                      ? isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-700"
+                      : thought.type === "analysis"
+                      ? isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-700"
+                      : isDarkTheme
                       ? "bg-emerald-500/20 text-emerald-400"
                       : "bg-emerald-100 text-emerald-700"
-                    : thought.type === "analysis"
-                    ? isDarkTheme
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-emerald-100 text-emerald-700"
-                    : isDarkTheme
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : "bg-emerald-100 text-emerald-700"
-                }`}
-              >
-                ROUND {thought.round}
-              </span>
-              <span
-                className={`text-xs uppercase font-semibold ${
-                  isDarkTheme ? "text-white/70" : "text-gray-500"
-                }`}
-              >
-                {thought.type}
-              </span>
-            </div>
-            <p
-              className={`text-sm mb-2 font-medium ${
-                isDarkTheme ? "text-white" : "text-gray-700"
-              }`}
-            >
-              {thought.content}
-            </p>
-
-            {thought.keywords && thought.type === "generation" && (
-              <div className="flex flex-wrap gap-1 mb-2">
-                {thought.keywords.map((kw, idx) => (
-                  <span
-                    key={idx}
-                    className={`px-2 py-1 border rounded text-xs ${
-                      isDarkTheme
-                        ? "bg-black border-emerald-500/20 text-white/90"
-                        : "bg-gray-50 border-gray-200 text-gray-600"
-                    }`}
-                  >
-                    {kw}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {thought.stats && (
-              <div className="flex gap-2 text-xs items-center">
-                <span
-                  className={`font-bold px-2 py-0.5 rounded ${
-                    isDarkTheme
-                      ? "text-emerald-400 bg-emerald-500/10"
-                      : "text-emerald-700 bg-emerald-100"
                   }`}
                 >
-                  {thought.stats.high} High
+                  ROUND {thought.round}
                 </span>
                 <span
-                  className={`px-2 py-0.5 rounded ${
-                    isDarkTheme
-                      ? "text-yellow-400 bg-yellow-500/10"
-                      : "text-yellow-700 bg-yellow-100"
+                  className={`text-xs uppercase font-semibold ${
+                    isDarkTheme ? "text-white/70" : "text-gray-500"
                   }`}
                 >
-                  {thought.stats.medium} Medium
-                </span>
-                <span
-                  className={`px-2 py-0.5 rounded ${
-                    isDarkTheme
-                      ? "text-red-400 bg-red-500/10"
-                      : "text-red-700 bg-red-100"
-                  }`}
-                >
-                  {thought.stats.low} Low
+                  {thought.type}
                 </span>
               </div>
-            )}
+              {thought.content && (
+                <p
+                  className={`text-sm mb-2 font-medium ${
+                    isDarkTheme ? "text-white" : "text-gray-700"
+                  }`}
+                >
+                  {thought.content}
+                </p>
+              )}
 
-            {/* Keyword Research Data Cards - Display for each keyword with research data */}
-            {thought.type === "analysis" && thought.analyzedKeywords && (
-              <div className="mt-2 space-y-2">
-                {thought.analyzedKeywords
-                  .filter((kw) => kw.serankingData?.is_data_found)
-                  .slice(0, 5) // Show top 5 keywords with research data
-                  .map((kw) => (
-                    <div
-                      key={kw.id}
-                      className={`p-3 rounded border ${
+              {thought.keywords && thought.type === "generation" && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {thought.keywords.map((kw, idx) => (
+                    <span
+                      key={idx}
+                      className={`px-2 py-1 border rounded text-xs ${
                         isDarkTheme
-                          ? "bg-black/40 border-orange-500/30"
-                          : "bg-orange-50 border-orange-200"
+                          ? "bg-black border-emerald-500/20 text-white/90"
+                          : "bg-gray-50 border-gray-200 text-gray-600"
                       }`}
                     >
+                      {kw}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {thought.stats && (
+                <div className="flex gap-2 text-xs items-center">
+                  <span
+                    className={`font-bold px-2 py-0.5 rounded ${
+                      isDarkTheme
+                        ? "text-emerald-400 bg-emerald-500/10"
+                        : "text-emerald-700 bg-emerald-100"
+                    }`}
+                  >
+                    {thought.stats.high} High
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded ${
+                      isDarkTheme
+                        ? "text-yellow-400 bg-yellow-500/10"
+                        : "text-yellow-700 bg-yellow-100"
+                    }`}
+                  >
+                    {thought.stats.medium} Medium
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded ${
+                      isDarkTheme
+                        ? "text-red-400 bg-red-500/10"
+                        : "text-red-700 bg-red-100"
+                    }`}
+                  >
+                    {thought.stats.low} Low
+                  </span>
+                </div>
+              )}
+
+              {/* Keyword Research Data Cards - Display for each keyword with research data */}
+              {thought.type === "analysis" && thought.analyzedKeywords && (
+                <div className="mt-2 space-y-2">
+                  {thought.analyzedKeywords
+                    .filter((kw) => kw.serankingData?.is_data_found)
+                    .slice(0, 5) // Show top 5 keywords with research data
+                    .map((kw) => (
                       <div
-                        className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
-                          isDarkTheme ? "text-orange-400" : "text-orange-600"
+                        key={kw.id}
+                        className={`p-3 rounded border ${
+                          isDarkTheme
+                            ? "bg-black/40 border-orange-500/30"
+                            : "bg-orange-50 border-orange-200"
                         }`}
                       >
-                        <TrendingUp className="w-3 h-3" />
-                        KEYWORD RESEARCH: {kw.keyword}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
                         <div
-                          className={`p-2 rounded border ${
-                            isDarkTheme
-                              ? "bg-black border-emerald-500/20"
-                              : "bg-white border-gray-200"
+                          className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
+                            isDarkTheme ? "text-orange-400" : "text-orange-600"
                           }`}
                         >
-                          <div
-                            className={`text-[9px] font-bold mb-1 ${
-                              isDarkTheme ? "text-white/70" : "text-gray-500"
-                            }`}
-                          >
-                            VOLUME
-                          </div>
-                          <div
-                            className={`text-sm font-bold ${
-                              isDarkTheme
-                                ? "text-emerald-400"
-                                : "text-emerald-600"
-                            }`}
-                          >
-                            {kw.serankingData?.volume?.toLocaleString() ||
-                              "N/A"}
-                          </div>
+                          <TrendingUp className="w-3 h-3" />
+                          KEYWORD RESEARCH: {kw.keyword}
                         </div>
-                        <div
-                          className={`p-2 rounded border ${
-                            isDarkTheme
-                              ? "bg-black border-emerald-500/20"
-                              : "bg-white border-gray-200"
-                          }`}
-                        >
+                        <div className="grid grid-cols-2 gap-2">
                           <div
-                            className={`text-[9px] font-bold mb-1 ${
-                              isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            className={`p-2 rounded border ${
+                              isDarkTheme
+                                ? "bg-black border-emerald-500/20"
+                                : "bg-white border-gray-200"
                             }`}
                           >
-                            KD
-                          </div>
-                          <div
-                            className={`text-sm font-bold ${
-                              (kw.serankingData?.difficulty || 0) <= 40
-                                ? isDarkTheme
+                            <div
+                              className={`text-[9px] font-bold mb-1 ${
+                                isDarkTheme ? "text-white/70" : "text-gray-500"
+                              }`}
+                            >
+                              VOLUME
+                            </div>
+                            <div
+                              className={`text-sm font-bold ${
+                                isDarkTheme
                                   ? "text-emerald-400"
                                   : "text-emerald-600"
-                                : (kw.serankingData?.difficulty || 0) <= 60
-                                ? isDarkTheme
-                                  ? "text-yellow-400"
-                                  : "text-yellow-600"
-                                : isDarkTheme
-                                ? "text-red-400"
-                                : "text-red-600"
-                            }`}
-                          >
-                            {kw.serankingData?.difficulty || "N/A"}
-                          </div>
-                        </div>
-                        <div
-                          className={`p-2 rounded border ${
-                            isDarkTheme
-                              ? "bg-black border-emerald-500/20"
-                              : "bg-white border-gray-200"
-                          }`}
-                        >
-                          <div
-                            className={`text-[9px] font-bold mb-1 ${
-                              isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                            }`}
-                          >
-                            CPC
+                              }`}
+                            >
+                              {kw.serankingData?.volume?.toLocaleString() ||
+                                "N/A"}
+                            </div>
                           </div>
                           <div
-                            className={`text-sm font-bold ${
+                            className={`p-2 rounded border ${
                               isDarkTheme
-                                ? "text-emerald-400"
-                                : "text-emerald-600"
+                                ? "bg-black border-emerald-500/20"
+                                : "bg-white border-gray-200"
                             }`}
                           >
-                            ${kw.serankingData?.cpc?.toFixed(2) || "N/A"}
+                            <div
+                              className={`text-[9px] font-bold mb-1 ${
+                                isDarkTheme
+                                  ? "text-neutral-400"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              KD
+                            </div>
+                            <div
+                              className={`text-sm font-bold ${
+                                (kw.serankingData?.difficulty || 0) <= 40
+                                  ? isDarkTheme
+                                    ? "text-emerald-400"
+                                    : "text-emerald-600"
+                                  : (kw.serankingData?.difficulty || 0) <= 60
+                                  ? isDarkTheme
+                                    ? "text-yellow-400"
+                                    : "text-yellow-600"
+                                  : isDarkTheme
+                                  ? "text-red-400"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              {kw.serankingData?.difficulty || "N/A"}
+                            </div>
                           </div>
-                        </div>
-                        <div
-                          className={`p-2 rounded border ${
-                            isDarkTheme
-                              ? "bg-black border-emerald-500/20"
-                              : "bg-white border-gray-200"
-                          }`}
-                        >
                           <div
-                            className={`text-[9px] font-bold mb-1 ${
-                              isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                            }`}
-                          >
-                            COMP
-                          </div>
-                          <div
-                            className={`text-sm font-bold ${
+                            className={`p-2 rounded border ${
                               isDarkTheme
-                                ? "text-emerald-400"
-                                : "text-emerald-600"
+                                ? "bg-black border-emerald-500/20"
+                                : "bg-white border-gray-200"
                             }`}
                           >
-                            {kw.serankingData?.competition?.toFixed(2) || "N/A"}
+                            <div
+                              className={`text-[9px] font-bold mb-1 ${
+                                isDarkTheme
+                                  ? "text-neutral-400"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              CPC
+                            </div>
+                            <div
+                              className={`text-sm font-bold ${
+                                isDarkTheme
+                                  ? "text-emerald-400"
+                                  : "text-emerald-600"
+                              }`}
+                            >
+                              ${kw.serankingData?.cpc?.toFixed(2) || "N/A"}
+                            </div>
+                          </div>
+                          <div
+                            className={`p-2 rounded border ${
+                              isDarkTheme
+                                ? "bg-black border-emerald-500/20"
+                                : "bg-white border-gray-200"
+                            }`}
+                          >
+                            <div
+                              className={`text-[9px] font-bold mb-1 ${
+                                isDarkTheme
+                                  ? "text-neutral-400"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              COMP
+                            </div>
+                            <div
+                              className={`text-sm font-bold ${
+                                isDarkTheme
+                                  ? "text-emerald-400"
+                                  : "text-emerald-600"
+                              }`}
+                            >
+                              {kw.serankingData?.competition?.toFixed(2) ||
+                                "N/A"}
+                            </div>
                           </div>
                         </div>
+                        {kw.probability && (
+                          <div className="mt-2">
+                            <div
+                              className={`text-[9px] font-bold mb-1 ${
+                                isDarkTheme
+                                  ? "text-neutral-400"
+                                  : "text-gray-500"
+                              }`}
+                            >
+                              PROBABILITY
+                            </div>
+                            <div
+                              className={`text-xs font-bold px-2 py-1 rounded inline-block ${
+                                kw.probability === ProbabilityLevel.HIGH
+                                  ? isDarkTheme
+                                    ? "bg-emerald-500/20 text-emerald-400"
+                                    : "bg-emerald-100 text-emerald-700"
+                                  : kw.probability === ProbabilityLevel.MEDIUM
+                                  ? isDarkTheme
+                                    ? "bg-yellow-500/20 text-yellow-400"
+                                    : "bg-yellow-100 text-yellow-700"
+                                  : isDarkTheme
+                                  ? "bg-red-500/20 text-red-400"
+                                  : "bg-red-100 text-red-700"
+                              }`}
+                            >
+                              {kw.probability}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      {kw.probability && (
-                        <div className="mt-2">
-                          <div
-                            className={`text-[9px] font-bold mb-1 ${
-                              isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                            }`}
-                          >
-                            PROBABILITY
-                          </div>
-                          <div
-                            className={`text-xs font-bold px-2 py-1 rounded inline-block ${
-                              kw.probability === ProbabilityLevel.HIGH
-                                ? isDarkTheme
-                                  ? "bg-emerald-500/20 text-emerald-400"
-                                  : "bg-emerald-100 text-emerald-700"
-                                : kw.probability === ProbabilityLevel.MEDIUM
-                                ? isDarkTheme
-                                  ? "bg-yellow-500/20 text-yellow-400"
-                                  : "bg-yellow-100 text-yellow-700"
-                                : isDarkTheme
-                                ? "bg-red-500/20 text-red-400"
-                                : "bg-red-100 text-red-700"
-                            }`}
-                          >
-                            {kw.probability}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            )}
+                    ))}
+                </div>
+              )}
 
-            {/* SERP PREVIEW Section */}
-            {thought.type === "analysis" && thought.analyzedKeywords && (
-              <SerpPreview
-                keywords={thought.analyzedKeywords}
-                label={t.serpEvidence}
-                disclaimer={t.serpEvidenceDisclaimer}
-                t={t}
-                isDarkTheme={isDarkTheme}
-              />
-            )}
-
-            {/* 联网搜索结果 */}
-            {thought.searchResults && thought.searchResults.length > 0 && (
-              <div className="mt-2">
-                <GoogleSearchResults
-                  results={thought.searchResults}
+              {/* SERP PREVIEW Section */}
+              {thought.type === "analysis" && thought.analyzedKeywords && (
+                <SerpPreview
+                  keywords={thought.analyzedKeywords}
+                  label={t.serpEvidence}
+                  disclaimer={t.serpEvidenceDisclaimer}
+                  t={t}
                   isDarkTheme={isDarkTheme}
-                  uiLanguage={uiLanguage}
                 />
-              </div>
-            )}
+              )}
 
-            {/* Table Display */}
-            {/* {thought.table && <div className="mt-2">{thought.table}</div>} */}
-            {thought.data && thought.dataType && (
-              <div className="mt-2">
-                {renderAgentDataTable(
-                  thought.data,
-                  // 如果 data 中有 analysisType，使用它作为 dataType
-                  thought.data.analysisType || thought.dataType,
-                  isDarkTheme
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+              {/* 联网搜索结果 */}
+              {thought.searchResults && thought.searchResults.length > 0 && (
+                <div className="mt-2">
+                  <GoogleSearchResults
+                    results={thought.searchResults}
+                    isDarkTheme={isDarkTheme}
+                    uiLanguage={uiLanguage}
+                  />
+                </div>
+              )}
+
+              {/* Card Display - Use AgentStreamFeed components for specific card types */}
+              {thought.data && thought.dataType && (
+                <div className="mt-2">
+                  {(() => {
+                    const dataType =
+                      thought.data.analysisType || thought.dataType;
+                    // 对于这些 cardType，使用专门的组件渲染
+                    if (
+                      dataType === "website-audit-report" ||
+                      dataType === "firecrawl-result" ||
+                      dataType === "dataforseo-competitors" ||
+                      dataType === "dataforseo-keywords" ||
+                      dataType === "google-search-results"
+                    ) {
+                      // 创建 AgentStreamEvent 格式的数据
+                      const event: AgentStreamEvent = {
+                        id: thought.id,
+                        agentId:
+                          thought.type === "generation"
+                            ? "strategist"
+                            : "researcher",
+                        type: "card",
+                        timestamp: Date.now(),
+                        message: thought.content || "",
+                        cardType: dataType as any,
+                        data: thought.data,
+                      };
+                      // 使用 AgentStreamFeed 的 StreamEventDetails 组件渲染
+                      return (
+                        <StreamEventDetails
+                          event={event}
+                          uiLanguage={uiLanguage}
+                        />
+                      );
+                    }
+                    // 其他类型使用 renderAgentDataTable
+                    return renderAgentDataTable(
+                      thought.data,
+                      dataType,
+                      isDarkTheme
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          ))}
       </div>
     </div>
   );
