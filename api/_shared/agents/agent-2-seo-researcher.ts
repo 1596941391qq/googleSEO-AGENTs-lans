@@ -503,9 +503,64 @@ function extractJSONRobust(text: string): string {
 
   // 移除可能的 Markdown 格式标记（如 ** 等）在 JSON 外部
   // 先尝试找到 JSON 对象或数组
-  const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-  if (jsonMatch) {
-    let extracted = jsonMatch[1];
+  // 注意：不使用贪婪匹配，而是直接查找第一个 { 或 [，然后使用括号匹配来提取完整 JSON
+  const firstBrace = text.indexOf('{');
+  const firstBracket = text.indexOf('[');
+
+  let extracted: string | null = null;
+
+  if (firstBrace !== -1 || firstBracket !== -1) {
+    // 使用括号匹配方法提取完整 JSON（更可靠）
+    const startIdx = firstBrace !== -1 && firstBracket !== -1
+      ? Math.min(firstBrace, firstBracket)
+      : (firstBrace !== -1 ? firstBrace : firstBracket);
+
+    let braceCount = 0;
+    let bracketCount = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = startIdx; i < text.length; i++) {
+      const char = text[i];
+
+      if (escapeNext) {
+        escapeNext = false;
+        continue;
+      }
+
+      if (char === '\\') {
+        escapeNext = true;
+        continue;
+      }
+
+      if (char === '"' && !escapeNext) {
+        inString = !inString;
+        continue;
+      }
+
+      if (!inString) {
+        if (char === '{') braceCount++;
+        if (char === '}') braceCount--;
+        if (char === '[') bracketCount++;
+        if (char === ']') bracketCount--;
+
+        if (braceCount === 0 && bracketCount === 0 && (char === '}' || char === ']')) {
+          extracted = text.substring(startIdx, i + 1);
+          break;
+        }
+      }
+    }
+  }
+
+  // 如果括号匹配失败，回退到正则表达式匹配（但可能匹配到不完整的 JSON）
+  if (!extracted) {
+    const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    if (jsonMatch) {
+      extracted = jsonMatch[1];
+    }
+  }
+
+  if (extracted) {
 
     // 使用更精确的方法提取完整的 JSON
     // 查找第一个 { 或 [
@@ -551,6 +606,20 @@ function extractJSONRobust(text: string): string {
             return extracted.substring(startIdx, i + 1).trim();
           }
         }
+      }
+
+      // 如果括号匹配失败（可能是 JSON 被截断），尝试修复截断的 JSON
+      // 检查是否有未闭合的括号
+      if (braceCount > 0 || bracketCount > 0) {
+        // JSON 可能被截断，尝试添加缺失的闭合括号
+        let fixedExtracted = extracted.substring(startIdx);
+        if (bracketCount > 0) {
+          fixedExtracted += ']'.repeat(bracketCount);
+        }
+        if (braceCount > 0) {
+          fixedExtracted += '}'.repeat(braceCount);
+        }
+        return fixedExtracted.trim();
       }
     }
 
@@ -751,7 +820,9 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
               required: ['probability', 'reasoning']
             },
             // 禁用 Google 搜索以避免 JSON 解析错误（联网模式会导致返回非纯 JSON 格式）
-            enableGoogleSearch: false
+            enableGoogleSearch: false,
+            // 增加 maxOutputTokens 以支持更长的 JSON 响应（包含详细 reasoning 和多个 topSerpSnippets）
+            maxOutputTokens: 16384
           }
         );
       } catch (apiError: any) {

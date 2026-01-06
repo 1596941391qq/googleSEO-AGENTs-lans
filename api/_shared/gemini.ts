@@ -14,6 +14,11 @@ interface GeminiConfig {
    * 当设置为 true 时，Gemini 可以调用 Google 搜索来获取实时信息
    */
   enableGoogleSearch?: boolean;
+  /**
+   * 最大输出 token 数
+   * 默认值为 16384，用于支持更长的 JSON 响应
+   */
+  maxOutputTokens?: number;
 }
 
 export async function callGeminiAPI(prompt: string, systemInstruction?: string, config?: GeminiConfig) {
@@ -43,7 +48,7 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
   const requestBody: any = {
     contents: contents,
     generationConfig: {
-      maxOutputTokens: 8192
+      maxOutputTokens: config?.maxOutputTokens || 16384 // 增加默认值以支持更长的 JSON 响应
     }
   };
 
