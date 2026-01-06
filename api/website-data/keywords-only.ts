@@ -249,43 +249,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return cleaned.trim();
       };
 
-      // 清理并更新数据库中的关键词（自动修复旧数据）
-      const cleanedKeywords = cacheResult.rows
-        .map((row: any) => {
-          const originalKeyword = row.keyword || '';
-          const cleanedKeyword = cleanKeyword(originalKeyword);
-          
-          // 如果关键词被清理了，异步更新数据库（不阻塞响应）
-          if (cleanedKeyword !== originalKeyword && cleanedKeyword && cleanedKeyword.length > 0 && !/^\d+$/.test(cleanedKeyword)) {
-            sql`
-              UPDATE domain_keywords_cache
-              SET keyword = ${cleanedKeyword}
-              WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
-            `.catch(err => console.warn('[keywords-only] Failed to update cleaned keyword:', err));
-          } else if (cleanedKeyword !== originalKeyword && (!cleanedKeyword || /^\d+$/.test(cleanedKeyword))) {
-            // 如果清理后为空或纯数字，删除该记录
-            sql`
-              DELETE FROM domain_keywords_cache
-              WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
-            `.catch(err => console.warn('[keywords-only] Failed to delete invalid keyword:', err));
-          }
-          
-          return {
-            keyword: cleanedKeyword,
-            currentPosition: row.current_position,
-            previousPosition: row.previous_position,
-            positionChange: row.position_change,
-            searchVolume: row.search_volume,
-            cpc: row.cpc,
-            competition: row.competition,
-            difficulty: row.difficulty,
-            trafficPercentage: row.traffic_percentage,
-            url: row.ranking_url || '',
-          };
-        })
+      // 清理关键词（读取时自动清理，确保显示的数据是干净的）
+      keywords = cacheResult.rows
+        .map((row: any) => ({
+          keyword: cleanKeyword(row.keyword || ''),
+          currentPosition: row.current_position,
+          previousPosition: row.previous_position,
+          positionChange: row.position_change,
+          searchVolume: row.search_volume,
+          cpc: row.cpc,
+          competition: row.competition,
+          difficulty: row.difficulty,
+          trafficPercentage: row.traffic_percentage,
+          url: row.ranking_url || '',
+        }))
         .filter((kw: any) => kw.keyword && kw.keyword.length > 0 && !/^\d+$/.test(kw.keyword)); // 过滤空关键词和纯数字
-      
-      keywords = cleanedKeywords;
     } else {
       // API 调用成功，转换数据格式并应用排序
       keywords = keywords.map(kw => ({

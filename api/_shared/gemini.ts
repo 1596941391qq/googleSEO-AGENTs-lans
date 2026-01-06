@@ -122,9 +122,29 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
       if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
         content = candidate.content.parts[0].text || '';
 
-        // 如果启用了 Google 搜索且要求 JSON 格式，清理响应中的搜索引用标记
+        // 如果启用了 Google 搜索且要求 JSON 格式，清理响应中的搜索引用标记和 Markdown 格式
         if (config?.enableGoogleSearch && config?.responseMimeType === 'application/json') {
           content = cleanJSONFromSearchReferences(content);
+          
+          // 移除可能的 Markdown 格式标记（当启用 Google 搜索时，AI 可能返回 Markdown）
+          // 移除开头的 Markdown 格式（如 "**Refining...", "* text" 等）
+          if (content && typeof content === 'string') {
+            const trimmedContent = content.trim();
+            if (trimmedContent && (trimmedContent.startsWith('**') || trimmedContent.startsWith('*') || trimmedContent.startsWith('#'))) {
+              // 查找第一个 { 的位置
+              const firstBrace = content.indexOf('{');
+              if (firstBrace > 0) {
+                // 移除 { 之前的所有内容（可能是思考过程或 Markdown）
+                content = content.substring(firstBrace);
+              }
+              // 移除所有行首的 Markdown 格式标记
+              content = content.replace(/^\*\*[^*]+\*\*/gm, ''); // 移除 **text** 格式
+            }
+            content = content.replace(/^\*[^*]+/gm, ''); // 移除 * text 格式
+            content = content.replace(/^#+\s+/gm, ''); // 移除 # 标题格式
+            content = content.replace(/^```[\s\S]*?```/gm, ''); // 移除代码块
+            content = content.trim();
+          }
         }
       }
 
@@ -266,9 +286,11 @@ function extractJSON(text: string): string {
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
     const extracted = text.substring(startIdx, endIdx + 1).trim();
     // Basic validation: check if it starts and ends correctly
-    if ((isArray && extracted.startsWith('[') && extracted.endsWith(']')) ||
-      (!isArray && extracted.startsWith('{') && extracted.endsWith('}'))) {
-      return extracted;
+    if (extracted && typeof extracted === 'string') {
+      if ((isArray && extracted.startsWith('[') && extracted.endsWith(']')) ||
+        (!isArray && extracted.startsWith('{') && extracted.endsWith('}'))) {
+        return extracted;
+      }
     }
   }
 

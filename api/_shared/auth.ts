@@ -113,8 +113,10 @@ export async function authenticateRequest(req: VercelRequest): Promise<AuthResul
  * 从请求中提取 token（用于向后兼容）
  */
 export function extractToken(req: VercelRequest): string | null {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  const authHeaderRaw = req.headers.authorization || req.headers.Authorization;
+  const authHeader = Array.isArray(authHeaderRaw) ? authHeaderRaw[0] : authHeaderRaw;
+  
+  if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
     return null;
   }
   return authHeader.substring(7);

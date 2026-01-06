@@ -196,16 +196,18 @@ ${docContent}
 IMPORTANT: While the user provided this reference document, the core theme of the article must be "${seoStrategyReport.targetKeyword}". Extract relevant information, data, and examples from the document that relate to the keyword. If the document content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${seoStrategyReport.targetKeyword}".
 `;
         }
-      } else if (reference.type === 'url' && reference.url?.content) {
+      } else if (reference.type === 'url' && reference.url?.content && reference.url?.url) {
         // For writer, provide full content (or summary if too long)
         const urlContent = reference.url.content.length > 10000
           ? reference.url.content.substring(0, 10000) + '...'
           : reference.url.content;
+        const urlString = typeof reference.url.url === 'string' ? reference.url.url : 'N/A';
+        const titleString = reference.url.title && typeof reference.url.title === 'string' ? reference.url.title : '';
         if (contentLanguage === 'zh') {
           referenceContext = `
 用户参考URL：
-URL：${reference.url.url}
-${reference.url.title ? `标题：${reference.url.title}\n` : ''}内容：
+URL：${urlString}
+${titleString ? `标题：${titleString}\n` : ''}内容：
 ${urlContent}
 
 重要提示：虽然用户提供了参考URL，但文章的核心主题必须是"${seoStrategyReport.targetKeyword}"。从URL中提取与关键词相关的信息、数据和案例，但如果URL内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${seoStrategyReport.targetKeyword}"展开。
@@ -213,8 +215,8 @@ ${urlContent}
         } else {
           referenceContext = `
 User Reference URL:
-URL: ${reference.url.url}
-${reference.url.title ? `Title: ${reference.url.title}\n` : ''}Content:
+URL: ${urlString}
+${titleString ? `Title: ${titleString}\n` : ''}Content:
 ${urlContent}
 
 IMPORTANT: While the user provided this reference URL, the core theme of the article must be "${seoStrategyReport.targetKeyword}". Extract relevant information, data, and examples from the URL that relate to the keyword. If the URL content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${seoStrategyReport.targetKeyword}".

@@ -81,7 +81,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     // 1. Research phase
     emit('tracker', 'log', uiLanguage === 'zh' ? `正在初始化关于 "${keyword}" 的任务...` : `Initializing mission for "${keyword}"...`);
 
-    emit('researcher', 'log', uiLanguage === 'zh' ? `正在分析 ${targetMarket === 'global' ? '全球' : targetMarket.toUpperCase()} 市场的 SERP 和竞争对手...` : `Analyzing SERP and Competitors for ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()} market...`);
+    emit('researcher', 'log', uiLanguage === 'zh' ? `正在分析 ${targetMarket === 'global' ? '全球' : (targetMarket || 'global').toUpperCase()} 市场的 SERP 和竞争对手...` : `Analyzing SERP and Competitors for ${targetMarket === 'global' ? 'Global' : (targetMarket || 'global').toUpperCase()} market...`);
     // Map targetMarket to country code for SERP search
     const countryCodeMap: Record<string, string> = {
       'global': 'us',
@@ -94,17 +94,29 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       'jp': 'jp',
       'cn': 'cn',
     };
-    const serpCountryCode = countryCodeMap[targetMarket] || 'us';
-    const serpData = await fetchSerpResults(keyword, targetLanguage, serpCountryCode);
-    emit('researcher', 'card', undefined, 'serp', { results: serpData.results });
+    const serpCountryCode = countryCodeMap[targetMarket || 'global'] || 'us';
+    let serpData;
+    try {
+      serpData = await fetchSerpResults(keyword, targetLanguage, serpCountryCode);
+    } catch (serpError: any) {
+      console.error('[VisualArticle] Failed to fetch SERP results:', serpError);
+      serpData = { keyword, results: [] };
+    }
+    emit('researcher', 'card', undefined, 'serp', { results: serpData?.results || [] });
 
-    const searchPrefs = await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket, (searchResults) => {
-      // Emit Google search results if available
-      if (searchResults && searchResults.length > 0) {
-        emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
-      }
-    });
-    
+    let searchPrefs;
+    try {
+      searchPrefs = await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket, (searchResults) => {
+        // Emit Google search results if available
+        if (searchResults && searchResults.length > 0) {
+          emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
+        }
+      });
+    } catch (searchPrefsError: any) {
+      console.error('[VisualArticle] Failed to analyze search preferences:', searchPrefsError);
+      searchPrefs = undefined;
+    }
+
     // Emit search preferences analysis results
     if (searchPrefs) {
       emit('researcher', 'card', undefined, 'search-preferences', {
@@ -115,12 +127,18 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       });
     }
 
-    const competitorAnalysis = await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, (searchResults) => {
-      // Emit Google search results if available
-      if (searchResults && searchResults.length > 0) {
-        emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
-      }
-    });
+    let competitorAnalysis;
+    try {
+      competitorAnalysis = await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, (searchResults) => {
+        // Emit Google search results if available
+        if (searchResults && searchResults.length > 0) {
+          emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
+        }
+      });
+    } catch (competitorError: any) {
+      console.error('[VisualArticle] Failed to analyze competitors:', competitorError);
+      competitorAnalysis = undefined;
+    }
 
     // Emit competitor analysis results
     if (competitorAnalysis) {
@@ -164,33 +182,48 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
           : reference.document.content;
         referenceContext = `\n\nUser Reference Document (${reference.document.filename}):\n${docSummary}`;
         emit('strategist', 'log', `✓ ${uiLanguage === 'zh' ? `文档已整合到策略 (截取至 ${docSummary.length} 字符)` : `Document integrated into strategy (truncated to ${docSummary.length} chars)`}`);
-      } else if (reference.type === 'url' && reference.url?.content) {
-        emit('strategist', 'log', uiLanguage === 'zh' ? `正在处理参考URL: ${reference.url.url}` : `Processing reference URL: ${reference.url.url}`);
+      } else if (reference.type === 'url' && reference.url?.content && reference.url?.url) {
+        const urlString = typeof reference.url.url === 'string' ? reference.url.url : 'N/A';
+        emit('strategist', 'log', uiLanguage === 'zh' ? `正在处理参考URL: ${urlString}` : `Processing reference URL: ${urlString}`);
         // For URL, provide summary (first 2000 chars)
         const urlSummary = reference.url.content.length > 2000
           ? reference.url.content.substring(0, 2000) + '...'
           : reference.url.content;
-        referenceContext = `\n\nUser Reference URL (${reference.url.url}):\n${urlSummary}`;
+        referenceContext = `\n\nUser Reference URL (${urlString}):\n${urlSummary}`;
         emit('strategist', 'log', `✓ ${uiLanguage === 'zh' ? `URL内容已抓取 (${reference.url.content.length} 字符)，截图: ${reference.url.screenshot ? '是' : '否'}` : `URL scraped (${reference.url.content.length} chars), Screenshot: ${reference.url.screenshot ? 'Yes' : 'No'}`}`);
       }
     }
 
     emit('strategist', 'log', uiLanguage === 'zh' ? '正在生成综合SEO策略报告...' : 'Generating comprehensive SEO strategy report...');
-    const strategyReport = await generateDeepDiveStrategy(
-      keywordData,
-      uiLanguage,
-      targetLanguage,
-      `Tone: ${tone}, Audience: ${targetAudience}, Target Market: ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()}. Ensure visual opportunities are highlighted and content is tailored for the target market.${referenceContext}`,
-      searchPrefs,
-      competitorAnalysis,
-      targetMarket,
-      reference
-    );
+    let strategyReport;
+    try {
+      strategyReport = await generateDeepDiveStrategy(
+        keywordData,
+        uiLanguage,
+        targetLanguage,
+        `Tone: ${tone}, Audience: ${targetAudience}, Target Market: ${targetMarket === 'global' ? 'Global' : (targetMarket || 'global').toUpperCase()}. Ensure visual opportunities are highlighted and content is tailored for the target market.${referenceContext}`,
+        searchPrefs,
+        competitorAnalysis,
+        targetMarket,
+        reference
+      );
+    } catch (strategyError: any) {
+      console.error('[VisualArticle] Failed to generate strategy report:', strategyError);
+      // Create a fallback strategy report
+      strategyReport = {
+        pageTitleH1: keyword,
+        contentStructure: [],
+        metaDescription: '',
+        targetKeyword: keyword
+      };
+      emit('strategist', 'log', uiLanguage === 'zh' ? '警告: 策略生成失败，使用默认策略' : 'Warning: Strategy generation failed, using default strategy');
+    }
 
-    emit('strategist', 'log', `✓ ${uiLanguage === 'zh' ? `策略报告生成完成: ${strategyReport.contentStructure?.length || 0} 个主要章节` : `Strategy report complete: ${strategyReport.contentStructure?.length || 0} main sections`}`);
+    const structureLength = Array.isArray(strategyReport.contentStructure) ? strategyReport.contentStructure.length : 0;
+    emit('strategist', 'log', `✓ ${uiLanguage === 'zh' ? `策略报告生成完成: ${structureLength} 个主要章节` : `Strategy report complete: ${structureLength} main sections`}`);
     emit('strategist', 'card', undefined, 'outline', {
-      h1: strategyReport.pageTitleH1,
-      structure: strategyReport.contentStructure
+      h1: strategyReport.pageTitleH1 || keyword,
+      structure: Array.isArray(strategyReport.contentStructure) ? strategyReport.contentStructure : []
     });
 
     // 3. Visual phase (Extract themes and start generation)
@@ -199,10 +232,21 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
 
     // Check if we have URL reference with screenshot
     const hasUrlScreenshot = reference?.type === 'url' && reference.url?.screenshot;
-    
+
     // We'll use the strategy report to extract themes early or wait for content?
     // Let's use strategy report as a proxy for content to get themes early.
-    const visualThemes = await extractVisualThemes(strategyReport.pageTitleH1 + "\n" + strategyReport.contentStructure.map(s => s.header).join("\n"), uiLanguage);
+    // Safely extract content structure with defensive checks
+    const pageTitle = strategyReport.pageTitleH1 || '';
+    const contentStructure = Array.isArray(strategyReport.contentStructure)
+      ? strategyReport.contentStructure
+      : [];
+    const structureText = contentStructure
+      .map((s: any) => s?.header || '')
+      .filter((h: string) => h)
+      .join("\n");
+    const contentForThemes = pageTitle + (structureText ? "\n" + structureText : "");
+
+    const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage);
 
     let generatedImages: any[] = [];
     if (visualThemes.themes && visualThemes.themes.length > 0) {
@@ -237,21 +281,23 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         prompt: r.theme,
         placement: 'inline'
       }));
-      
+
       // If we have URL screenshot, add it as the second image
       if (hasUrlScreenshot && reference.url?.screenshot) {
+        const urlString = reference.url.url && typeof reference.url.url === 'string' ? reference.url.url : 'Reference Screenshot';
+        const titleString = reference.url.title && typeof reference.url.title === 'string' ? reference.url.title : undefined;
         generatedImages.push({
           url: reference.url.screenshot,
-          prompt: reference.url.title || reference.url.url,
+          prompt: titleString || urlString,
           placement: 'inline',
           isScreenshot: true
         });
-        emit('artist', 'card', 
-          uiLanguage === 'zh' ? `已添加参考页面截图` : `Reference page screenshot added`, 
-          'image-gen', 
-          { 
-            theme: reference.url.title || 'Reference Screenshot',
-            prompt: reference.url.url,
+        emit('artist', 'card',
+          uiLanguage === 'zh' ? `已添加参考页面截图` : `Reference page screenshot added`,
+          'image-gen',
+          {
+            theme: titleString || 'Reference Screenshot',
+            prompt: urlString,
             imageUrl: reference.url.screenshot,
             status: 'completed',
             progress: 100,
@@ -264,10 +310,10 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       imageResults.forEach((res, i) => {
         const theme = selectedThemes[i];
         if (res.imageUrl) {
-          emit('artist', 'card', 
-            uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`, 
-            'image-gen', 
-            { 
+          emit('artist', 'card',
+            uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`,
+            'image-gen',
+            {
               theme: theme?.title || theme?.id || res.theme,
               prompt: prompts[i]?.prompt || res.theme,
               description: prompts[i]?.description,
@@ -277,10 +323,10 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
             }
           );
         } else if (res.error) {
-          emit('artist', 'card', 
-            uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`, 
-            'image-gen', 
-            { 
+          emit('artist', 'card',
+            uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`,
+            'image-gen',
+            {
               theme: theme?.title || theme?.id || res.theme,
               prompt: prompts[i]?.prompt || res.theme,
               description: prompts[i]?.description,
@@ -295,8 +341,8 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     }
 
     // 4. Writing phase
-    emit('writer', 'log', uiLanguage === 'zh' ? `正在为 ${targetMarket === 'global' ? '全球' : targetMarket.toUpperCase()} 市场撰写包含视觉元素的精细内容...` : `Drafting content with integrated visuals for ${targetMarket === 'global' ? 'Global' : targetMarket.toUpperCase()} market...`);
-    
+    emit('writer', 'log', uiLanguage === 'zh' ? `正在为 ${targetMarket === 'global' ? '全球' : (targetMarket || 'global').toUpperCase()} 市场撰写包含视觉元素的精细内容...` : `Drafting content with integrated visuals for ${targetMarket === 'global' ? 'Global' : (targetMarket || 'global').toUpperCase()} market...`);
+
     // Emit streaming text card
     emit('writer', 'card', undefined, 'streaming-text', {
       content: '',
@@ -304,21 +350,33 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       interval: 50
     });
 
-    const contentResult = await generateContent(
-      strategyReport,
-      searchPrefs,
-      competitorAnalysis,
-      uiLanguage,
-      targetMarket,
-      targetLanguage,
-      reference,
-      (searchResults) => {
-        // Emit Google search results if available
-        if (searchResults && searchResults.length > 0) {
-          emit('writer', 'card', undefined, 'google-search-results', { results: searchResults });
+    let contentResult;
+    try {
+      contentResult = await generateContent(
+        strategyReport,
+        searchPrefs,
+        competitorAnalysis,
+        uiLanguage,
+        targetMarket,
+        targetLanguage,
+        reference,
+        (searchResults) => {
+          // Emit Google search results if available
+          if (searchResults && searchResults.length > 0) {
+            emit('writer', 'card', undefined, 'google-search-results', { results: searchResults });
+          }
         }
-      }
-    );
+      );
+    } catch (contentError: any) {
+      console.error('[VisualArticle] Failed to generate content:', contentError);
+      // Create a fallback content result
+      contentResult = {
+        title: strategyReport?.pageTitleH1 || keyword,
+        content: `# ${strategyReport?.pageTitleH1 || keyword}\n\nContent generation failed. Please try again.`,
+        article_body: ''
+      };
+      emit('writer', 'log', uiLanguage === 'zh' ? '警告: 内容生成失败' : 'Warning: Content generation failed');
+    }
 
     // Update streaming text with final content
     if (contentResult.content || contentResult.article_body) {
@@ -329,11 +387,11 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       });
     }
 
-    // Final result assembly
+    // Final result assembly with defensive checks
     const finalArticle = {
-      title: contentResult.title || strategyReport.pageTitleH1,
-      content: contentResult.content || contentResult.article_body || '',
-      images: generatedImages
+      title: contentResult?.title || strategyReport?.pageTitleH1 || keyword,
+      content: contentResult?.content || contentResult?.article_body || '',
+      images: Array.isArray(generatedImages) ? generatedImages : []
     };
 
     // Auto-save to database if userId is provided
@@ -408,7 +466,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       );
       finalResult.projectId = project.id;
     }
-    
+
     return finalResult;
 
   } catch (error: any) {

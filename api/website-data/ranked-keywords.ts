@@ -215,66 +215,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return cleaned.trim();
       };
 
-      // 清理并更新数据库中的关键词（自动修复旧数据）
-      const cleanedKeywords = cacheResult.rows
-        .map((row: any) => {
-          const originalKeyword = row.keyword || '';
-          const cleanedKeyword = cleanKeyword(originalKeyword);
-          
-          // 如果关键词被清理了，异步更新数据库（不阻塞响应）
-          if (cleanedKeyword !== originalKeyword && cleanedKeyword && cleanedKeyword.length > 0 && !/^\d+$/.test(cleanedKeyword)) {
-            // 检查是否已存在清理后的关键词（避免重复）
-            sql`
-              SELECT 1 FROM ranked_keywords_cache
-              WHERE website_id = ${body.websiteId} AND keyword = ${cleanedKeyword}
-            `.then(existing => {
-              if (existing.rows.length === 0) {
-                // 更新为清理后的关键词
-                sql`
-                  UPDATE ranked_keywords_cache
-                  SET keyword = ${cleanedKeyword}
-                  WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
-                `.catch(err => console.warn('[ranked-keywords] Failed to update cleaned keyword:', err));
-              } else {
-                // 如果已存在，删除旧记录
-                sql`
-                  DELETE FROM ranked_keywords_cache
-                  WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
-                `.catch(err => console.warn('[ranked-keywords] Failed to delete duplicate keyword:', err));
-              }
-            }).catch(() => {
-              // 如果查询失败，直接更新
-              sql`
-                UPDATE ranked_keywords_cache
-                SET keyword = ${cleanedKeyword}
-                WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
-              `.catch(err => console.warn('[ranked-keywords] Failed to update cleaned keyword:', err));
-            });
-          } else if (cleanedKeyword !== originalKeyword && (!cleanedKeyword || /^\d+$/.test(cleanedKeyword))) {
-            // 如果清理后为空或纯数字，删除该记录
-            sql`
-              DELETE FROM ranked_keywords_cache
-              WHERE website_id = ${body.websiteId} AND keyword = ${originalKeyword}
-            `.catch(err => console.warn('[ranked-keywords] Failed to delete invalid keyword:', err));
-          }
-          
-          return {
-            keyword: cleanedKeyword,
-            currentPosition: row.current_position,
-            previousPosition: row.previous_position,
-            positionChange: (row.previous_position || 0) - (row.current_position || 0),
-            searchVolume: row.search_volume,
-            etv: Number(row.etv) || 0,
-            serpFeatures: row.serp_features || {},
-            url: row.ranking_url,
-            cpc: row.cpc,
-            competition: row.competition,
-            difficulty: row.difficulty,
-          };
-        })
+      // 清理关键词（读取时自动清理，确保显示的数据是干净的）
+      keywords = cacheResult.rows
+        .map((row: any) => ({
+          keyword: cleanKeyword(row.keyword || ''),
+          currentPosition: row.current_position,
+          previousPosition: row.previous_position,
+          positionChange: (row.previous_position || 0) - (row.current_position || 0),
+          searchVolume: row.search_volume,
+          etv: Number(row.etv) || 0,
+          serpFeatures: row.serp_features || {},
+          url: row.ranking_url,
+          cpc: row.cpc,
+          competition: row.competition,
+          difficulty: row.difficulty,
+        }))
         .filter((kw: any) => kw.keyword && kw.keyword.length > 0 && !/^\d+$/.test(kw.keyword)); // 过滤空关键词和纯数字
-      
-      keywords = cleanedKeywords;
     } else if (keywords.length > 0) {
       // 如果 API 调用成功，转换数据格式并应用排序
       keywords = keywords.map(kw => ({

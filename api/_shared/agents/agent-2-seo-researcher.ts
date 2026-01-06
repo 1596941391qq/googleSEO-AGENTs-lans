@@ -618,7 +618,7 @@ Return a JSON object:
       const response = await callGeminiAPI(
         `Analyze SEO competition for: ${keywordData.keyword}
 
-CRITICAL: Return ONLY a valid JSON object in the exact format specified. No markdown, no explanations, just the JSON object starting with {`,
+CRITICAL: Return ONLY a valid JSON object in the exact format specified. No markdown, no explanations, no thinking process, just the JSON object starting with {`,
         fullSystemInstruction,
         {
           responseMimeType: 'application/json',
@@ -634,11 +634,32 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
               topSerpSnippets: { type: 'array' }
             },
             required: ['probability', 'reasoning']
-          }
+          },
+          // 注意：启用 Google 搜索时，即使设置了 responseMimeType，AI 仍可能返回 Markdown
+          // 所以我们需要在 JSON 提取时处理这种情况
         }
       );
 
       let text = response.text || "{}";
+
+      // 如果响应以 Markdown 格式开头（如 "**Refining..."），先清理
+      // 移除 Markdown 格式标记和思考过程
+      if (text && typeof text === 'string') {
+        const trimmedText = text.trim();
+        if (trimmedText && (trimmedText.startsWith('**') || trimmedText.startsWith('*'))) {
+          // 查找第一个 { 之前的所有内容，可能是思考过程
+          const firstBrace = text.indexOf('{');
+          if (firstBrace > 0) {
+            // 移除 { 之前的所有 Markdown 和思考过程
+            text = text.substring(firstBrace);
+          }
+          // 移除所有 Markdown 格式标记
+          text = text.replace(/^\*\*[^*]+\*\*/gm, ''); // 移除 **text** 格式
+          text = text.replace(/^\*[^*]+/gm, ''); // 移除 * text 格式
+          text = text.replace(/^#+\s+/gm, ''); // 移除 # 标题格式
+          text = text.trim();
+        }
+      }
 
       // Enhanced JSON extraction - try to find JSON even if wrapped in markdown
       text = extractJSONRobust(text);
@@ -669,18 +690,26 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           }
         }
 
-        // Strategy 2: Try to find any JSON object that looks complete
+        // Strategy 2: Try to find any JSON object that looks complete (使用清理后的文本)
         if (!recovered) {
+          // 先清理 Markdown，再查找 JSON
+          let cleanedText = response.text;
+          // 移除 Markdown 格式标记
+          cleanedText = cleanedText.replace(/^\*\*[^*]+\*\*/gm, '');
+          cleanedText = cleanedText.replace(/^\*[^*]+/gm, '');
+          cleanedText = cleanedText.replace(/^#+\s+/gm, '');
+          cleanedText = cleanedText.replace(/^```[\s\S]*?```/gm, '');
+          
           // Find the first { and try to extract complete JSON
-          const firstBrace = response.text.indexOf('{');
+          const firstBrace = cleanedText.indexOf('{');
           if (firstBrace !== -1) {
             // Try to find matching closing brace
             let braceCount = 0;
             let inString = false;
             let escapeNext = false;
 
-            for (let i = firstBrace; i < response.text.length; i++) {
-              const char = response.text[i];
+            for (let i = firstBrace; i < cleanedText.length; i++) {
+              const char = cleanedText[i];
 
               if (escapeNext) {
                 escapeNext = false;
@@ -702,7 +731,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
                 if (char === '}') braceCount--;
 
                 if (braceCount === 0 && char === '}') {
-                  const candidate = response.text.substring(firstBrace, i + 1);
+                  const candidate = cleanedText.substring(firstBrace, i + 1);
                   try {
                     analysis = JSON.parse(candidate);
                     console.log("✓ Recovered JSON using brace matching");
@@ -926,12 +955,14 @@ export const generateDeepDiveStrategy = async (
         ? reference.document.content.substring(0, 2000) + '...'
         : reference.document.content;
       referenceContext = `\n\n=== USER REFERENCE DOCUMENT ===\nFilename: ${reference.document.filename}\nContent Summary:\n${docSummary}\n\nIMPORTANT: While the user provided this reference document, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the document that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the document content is not relevant to the keyword, use it only as a style reference.`;
-    } else if (reference.type === 'url' && reference.url?.content) {
+    } else if (reference.type === 'url' && reference.url?.content && reference.url?.url) {
       // Provide summary for strategist (first 2000 chars)
       const urlSummary = reference.url.content.length > 2000
         ? reference.url.content.substring(0, 2000) + '...'
         : reference.url.content;
-      referenceContext = `\n\n=== USER REFERENCE URL ===\nURL: ${reference.url.url}\n${reference.url.title ? `Title: ${reference.url.title}\n` : ''}Content Summary:\n${urlSummary}\n\nIMPORTANT: While the user provided this reference URL, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the URL that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the URL content is not relevant to the keyword, use it only as a style reference.`;
+      const urlString = typeof reference.url.url === 'string' ? reference.url.url : 'N/A';
+      const titleString = reference.url.title && typeof reference.url.title === 'string' ? reference.url.title : '';
+      referenceContext = `\n\n=== USER REFERENCE URL ===\nURL: ${urlString}\n${titleString ? `Title: ${titleString}\n` : ''}Content Summary:\n${urlSummary}\n\nIMPORTANT: While the user provided this reference URL, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the URL that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the URL content is not relevant to the keyword, use it only as a style reference.`;
     }
   }
 
