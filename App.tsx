@@ -685,16 +685,27 @@ const SerpPreview = ({
 // Render agent data as formatted table or cards
 const renderAgentDataTable = (
   data: any,
-  dataType: "keywords" | "analysis" | "website-content" | "competitor-analysis" | "website-audit-report" | "firecrawl-result" | "dataforseo-competitors" | "dataforseo-keywords" | "google-search-results",
+  dataType:
+    | "keywords"
+    | "analysis"
+    | "website-content"
+    | "competitor-analysis"
+    | "website-audit-report"
+    | "firecrawl-result"
+    | "dataforseo-competitors"
+    | "dataforseo-keywords"
+    | "google-search-results",
   isDarkTheme: boolean = true
 ) => {
   // 对于这些 cardType，使用 AgentStreamFeed 组件渲染（在 AgentStream 中处理）
   // 这里只处理需要特殊渲染的 dataType
-  if (dataType === "website-audit-report" || 
-      dataType === "firecrawl-result" || 
-      dataType === "dataforseo-competitors" || 
-      dataType === "dataforseo-keywords" || 
-      dataType === "google-search-results") {
+  if (
+    dataType === "website-audit-report" ||
+    dataType === "firecrawl-result" ||
+    dataType === "dataforseo-competitors" ||
+    dataType === "dataforseo-keywords" ||
+    dataType === "google-search-results"
+  ) {
     // 这些类型由 AgentStreamFeed 组件处理，这里返回 null
     return null;
   }
@@ -3416,6 +3427,7 @@ export default function App() {
       keywords: currentState.keywords,
       miningRound: currentState.miningRound,
       targetLanguage: currentState.targetLanguage,
+      taskName: currentTask?.name, // 保存任务名称
       // 保存存量拓新模式的数据
       miningMode: miningState?.miningMode,
       websiteId: miningState?.websiteId,
@@ -6061,7 +6073,11 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           state.miningConfig?.additionalSuggestions || "";
 
         // 如果没有有效的种子关键词，停止循环
-        if (!seedKeyword || seedKeyword.trim() === '' || seedKeyword === 'general topics') {
+        if (
+          !seedKeyword ||
+          seedKeyword.trim() === "" ||
+          seedKeyword === "general topics"
+        ) {
           addLog(
             state.uiLanguage === "zh"
               ? `⚠️ 没有有效的种子关键词，停止挖掘循环`
@@ -9553,7 +9569,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                         : "text-gray-900 group-hover:text-emerald-600"
                                     )}
                                   >
-                                    {arch.seedKeyword}
+                                    {arch.taskName || arch.seedKeyword}
                                   </span>
                                   <span
                                     className={cn(

@@ -91,7 +91,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   const getCacheKey = (key: string) => `website_data_${websiteId}_${key}`;
   const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时
 
-  const getCachedData = <T>(key: string): T | null => {
+  const getCachedData = <T,>(key: string): T | null => {
     try {
       const cached = localStorage.getItem(getCacheKey(key));
       if (!cached) return null;
@@ -106,7 +106,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     }
   };
 
-  const setCachedData = <T>(key: string, data: T) => {
+  const setCachedData = <T,>(key: string, data: T) => {
     try {
       localStorage.setItem(getCacheKey(key), JSON.stringify({
         data,

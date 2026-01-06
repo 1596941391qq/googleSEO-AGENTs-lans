@@ -125,6 +125,7 @@ export interface ArchiveEntry {
   keywords: KeywordData[];
   miningRound: number;
   targetLanguage: TargetLanguage;
+  taskName?: string; // 任务名称/项目名称
   // 存量拓新模式相关字段
   miningMode?: 'blue-ocean' | 'existing-website-audit';
   websiteId?: string | null;
