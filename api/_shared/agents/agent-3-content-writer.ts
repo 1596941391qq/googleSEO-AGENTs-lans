@@ -270,7 +270,7 @@ ${seoContext}${searchPreferencesContext}${competitorContext}${referenceContext}
 请以Markdown格式输出完整文章，包括以下部分：
 - **H1 标题**（文章主标题）
 - **文章正文**（使用 H2、H3 标题组织结构）
-- **关键要点总结**（在文章末尾）`;
+- **关键要点总结**（在文章末尾）
       : `Generate a high-quality article based on the following SEO research findings for the ${marketLabel} market.
 
 ${seoContext}${searchPreferencesContext}${competitorContext}${referenceContext}

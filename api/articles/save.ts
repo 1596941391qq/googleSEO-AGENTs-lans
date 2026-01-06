@@ -66,14 +66,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ${userId},
         ${title},
         ${content},
-        ${validImages.length > 0 ? JSON.stringify(validImages) : '[]':: jsonb
-  },
-        ${ keyword || null },
-        ${ tone || null },
-        ${ visualStyle || null },
-        ${ targetAudience || null },
-        ${ targetMarket || null },
-  'draft'
+        ${validImages.length > 0 ? JSON.stringify(validImages) : '[]'}::jsonb,
+        ${keyword || null},
+        ${tone || null},
+        ${visualStyle || null},
+        ${targetAudience || null},
+        ${targetMarket || null},
+        'draft'
       )
       RETURNING id, created_at
     `;

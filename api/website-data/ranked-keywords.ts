@@ -184,9 +184,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             `)
           );
           
-          keywords = cleanedKeywords;
+          keywords = apiKeywords;
           fromApi = true;
-          console.log(`[ranked-keywords] ✅ Successfully fetched and cached ${keywords.length} keywords from API (cleaned from ${apiKeywords.length} raw keywords)`);
+          console.log(`[ranked-keywords] ✅ Successfully fetched and cached ${keywords.length} keywords from API`);
         }
       } catch (error: any) {
         console.error('[ranked-keywords] ❌ API call failed:', error.message);

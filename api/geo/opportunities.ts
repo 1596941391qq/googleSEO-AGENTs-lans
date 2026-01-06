@@ -70,42 +70,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ==========================================
-    // Step 2: 构建查询条件
+    // Step 2: 构建查询条件（使用模板字符串）
     // ==========================================
-    const conditions: string[] = ['go.website_id = $1'];
-    const params: any[] = [body.websiteId];
-    let paramIndex = 2;
+    const conditionParts: any[] = [];
+    conditionParts.push(sql`go.website_id = ${body.websiteId}`);
 
     if (body.targetCountry) {
-      conditions.push(`go.target_country = $${paramIndex}`);
-      params.push(body.targetCountry);
-      paramIndex++;
+      conditionParts.push(sql`go.target_country = ${body.targetCountry}`);
     }
 
     if (body.minPositionGap !== undefined) {
-      conditions.push(`go.position_gap >= $${paramIndex}`);
-      params.push(body.minPositionGap);
-      paramIndex++;
+      conditionParts.push(sql`go.position_gap >= ${body.minPositionGap}`);
     }
 
     if (body.maxDifficulty !== undefined) {
-      conditions.push(`go.difficulty_score <= $${paramIndex}`);
-      params.push(body.maxDifficulty);
-      paramIndex++;
+      conditionParts.push(sql`go.difficulty_score <= ${body.maxDifficulty}`);
     }
 
     if (body.status) {
-      conditions.push(`go.status = $${paramIndex}`);
-      params.push(body.status);
-      paramIndex++;
+      conditionParts.push(sql`go.status = ${body.status}`);
     }
 
-    const whereClause = conditions.join(' AND ');
+    // 组合 WHERE 条件
+    const whereClause = conditionParts.reduce((acc, part, index) => {
+      if (index === 0) {
+        return part;
+      }
+      return sql`${acc} AND ${part}`;
+    });
 
     // ==========================================
     // Step 3: 获取 GEO 机会列表
     // ==========================================
-    const opportunitiesResult = await sql(`
+    const opportunitiesResult = await sql`
       SELECT
         go.id,
         go.website_id,
@@ -150,12 +147,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         go.position_gap DESC,
         go.difficulty_score ASC
       LIMIT ${limit}
-    `, ...params);
+    `;
 
     // ==========================================
     // Step 4: 统计摘要
     // ==========================================
-    const statsResult = await sql(`
+    const statsResult = await sql`
       SELECT
         COUNT(*) as total_opportunities,
         SUM(estimated_traffic_gain) as total_potential_traffic,
@@ -165,10 +162,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count
       FROM geo_opportunities
       WHERE ${whereClause}
-    `, ...params);
+    `;
 
     // 按国家分组统计
-    const byCountryResult = await sql(`
+    const byCountryResult = await sql`
       SELECT
         target_country,
         COUNT(*) as opportunity_count,
@@ -178,7 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       WHERE ${whereClause}
       GROUP BY target_country
       ORDER BY potential_traffic_gain DESC
-    `, ...params);
+    `;
 
     return res.status(200).json({
       success: true,

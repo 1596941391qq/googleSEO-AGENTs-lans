@@ -65,30 +65,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ==========================================
-    // Step 2: 构建 WHERE 条件
+    // Step 2: 构建 WHERE 条件（使用模板字符串）
     // ==========================================
-    const conditions: string[] = ['website_id = $1'];
-    const params: any[] = [body.websiteId];
-    let paramIndex = 2;
+    const conditionParts: any[] = [];
+    conditionParts.push(sql`website_id = ${body.websiteId}`);
 
     if (body.keywordId) {
-      conditions.push(`keyword_id = $${paramIndex}`);
-      params.push(body.keywordId);
-      paramIndex++;
+      conditionParts.push(sql`keyword_id = ${body.keywordId}`);
     }
 
     if (body.countryCode) {
-      conditions.push(`country_code = $${paramIndex}`);
-      params.push(body.countryCode);
-      paramIndex++;
+      conditionParts.push(sql`country_code = ${body.countryCode}`);
     }
 
-    const whereClause = conditions.join(' AND ');
+    // 组合 WHERE 条件
+    const whereClause = conditionParts.reduce((acc, part, index) => {
+      if (index === 0) {
+        return part;
+      }
+      return sql`${acc} AND ${part}`;
+    });
 
     // ==========================================
     // Step 3: 获取 GEO 排名数据
     // ==========================================
-    const rankingsResult = await sql(`
+    const rankingsResult = await sql`
       SELECT
         id,
         article_ranking_id,
@@ -108,12 +109,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       FROM geo_rankings
       WHERE ${whereClause}
       ORDER BY country_code, region, city, current_position NULLS LAST
-    `, ...params);
+    `;
 
     // ==========================================
     // Step 4: 按国家分组统计
     // ==========================================
-    const statsResult = await sql(`
+    const statsResult = await sql`
       SELECT
         country_code,
         COUNT(*) as total_keywords,
@@ -125,7 +126,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       WHERE ${whereClause}
       GROUP BY country_code
       ORDER BY top10_count DESC
-    `, ...params);
+    `;
 
     // ==========================================
     // Step 5: 获取关键词信息（如果提供了 keywordId）

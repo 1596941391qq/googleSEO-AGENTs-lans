@@ -593,15 +593,16 @@ export const analyzeRankingProbability = async (
       ? `\n\nTOP GOOGLE SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\nNote: These are the TOP ranking results provided to you for competition analysis, NOT all search results.\n\n${serpResults.map((r, i) => `${i + 1}. Title: ${r.title}\n   URL: ${r.url}\n   Snippet: ${r.snippet}`).join('\n\n')}\n\nEstimated Total Results on Google: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: The results shown above are only the TOP-RANKING pages from Google's first page. There may be thousands of other lower-ranking results not shown here. Use these top results to assess the QUALITY of competition you need to beat.`
       : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
 
-    // Add SE Ranking data context if available
-    const serankingContext = keywordData.serankingData && keywordData.serankingData.is_data_found
-      ? `\n\nSE RANKING KEYWORD DATA FOR "${keywordData.keyword}":
-- Search Volume: ${keywordData.serankingData.volume || 'N/A'} monthly searches
-- Keyword Difficulty (KD): ${keywordData.serankingData.difficulty || 'N/A'} (0-100 scale, higher = more competitive)
-- CPC: $${keywordData.serankingData.cpc || 'N/A'}
-- Competition: ${keywordData.serankingData.competition ? (keywordData.serankingData.competition * 100).toFixed(1) + '%' : 'N/A'}
+    // Add DataForSEO data context if available (use dataForSEOData or serankingData for backward compatibility)
+    const dataForSEOData = (keywordData as any).dataForSEOData || keywordData.serankingData;
+    const dataForSEOContext = dataForSEOData && dataForSEOData.is_data_found
+      ? `\n\nDATAFORSEO KEYWORD DATA FOR "${keywordData.keyword}":
+- Search Volume: ${dataForSEOData.volume || 'N/A'} monthly searches
+- Keyword Difficulty (KD): ${dataForSEOData.difficulty || 'N/A'} (0-100 scale, higher = more competitive)
+- CPC: $${dataForSEOData.cpc || 'N/A'}
+- Competition: ${dataForSEOData.competition ? (dataForSEOData.competition * 100).toFixed(1) + '%' : 'N/A'}
 
-IMPORTANT: Consider the SE Ranking Keyword Difficulty (KD) score in your analysis:
+IMPORTANT: Consider the DataForSEO Keyword Difficulty (KD) score in your analysis:
 - KD 0-20: Very low competition (favors HIGH probability)
 - KD 21-40: Low to moderate competition (consider MEDIUM to HIGH)
 - KD 41-60: Moderate to high competition (likely MEDIUM to LOW)
@@ -609,26 +610,26 @@ IMPORTANT: Consider the SE Ranking Keyword Difficulty (KD) score in your analysi
 - KD 81-100: Very high competition (definitely LOW)
 
 Combine the KD score with your SERP analysis to make a final judgment.`
-      : keywordData.serankingData
-        ? `\n\nSE RANKING KEYWORD DATA FOR "${keywordData.keyword}":
+      : dataForSEOData
+        ? `\n\nDATAFORSEO KEYWORD DATA FOR "${keywordData.keyword}":
 ⚠️ NO DATA FOUND
 
-**CRITICAL**: Do NOT automatically treat "no SE Ranking data" as a blue ocean signal!
+**CRITICAL**: Do NOT automatically treat "no DataForSEO data" as a blue ocean signal!
 
-When SE Ranking has no data for a keyword, it could mean:
-1. **For non-English languages (${targetLanguage})**: SE Ranking's database may not have comprehensive coverage for this language. This is NORMAL and does NOT indicate a blue ocean opportunity.
+When DataForSEO has no data for a keyword, it could mean:
+1. **For non-English languages (${targetLanguage})**: DataForSEO's database may not have comprehensive coverage for this language. This is NORMAL and does NOT indicate a blue ocean opportunity.
 2. Very low or zero search volume in their database (possible but not guaranteed)
 3. New, emerging, or highly niche keyword (possible but not guaranteed)
 4. Little to no advertising competition (possible but not guaranteed)
 
 **IMPORTANT ANALYSIS RULES**:
-- **For non-English target languages**: SE Ranking "no data" is often due to limited database coverage, NOT because it's a blue ocean keyword. Do NOT give bonus points for this.
-- **For English keywords**: SE Ranking "no data" MIGHT indicate a blue ocean, but you MUST verify with SERP results first.
-- **ALWAYS prioritize SERP analysis over SE Ranking data absence**: If SERP shows strong competition (authoritative sites, optimized content), the keyword is NOT a blue ocean regardless of SE Ranking data.
+- **For non-English target languages**: DataForSEO "no data" is often due to limited database coverage, NOT because it's a blue ocean keyword. Do NOT give bonus points for this.
+- **For English keywords**: DataForSEO "no data" MIGHT indicate a blue ocean, but you MUST verify with SERP results first.
+- **ALWAYS prioritize SERP analysis over DataForSEO data absence**: If SERP shows strong competition (authoritative sites, optimized content), the keyword is NOT a blue ocean regardless of DataForSEO data.
 - **Only consider it a positive signal if**: SERP results ALSO show weak competition (forums, low-quality content) AND the target language is English.
 
-ACTION: Analyze SERP results first. Do NOT automatically assign HIGH probability just because SE Ranking has no data.`
-        : `\n\nNote: SE Ranking keyword data not available for this keyword (API call failed or not attempted).`;
+ACTION: Analyze SERP results first. Do NOT automatically assign HIGH probability just because DataForSEO has no data.`
+        : `\n\nNote: DataForSEO keyword data not available for this keyword (API call failed or not attempted).`;
 
     const topSerpSnippetsJson = serpResults.length > 0
       ? JSON.stringify(serpResults.slice(0, 3).map(r => ({
@@ -643,7 +644,7 @@ ${systemInstruction}
 
 TASK: Analyze the Google SERP competition for the keyword: "${keywordData.keyword}".
 ${serpContext}
-${serankingContext}
+${dataForSEOContext}
 
 **STEP 1: PREDICT SEARCH INTENT**
 First, predict what the user's search intent is when they type this keyword. Consider:
@@ -665,7 +666,7 @@ STRICT SCORING CRITERIA (Be conservative and strict):
   * Top 3 results are ALL weak competitors (Forums like Reddit/Quora, Social Media, PDFs, low-quality blogs, OR off-topic/irrelevant content)
   * NO highly relevant authoritative sites in top 5
   * Content quality of top results is clearly poor, outdated, or doesn't match user intent
-  * **BONUS**: SE Ranking shows NO DATA - BUT ONLY if target language is English AND SERP also shows weak competition (do NOT assume blue ocean for non-English languages)
+  * **BONUS**: DataForSEO shows NO DATA - BUT ONLY if target language is English AND SERP also shows weak competition (do NOT assume blue ocean for non-English languages)
 
   **RELEVANCE CHECK**: If you see Wikipedia/.gov/.edu in top results:
     ├─ Are they HIGHLY RELEVANT to the keyword topic? → Competition is strong → NOT HIGH
@@ -698,7 +699,7 @@ IMPORTANT ANALYSIS RULES:
 - If authoritative sites are present but OFF-TOPIC, treat it as a blue ocean opportunity
 - Analyze the actual quality and relevance of top results, not just domain names
 - Use the REAL SERP results provided above for your analysis
-- **CRITICAL**: For non-English target languages (${targetLanguage}), SE Ranking "no data" is often due to limited database coverage, NOT a blue ocean signal. Do NOT treat it as positive. Always verify with SERP results first.
+- **CRITICAL**: For non-English target languages (${targetLanguage}), DataForSEO "no data" is often due to limited database coverage, NOT a blue ocean signal. Do NOT treat it as positive. Always verify with SERP results first.
 - Output all text fields (reasoning, searchIntent, intentAnalysis, topSerpSnippets titles/snippets) in ${uiLangName}
 - The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}
 - For topSerpSnippets, use the ACTUAL results from the SERP data above (first 3 results)
@@ -749,8 +750,8 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
               },
               required: ['probability', 'reasoning']
             },
-            // 注意：启用 Google 搜索时，即使设置了 responseMimeType，AI 仍可能返回 Markdown
-            // 所以我们需要在 JSON 提取时处理这种情况
+            // 禁用 Google 搜索以避免 JSON 解析错误（联网模式会导致返回非纯 JSON 格式）
+            enableGoogleSearch: false
           }
         );
       } catch (apiError: any) {
@@ -811,395 +812,452 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         // Enhanced fallback: try multiple strategies to extract JSON
         let recovered = false;
 
-        // Strategy 1: Try to find JSON object with "probability" field
-        const jsonMatch1 = response.text.match(/\{[\s\S]*?"probability"[\s\S]*?\}/);
-        if (jsonMatch1) {
+        // Strategy 0: 尝试修复常见的 JSON 截断问题
+        let fixedText = text.trim();
+        const openBraces = (fixedText.match(/\{/g) || []).length;
+        const closeBraces = (fixedText.match(/\}/g) || []).length;
+        if (openBraces > closeBraces) {
+          // 添加缺失的闭合括号和可能的数组闭合
+          const missingBraces = openBraces - closeBraces;
+          // 检查是否有未闭合的数组
+          const openBrackets = (fixedText.match(/\[/g) || []).length;
+          const closeBrackets = (fixedText.match(/\]/g) || []).length;
+          if (openBrackets > closeBrackets) {
+            fixedText += ']'.repeat(openBrackets - closeBrackets);
+          }
+          // 添加缺失的闭合大括号
+          fixedText += '}'.repeat(missingBraces);
+
           try {
-            analysis = JSON.parse(jsonMatch1[0]);
-            console.log("✓ Recovered JSON using probability field match");
+            analysis = JSON.parse(fixedText);
+            console.log("✓ Fixed truncated JSON by adding missing braces");
             recovered = true;
-          } catch (recoveryError) {
-            // Continue to next strategy
+          } catch (fixError) {
+            // 继续使用其他恢复策略
           }
         }
 
-        // Strategy 2: Try to find any JSON object that looks complete (使用清理后的文本)
         if (!recovered) {
-          // 先清理 Markdown，再查找 JSON
-          let cleanedText = response.text;
-          // 移除 Markdown 格式标记
-          cleanedText = cleanedText.replace(/^\*\*[^*]+\*\*/gm, '');
-          cleanedText = cleanedText.replace(/^\*[^*]+/gm, '');
-          cleanedText = cleanedText.replace(/^#+\s+/gm, '');
-          cleanedText = cleanedText.replace(/^```[\s\S]*?```/gm, '');
 
-          // Find the first { and try to extract complete JSON
-          const firstBrace = cleanedText.indexOf('{');
-          if (firstBrace !== -1) {
-            // Try to find matching closing brace
-            let braceCount = 0;
-            let inString = false;
-            let escapeNext = false;
+          // Enhanced fallback: try multiple strategies to extract JSON
+          let recovered = false;
 
-            for (let i = firstBrace; i < cleanedText.length; i++) {
-              const char = cleanedText[i];
+          // Strategy 0.5: 尝试修复截断的 JSON（在尝试其他策略之前）
+          let fixedText = text.trim();
+          const openBraces = (fixedText.match(/\{/g) || []).length;
+          const closeBraces = (fixedText.match(/\}/g) || []).length;
+          if (openBraces > closeBraces) {
+            // 添加缺失的闭合括号和可能的数组闭合
+            const missingBraces = openBraces - closeBraces;
+            // 检查是否有未闭合的数组
+            const openBrackets = (fixedText.match(/\[/g) || []).length;
+            const closeBrackets = (fixedText.match(/\]/g) || []).length;
+            if (openBrackets > closeBrackets) {
+              fixedText += ']'.repeat(openBrackets - closeBrackets);
+            }
+            // 添加缺失的闭合大括号
+            fixedText += '}'.repeat(missingBraces);
 
-              if (escapeNext) {
-                escapeNext = false;
-                continue;
+            try {
+              analysis = JSON.parse(fixedText);
+              console.log("✓ Fixed truncated JSON by adding missing braces");
+              recovered = true;
+            } catch (fixError) {
+              // 继续使用其他恢复策略
+            }
+          }
+
+          // Strategy 1: Try to find JSON object with "probability" field
+          if (!recovered) {
+            const jsonMatch1 = response.text.match(/\{[\s\S]*?"probability"[\s\S]*?\}/);
+            if (jsonMatch1) {
+              try {
+                analysis = JSON.parse(jsonMatch1[0]);
+                console.log("✓ Recovered JSON using probability field match");
+                recovered = true;
+              } catch (recoveryError) {
+                // Continue to next strategy
               }
+            }
+          }
 
-              if (char === '\\') {
-                escapeNext = true;
-                continue;
-              }
+          // Strategy 2: Try to find any JSON object that looks complete (使用清理后的文本)
+          if (!recovered) {
+            // 先清理 Markdown，再查找 JSON
+            let cleanedText = response.text;
+            // 移除 Markdown 格式标记
+            cleanedText = cleanedText.replace(/^\*\*[^*]+\*\*/gm, '');
+            cleanedText = cleanedText.replace(/^\*[^*]+/gm, '');
+            cleanedText = cleanedText.replace(/^#+\s+/gm, '');
+            cleanedText = cleanedText.replace(/^```[\s\S]*?```/gm, '');
 
-              if (char === '"' && !escapeNext) {
-                inString = !inString;
-                continue;
-              }
+            // Find the first { and try to extract complete JSON
+            const firstBrace = cleanedText.indexOf('{');
+            if (firstBrace !== -1) {
+              // Try to find matching closing brace
+              let braceCount = 0;
+              let inString = false;
+              let escapeNext = false;
 
-              if (!inString) {
-                if (char === '{') braceCount++;
-                if (char === '}') braceCount--;
+              for (let i = firstBrace; i < cleanedText.length; i++) {
+                const char = cleanedText[i];
 
-                if (braceCount === 0 && char === '}') {
-                  const candidate = cleanedText.substring(firstBrace, i + 1);
-                  try {
-                    analysis = JSON.parse(candidate);
-                    console.log("✓ Recovered JSON using brace matching");
-                    recovered = true;
-                    break;
-                  } catch (recoveryError) {
-                    // Continue searching
+                if (escapeNext) {
+                  escapeNext = false;
+                  continue;
+                }
+
+                if (char === '\\') {
+                  escapeNext = true;
+                  continue;
+                }
+
+                if (char === '"' && !escapeNext) {
+                  inString = !inString;
+                  continue;
+                }
+
+                if (!inString) {
+                  if (char === '{') braceCount++;
+                  if (char === '}') braceCount--;
+
+                  if (braceCount === 0 && char === '}') {
+                    const candidate = cleanedText.substring(firstBrace, i + 1);
+                    try {
+                      analysis = JSON.parse(candidate);
+                      console.log("✓ Recovered JSON using brace matching");
+                      recovered = true;
+                      break;
+                    } catch (recoveryError) {
+                      // Continue searching
+                    }
                   }
                 }
               }
             }
           }
+
+          if (!recovered) {
+            // 如果所有恢复策略都失败，使用默认值并记录错误
+            console.error("All JSON recovery strategies failed. Using default values.");
+            analysis = {
+              searchIntent: "Unable to determine intent",
+              intentAnalysis: "Analysis failed due to invalid JSON response",
+              serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
+              topDomainType: "Unknown",
+              probability: "Medium", // 默认中等概率
+              reasoning: `Failed to parse AI response. Original error: ${e.message}. Response preview: ${text.substring(0, 200)}`,
+              topSerpSnippets: []
+            };
+            // 不抛出错误，而是使用默认值继续处理
+          }
         }
 
-        if (!recovered) {
-          // 如果所有恢复策略都失败，使用默认值并记录错误
-          console.error("All JSON recovery strategies failed. Using default values.");
-          analysis = {
-            searchIntent: "Unable to determine intent",
-            intentAnalysis: "Analysis failed due to invalid JSON response",
-            serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
-            topDomainType: "Unknown",
-            probability: "Medium", // 默认中等概率
-            reasoning: `Failed to parse AI response. Original error: ${e.message}. Response preview: ${text.substring(0, 200)}`,
-            topSerpSnippets: []
-          };
-          // 不抛出错误，而是使用默认值继续处理
+        if (typeof analysis !== 'object' || analysis === null) {
+          throw new Error("Response is not a valid JSON object");
         }
-      }
 
-      if (typeof analysis !== 'object' || analysis === null) {
-        throw new Error("Response is not a valid JSON object");
-      }
+        if (serpResults.length > 0) {
+          analysis.topSerpSnippets = serpResults.slice(0, 3).map(r => ({
+            title: r.title,
+            url: r.url,
+            snippet: r.snippet
+          }));
+          if (serpResultCount > 0) {
+            analysis.serpResultCount = serpResultCount;
+          }
+        }
 
-      if (serpResults.length > 0) {
-        analysis.topSerpSnippets = serpResults.slice(0, 3).map(r => ({
-          title: r.title,
-          url: r.url,
-          snippet: r.snippet
+        if (typeof analysis.serpResultCount !== 'number') {
+          analysis.serpResultCount = serpResultCount > 0 ? serpResultCount : -1;
+        }
+        if (!analysis.topDomainType) analysis.topDomainType = 'Unknown';
+        if (!analysis.probability) analysis.probability = ProbabilityLevel.MEDIUM;
+        if (!analysis.reasoning) analysis.reasoning = 'Analysis completed';
+        if (!analysis.searchIntent) analysis.searchIntent = 'Unknown search intent';
+        if (!analysis.intentAnalysis) analysis.intentAnalysis = 'Intent analysis not available';
+        if (!Array.isArray(analysis.topSerpSnippets)) {
+          analysis.topSerpSnippets = serpResults.length > 0
+            ? serpResults.slice(0, 3).map(r => ({ title: r.title, url: r.url, snippet: r.snippet }))
+            : [];
+        }
+
+        if (typeof analysis.serpResultCount === 'number' && analysis.serpResultCount === 0) {
+          analysis.probability = ProbabilityLevel.HIGH;
+          analysis.reasoning = `Blue Ocean! Zero indexed results found - this is a completely untapped keyword.`;
+          analysis.topDomainType = 'Weak Page';
+        }
+
+        return {
+          ...keywordData,
+          ...analysis,
+          rawResponse: response.text,
+          searchResults: response.searchResults // 添加联网搜索结果
+        };
+
+      } catch (error) {
+        console.error(`Analysis failed for ${keywordData.keyword}:`, error);
+        return {
+          ...keywordData,
+          probability: ProbabilityLevel.LOW,
+          reasoning: "API Analysis Failed (Timeout or Rate Limit).",
+          topDomainType: "Unknown",
+          serpResultCount: -1,
+          rawResponse: "Error: " + error.message
+        };
+      }
+    };
+
+    const results: KeywordData[] = [];
+    const BATCH_SIZE = 5;
+    const BATCH_DELAY = 300;
+    const startTime = Date.now();
+    const MAX_EXECUTION_TIME = 880000;
+
+    for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
+      const elapsed = Date.now() - startTime;
+      if (elapsed > MAX_EXECUTION_TIME) {
+        console.warn(`Approaching timeout, processed ${i}/${keywords.length} keywords`);
+        const remaining = keywords.slice(i).map(k => ({
+          ...k,
+          probability: ProbabilityLevel.LOW,
+          reasoning: "Analysis timeout - too many keywords to process",
+          topDomainType: "Unknown" as const,
+          serpResultCount: -1
         }));
-        if (serpResultCount > 0) {
-          analysis.serpResultCount = serpResultCount;
+        results.push(...remaining);
+        break;
+      }
+
+      const batch = keywords.slice(i, i + BATCH_SIZE);
+      const batchResults = await Promise.allSettled(
+        batch.map(k => analyzeSingleKeyword(k))
+      );
+
+      const processedResults = batchResults.map((result, idx) => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          console.error(`Analysis failed for keyword ${batch[idx].keyword}:`, result.reason);
+          return {
+            ...batch[idx],
+            probability: ProbabilityLevel.LOW,
+            reasoning: "Analysis failed due to timeout or error",
+            topDomainType: "Unknown" as const,
+            serpResultCount: -1
+          };
         }
-      }
+      });
 
-      if (typeof analysis.serpResultCount !== 'number') {
-        analysis.serpResultCount = serpResultCount > 0 ? serpResultCount : -1;
-      }
-      if (!analysis.topDomainType) analysis.topDomainType = 'Unknown';
-      if (!analysis.probability) analysis.probability = ProbabilityLevel.MEDIUM;
-      if (!analysis.reasoning) analysis.reasoning = 'Analysis completed';
-      if (!analysis.searchIntent) analysis.searchIntent = 'Unknown search intent';
-      if (!analysis.intentAnalysis) analysis.intentAnalysis = 'Intent analysis not available';
-      if (!Array.isArray(analysis.topSerpSnippets)) {
-        analysis.topSerpSnippets = serpResults.length > 0
-          ? serpResults.slice(0, 3).map(r => ({ title: r.title, url: r.url, snippet: r.snippet }))
-          : [];
-      }
+      results.push(...processedResults);
 
-      if (typeof analysis.serpResultCount === 'number' && analysis.serpResultCount === 0) {
-        analysis.probability = ProbabilityLevel.HIGH;
-        analysis.reasoning = `Blue Ocean! Zero indexed results found - this is a completely untapped keyword.`;
-        analysis.topDomainType = 'Weak Page';
+      if (i + BATCH_SIZE < keywords.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
       }
+    }
 
-      return {
-        ...keywordData,
-        ...analysis,
-        rawResponse: response.text,
-        searchResults: response.searchResults // 添加联网搜索结果
-      };
+    return results;
+  };
 
-    } catch (error) {
-      console.error(`Analysis failed for ${keywordData.keyword}:`, error);
-      return {
-        ...keywordData,
-        probability: ProbabilityLevel.LOW,
-        reasoning: "API Analysis Failed (Timeout or Rate Limit).",
-        topDomainType: "Unknown",
-        serpResultCount: -1,
-        rawResponse: "Error: " + error.message
-      };
+  export const extractCoreKeywords = async (
+    report: any,
+    targetLanguage: TargetLanguage,
+    uiLanguage: 'zh' | 'en'
+  ): Promise<string[]> => {
+    const targetLangName = getLanguageName(targetLanguage);
+
+    // 从 prompts 文件获取 prompt
+    const prompt = getSEOResearcherPrompt('extractCoreKeywords', uiLanguage, {
+      targetLangName,
+      report
+    }) as string;
+
+    try {
+      const response = await callGeminiAPI(prompt, undefined, {
+      });
+      const text = response.text.trim();
+      const jsonMatch = text.match(/\[.*?\]/s);
+      if (jsonMatch) {
+        const keywords = JSON.parse(jsonMatch[0]);
+        return keywords.filter((k: string) => k && k.trim().length > 0).slice(0, 8);
+      }
+      const extracted = text.split('\n')
+        .map(line => line.replace(/^[-•*]\s*/, '').replace(/["\[\],]/g, '').trim())
+        .filter(line => line.length > 0 && line.length < 50)
+        .slice(0, 8);
+      if (extracted.length > 0) return extracted;
+      return [report.targetKeyword];
+    } catch (error: any) {
+      console.error('Failed to extract core keywords:', error);
+      return [report.targetKeyword];
     }
   };
 
-  const results: KeywordData[] = [];
-  const BATCH_SIZE = 5;
-  const BATCH_DELAY = 300;
-  const startTime = Date.now();
-  const MAX_EXECUTION_TIME = 880000;
-
-  for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
-    const elapsed = Date.now() - startTime;
-    if (elapsed > MAX_EXECUTION_TIME) {
-      console.warn(`Approaching timeout, processed ${i}/${keywords.length} keywords`);
-      const remaining = keywords.slice(i).map(k => ({
-        ...k,
-        probability: ProbabilityLevel.LOW,
-        reasoning: "Analysis timeout - too many keywords to process",
-        topDomainType: "Unknown" as const,
-        serpResultCount: -1
-      }));
-      results.push(...remaining);
-      break;
-    }
-
-    const batch = keywords.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.allSettled(
-      batch.map(k => analyzeSingleKeyword(k))
-    );
-
-    const processedResults = batchResults.map((result, idx) => {
-      if (result.status === 'fulfilled') {
-        return result.value;
-      } else {
-        console.error(`Analysis failed for keyword ${batch[idx].keyword}:`, result.reason);
-        return {
-          ...batch[idx],
-          probability: ProbabilityLevel.LOW,
-          reasoning: "Analysis failed due to timeout or error",
-          topDomainType: "Unknown" as const,
-          serpResultCount: -1
-        };
-      }
-    });
-
-    results.push(...processedResults);
-
-    if (i + BATCH_SIZE < keywords.length) {
-      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
-    }
-  }
-
-  return results;
-};
-
-export const extractCoreKeywords = async (
-  report: any,
-  targetLanguage: TargetLanguage,
-  uiLanguage: 'zh' | 'en'
-): Promise<string[]> => {
-  const targetLangName = getLanguageName(targetLanguage);
-
-  // 从 prompts 文件获取 prompt
-  const prompt = getSEOResearcherPrompt('extractCoreKeywords', uiLanguage, {
-    targetLangName,
-    report
-  }) as string;
-
-  try {
-    const response = await callGeminiAPI(prompt, undefined, {
-    });
-    const text = response.text.trim();
-    const jsonMatch = text.match(/\[.*?\]/s);
-    if (jsonMatch) {
-      const keywords = JSON.parse(jsonMatch[0]);
-      return keywords.filter((k: string) => k && k.trim().length > 0).slice(0, 8);
-    }
-    const extracted = text.split('\n')
-      .map(line => line.replace(/^[-•*]\s*/, '').replace(/["\[\],]/g, '').trim())
-      .filter(line => line.length > 0 && line.length < 50)
-      .slice(0, 8);
-    if (extracted.length > 0) return extracted;
-    return [report.targetKeyword];
-  } catch (error: any) {
-    console.error('Failed to extract core keywords:', error);
-    return [report.targetKeyword];
-  }
-};
-
-export const generateDeepDiveStrategy = async (
-  keyword: KeywordData,
-  uiLanguage: 'zh' | 'en',
-  targetLanguage: TargetLanguage,
-  customPrompt?: string,
-  searchPreferences?: SearchPreferencesResult,
-  competitorAnalysis?: CompetitorAnalysisResult,
-  targetMarket: string = 'global',
-  reference?: {
-    type: 'document' | 'url';
-    document?: {
-      filename: string;
-      content: string;
-    };
-    url?: {
-      url: string;
-      content?: string;
-      screenshot?: string;
-      title?: string;
-    };
-  }
-): Promise<SEOStrategyReport> => {
-  const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
-  const targetLangName = getLanguageName(targetLanguage);
-
-  // Construct context from analysis results
-  let analysisContext = '';
-
-  if (searchPreferences) {
-    analysisContext += `\n\n=== SEARCH ENGINE PREFERENCES ===\n${JSON.stringify(searchPreferences, null, 2)}`;
-  }
-
-  if (competitorAnalysis) {
-    analysisContext += `\n\n=== COMPETITOR ANALYSIS (Based on Deep Scrape) ===\n${JSON.stringify(competitorAnalysis, null, 2)}`;
-
-    if (competitorAnalysis.winning_formula) {
-      analysisContext += `\n\nWINNING FORMULA: ${competitorAnalysis.winning_formula}`;
-    }
-
-    if (competitorAnalysis.competitorAnalysis?.contentGaps) {
-      analysisContext += `\n\nCONTENT GAPS TO FILL: ${competitorAnalysis.competitorAnalysis.contentGaps.join(', ')}`;
-    }
-  }
-
-  // Add reference context
-  let referenceContext = '';
-  if (reference) {
-    if (reference.type === 'document' && reference.document) {
-      // Provide summary for strategist (first 2000 chars)
-      const docSummary = reference.document.content.length > 2000
-        ? reference.document.content.substring(0, 2000) + '...'
-        : reference.document.content;
-      referenceContext = `\n\n=== USER REFERENCE DOCUMENT ===\nFilename: ${reference.document.filename}\nContent Summary:\n${docSummary}\n\nIMPORTANT: While the user provided this reference document, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the document that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the document content is not relevant to the keyword, use it only as a style reference.`;
-    } else if (reference.type === 'url' && reference.url?.content && reference.url?.url) {
-      // Provide summary for strategist (first 2000 chars)
-      const urlSummary = reference.url.content.length > 2000
-        ? reference.url.content.substring(0, 2000) + '...'
-        : reference.url.content;
-      const urlString = typeof reference.url.url === 'string' ? reference.url.url : 'N/A';
-      const titleString = reference.url.title && typeof reference.url.title === 'string' ? reference.url.title : '';
-      referenceContext = `\n\n=== USER REFERENCE URL ===\nURL: ${urlString}\n${titleString ? `Title: ${titleString}\n` : ''}Content Summary:\n${urlSummary}\n\nIMPORTANT: While the user provided this reference URL, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the URL that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the URL content is not relevant to the keyword, use it only as a style reference.`;
-    }
-  }
-
-  const marketLabel = targetMarket === 'global'
-    ? 'Global'
-    : targetMarket.toUpperCase();
-
-  // 从 prompts 文件获取 system instruction 和 prompt
-  const promptConfig = getSEOResearcherPrompt('deepDiveStrategy', uiLanguage, {
-    keyword: keyword.keyword,
-    targetLangName,
-    uiLangName,
-    marketLabel,
-    analysisContext,
-    referenceContext
-  }) as { systemInstruction: string; prompt: string };
-
-  const systemInstruction = customPrompt || (promptConfig.systemInstruction + analysisContext + referenceContext);
-  const prompt = promptConfig.prompt;
-
-  try {
-    const response = await callGeminiAPI(prompt, systemInstruction, {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: 'object',
-        properties: {
-          targetKeyword: { type: 'string' },
-          pageTitleH1: { type: 'string' },
-          pageTitleH1_trans: { type: 'string' },
-          metaDescription: { type: 'string' },
-          metaDescription_trans: { type: 'string' },
-          urlSlug: { type: 'string' },
-          userIntentSummary: { type: 'string' },
-          contentStructure: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                header: { type: 'string' },
-                header_trans: { type: 'string' },
-                description: { type: 'string' },
-                description_trans: { type: 'string' }
-              },
-              required: ['header', 'description']
-            }
-          },
-          longTailKeywords: { type: 'array', items: { type: 'string' } },
-          longTailKeywords_trans: { type: 'array', items: { type: 'string' } },
-          recommendedWordCount: { type: 'number' },
-          markdown: { type: 'string' }
-        },
-        required: ['pageTitleH1', 'metaDescription', 'contentStructure', 'markdown']
-      }
-    });
-
-    // 提取并解析 JSON
-    let text = response?.text || '{}';
-    text = extractJSONRobust(text);
-
-    try {
-      const parsed = JSON.parse(text);
-      // 确保 markdown 字段存在，如果没有则从其他字段生成
-      if (!parsed.markdown) {
-        // 从结构化数据生成 Markdown
-        const mdParts: string[] = [];
-        mdParts.push(`# Content Strategy: ${parsed.pageTitleH1 || keyword.keyword}\n\n`);
-        mdParts.push(`## Page Title (H1)\n${parsed.pageTitleH1 || ''}\n*Translation: ${parsed.pageTitleH1_trans || ''}*\n\n`);
-        mdParts.push(`## Meta Description\n${parsed.metaDescription || ''}\n*Translation: ${parsed.metaDescription_trans || ''}*\n\n`);
-        if (parsed.urlSlug) mdParts.push(`## URL Slug\n${parsed.urlSlug}\n\n`);
-        if (parsed.userIntentSummary) mdParts.push(`## User Intent Analysis\n${parsed.userIntentSummary}\n\n`);
-        if (parsed.contentStructure && Array.isArray(parsed.contentStructure)) {
-          mdParts.push(`## Content Structure\n`);
-          parsed.contentStructure.forEach((section: any, idx: number) => {
-            mdParts.push(`### H2 ${idx + 1}: ${section.header || ''}\n*Translation: ${section.header_trans || ''}*\n\n`);
-            mdParts.push(`**Description**: ${section.description || ''}\n\n`);
-            if (section.description_trans) {
-              mdParts.push(`*Translation: ${section.description_trans}*\n\n`);
-            }
-          });
-        }
-        if (parsed.longTailKeywords && Array.isArray(parsed.longTailKeywords)) {
-          mdParts.push(`## Long-tail Keywords\n${parsed.longTailKeywords.join(', ')}\n\n`);
-        }
-        if (parsed.recommendedWordCount) {
-          mdParts.push(`## Recommended Word Count\n${parsed.recommendedWordCount} words\n\n`);
-        }
-        parsed.markdown = mdParts.join('');
-      }
-      return parsed as SEOStrategyReport;
-    } catch (parseError: any) {
-      console.error('[Agent 2] Failed to parse strategy report JSON:', parseError);
-      console.error('[Agent 2] Response text:', text.substring(0, 500));
-      // 返回默认结构
-      return {
-        targetKeyword: keyword.keyword,
-        pageTitleH1: keyword.keyword,
-        contentStructure: [],
-        markdown: text || `Content strategy for "${keyword.keyword}" in ${marketLabel} market.`
+  export const generateDeepDiveStrategy = async (
+    keyword: KeywordData,
+    uiLanguage: 'zh' | 'en',
+    targetLanguage: TargetLanguage,
+    customPrompt?: string,
+    searchPreferences?: SearchPreferencesResult,
+    competitorAnalysis?: CompetitorAnalysisResult,
+    targetMarket: string = 'global',
+    reference?: {
+      type: 'document' | 'url';
+      document?: {
+        filename: string;
+        content: string;
+      };
+      url?: {
+        url: string;
+        content?: string;
+        screenshot?: string;
+        title?: string;
       };
     }
-  } catch (error: any) {
-    console.error("Deep Dive Error:", error);
-    throw new Error(`Failed to generate strategy report: ${error.message || error}`);
-  }
-};
+  ): Promise<SEOStrategyReport> => {
+    const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
+    const targetLangName = getLanguageName(targetLanguage);
+
+    // Construct context from analysis results
+    let analysisContext = '';
+
+    if (searchPreferences) {
+      analysisContext += `\n\n=== SEARCH ENGINE PREFERENCES ===\n${JSON.stringify(searchPreferences, null, 2)}`;
+    }
+
+    if (competitorAnalysis) {
+      analysisContext += `\n\n=== COMPETITOR ANALYSIS (Based on Deep Scrape) ===\n${JSON.stringify(competitorAnalysis, null, 2)}`;
+
+      if (competitorAnalysis.winning_formula) {
+        analysisContext += `\n\nWINNING FORMULA: ${competitorAnalysis.winning_formula}`;
+      }
+
+      if (competitorAnalysis.competitorAnalysis?.contentGaps) {
+        analysisContext += `\n\nCONTENT GAPS TO FILL: ${competitorAnalysis.competitorAnalysis.contentGaps.join(', ')}`;
+      }
+    }
+
+    // Add reference context
+    let referenceContext = '';
+    if (reference) {
+      if (reference.type === 'document' && reference.document) {
+        // Provide summary for strategist (first 2000 chars)
+        const docSummary = reference.document.content.length > 2000
+          ? reference.document.content.substring(0, 2000) + '...'
+          : reference.document.content;
+        referenceContext = `\n\n=== USER REFERENCE DOCUMENT ===\nFilename: ${reference.document.filename}\nContent Summary:\n${docSummary}\n\nIMPORTANT: While the user provided this reference document, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the document that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the document content is not relevant to the keyword, use it only as a style reference.`;
+      } else if (reference.type === 'url' && reference.url?.content && reference.url?.url) {
+        // Provide summary for strategist (first 2000 chars)
+        const urlSummary = reference.url.content.length > 2000
+          ? reference.url.content.substring(0, 2000) + '...'
+          : reference.url.content;
+        const urlString = typeof reference.url.url === 'string' ? reference.url.url : 'N/A';
+        const titleString = reference.url.title && typeof reference.url.title === 'string' ? reference.url.title : '';
+        referenceContext = `\n\n=== USER REFERENCE URL ===\nURL: ${urlString}\n${titleString ? `Title: ${titleString}\n` : ''}Content Summary:\n${urlSummary}\n\nIMPORTANT: While the user provided this reference URL, your primary focus must be on the keyword "${keyword.keyword}". Extract relevant information from the URL that relates to the keyword, but ensure the content strategy is centered around "${keyword.keyword}". If the URL content is not relevant to the keyword, use it only as a style reference.`;
+      }
+    }
+
+    const marketLabel = targetMarket === 'global'
+      ? 'Global'
+      : targetMarket.toUpperCase();
+
+    // 从 prompts 文件获取 system instruction 和 prompt
+    const promptConfig = getSEOResearcherPrompt('deepDiveStrategy', uiLanguage, {
+      keyword: keyword.keyword,
+      targetLangName,
+      uiLangName,
+      marketLabel,
+      analysisContext,
+      referenceContext
+    }) as { systemInstruction: string; prompt: string };
+
+    const systemInstruction = customPrompt || (promptConfig.systemInstruction + analysisContext + referenceContext);
+    const prompt = promptConfig.prompt;
+
+    try {
+      const response = await callGeminiAPI(prompt, systemInstruction, {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: 'object',
+          properties: {
+            targetKeyword: { type: 'string' },
+            pageTitleH1: { type: 'string' },
+            pageTitleH1_trans: { type: 'string' },
+            metaDescription: { type: 'string' },
+            metaDescription_trans: { type: 'string' },
+            urlSlug: { type: 'string' },
+            userIntentSummary: { type: 'string' },
+            contentStructure: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  header: { type: 'string' },
+                  header_trans: { type: 'string' },
+                  description: { type: 'string' },
+                  description_trans: { type: 'string' }
+                },
+                required: ['header', 'description']
+              }
+            },
+            longTailKeywords: { type: 'array', items: { type: 'string' } },
+            longTailKeywords_trans: { type: 'array', items: { type: 'string' } },
+            recommendedWordCount: { type: 'number' },
+            markdown: { type: 'string' }
+          },
+          required: ['pageTitleH1', 'metaDescription', 'contentStructure', 'markdown']
+        }
+      });
+
+      // 提取并解析 JSON
+      let text = response?.text || '{}';
+      text = extractJSONRobust(text);
+
+      try {
+        const parsed = JSON.parse(text);
+        // 确保 markdown 字段存在，如果没有则从其他字段生成
+        if (!parsed.markdown) {
+          // 从结构化数据生成 Markdown
+          const mdParts: string[] = [];
+          mdParts.push(`# Content Strategy: ${parsed.pageTitleH1 || keyword.keyword}\n\n`);
+          mdParts.push(`## Page Title (H1)\n${parsed.pageTitleH1 || ''}\n*Translation: ${parsed.pageTitleH1_trans || ''}*\n\n`);
+          mdParts.push(`## Meta Description\n${parsed.metaDescription || ''}\n*Translation: ${parsed.metaDescription_trans || ''}*\n\n`);
+          if (parsed.urlSlug) mdParts.push(`## URL Slug\n${parsed.urlSlug}\n\n`);
+          if (parsed.userIntentSummary) mdParts.push(`## User Intent Analysis\n${parsed.userIntentSummary}\n\n`);
+          if (parsed.contentStructure && Array.isArray(parsed.contentStructure)) {
+            mdParts.push(`## Content Structure\n`);
+            parsed.contentStructure.forEach((section: any, idx: number) => {
+              mdParts.push(`### H2 ${idx + 1}: ${section.header || ''}\n*Translation: ${section.header_trans || ''}*\n\n`);
+              mdParts.push(`**Description**: ${section.description || ''}\n\n`);
+              if (section.description_trans) {
+                mdParts.push(`*Translation: ${section.description_trans}*\n\n`);
+              }
+            });
+          }
+          if (parsed.longTailKeywords && Array.isArray(parsed.longTailKeywords)) {
+            mdParts.push(`## Long-tail Keywords\n${parsed.longTailKeywords.join(', ')}\n\n`);
+          }
+          if (parsed.recommendedWordCount) {
+            mdParts.push(`## Recommended Word Count\n${parsed.recommendedWordCount} words\n\n`);
+          }
+          parsed.markdown = mdParts.join('');
+        }
+        return parsed as SEOStrategyReport;
+      } catch (parseError: any) {
+        console.error('[Agent 2] Failed to parse strategy report JSON:', parseError);
+        console.error('[Agent 2] Response text:', text.substring(0, 500));
+        // 返回默认结构
+        return {
+          targetKeyword: keyword.keyword,
+          pageTitleH1: keyword.keyword,
+          contentStructure: [],
+          markdown: text || `Content strategy for "${keyword.keyword}" in ${marketLabel} market.`
+        };
+      }
+    } catch (error: any) {
+      console.error("Deep Dive Error:", error);
+      throw new Error(`Failed to generate strategy report: ${error.message || error}`);
+    }
+  };
 
 
