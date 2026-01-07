@@ -172,11 +172,15 @@ Ensure themes are highly relevant to article content and SEO-friendly.`;
  * 
  * @param themes - 视觉主题列表
  * @param language - 语言代码（'zh' | 'en'）
+ * @param keyword - 文章关键词，用于增强图像与主题的相关性
+ * @param articleTitle - 文章标题，用于增强图像与主题的相关性
  * @returns 图像提示词列表
  */
 export async function generateImagePrompts(
   themes: VisualTheme[],
-  language: 'zh' | 'en' = 'en'
+  language: 'zh' | 'en' = 'en',
+  keyword?: string,
+  articleTitle?: string
 ): Promise<ImagePromptResult[]> {
   try {
     const imagePrompts: ImagePromptResult[] = [];
@@ -186,8 +190,14 @@ export async function generateImagePrompts(
       const themeDescription = theme.visual_metaphor || theme.description || '';
       const themeTitle = theme.title || theme.id || 'Theme';
 
-      // 生成 Nano Banana 2 prompt
-      const nanoBananaPrompt = getNanoBananaPrompt(themeTitle, themeDescription, language);
+      // 生成 Nano Banana 2 prompt，增强主题相关性
+      const nanoBananaPrompt = getNanoBananaPrompt(
+        themeTitle, 
+        themeDescription, 
+        language,
+        keyword,
+        articleTitle
+      );
 
       // 如果需要，可以调用 Gemini API 进一步优化 prompt
       // 这里直接使用生成的 prompt

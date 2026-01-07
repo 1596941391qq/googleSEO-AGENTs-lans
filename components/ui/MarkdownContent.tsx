@@ -1,7 +1,7 @@
-import React from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import { cn } from '../../lib/utils';
+import React from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { cn } from "../../lib/utils";
 
 interface MarkdownContentProps {
   content: string;
@@ -12,11 +12,90 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
   content,
   isDarkTheme = false,
 }) => {
+  // 保护：如果内容是 JSON 格式，不渲染
+  if (content && typeof content === "string") {
+    let trimmedContent = content.trim();
+
+    // 处理以 "json\n" 或 "```json\n" 开头的情况
+    if (
+      trimmedContent.startsWith("json\n") ||
+      trimmedContent.startsWith("```json\n")
+    ) {
+      trimmedContent = trimmedContent
+        .replace(/^```?json\n?/, "")
+        .replace(/```$/, "")
+        .trim();
+    }
+
+    // 检查是否是 JSON 格式
+    if (
+      (trimmedContent.startsWith("{") && trimmedContent.endsWith("}")) ||
+      (trimmedContent.startsWith("[") && trimmedContent.endsWith("]"))
+    ) {
+      try {
+        const testParsed = JSON.parse(trimmedContent);
+        if (typeof testParsed === "object" && testParsed !== null) {
+          // 如果是 JSON，不渲染，返回空内容
+          console.warn("[MarkdownContent] 检测到 JSON 格式内容，已跳过渲染");
+          return (
+            <div
+              className={cn(
+                "p-4 rounded-lg",
+                isDarkTheme
+                  ? "bg-white/5 border border-white/10"
+                  : "bg-gray-50 border border-gray-200"
+              )}
+            >
+              <p
+                className={cn(
+                  "text-sm",
+                  isDarkTheme ? "text-gray-400" : "text-gray-600"
+                )}
+              >
+                内容格式错误：检测到 JSON 数据，无法渲染
+              </p>
+            </div>
+          );
+        }
+      } catch (e) {
+        // 解析失败，可能是格式化的 JSON 文本
+        if (trimmedContent.includes('"') && trimmedContent.includes(":")) {
+          console.warn(
+            "[MarkdownContent] 检测到类似 JSON 格式的内容，已跳过渲染"
+          );
+          return (
+            <div
+              className={cn(
+                "p-4 rounded-lg",
+                isDarkTheme
+                  ? "bg-white/5 border border-white/10"
+                  : "bg-gray-50 border border-gray-200"
+              )}
+            >
+              <p
+                className={cn(
+                  "text-sm",
+                  isDarkTheme ? "text-gray-400" : "text-gray-600"
+                )}
+              >
+                内容格式错误：检测到 JSON 数据，无法渲染
+              </p>
+            </div>
+          );
+        }
+      }
+    }
+  }
+
   const textColor = isDarkTheme ? "text-slate-300" : "text-slate-700";
   const headingColor = isDarkTheme ? "text-white" : "text-slate-900";
   const borderColor = isDarkTheme ? "border-white/20" : "border-slate-300";
-  const codeBg = isDarkTheme ? "bg-white/10 border-white/5" : "bg-slate-100 border-slate-300";
-  const blockquoteBorder = isDarkTheme ? "border-l-emerald-500/50" : "border-l-emerald-600";
+  const codeBg = isDarkTheme
+    ? "bg-white/10 border-white/5"
+    : "bg-slate-100 border-slate-300";
+  const blockquoteBorder = isDarkTheme
+    ? "border-l-emerald-500/50"
+    : "border-l-emerald-600";
 
   return (
     <div className={cn("markdown-content", textColor)}>
@@ -56,37 +135,23 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
           ),
           // 段落
           p: ({ children }) => (
-            <p className="mb-4 leading-relaxed">
-              {children}
-            </p>
+            <p className="mb-4 leading-relaxed">{children}</p>
           ),
           // 列表
           ul: ({ children }) => (
-            <ul className="my-4 ml-6 list-disc space-y-2">
-              {children}
-            </ul>
+            <ul className="my-4 ml-6 list-disc space-y-2">{children}</ul>
           ),
           ol: ({ children }) => (
-            <ol className="my-4 ml-6 list-decimal space-y-2">
-              {children}
-            </ol>
+            <ol className="my-4 ml-6 list-decimal space-y-2">{children}</ol>
           ),
-          li: ({ children }) => (
-            <li className="pl-1">
-              {children}
-            </li>
-          ),
+          li: ({ children }) => <li className="pl-1">{children}</li>,
           // 强调
           strong: ({ children }) => (
             <strong className={cn("font-bold", headingColor)}>
               {children}
             </strong>
           ),
-          em: ({ children }) => (
-            <em className="italic">
-              {children}
-            </em>
-          ),
+          em: ({ children }) => <em className="italic">{children}</em>,
           // 代码
           code: ({ className, children, ...props }) => {
             const isInline = !className;
@@ -115,21 +180,19 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
             );
           },
           pre: ({ children }) => (
-            <pre className="my-4 overflow-x-auto">
-              {children}
-            </pre>
+            <pre className="my-4 overflow-x-auto">{children}</pre>
           ),
           // 分割线
-          hr: () => (
-            <hr className={cn("my-8 border-t", borderColor)} />
-          ),
+          hr: () => <hr className={cn("my-8 border-t", borderColor)} />,
           // 引用
           blockquote: ({ children }) => (
-            <blockquote className={cn(
-              "my-4 pl-4 border-l-4 italic",
-              blockquoteBorder,
-              isDarkTheme ? "text-slate-400" : "text-slate-600"
-            )}>
+            <blockquote
+              className={cn(
+                "my-4 pl-4 border-l-4 italic",
+                blockquoteBorder,
+                isDarkTheme ? "text-slate-400" : "text-slate-600"
+              )}
+            >
               {children}
             </blockquote>
           ),
@@ -141,7 +204,9 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
               rel="noopener noreferrer"
               className={cn(
                 "underline hover:no-underline transition-colors",
-                isDarkTheme ? "text-emerald-400 hover:text-emerald-300" : "text-emerald-600 hover:text-emerald-700"
+                isDarkTheme
+                  ? "text-emerald-400 hover:text-emerald-300"
+                  : "text-emerald-600 hover:text-emerald-700"
               )}
             >
               {children}
@@ -150,39 +215,27 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
           // 表格
           table: ({ children }) => (
             <div className="my-4 overflow-x-auto">
-              <table className={cn(
-                "min-w-full border-collapse",
-                borderColor
-              )}>
+              <table className={cn("min-w-full border-collapse", borderColor)}>
                 {children}
               </table>
             </div>
           ),
           thead: () => (
-            <thead className={cn("bg-white/5", !isDarkTheme && "bg-slate-100")}>
-            </thead>
+            <thead
+              className={cn("bg-white/5", !isDarkTheme && "bg-slate-100")}
+            ></thead>
           ),
-          tbody: () => (
-            <tbody>
-            </tbody>
-          ),
+          tbody: () => <tbody></tbody>,
           tr: ({ children }) => (
-            <tr className={cn("border-b", borderColor)}>
-              {children}
-            </tr>
+            <tr className={cn("border-b", borderColor)}>{children}</tr>
           ),
           th: ({ children }) => (
-            <th className={cn(
-              "px-4 py-2 text-left font-bold",
-              headingColor
-            )}>
+            <th className={cn("px-4 py-2 text-left font-bold", headingColor)}>
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className={cn("px-4 py-2", textColor)}>
-              {children}
-            </td>
+            <td className={cn("px-4 py-2", textColor)}>{children}</td>
           ),
           // 图片
           img: ({ src, alt }) => (

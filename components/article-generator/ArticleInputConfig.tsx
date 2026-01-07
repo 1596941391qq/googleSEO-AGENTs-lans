@@ -376,10 +376,16 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
         <div className="inline-flex items-center justify-center p-3 bg-emerald-500/10 rounded-2xl mb-4 ring-1 ring-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
           <Wand2 className="text-emerald-500 w-8 h-8" />
         </div>
-        <h1 className="text-4xl font-black tracking-tight text-white mb-2">
+        <h1 className={cn(
+          "text-4xl font-black tracking-tight mb-2",
+          isDarkTheme ? "text-white" : "text-gray-900"
+        )}>
           {uiLanguage === "zh" ? "AI 图文工场" : "AI Visual Article Generator"}
         </h1>
-        <p className="text-lg text-gray-400 max-w-md mx-auto">
+        <p className={cn(
+          "text-lg max-w-md mx-auto",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}>
           {uiLanguage === "zh"
             ? "将单个关键词转换为包含 AI 生成配图的丰富结构化文章。"
             : "Transform a single keyword into a rich, structured article with AI-generated visuals."}
@@ -393,9 +399,17 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
           visualStyle !== "realistic" ||
           targetMarket !== "global" ||
           audience !== "beginner") && (
-          <div className="bg-[#111] border border-white/5 rounded-xl p-4 space-y-3 animate-in slide-in-from-top-4 duration-300">
+          <div className={cn(
+            "border rounded-xl p-4 space-y-3 animate-in slide-in-from-top-4 duration-300",
+            isDarkTheme 
+              ? "bg-[#111] border-white/5" 
+              : "bg-gray-50 border-gray-200"
+          )}>
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
+              <span className={cn(
+                "text-xs font-bold uppercase tracking-widest",
+                isDarkTheme ? "text-gray-400" : "text-gray-600"
+              )}>
                 {uiLanguage === "zh" ? "当前设置" : "Current Settings"}
               </span>
               <button
@@ -475,7 +489,12 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                   ? "输入您的主题关键词"
                   : "Enter your topic keyword"
               }
-              className="w-full bg-[#111] border border-white/10 text-xl p-6 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all shadow-2xl"
+              className={cn(
+                "w-full text-xl p-6 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all shadow-2xl",
+                isDarkTheme
+                  ? "bg-[#111] border border-white/10 text-white placeholder:text-gray-600"
+                  : "bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
+              )}
               autoFocus
             />
             <button
@@ -490,18 +509,29 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
         </div>
 
         {/* Reference Materials Section - Always Visible */}
-        <div className="bg-[#111] border border-white/5 rounded-xl p-5 space-y-4 animate-in slide-in-from-top-4 duration-300">
+        <div className={cn(
+          "border rounded-xl p-5 space-y-4 animate-in slide-in-from-top-4 duration-300",
+          isDarkTheme 
+            ? "bg-[#111] border-white/5" 
+            : "bg-gray-50 border-gray-200"
+        )}>
           <div className="flex items-center space-x-2">
             <div className="p-2 bg-emerald-500/10 rounded-lg">
               <FileText className="text-emerald-400" size={16} />
             </div>
             <div>
-              <label className="text-sm font-bold text-white">
+              <label className={cn(
+                "text-sm font-bold",
+                isDarkTheme ? "text-white" : "text-gray-900"
+              )}>
                 {uiLanguage === "zh"
                   ? "参考资料（可选）"
                   : "Reference Materials (Optional)"}
               </label>
-              <p className="text-[10px] text-gray-500 mt-0.5">
+              <p className={cn(
+                "text-[10px] mt-0.5",
+                isDarkTheme ? "text-gray-500" : "text-gray-500"
+              )}>
                 {uiLanguage === "zh"
                   ? "上传文档或输入URL以指导文章生成"
                   : "Upload document or enter URL to guide article generation"}
@@ -620,7 +650,9 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
             {!referenceUrl ? (
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                  <LinkIcon className="text-gray-500" size={16} />
+                  <LinkIcon className={cn(
+                    isDarkTheme ? "text-gray-500" : "text-gray-500"
+                  )} size={16} />
                 </div>
                 <input
                   type="url"
@@ -633,7 +665,12 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                   }
                   disabled={isProcessingDocument || !!documentFile}
                   className={cn(
-                    "w-full pl-10 pr-4 py-3 bg-black/40 border rounded-lg text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 transition-all",
+                    cn(
+                      "w-full pl-10 pr-4 py-3 border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all",
+                      isDarkTheme
+                        ? "bg-black/40 text-white placeholder:text-gray-600"
+                        : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400"
+                    ),
                     isProcessingDocument || documentFile
                       ? "border-gray-700 cursor-not-allowed"
                       : "border-blue-500/30 focus:border-blue-500/50 focus:ring-blue-500/20"
@@ -695,7 +732,10 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
         {/* More Options Modal */}
         {isModalOpen && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+            className={cn(
+              "fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200",
+              isDarkTheme ? "bg-black/80" : "bg-black/50"
+            )}
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 setIsModalOpen(false);
@@ -707,7 +747,12 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="sticky top-0 bg-[#111] border-b border-white/10 p-6 flex items-center justify-between z-10">
+              <div className={cn(
+                "sticky top-0 border-b p-6 flex items-center justify-between z-10",
+                isDarkTheme 
+                  ? "bg-[#111] border-white/10" 
+                  : "bg-white border-gray-200"
+              )}>
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-emerald-500/10 rounded-lg">
                     <Sparkles className="text-emerald-400" size={20} />
@@ -719,7 +764,12 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="p-2 hover:bg-white/5 rounded-lg transition-colors text-gray-400 hover:text-white"
+                  className={cn(
+                    "p-2 rounded-lg transition-colors",
+                    isDarkTheme
+                      ? "hover:bg-white/5 text-gray-400 hover:text-white"
+                      : "hover:bg-gray-100 text-gray-500 hover:text-gray-900"
+                  )}
                 >
                   <X size={20} />
                 </button>
@@ -731,7 +781,10 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Tone */}
                   <div className="space-y-3">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center">
+                    <label className={cn(
+                      "text-xs font-bold uppercase tracking-widest flex items-center",
+                      isDarkTheme ? "text-gray-500" : "text-gray-600"
+                    )}>
                       <Type size={12} className="mr-2" />{" "}
                       {uiLanguage === "zh" ? "语调" : "Tone"}
                     </label>
@@ -745,7 +798,9 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                             "p-2 rounded border text-xs font-medium transition-all text-left flex items-center space-x-2",
                             tone === opt.id
                               ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
-                              : "bg-black/20 border-white/5 text-gray-400 hover:bg-white/5"
+                              : isDarkTheme
+                                ? "bg-black/20 border-white/5 text-gray-400 hover:bg-white/5"
+                                : "bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100"
                           )}
                         >
                           <span>{opt.emoji}</span>
@@ -798,7 +853,9 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                           "p-2 rounded border text-xs font-medium transition-all text-center flex flex-col items-center space-y-1",
                           targetMarket === market.id
                             ? "bg-blue-500/20 border-blue-500/50 text-blue-400"
-                            : "bg-black/20 border-white/5 text-gray-400 hover:bg-white/5"
+                            : isDarkTheme
+                              ? "bg-black/20 border-white/5 text-gray-400 hover:bg-white/5"
+                              : "bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100"
                         )}
                       >
                         <span className="text-base">{market.emoji}</span>
@@ -809,12 +866,23 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                 </div>
 
                 {/* Audience Slider (Simple Toggle for now) */}
-                <div className="space-y-3 pt-2 border-t border-white/5">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center">
+                <div className={cn(
+                  "space-y-3 pt-2 border-t",
+                  isDarkTheme ? "border-white/5" : "border-gray-200"
+                )}>
+                  <label className={cn(
+                    "text-xs font-bold uppercase tracking-widest flex items-center",
+                    isDarkTheme ? "text-gray-500" : "text-gray-600"
+                  )}>
                     <Users size={12} className="mr-2" />{" "}
                     {uiLanguage === "zh" ? "目标受众" : "Target Audience"}
                   </label>
-                  <div className="flex bg-black/40 p-1 rounded-lg w-full max-w-md mx-auto border border-white/5">
+                  <div className={cn(
+                    "flex p-1 rounded-lg w-full max-w-md mx-auto border",
+                    isDarkTheme
+                      ? "bg-black/40 border-white/5"
+                      : "bg-gray-100 border-gray-300"
+                  )}>
                     <button
                       type="button"
                       onClick={() => setAudience("beginner")}
@@ -833,8 +901,12 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                       className={cn(
                         "flex-1 py-1.5 text-xs font-bold rounded transition-all",
                         audience === "expert"
-                          ? "bg-white/10 text-white shadow"
-                          : "text-gray-500 hover:text-gray-300"
+                          ? isDarkTheme
+                            ? "bg-white/10 text-white shadow"
+                            : "bg-emerald-100 text-emerald-700 shadow"
+                          : isDarkTheme
+                            ? "text-gray-500 hover:text-gray-300"
+                            : "text-gray-600 hover:text-gray-900"
                       )}
                     >
                       {uiLanguage === "zh" ? "专家" : "Expert"}
@@ -844,11 +916,21 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
               </div>
 
               {/* Modal Footer */}
-              <div className="sticky bottom-0 bg-[#111] border-t border-white/10 p-6 flex justify-end space-x-3">
+              <div className={cn(
+                "sticky bottom-0 border-t p-6 flex justify-end space-x-3",
+                isDarkTheme 
+                  ? "bg-[#111] border-white/10" 
+                  : "bg-white border-gray-200"
+              )}>
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-gray-400 hover:text-white transition-all"
+                  className={cn(
+                    "px-4 py-2 border rounded-lg text-sm font-medium transition-all",
+                    isDarkTheme
+                      ? "bg-white/5 hover:bg-white/10 border-white/10 text-gray-400 hover:text-white"
+                      : "bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-700 hover:text-gray-900"
+                  )}
                 >
                   {uiLanguage === "zh" ? "取消" : "Cancel"}
                 </button>

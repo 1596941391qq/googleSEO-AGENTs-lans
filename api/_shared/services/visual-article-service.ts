@@ -119,6 +119,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
 
     // Emit search preferences analysis results
     if (searchPrefs) {
+      // 后端现在强制返回JSON格式，直接传递结构化数据
       emit('researcher', 'card', undefined, 'search-preferences', {
         semantic_landscape: searchPrefs.semantic_landscape,
         engine_strategies: searchPrefs.engine_strategies,
@@ -253,7 +254,13 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       // If we have URL screenshot, generate 1 AI image instead of 2
       const imageCount = hasUrlScreenshot ? 1 : 2;
       const selectedThemes = visualThemes.themes.slice(0, imageCount);
-      const prompts = await generateImagePrompts(selectedThemes, uiLanguage);
+      // 传递关键词和文章标题以增强图像与主题的相关性
+      const prompts = await generateImagePrompts(
+        selectedThemes, 
+        uiLanguage,
+        keyword,
+        pageTitle || undefined
+      );
 
       // Emit image-gen cards as "loading" with theme info
       prompts.forEach((p, i) => {

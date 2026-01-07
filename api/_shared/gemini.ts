@@ -16,7 +16,8 @@ interface GeminiConfig {
   enableGoogleSearch?: boolean;
   /**
    * 最大输出 token 数
-   * 默认值为 16384，用于支持更长的 JSON 响应
+   * 默认使用模型支持的最大值 65536（Gemini 2.5 Flash 支持的最大值）
+   * 可以显式指定其他值来覆盖默认值
    */
   maxOutputTokens?: number;
 }
@@ -48,7 +49,8 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
   const requestBody: any = {
     contents: contents,
     generationConfig: {
-      maxOutputTokens: config?.maxOutputTokens || 16384 // 增加默认值以支持更长的 JSON 响应
+      // 使用模型支持的最大值 65536，移除 16384 的限制
+      maxOutputTokens: config?.maxOutputTokens ?? 65536
     }
   };
 

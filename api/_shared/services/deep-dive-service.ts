@@ -327,7 +327,9 @@ export async function reviewContentQualityForDeepDive(
  */
 export async function generateImagesForDeepDive(
   content: ContentGenerationResult | string,
-  uiLanguage: 'zh' | 'en' = 'en'
+  uiLanguage: 'zh' | 'en' = 'en',
+  keyword?: string,
+  articleTitle?: string
 ): Promise<{
   visualThemes: VisualThemesResult;
   imagePrompts: ImagePromptResult[];
@@ -336,10 +338,20 @@ export async function generateImagesForDeepDive(
   // 提取视觉主题
   const visualThemes = await extractVisualThemes(content, uiLanguage);
 
-  // 生成图像提示词
+  // 提取标题（如果content是对象）
+  const title = typeof content === 'object' && content !== null
+    ? (content.title || content.seo_meta?.title || articleTitle)
+    : articleTitle;
+
+  // 生成图像提示词，传递关键词和标题以增强相关性
   let imagePrompts: ImagePromptResult[] = [];
   if (visualThemes.themes && visualThemes.themes.length > 0) {
-    imagePrompts = await generateImagePrompts(visualThemes.themes, uiLanguage);
+    imagePrompts = await generateImagePrompts(
+      visualThemes.themes, 
+      uiLanguage,
+      keyword,
+      title
+    );
   }
 
   // 生成图像
@@ -503,7 +515,7 @@ export async function executeDeepDive(
     };
 
     // Step 1: 分析搜索引擎偏好
-    progress(1, 'Analyzing search engine preferences...');
+    progress(1, uiLanguage === 'zh' ? '正在分析搜索引擎偏好...' : 'Analyzing search engine preferences...');
     try {
       result.searchPreferences = await analyzeSearchEnginePreferences(
         keyword.keyword,
@@ -612,9 +624,13 @@ export async function executeDeepDive(
       progress(8, 'Generating images...');
       try {
         if (result.generatedContent) {
+          // 提取文章标题
+          const articleTitle = result.generatedContent.title || result.seoStrategyReport.pageTitleH1;
           const imageResult = await generateImagesForDeepDive(
             result.generatedContent,
-            uiLanguage
+            uiLanguage,
+            keyword.keyword,
+            articleTitle
           );
           result.visualThemes = imageResult.visualThemes;
           result.imagePrompts = imageResult.imagePrompts;

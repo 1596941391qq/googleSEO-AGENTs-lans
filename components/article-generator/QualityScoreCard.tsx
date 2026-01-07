@@ -17,6 +17,7 @@ export interface QualityScoreCardProps {
   totalScore: number; // 0-100
   rating?: 'usable' | 'ai-summary-ready' | 'master-copy' | 'needs-optimization';
   uiLanguage?: 'en' | 'zh';
+  isDarkTheme?: boolean;
   className?: string;
 }
 
@@ -80,6 +81,7 @@ export const QualityScoreCard: React.FC<QualityScoreCardProps> = ({
   totalScore,
   rating = 'needs-optimization',
   uiLanguage = 'en',
+  isDarkTheme = true,
   className,
 }) => {
   const ratingInfo = RATING_INFO[rating] || RATING_INFO['needs-optimization'];
@@ -95,18 +97,30 @@ export const QualityScoreCard: React.FC<QualityScoreCardProps> = ({
   const actualRatingInfo = RATING_INFO[actualRating];
 
   return (
-    <div className={cn("bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 space-y-4", className)}>
+    <div className={cn(
+      "border rounded-lg p-4 space-y-4",
+      isDarkTheme 
+        ? "bg-blue-500/5 border-blue-500/20" 
+        : "bg-blue-50 border-blue-200",
+      className
+    )}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <TrendingUp className="text-blue-400" size={16} />
-          <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">
+          <TrendingUp className={isDarkTheme ? "text-blue-400" : "text-blue-600"} size={16} />
+          <span className={cn(
+            "text-xs font-bold uppercase tracking-wider",
+            isDarkTheme ? "text-blue-300" : "text-blue-700"
+          )}>
             {uiLanguage === 'zh' ? 'GEO质量评分' : 'GEO Quality Score'}
           </span>
         </div>
         <div className="flex items-center space-x-2">
           {actualRatingInfo.icon}
-          <div className="text-sm font-bold text-white">
+          <div className={cn(
+            "text-sm font-bold",
+            isDarkTheme ? "text-white" : "text-gray-900"
+          )}>
             {totalScore}/100
           </div>
         </div>
@@ -141,7 +155,10 @@ export const QualityScoreCard: React.FC<QualityScoreCardProps> = ({
                   {score}/{max}
                 </span>
               </div>
-              <div className="w-full bg-black/40 rounded-full h-2 overflow-hidden">
+              <div className={cn(
+                "w-full rounded-full h-2 overflow-hidden",
+                isDarkTheme ? "bg-black/40" : "bg-gray-200"
+              )}>
                 <div
                   className={cn(
                     "h-full rounded-full transition-all duration-300",

@@ -15,8 +15,7 @@ import { fetchKeywordData } from '../tools/dataforseo.js';
  * 搜索引擎偏好分析结果（Markdown格式）
  */
 export interface SearchPreferencesResult {
-  markdown: string;  // Markdown格式的完整分析
-  // 保留向后兼容的字段（可选）
+  // 主要使用结构化字段，markdown字段已废弃（保留仅为兼容）
   semantic_landscape?: string;
   engine_strategies?: {
     google?: {
@@ -32,6 +31,7 @@ export interface SearchPreferencesResult {
       llm_preference?: string;
     };
   };
+  geo_recommendations?: string;
   searchPreferences?: {
     google?: {
       rankingFactors?: string[];
@@ -217,7 +217,6 @@ export async function analyzeSearchPreferences(
               }
             }
           },
-          geo_recommendations: { type: 'string' },
           searchPreferences: {
             type: 'object',
             properties: {
@@ -255,29 +254,39 @@ export async function analyzeSearchPreferences(
               }
             }
           },
-          markdown: { type: 'string' }
+          geo_recommendations: { type: 'string' }
         },
-        required: ['markdown']
+        required: ['semantic_landscape', 'engine_strategies']
       }
     });
 
-    // 提取并解析 JSON
+    // 提取并解析 JSON - 强制返回JSON格式
     let text = response?.text || '{}';
     text = extractJSONRobust(text);
 
     try {
       const parsed = JSON.parse(text);
-      // 确保 markdown 字段存在，如果没有则从其他字段生成
-      if (!parsed.markdown) {
-        parsed.markdown = JSON.stringify(parsed, null, 2);
-      }
-      return parsed as SearchPreferencesResult;
+      // 强制返回JSON格式，移除markdown字段，直接返回结构化数据
+      // 确保所有必需字段都存在
+      const result: SearchPreferencesResult = {
+        semantic_landscape: parsed.semantic_landscape || '',
+        engine_strategies: parsed.engine_strategies || {},
+        geo_recommendations: parsed.geo_recommendations || '',
+        searchPreferences: parsed.searchPreferences || {}
+      };
+      return result;
     } catch (parseError: any) {
       console.error('[Agent 2] Failed to parse search preferences JSON:', parseError);
       console.error('[Agent 2] Response text:', text.substring(0, 500));
-      // 返回默认结构
+      // 返回默认JSON结构（而不是markdown字符串）
+      const defaultMessage = language === 'zh'
+        ? `关键词 "${keyword}" 在 ${marketLabel} 市场的搜索引擎偏好分析。`
+        : `Search preferences analysis for "${keyword}" in ${marketLabel} market.`;
       return {
-        markdown: text || `Search preferences analysis for "${keyword}" in ${marketLabel} market.`
+        semantic_landscape: defaultMessage,
+        engine_strategies: {},
+        geo_recommendations: '',
+        searchPreferences: {}
       };
     }
   } catch (error: any) {
@@ -1192,8 +1201,8 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
 
             const getFriendlySearchIntent = (extracted: string | undefined): string => {
               if (extracted && !hasErrorInField(extracted)) return extracted;
-              return uiLanguage === 'zh' 
-                ? '正在分析用户搜索意图...' 
+              return uiLanguage === 'zh'
+                ? '正在分析用户搜索意图...'
                 : 'Analyzing user search intent...';
             };
 

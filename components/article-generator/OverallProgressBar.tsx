@@ -9,6 +9,7 @@ export interface OverallProgressBarProps {
   progress: number; // 0-100
   estimatedTime?: number; // seconds
   uiLanguage?: 'en' | 'zh';
+  isDarkTheme?: boolean;
   className?: string;
 }
 
@@ -59,6 +60,7 @@ export const OverallProgressBar: React.FC<OverallProgressBarProps> = ({
   progress,
   estimatedTime,
   uiLanguage = 'en',
+  isDarkTheme = true,
   className,
 }) => {
   const stageInfo = STAGE_INFO[currentStage];
@@ -75,16 +77,28 @@ export const OverallProgressBar: React.FC<OverallProgressBarProps> = ({
   };
 
   return (
-    <div className={cn("bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-emerald-500/20 p-6 space-y-4", className)}>
+    <div className={cn(
+      "backdrop-blur-sm rounded-xl shadow-sm border p-6 space-y-4",
+      isDarkTheme
+        ? "bg-black/40 border-emerald-500/20"
+        : "bg-white/90 border-emerald-500/30",
+      className
+    )}>
       {/* Stage Info */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           {stageInfo.icon}
           <div>
-            <div className="text-sm font-bold text-white">
+            <div className={cn(
+              "text-sm font-bold",
+              isDarkTheme ? "text-white" : "text-gray-900"
+            )}>
               {uiLanguage === 'zh' ? stageInfo.zh : stageInfo.en}
             </div>
-            <div className="text-xs text-gray-400">
+            <div className={cn(
+              "text-xs",
+              isDarkTheme ? "text-gray-400" : "text-gray-600"
+            )}>
               {uiLanguage === 'zh' ? '正在处理...' : 'Processing...'}
             </div>
           </div>
@@ -96,7 +110,10 @@ export const OverallProgressBar: React.FC<OverallProgressBarProps> = ({
 
       {/* Progress Bar */}
       <div className="space-y-2">
-        <div className="w-full bg-black/60 rounded-full h-3 overflow-hidden">
+        <div className={cn(
+          "w-full rounded-full h-3 overflow-hidden",
+          isDarkTheme ? "bg-black/60" : "bg-gray-200"
+        )}>
           <div
             className={cn(
               "h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500 ease-out relative overflow-hidden",
@@ -109,7 +126,10 @@ export const OverallProgressBar: React.FC<OverallProgressBarProps> = ({
         </div>
 
         {/* Stage Markers */}
-        <div className="flex justify-between text-[10px] text-gray-500">
+        <div className={cn(
+          "flex justify-between text-[10px]",
+          isDarkTheme ? "text-gray-500" : "text-gray-600"
+        )}>
           {Object.entries(STAGE_PROGRESS).map(([stage, stageProg]) => {
             if (stage === 'input' || stage === 'complete') return null;
             const isActive = STAGE_PROGRESS[currentStage] >= stageProg;
@@ -132,7 +152,10 @@ export const OverallProgressBar: React.FC<OverallProgressBarProps> = ({
 
       {/* Estimated Time */}
       {!isComplete && estimatedTime && estimatedTime > 0 && (
-        <div className="text-xs text-gray-500 text-center">
+        <div className={cn(
+          "text-xs text-center",
+          isDarkTheme ? "text-gray-500" : "text-gray-600"
+        )}>
           {uiLanguage === 'zh' 
             ? `预计剩余时间: ${formatTime(estimatedTime)}`
             : `Estimated time remaining: ${formatTime(estimatedTime)}`

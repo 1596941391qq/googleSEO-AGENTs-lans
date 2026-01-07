@@ -3267,8 +3267,12 @@ export default function App() {
   useEffect(() => {
     try {
       const savedTheme = localStorage.getItem("theme");
-      if (savedTheme) {
+      // 如果 localStorage 中有保存的主题，使用保存的值；否则默认使用暗色模式
+      if (savedTheme !== null) {
         setIsDarkTheme(savedTheme === "dark");
+      } else {
+        // 如果没有保存的主题，默认使用暗色模式
+        setIsDarkTheme(true);
       }
       const savedCollapsed = localStorage.getItem("sidebar_collapsed");
       if (savedCollapsed) {
@@ -4247,12 +4251,20 @@ export default function App() {
             deepDiveCurrentStep: "",
           };
         case "article-generator":
+          const articleState = task.articleGeneratorState || prev.articleGeneratorState;
+          // 如果有 finalArticle，确保 isGenerating 为 false，以便显示预览
+          const hasFinalArticle = articleState?.finalArticle && 
+            (articleState.finalArticle.title || articleState.finalArticle.content);
+          
           return {
             ...prev,
             ...baseState,
             step: "article-generator",
-            articleGeneratorState:
-              task.articleGeneratorState || prev.articleGeneratorState,
+            articleGeneratorState: {
+              ...articleState,
+              // 如果有 finalArticle，强制设置 isGenerating 为 false
+              isGenerating: hasFinalArticle ? false : (articleState?.isGenerating || false),
+            },
             // Clear other task types' state
             seedKeyword: "",
             keywords: [],
@@ -4300,20 +4312,48 @@ export default function App() {
           isActive: false,
         }));
 
-        setState((prev) => ({
-          ...prev,
-          taskManager: {
-            ...prev.taskManager,
-            tasks: tasksWithNoActive,
-            activeTaskId: null, // 确保没有active任务
-          },
-          // 确保显示"我的网站"页面
-          step: "content-generation",
-          contentGeneration: {
-            ...prev.contentGeneration,
-            activeTab: "my-website",
-          },
-        }));
+        // 查找是否有 article-generator 任务且有 finalArticle
+        const articleTaskWithResult = tasksWithNoActive.find(
+          (task) =>
+            task.type === "article-generator" &&
+            task.articleGeneratorState?.finalArticle &&
+            (task.articleGeneratorState.finalArticle.title ||
+              task.articleGeneratorState.finalArticle.content)
+        );
+
+        setState((prev) => {
+          const newState = {
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: tasksWithNoActive,
+              activeTaskId: articleTaskWithResult?.id || null,
+            },
+          };
+
+          // 如果有 article-generator 任务且有 finalArticle，恢复状态并切换到预览
+          if (articleTaskWithResult && articleTaskWithResult.articleGeneratorState) {
+            return {
+              ...newState,
+              step: "article-generator",
+              articleGeneratorState: {
+                ...articleTaskWithResult.articleGeneratorState,
+                // 确保 isGenerating 为 false，以便显示预览
+                isGenerating: false,
+              },
+            };
+          }
+
+          // 否则显示"我的网站"页面
+          return {
+            ...newState,
+            step: "content-generation",
+            contentGeneration: {
+              ...prev.contentGeneration,
+              activeTab: "my-website",
+            },
+          };
+        });
       }
     } catch (e) {
       console.error("Failed to load tasks", e);
@@ -4537,13 +4577,21 @@ export default function App() {
         case "article-generator":
           // Determine step based on article generator state
           let articleStep: AppState["step"] = "article-generator";
+          
+          const articleStateForTask = targetTask.articleGeneratorState || prev.articleGeneratorState;
+          // 如果有 finalArticle，确保 isGenerating 为 false，以便显示预览
+          const hasFinalArticleForTask = articleStateForTask?.finalArticle && 
+            (articleStateForTask.finalArticle.title || articleStateForTask.finalArticle.content);
 
           newState = {
             ...prev,
             ...baseState,
             step: articleStep,
-            articleGeneratorState:
-              targetTask.articleGeneratorState || prev.articleGeneratorState,
+            articleGeneratorState: {
+              ...articleStateForTask,
+              // 如果有 finalArticle，强制设置 isGenerating 为 false
+              isGenerating: hasFinalArticleForTask ? false : (articleStateForTask?.isGenerating || false),
+            },
             // Clear other task types
             seedKeyword: "",
             keywords: [],
@@ -8128,9 +8176,12 @@ Please generate keywords based on the opportunities and keyword suggestions ment
   // Determine if we should use dark theme (all pages now use dark theme)
   // Handler for theme toggle
   const handleThemeToggle = () => {
-    setIsDarkTheme((prev) => !prev);
-    // Persist to localStorage
-    localStorage.setItem("theme", !isDarkTheme ? "dark" : "light");
+    setIsDarkTheme((prev) => {
+      const newTheme = !prev;
+      // Persist to localStorage
+      localStorage.setItem("theme", newTheme ? "dark" : "light");
+      return newTheme;
+    });
   };
 
   // Handler for sidebar collapse
@@ -8523,44 +8574,60 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 finalArticle: state.articleGeneratorState.finalArticle,
               }}
               onStateChange={(updates) => {
-                setState((prev) => ({
-                  ...prev,
-                  articleGeneratorState: {
-                    ...prev.articleGeneratorState,
-                    ...updates,
-                  },
-                }));
-                // Also update the task state
-                const activeTask = state.taskManager.tasks.find(
-                  (t) => t.id === state.taskManager.activeTaskId
-                );
-                if (activeTask && activeTask.type === "article-generator") {
-                  setTimeout(() => {
-                    setState((prev) => {
-                      const updatedTasks = prev.taskManager.tasks.map(
-                        (task) => {
-                          if (task.id === prev.taskManager.activeTaskId) {
-                            return {
-                              ...task,
-                              articleGeneratorState: {
-                                ...prev.articleGeneratorState,
-                                ...updates,
-                              },
-                            };
-                          }
-                          return task;
-                        }
-                      );
-                      return {
-                        ...prev,
-                        taskManager: {
-                          ...prev.taskManager,
-                          tasks: updatedTasks,
-                        },
-                      };
+                setState((prev) => {
+                  const newState = {
+                    ...prev,
+                    articleGeneratorState: {
+                      ...prev.articleGeneratorState,
+                      ...updates,
+                    },
+                  };
+                  
+                  // 调试日志：检查状态更新
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log('[App.tsx] ArticleGeneratorState updated:', {
+                      updates,
+                      isGenerating: newState.articleGeneratorState.isGenerating,
+                      hasFinalArticle: !!newState.articleGeneratorState.finalArticle,
+                      finalArticleTitle: newState.articleGeneratorState.finalArticle?.title,
+                      finalArticleContent: newState.articleGeneratorState.finalArticle?.content?.substring(0, 50),
                     });
-                  }, 0);
-                }
+                  }
+                  
+                  // Also update the task state
+                  const activeTask = newState.taskManager.tasks.find(
+                    (t) => t.id === newState.taskManager.activeTaskId
+                  );
+                  if (activeTask && activeTask.type === "article-generator") {
+                    setTimeout(() => {
+                      setState((prevState) => {
+                        const updatedTasks = prevState.taskManager.tasks.map(
+                          (task) => {
+                            if (task.id === prevState.taskManager.activeTaskId) {
+                              return {
+                                ...task,
+                                articleGeneratorState: {
+                                  ...prevState.articleGeneratorState,
+                                  ...updates,
+                                },
+                              };
+                            }
+                            return task;
+                          }
+                        );
+                        return {
+                          ...prevState,
+                          taskManager: {
+                            ...prevState.taskManager,
+                            tasks: updatedTasks,
+                          },
+                        };
+                      });
+                    }, 0);
+                  }
+                  
+                  return newState;
+                });
               }}
             />
           )}

@@ -106,14 +106,27 @@ const AGENT_TEXT: Record<UILanguage, any> = {
 };
 
 // Sub-components for specific cards
-const SerpCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
-  data,
-  uiLanguage,
-}) => {
+const SerpCard: React.FC<{
+  data: any;
+  uiLanguage: UILanguage;
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   const t = AGENT_TEXT[uiLanguage];
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-3 space-y-2 mt-2",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <Search size={12} className="mr-1" /> {t.cardTopCompetitors}
       </h4>
       <div className="space-y-2">
@@ -123,12 +136,27 @@ const SerpCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
             href={result.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block p-2 bg-black/20 rounded hover:bg-black/30 transition-colors"
+            className={cn(
+              "block p-2 rounded transition-colors",
+              isDarkTheme
+                ? "bg-black/20 hover:bg-black/30"
+                : "bg-gray-100 hover:bg-gray-200"
+            )}
           >
-            <div className="text-xs font-medium text-emerald-400 truncate">
+            <div
+              className={cn(
+                "text-xs font-medium truncate",
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
               {result.title}
             </div>
-            <div className="text-[10px] text-gray-500 truncate">
+            <div
+              className={cn(
+                "text-[10px] truncate",
+                isDarkTheme ? "text-gray-500" : "text-gray-600"
+              )}
+            >
               {result.url}
             </div>
           </a>
@@ -138,22 +166,33 @@ const SerpCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
   );
 };
 
-const DataCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
-  data,
-  uiLanguage,
-}) => {
+const DataCard: React.FC<{
+  data: any;
+  uiLanguage: UILanguage;
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   const t = AGENT_TEXT[uiLanguage];
   return (
     <div className="flex space-x-2 mt-2">
       {data.volume > 0 && (
-        <div className="bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded text-xs text-blue-400 font-mono">
+        <div
+          className={cn(
+            "border px-3 py-1.5 rounded text-xs font-mono",
+            isDarkTheme
+              ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+              : "bg-blue-50 border-blue-200 text-blue-600"
+          )}
+        >
           {t.cardVolume}: {data.volume}
         </div>
       )}
       {data.difficulty > 0 && (
         <div
           className={cn(
-            "bg-orange-500/10 border border-orange-500/20 px-3 py-1.5 rounded text-xs text-orange-400 font-mono"
+            "border px-3 py-1.5 rounded text-xs font-mono",
+            isDarkTheme
+              ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
+              : "bg-orange-50 border-orange-200 text-orange-600"
           )}
         >
           {t.cardDifficulty}: {data.difficulty}
@@ -163,21 +202,44 @@ const DataCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
   );
 };
 
-const OutlineCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
-  data,
-  uiLanguage,
-}) => {
+const OutlineCard: React.FC<{
+  data: any;
+  uiLanguage: UILanguage;
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   const t = AGENT_TEXT[uiLanguage];
 
   // If markdown field exists, render markdown directly
   if (data.markdown) {
     return (
-      <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center mb-3">
+      <div
+        className={cn(
+          "border rounded-lg p-4 mt-2",
+          isDarkTheme
+            ? "bg-white/5 border-white/10"
+            : "bg-gray-50 border-gray-200"
+        )}
+      >
+        <h4
+          className={cn(
+            "text-xs font-bold uppercase tracking-widest flex items-center mb-3",
+            isDarkTheme ? "text-gray-400" : "text-gray-600"
+          )}
+        >
           <FileText size={12} className="mr-1" /> {t.cardStrategicOutline}
         </h4>
-        <div className="prose prose-sm prose-invert max-w-none">
-          <div className="text-xs text-gray-300 leading-relaxed">
+        <div
+          className={cn(
+            "prose prose-sm max-w-none",
+            isDarkTheme ? "prose-invert" : ""
+          )}
+        >
+          <div
+            className={cn(
+              "text-xs leading-relaxed",
+              isDarkTheme ? "text-gray-300" : "text-gray-700"
+            )}
+          >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {data.markdown}
             </ReactMarkdown>
@@ -189,18 +251,55 @@ const OutlineCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
 
   // Fallback: render old structured format
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 font-mono text-xs text-gray-300">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-4 mt-2 font-mono text-xs",
+        isDarkTheme
+          ? "bg-white/5 border-white/10 text-gray-300"
+          : "bg-gray-50 border-gray-200 text-gray-700"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest mb-2 flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <FileText size={12} className="mr-1" /> {t.cardStrategicOutline}
       </h4>
       <ul className="space-y-1 list-none pl-1">
-        <li className="font-bold text-white text-sm pb-1">{data.h1}</li>
+        <li
+          className={cn(
+            "font-bold text-sm pb-1",
+            isDarkTheme ? "text-white" : "text-gray-900"
+          )}
+        >
+          {data.h1}
+        </li>
         {data.structure?.map((section: any, i: number) => (
-          <li key={i} className="pl-2 border-l-2 border-white/10 ml-1">
-            <span className="text-emerald-500 mr-2">H2</span>
+          <li
+            key={i}
+            className={cn(
+              "pl-2 border-l-2 ml-1",
+              isDarkTheme ? "border-white/10" : "border-gray-300"
+            )}
+          >
+            <span
+              className={cn(
+                "mr-2",
+                isDarkTheme ? "text-emerald-500" : "text-emerald-600"
+              )}
+            >
+              H2
+            </span>
             {section.header}
             {section.subsections && (
-              <ul className="mt-1 ml-2 space-y-0.5 opacity-60 text-[10px]">
+              <ul
+                className={cn(
+                  "mt-1 ml-2 space-y-0.5 text-[10px]",
+                  isDarkTheme ? "opacity-60" : "opacity-80"
+                )}
+              >
                 {section.subsections.map((sub: string, j: number) => (
                   <li key={j}>• {sub}</li>
                 ))}
@@ -213,45 +312,91 @@ const OutlineCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
   );
 };
 
-const FirecrawlResultCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
-  data,
-  uiLanguage,
-}) => {
+const FirecrawlResultCard: React.FC<{
+  data: any;
+  uiLanguage: UILanguage;
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-3 space-y-2 mt-2",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <Globe size={12} className="mr-1" />
         {uiLanguage === "zh" ? "Firecrawl 抓取结果" : "Firecrawl Scrape Result"}
       </h4>
       <div className="space-y-2">
-        <div className="p-2 bg-black/20 rounded">
-          <div className="text-xs font-medium text-emerald-400 truncate flex items-center">
+        <div
+          className={cn(
+            "p-2 rounded",
+            isDarkTheme ? "bg-black/20" : "bg-gray-100"
+          )}
+        >
+          <div
+            className={cn(
+              "text-xs font-medium truncate flex items-center",
+              isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+            )}
+          >
             <ExternalLink size={10} className="mr-1" />
             {data.title || data.url}
           </div>
-          <div className="text-[10px] text-gray-500 truncate mt-0.5">
+          <div
+            className={cn(
+              "text-[10px] truncate mt-0.5",
+              isDarkTheme ? "text-gray-500" : "text-gray-600"
+            )}
+          >
             {data.url}
           </div>
-          <div className="flex items-center gap-2 mt-2 text-[10px] text-gray-400">
+          <div
+            className={cn(
+              "flex items-center gap-2 mt-2 text-[10px]",
+              isDarkTheme ? "text-gray-400" : "text-gray-600"
+            )}
+          >
             <span>
               {uiLanguage === "zh" ? "内容长度" : "Content"}:{" "}
               {data.contentLength?.toLocaleString()}{" "}
               {uiLanguage === "zh" ? "字符" : "chars"}
             </span>
             {data.hasScreenshot && (
-              <span className="text-emerald-400">
+              <span
+                className={cn(
+                  isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+                )}
+              >
                 📸 {uiLanguage === "zh" ? "含截图" : "Screenshot"}
               </span>
             )}
             {data.images && data.images.length > 0 && (
-              <span className="text-blue-400">
+              <span
+                className={cn(isDarkTheme ? "text-blue-400" : "text-blue-600")}
+              >
                 🖼️ {data.images.length}{" "}
                 {uiLanguage === "zh" ? "图片" : "images"}
               </span>
             )}
           </div>
           {data.preview && (
-            <div className="text-[10px] text-gray-400 mt-2 line-clamp-3 bg-black/20 p-2 rounded">
+            <div
+              className={cn(
+                "text-[10px] mt-2 line-clamp-3 p-2 rounded",
+                isDarkTheme
+                  ? "text-gray-400 bg-black/20"
+                  : "text-gray-700 bg-gray-200"
+              )}
+            >
               {data.preview}
             </div>
           )}
@@ -264,24 +409,62 @@ const FirecrawlResultCard: React.FC<{ data: any; uiLanguage: UILanguage }> = ({
 const DataForSEOCompetitorsCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
-}> = ({ data, uiLanguage }) => {
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-3 space-y-2 mt-2",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <Database size={12} className="mr-1" />
         {uiLanguage === "zh" ? "DataForSEO 竞争对手" : "DataForSEO Competitors"}
       </h4>
-      <div className="text-[10px] text-gray-500 mb-2">
+      <div
+        className={cn(
+          "text-[10px] mb-2",
+          isDarkTheme ? "text-gray-500" : "text-gray-600"
+        )}
+      >
         {uiLanguage === "zh" ? "分析域名" : "Analyzing domain"}:{" "}
-        <span className="text-emerald-400">{data.domain}</span>
+        <span
+          className={cn(isDarkTheme ? "text-emerald-400" : "text-emerald-600")}
+        >
+          {data.domain}
+        </span>
       </div>
       <div className="space-y-1.5">
         {data.competitors?.slice(0, 5).map((competitor: any, i: number) => (
-          <div key={i} className="p-2 bg-black/20 rounded text-[10px]">
-            <div className="text-emerald-400 font-medium truncate">
+          <div
+            key={i}
+            className={cn(
+              "p-2 rounded text-[10px]",
+              isDarkTheme ? "bg-black/20" : "bg-gray-100"
+            )}
+          >
+            <div
+              className={cn(
+                "font-medium truncate",
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
               {competitor.domain}
             </div>
-            <div className="flex items-center gap-2 mt-1 text-gray-400">
+            <div
+              className={cn(
+                "flex items-center gap-2 mt-1",
+                isDarkTheme ? "text-gray-400" : "text-gray-600"
+              )}
+            >
               {competitor.commonKeywords > 0 && (
                 <span>
                   {uiLanguage === "zh" ? "共同关键词" : "Common Keywords"}:{" "}
@@ -295,7 +478,12 @@ const DataForSEOCompetitorsCard: React.FC<{
           </div>
         ))}
         {data.totalCompetitors > 5 && (
-          <div className="text-[10px] text-gray-500 text-center pt-1">
+          <div
+            className={cn(
+              "text-[10px] text-center pt-1",
+              isDarkTheme ? "text-gray-500" : "text-gray-600"
+            )}
+          >
             {uiLanguage === "zh"
               ? `还有 ${data.totalCompetitors - 5} 个竞争对手...`
               : `+ ${data.totalCompetitors - 5} more competitors...`}
@@ -309,16 +497,38 @@ const DataForSEOCompetitorsCard: React.FC<{
 const DataForSEOKeywordsCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
-}> = ({ data, uiLanguage }) => {
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-3 space-y-2 mt-2",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <Database size={12} className="mr-1" />
         {uiLanguage === "zh" ? "DataForSEO 关键词数据" : "DataForSEO Keywords"}
       </h4>
-      <div className="text-[10px] text-gray-500 mb-2">
+      <div
+        className={cn(
+          "text-[10px] mb-2",
+          isDarkTheme ? "text-gray-500" : "text-gray-600"
+        )}
+      >
         {uiLanguage === "zh" ? "域名" : "Domain"}:{" "}
-        <span className="text-emerald-400">{data.domain}</span>
+        <span
+          className={cn(isDarkTheme ? "text-emerald-400" : "text-emerald-600")}
+        >
+          {data.domain}
+        </span>
         <span className="ml-2">
           {uiLanguage === "zh" ? "关键词数" : "Keywords"}: {data.keywordCount}
         </span>
@@ -327,12 +537,25 @@ const DataForSEOKeywordsCard: React.FC<{
         {data.sampleKeywords?.slice(0, 5).map((kw: any, i: number) => (
           <div
             key={i}
-            className="p-1.5 bg-black/20 rounded text-[10px] flex items-center justify-between"
+            className={cn(
+              "p-1.5 rounded text-[10px] flex items-center justify-between",
+              isDarkTheme ? "bg-black/20" : "bg-gray-100"
+            )}
           >
-            <span className="text-emerald-300 truncate flex-1">
+            <span
+              className={cn(
+                "truncate flex-1",
+                isDarkTheme ? "text-emerald-300" : "text-emerald-600"
+              )}
+            >
               {kw.keyword}
             </span>
-            <div className="flex items-center gap-2 ml-2 text-gray-400">
+            <div
+              className={cn(
+                "flex items-center gap-2 ml-2",
+                isDarkTheme ? "text-gray-400" : "text-gray-600"
+              )}
+            >
               {kw.position > 0 && <span>Pos: {kw.position}</span>}
               {kw.volume > 0 && <span>Vol: {kw.volume}</span>}
               {kw.difficulty > 0 && <span>KD: {kw.difficulty}</span>}
@@ -340,7 +563,12 @@ const DataForSEOKeywordsCard: React.FC<{
           </div>
         ))}
         {data.keywordCount > 5 && (
-          <div className="text-[10px] text-gray-500 text-center pt-1">
+          <div
+            className={cn(
+              "text-[10px] text-center pt-1",
+              isDarkTheme ? "text-gray-500" : "text-gray-600"
+            )}
+          >
             {uiLanguage === "zh"
               ? `还有 ${data.keywordCount - 5} 个关键词...`
               : `+ ${data.keywordCount - 5} more keywords...`}
@@ -354,27 +582,49 @@ const DataForSEOKeywordsCard: React.FC<{
 const WebsiteAuditReportCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
-}> = ({ data, uiLanguage }) => {
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const report = data.report || "";
   const maxPreviewLength = 500;
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-4 space-y-3 mt-2">
+    <div
+      className={cn(
+        "border rounded-lg p-4 space-y-3 mt-2",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+        <h4
+          className={cn(
+            "text-xs font-bold uppercase tracking-widest flex items-center",
+            isDarkTheme ? "text-gray-400" : "text-gray-600"
+          )}
+        >
           <FileText size={12} className="mr-1" />
           {uiLanguage === "zh"
             ? "网站审计分析报告"
             : "Website Audit Analysis Report"}
         </h4>
-        <div className="flex items-center gap-2 text-[10px] text-gray-500">
+        <div
+          className={cn(
+            "flex items-center gap-2 text-[10px]",
+            isDarkTheme ? "text-gray-500" : "text-gray-600"
+          )}
+        >
           <span>
             {data.reportLength?.toLocaleString()}{" "}
             {uiLanguage === "zh" ? "字符" : "chars"}
           </span>
           {data.extractedKeywordsCount > 0 && (
-            <span className="text-emerald-400">
+            <span
+              className={cn(
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
               {data.extractedKeywordsCount}{" "}
               {uiLanguage === "zh" ? "个关键词建议" : "keyword suggestions"}
             </span>
@@ -385,37 +635,86 @@ const WebsiteAuditReportCard: React.FC<{
       {/* Summary Info */}
       <div className="grid grid-cols-2 gap-2 text-[10px]">
         {data.websiteUrl && (
-          <div className="p-2 bg-black/20 rounded">
-            <div className="text-gray-500">
+          <div
+            className={cn(
+              "p-2 rounded",
+              isDarkTheme ? "bg-black/20" : "bg-gray-100"
+            )}
+          >
+            <div
+              className={cn(isDarkTheme ? "text-gray-500" : "text-gray-600")}
+            >
               {uiLanguage === "zh" ? "网站" : "Website"}
             </div>
-            <div className="text-emerald-400 truncate">{data.websiteUrl}</div>
+            <div
+              className={cn(
+                "truncate",
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
+              {data.websiteUrl}
+            </div>
           </div>
         )}
         {data.competitorKeywordsCount !== undefined && (
-          <div className="p-2 bg-black/20 rounded">
-            <div className="text-gray-500">
+          <div
+            className={cn(
+              "p-2 rounded",
+              isDarkTheme ? "bg-black/20" : "bg-gray-100"
+            )}
+          >
+            <div
+              className={cn(isDarkTheme ? "text-gray-500" : "text-gray-600")}
+            >
               {uiLanguage === "zh" ? "竞争对手关键词" : "Competitor Keywords"}
             </div>
-            <div className="text-emerald-400">
+            <div
+              className={cn(
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
               {data.competitorKeywordsCount}
             </div>
           </div>
         )}
         {data.industry && (
-          <div className="p-2 bg-black/20 rounded">
-            <div className="text-gray-500">
+          <div
+            className={cn(
+              "p-2 rounded",
+              isDarkTheme ? "bg-black/20" : "bg-gray-100"
+            )}
+          >
+            <div
+              className={cn(isDarkTheme ? "text-gray-500" : "text-gray-600")}
+            >
               {uiLanguage === "zh" ? "行业" : "Industry"}
             </div>
-            <div className="text-emerald-400">{data.industry}</div>
+            <div
+              className={cn(
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
+              {data.industry}
+            </div>
           </div>
         )}
         {data.miningStrategy && (
-          <div className="p-2 bg-black/20 rounded">
-            <div className="text-gray-500">
+          <div
+            className={cn(
+              "p-2 rounded",
+              isDarkTheme ? "bg-black/20" : "bg-gray-100"
+            )}
+          >
+            <div
+              className={cn(isDarkTheme ? "text-gray-500" : "text-gray-600")}
+            >
               {uiLanguage === "zh" ? "挖掘策略" : "Mining Strategy"}
             </div>
-            <div className="text-emerald-400">
+            <div
+              className={cn(
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
               {data.miningStrategy === "horizontal"
                 ? uiLanguage === "zh"
                   ? "横向挖掘"
@@ -431,13 +730,22 @@ const WebsiteAuditReportCard: React.FC<{
       {/* Extracted Keywords Preview - Enhanced with full JSON data */}
       {data.keywords && data.keywords.length > 0 && (
         <div className="space-y-2">
-          <div className="text-[10px] text-gray-500 flex items-center justify-between">
+          <div
+            className={cn(
+              "text-[10px] flex items-center justify-between",
+              isDarkTheme ? "text-gray-500" : "text-gray-600"
+            )}
+          >
             <span>
               {uiLanguage === "zh"
                 ? "提取的关键词建议"
                 : "Extracted Keyword Suggestions"}
             </span>
-            <span className="text-emerald-400">
+            <span
+              className={cn(
+                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+              )}
+            >
               {data.keywords.length}{" "}
               {uiLanguage === "zh" ? "个关键词" : "keywords"}
             </span>
@@ -449,12 +757,20 @@ const WebsiteAuditReportCard: React.FC<{
               const probability = kw.probability || kw.priority || "Unknown";
               const probabilityColor =
                 probability === "High" || probability === "high"
-                  ? "text-green-400"
+                  ? isDarkTheme
+                    ? "text-green-400"
+                    : "text-green-600"
                   : probability === "Medium" || probability === "medium"
-                  ? "text-yellow-400"
+                  ? isDarkTheme
+                    ? "text-yellow-400"
+                    : "text-yellow-600"
                   : probability === "Low" || probability === "low"
-                  ? "text-red-400"
-                  : "text-gray-400";
+                  ? isDarkTheme
+                    ? "text-red-400"
+                    : "text-red-600"
+                  : isDarkTheme
+                  ? "text-gray-400"
+                  : "text-gray-600";
 
               const opportunityType =
                 kw.opportunity_type || kw.opportunityType || "N/A";
@@ -463,19 +779,32 @@ const WebsiteAuditReportCard: React.FC<{
               return (
                 <div
                   key={i}
-                  className="p-3 bg-black/20 rounded border border-white/5 hover:border-emerald-500/30 transition-colors"
+                  className={cn(
+                    "p-3 rounded border transition-colors",
+                    isDarkTheme
+                      ? "bg-black/20 border-white/5 hover:border-emerald-500/30"
+                      : "bg-gray-100 border-gray-300 hover:border-emerald-400"
+                  )}
                 >
                   {/* Header Row */}
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
                       <div
-                        className="text-xs font-semibold text-emerald-300 truncate"
+                        className={cn(
+                          "text-xs font-semibold truncate",
+                          isDarkTheme ? "text-emerald-300" : "text-emerald-600"
+                        )}
                         title={kw.keyword}
                       >
                         {kw.keyword}
                       </div>
                       {kw.translation && (
-                        <div className="text-[10px] text-gray-400 mt-0.5">
+                        <div
+                          className={cn(
+                            "text-[10px] mt-0.5",
+                            isDarkTheme ? "text-gray-400" : "text-gray-600"
+                          )}
+                        >
                           {kw.translation}
                         </div>
                       )}
@@ -483,7 +812,11 @@ const WebsiteAuditReportCard: React.FC<{
                     <div className="flex items-center gap-1 flex-shrink-0">
                       {probability !== "Unknown" && (
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-medium ${probabilityColor} bg-black/30`}
+                          className={cn(
+                            "px-2 py-0.5 rounded text-[10px] font-medium",
+                            probabilityColor,
+                            isDarkTheme ? "bg-black/30" : "bg-gray-200"
+                          )}
                         >
                           {probability}
                         </span>
@@ -495,26 +828,46 @@ const WebsiteAuditReportCard: React.FC<{
                   <div className="grid grid-cols-2 gap-2 text-[10px] mt-2">
                     {kw.volume !== undefined && kw.volume > 0 && (
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-500">
+                        <span
+                          className={cn(
+                            isDarkTheme ? "text-gray-500" : "text-gray-600"
+                          )}
+                        >
                           {uiLanguage === "zh" ? "搜索量" : "Volume"}:
                         </span>
-                        <span className="text-emerald-400">
+                        <span
+                          className={cn(
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
+                          )}
+                        >
                           {kw.volume.toLocaleString()}
                         </span>
                       </div>
                     )}
                     {kw.difficulty !== undefined && (
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-500">
+                        <span
+                          className={cn(
+                            isDarkTheme ? "text-gray-500" : "text-gray-600"
+                          )}
+                        >
                           {uiLanguage === "zh" ? "难度" : "Difficulty"}:
                         </span>
                         <span
                           className={
                             kw.difficulty > 40
-                              ? "text-red-400"
+                              ? isDarkTheme
+                                ? "text-red-400"
+                                : "text-red-600"
                               : kw.difficulty > 20
-                              ? "text-yellow-400"
-                              : "text-green-400"
+                              ? isDarkTheme
+                                ? "text-yellow-400"
+                                : "text-yellow-600"
+                              : isDarkTheme
+                              ? "text-green-400"
+                              : "text-green-600"
                           }
                         >
                           {kw.difficulty}
@@ -523,18 +876,37 @@ const WebsiteAuditReportCard: React.FC<{
                     )}
                     {intent && (
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-500">
+                        <span
+                          className={cn(
+                            isDarkTheme ? "text-gray-500" : "text-gray-600"
+                          )}
+                        >
                           {uiLanguage === "zh" ? "意图" : "Intent"}:
                         </span>
-                        <span className="text-blue-400">{intent}</span>
+                        <span
+                          className={cn(
+                            isDarkTheme ? "text-blue-400" : "text-blue-600"
+                          )}
+                        >
+                          {intent}
+                        </span>
                       </div>
                     )}
                     {opportunityType !== "N/A" && (
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-500">
+                        <span
+                          className={cn(
+                            isDarkTheme ? "text-gray-500" : "text-gray-600"
+                          )}
+                        >
                           {uiLanguage === "zh" ? "机会类型" : "Type"}:
                         </span>
-                        <span className="text-purple-400 capitalize">
+                        <span
+                          className={cn(
+                            "capitalize",
+                            isDarkTheme ? "text-purple-400" : "text-purple-600"
+                          )}
+                        >
                           {opportunityType}
                         </span>
                       </div>
@@ -543,11 +915,26 @@ const WebsiteAuditReportCard: React.FC<{
 
                   {/* Reasoning */}
                   {kw.reasoning && (
-                    <div className="mt-2 pt-2 border-t border-white/5">
-                      <div className="text-[10px] text-gray-500 mb-1">
+                    <div
+                      className={cn(
+                        "mt-2 pt-2 border-t",
+                        isDarkTheme ? "border-white/5" : "border-gray-300"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "text-[10px] mb-1",
+                          isDarkTheme ? "text-gray-500" : "text-gray-600"
+                        )}
+                      >
                         {uiLanguage === "zh" ? "分析原因" : "Reasoning"}:
                       </div>
-                      <div className="text-[10px] text-gray-300 leading-relaxed line-clamp-2">
+                      <div
+                        className={cn(
+                          "text-[10px] leading-relaxed line-clamp-2",
+                          isDarkTheme ? "text-gray-300" : "text-gray-700"
+                        )}
+                      >
                         {kw.reasoning}
                       </div>
                     </div>
@@ -564,7 +951,12 @@ const WebsiteAuditReportCard: React.FC<{
         <div className="space-y-2">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="w-full text-left text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center justify-between p-2 bg-black/20 rounded hover:bg-black/30 transition-colors"
+            className={cn(
+              "w-full text-left text-[10px] flex items-center justify-between p-2 rounded transition-colors",
+              isDarkTheme
+                ? "text-emerald-400 hover:text-emerald-300 bg-black/20 hover:bg-black/30"
+                : "text-emerald-600 hover:text-emerald-700 bg-gray-100 hover:bg-gray-200"
+            )}
           >
             <span>
               {uiLanguage === "zh"
@@ -575,7 +967,14 @@ const WebsiteAuditReportCard: React.FC<{
           </button>
 
           {isExpanded && (
-            <div className="max-h-96 overflow-y-auto p-3 bg-black/20 rounded text-xs text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none">
+            <div
+              className={cn(
+                "max-h-96 overflow-y-auto p-3 rounded text-xs leading-relaxed prose prose-sm max-w-none",
+                isDarkTheme
+                  ? "bg-black/20 text-gray-300 prose-invert"
+                  : "bg-gray-100 text-gray-700"
+              )}
+            >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {report}
               </ReactMarkdown>
@@ -583,13 +982,27 @@ const WebsiteAuditReportCard: React.FC<{
           )}
 
           {!isExpanded && report.length > maxPreviewLength && (
-            <div className="p-3 bg-black/20 rounded text-xs text-gray-400 leading-relaxed line-clamp-6">
+            <div
+              className={cn(
+                "p-3 rounded text-xs leading-relaxed line-clamp-6",
+                isDarkTheme
+                  ? "bg-black/20 text-gray-400"
+                  : "bg-gray-100 text-gray-600"
+              )}
+            >
               {report.substring(0, maxPreviewLength)}...
             </div>
           )}
 
           {!isExpanded && report.length <= maxPreviewLength && (
-            <div className="p-3 bg-black/20 rounded text-xs text-gray-300 leading-relaxed prose prose-invert prose-sm max-w-none">
+            <div
+              className={cn(
+                "p-3 rounded text-xs leading-relaxed prose prose-sm max-w-none",
+                isDarkTheme
+                  ? "bg-black/20 text-gray-300 prose-invert"
+                  : "bg-gray-100 text-gray-700"
+              )}
+            >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {report}
               </ReactMarkdown>
@@ -604,7 +1017,8 @@ const WebsiteAuditReportCard: React.FC<{
 const GoogleSearchResultsCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
-}> = ({ data, uiLanguage }) => {
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   const t = AGENT_TEXT[uiLanguage];
   const searchResults = data.results || data.searchResults || [];
 
@@ -613,8 +1027,20 @@ const GoogleSearchResultsCard: React.FC<{
   }
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-2 mt-2">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-3 space-y-2 mt-2",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <Search size={12} className="mr-1" />
         {uiLanguage === "zh" ? "Google 搜索结果" : "Google Search Results"}
       </h4>
@@ -625,23 +1051,50 @@ const GoogleSearchResultsCard: React.FC<{
             href={result.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="block p-2 bg-black/20 rounded hover:bg-black/30 transition-colors group"
+            className={cn(
+              "block p-2 rounded transition-colors group",
+              isDarkTheme
+                ? "bg-black/20 hover:bg-black/30"
+                : "bg-gray-100 hover:bg-gray-200"
+            )}
           >
-            <div className="text-xs font-medium text-emerald-400 truncate group-hover:text-emerald-300">
+            <div
+              className={cn(
+                "text-xs font-medium truncate",
+                isDarkTheme
+                  ? "text-emerald-400 group-hover:text-emerald-300"
+                  : "text-emerald-600 group-hover:text-emerald-700"
+              )}
+            >
               {result.title || result.url}
             </div>
-            <div className="text-[10px] text-gray-500 truncate mt-0.5">
+            <div
+              className={cn(
+                "text-[10px] truncate mt-0.5",
+                isDarkTheme ? "text-gray-500" : "text-gray-600"
+              )}
+            >
               {result.url}
             </div>
             {result.snippet && (
-              <div className="text-[10px] text-gray-400 mt-1 line-clamp-2">
+              <div
+                className={cn(
+                  "text-[10px] mt-1 line-clamp-2",
+                  isDarkTheme ? "text-gray-400" : "text-gray-600"
+                )}
+              >
                 {result.snippet}
               </div>
             )}
           </a>
         ))}
         {searchResults.length > 5 && (
-          <div className="text-[10px] text-gray-500 text-center pt-1">
+          <div
+            className={cn(
+              "text-[10px] text-center pt-1",
+              isDarkTheme ? "text-gray-500" : "text-gray-600"
+            )}
+          >
             {uiLanguage === "zh"
               ? `还有 ${searchResults.length - 5} 个结果...`
               : `+ ${searchResults.length - 5} more results...`}
@@ -655,67 +1108,64 @@ const GoogleSearchResultsCard: React.FC<{
 const SearchPreferencesCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
-}> = ({ data, uiLanguage }) => {
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   const t = AGENT_TEXT[uiLanguage];
 
-  // Try to parse JSON string if markdown is a JSON string
+  // 后端现在强制返回JSON格式，直接使用结构化数据
+  // 如果data是字符串，尝试解析为JSON（向后兼容）
   let parsedData = data;
-  if (data.markdown && typeof data.markdown === 'string') {
-    // Check if markdown is a JSON string
-    const trimmedMarkdown = data.markdown.trim();
-    if ((trimmedMarkdown.startsWith('{') && trimmedMarkdown.endsWith('}')) ||
-        (trimmedMarkdown.startsWith('[') && trimmedMarkdown.endsWith(']'))) {
-      try {
-        const jsonParsed = JSON.parse(trimmedMarkdown);
-        // Merge parsed JSON with existing data
-        parsedData = {
-          ...data,
-          ...jsonParsed,
-          // Preserve original markdown for fallback
-          _originalMarkdown: data.markdown
-        };
-      } catch (e) {
-        // If parsing fails, treat as markdown
-        console.warn('[SearchPreferencesCard] Failed to parse JSON markdown:', e);
-      }
+  if (typeof data === "string") {
+    try {
+      parsedData = JSON.parse(data);
+    } catch (e) {
+      console.warn("[SearchPreferencesCard] Failed to parse data as JSON:", e);
+      // 如果解析失败，返回空数据
+      parsedData = {};
     }
   }
 
-  // If markdown field exists and is not JSON, render markdown directly
-  if (parsedData.markdown && !parsedData._originalMarkdown) {
-    return (
-      <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center mb-3">
-          <Search size={12} className="mr-1" /> {t.cardSearchPreferences}
-        </h4>
-        <div className="prose prose-sm prose-invert max-w-none">
-          <div className="text-xs text-gray-300 leading-relaxed">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {parsedData.markdown}
-            </ReactMarkdown>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Use parsed data for rendering
+  // 使用解析后的数据
   data = parsedData;
 
   // Fallback: render old structured format
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 space-y-4">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-4 mt-2 space-y-4",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <Search size={12} className="mr-1" /> {t.cardSearchPreferences}
       </h4>
 
       {/* Semantic Landscape */}
       {data.semantic_landscape && (
         <div className="space-y-1">
-          <div className="text-[10px] text-purple-400/70 uppercase tracking-wider flex items-center">
+          <div
+            className={cn(
+              "text-[10px] uppercase tracking-wider flex items-center",
+              isDarkTheme ? "text-purple-400/70" : "text-purple-600"
+            )}
+          >
             <TrendingUp size={10} className="mr-1" /> {t.cardSemanticLandscape}
           </div>
-          <div className="text-xs text-gray-300 leading-relaxed bg-purple-500/5 border border-purple-500/20 rounded p-2">
+          <div
+            className={cn(
+              "text-xs leading-relaxed rounded p-2 border",
+              isDarkTheme
+                ? "text-gray-300 bg-purple-500/5 border-purple-500/20"
+                : "text-gray-700 bg-purple-50 border-purple-200"
+            )}
+          >
             {data.semantic_landscape}
           </div>
         </div>
@@ -724,33 +1174,81 @@ const SearchPreferencesCard: React.FC<{
       {/* Engine Strategies */}
       {data.engine_strategies && (
         <div className="space-y-3">
-          <div className="text-[10px] text-cyan-400/70 uppercase tracking-wider">
+          <div
+            className={cn(
+              "text-[10px] uppercase tracking-wider",
+              isDarkTheme ? "text-cyan-400/70" : "text-cyan-600"
+            )}
+          >
             {t.cardEngineStrategies}
           </div>
 
           {/* Google Strategy */}
           {data.engine_strategies.google && (
-            <div className="bg-cyan-500/5 border border-cyan-500/20 rounded p-2 space-y-2">
-              <div className="text-xs font-medium text-cyan-400">
+            <div
+              className={cn(
+                "border rounded p-2 space-y-2",
+                isDarkTheme
+                  ? "bg-cyan-500/5 border-cyan-500/20"
+                  : "bg-cyan-50 border-cyan-200"
+              )}
+            >
+              <div
+                className={cn(
+                  "text-xs font-medium",
+                  isDarkTheme ? "text-cyan-400" : "text-cyan-600"
+                )}
+              >
                 {t.cardGoogle}
               </div>
               {data.engine_strategies.google.ranking_logic && (
-                <div className="text-[11px] text-gray-300">
-                  <span className="text-cyan-400/70">
+                <div
+                  className={cn(
+                    "text-[11px]",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      isDarkTheme ? "text-cyan-400/70" : "text-cyan-600"
+                    )}
+                  >
                     {t.cardRankingLogic}:
                   </span>{" "}
                   {data.engine_strategies.google.ranking_logic}
                 </div>
               )}
               {data.engine_strategies.google.content_gap && (
-                <div className="text-[11px] text-gray-300">
-                  <span className="text-cyan-400/70">{t.cardContentGap}:</span>{" "}
+                <div
+                  className={cn(
+                    "text-[11px]",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      isDarkTheme ? "text-cyan-400/70" : "text-cyan-600"
+                    )}
+                  >
+                    {t.cardContentGap}:
+                  </span>{" "}
                   {data.engine_strategies.google.content_gap}
                 </div>
               )}
               {data.engine_strategies.google.action_item && (
-                <div className="text-[11px] text-gray-300">
-                  <span className="text-cyan-400/70">{t.cardActionItem}:</span>{" "}
+                <div
+                  className={cn(
+                    "text-[11px]",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      isDarkTheme ? "text-cyan-400/70" : "text-cyan-600"
+                    )}
+                  >
+                    {t.cardActionItem}:
+                  </span>{" "}
                   {data.engine_strategies.google.action_item}
                 </div>
               )}
@@ -759,21 +1257,51 @@ const SearchPreferencesCard: React.FC<{
 
           {/* Perplexity Strategy */}
           {data.engine_strategies.perplexity && (
-            <div className="bg-blue-500/5 border border-blue-500/20 rounded p-2 space-y-2">
-              <div className="text-xs font-medium text-blue-400">
+            <div
+              className={cn(
+                "border rounded p-2 space-y-2",
+                isDarkTheme
+                  ? "bg-blue-500/5 border-blue-500/20"
+                  : "bg-blue-50 border-blue-200"
+              )}
+            >
+              <div
+                className={cn(
+                  "text-xs font-medium",
+                  isDarkTheme ? "text-blue-400" : "text-blue-600"
+                )}
+              >
                 {t.cardPerplexity}
               </div>
               {data.engine_strategies.perplexity.citation_logic && (
-                <div className="text-[11px] text-gray-300">
-                  <span className="text-blue-400/70">
+                <div
+                  className={cn(
+                    "text-[11px]",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      isDarkTheme ? "text-blue-400/70" : "text-blue-600"
+                    )}
+                  >
                     {t.cardCitationLogic}:
                   </span>{" "}
                   {data.engine_strategies.perplexity.citation_logic}
                 </div>
               )}
               {data.engine_strategies.perplexity.structure_hint && (
-                <div className="text-[11px] text-gray-300">
-                  <span className="text-blue-400/70">
+                <div
+                  className={cn(
+                    "text-[11px]",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      isDarkTheme ? "text-blue-400/70" : "text-blue-600"
+                    )}
+                  >
                     {t.cardStructureHint}:
                   </span>{" "}
                   {data.engine_strategies.perplexity.structure_hint}
@@ -784,13 +1312,34 @@ const SearchPreferencesCard: React.FC<{
 
           {/* Generative AI Strategy */}
           {data.engine_strategies.generative_ai && (
-            <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2 space-y-2">
-              <div className="text-xs font-medium text-emerald-400">
+            <div
+              className={cn(
+                "border rounded p-2 space-y-2",
+                isDarkTheme
+                  ? "bg-emerald-500/5 border-emerald-500/20"
+                  : "bg-emerald-50 border-emerald-200"
+              )}
+            >
+              <div
+                className={cn(
+                  "text-xs font-medium",
+                  isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+                )}
+              >
                 {t.cardGenerativeAI}
               </div>
               {data.engine_strategies.generative_ai.llm_preference && (
-                <div className="text-[11px] text-gray-300">
-                  <span className="text-emerald-400/70">
+                <div
+                  className={cn(
+                    "text-[11px]",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      isDarkTheme ? "text-emerald-400/70" : "text-emerald-600"
+                    )}
+                  >
                     {t.cardLlmPreference}:
                   </span>{" "}
                   {data.engine_strategies.generative_ai.llm_preference}
@@ -801,72 +1350,95 @@ const SearchPreferencesCard: React.FC<{
         </div>
       )}
 
-      {/* GEO Recommendations */}
-      {data.geo_recommendations ? (
-        <div className="space-y-1">
-          <div className="text-[10px] text-amber-400/70 uppercase tracking-wider">
-            {t.cardGeoRecommendations}
-          </div>
-          <div className="bg-amber-500/5 border border-amber-500/20 rounded p-2 space-y-2 text-xs text-gray-300">
-            {data.geo_recommendations.format_engineering && (
-              <div>
-                <span className="text-amber-400/70">
-                  {uiLanguage === "zh" ? "格式工程:" : "Format Engineering:"}
-                </span>{" "}
-                {data.geo_recommendations.format_engineering}
-              </div>
-            )}
-            {data.geo_recommendations.entity_engineering && (
-              <div>
-                <span className="text-amber-400/70">
-                  {uiLanguage === "zh" ? "实体工程:" : "Entity Engineering:"}
-                </span>{" "}
-                {data.geo_recommendations.entity_engineering}
-              </div>
-            )}
-            {data.geo_recommendations.information_gain && (
-              <div>
-                <span className="text-amber-400/70">
-                  {uiLanguage === "zh" ? "信息增益:" : "Information Gain:"}
-                </span>{" "}
-                {data.geo_recommendations.information_gain}
-              </div>
-            )}
-            {data.geo_recommendations.structure_optimization && (
-              <div>
-                <span className="text-amber-400/70">
-                  {uiLanguage === "zh"
-                    ? "结构优化:"
-                    : "Structure Optimization:"}
-                </span>{" "}
-                {data.geo_recommendations.structure_optimization}
-              </div>
-            )}
-            {!data.geo_recommendations.format_engineering &&
-              !data.geo_recommendations.entity_engineering &&
-              !data.geo_recommendations.information_gain &&
-              !data.geo_recommendations.structure_optimization && (
-                <div className="text-gray-500 italic">
-                  {uiLanguage === "zh"
-                    ? "暂无 GEO 优化建议"
-                    : "No GEO optimization recommendations available"}
-                </div>
+      {/* GEO Recommendations - 支持字符串和对象两种格式 */}
+      {data.geo_recommendations &&
+        // 如果是字符串格式，直接显示
+        (typeof data.geo_recommendations === "string" ? (
+          <div className="space-y-1">
+            <div
+              className={cn(
+                "text-[10px] uppercase tracking-wider",
+                isDarkTheme ? "text-amber-400/70" : "text-amber-600"
               )}
+            >
+              {t.cardGeoRecommendations}
+            </div>
+            <div
+              className={cn(
+                "border rounded p-2 text-xs leading-relaxed",
+                isDarkTheme
+                  ? "bg-amber-500/5 border-amber-500/20 text-gray-300"
+                  : "bg-amber-50 border-amber-200 text-gray-700"
+              )}
+            >
+              {data.geo_recommendations}
+            </div>
           </div>
-        </div>
-      ) : (
-        // Show empty state if no geo recommendations
-        <div className="space-y-1">
-          <div className="text-[10px] text-amber-400/70 uppercase tracking-wider">
-            {t.cardGeoRecommendations}
-          </div>
-          <div className="text-xs text-gray-500 italic bg-amber-500/5 border border-amber-500/20 rounded p-2">
-            {uiLanguage === "zh"
-              ? "暂无 GEO 优化建议"
-              : "No GEO optimization recommendations available"}
-          </div>
-        </div>
-      )}
+        ) : (
+          // 如果是对象格式，显示各个字段
+          (data.geo_recommendations.format_engineering ||
+            data.geo_recommendations.entity_engineering ||
+            data.geo_recommendations.information_gain ||
+            data.geo_recommendations.structure_optimization) && (
+            <div className="space-y-1">
+              <div
+                className={cn(
+                  "text-[10px] uppercase tracking-wider",
+                  isDarkTheme ? "text-amber-400/70" : "text-amber-600"
+                )}
+              >
+                {t.cardGeoRecommendations}
+              </div>
+              <div
+                className={cn(
+                  "border rounded p-2 space-y-2 text-xs",
+                  isDarkTheme
+                    ? "bg-amber-500/5 border-amber-500/20 text-gray-300"
+                    : "bg-amber-50 border-amber-200 text-gray-700"
+                )}
+              >
+                {data.geo_recommendations.format_engineering && (
+                  <div>
+                    <span className="text-amber-400/70">
+                      {uiLanguage === "zh"
+                        ? "格式工程:"
+                        : "Format Engineering:"}
+                    </span>{" "}
+                    {data.geo_recommendations.format_engineering}
+                  </div>
+                )}
+                {data.geo_recommendations.entity_engineering && (
+                  <div>
+                    <span className="text-amber-400/70">
+                      {uiLanguage === "zh"
+                        ? "实体工程:"
+                        : "Entity Engineering:"}
+                    </span>{" "}
+                    {data.geo_recommendations.entity_engineering}
+                  </div>
+                )}
+                {data.geo_recommendations.information_gain && (
+                  <div>
+                    <span className="text-amber-400/70">
+                      {uiLanguage === "zh" ? "信息增益:" : "Information Gain:"}
+                    </span>{" "}
+                    {data.geo_recommendations.information_gain}
+                  </div>
+                )}
+                {data.geo_recommendations.structure_optimization && (
+                  <div>
+                    <span className="text-amber-400/70">
+                      {uiLanguage === "zh"
+                        ? "结构优化:"
+                        : "Structure Optimization:"}
+                    </span>{" "}
+                    {data.geo_recommendations.structure_optimization}
+                  </div>
+                )}
+              </div>
+            </div>
+          )
+        ))}
     </div>
   );
 };
@@ -875,12 +1447,39 @@ const SearchPreferencesCard: React.FC<{
 const QualityReviewCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
-}> = ({ data, uiLanguage }) => {
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
+  // 调试日志
+  if (process.env.NODE_ENV === "development") {
+    console.log("[QualityReviewCard] 接收到的数据:", {
+      dataType: typeof data,
+      isString: typeof data === "string",
+      isObject: typeof data === "object" && data !== null,
+      dataKeys:
+        typeof data === "object" && data !== null ? Object.keys(data) : [],
+      dataPreview:
+        typeof data === "string"
+          ? data.substring(0, 200)
+          : JSON.stringify(data).substring(0, 200),
+    });
+  }
+
+  // 如果 data 是字符串，尝试解析 JSON
+  let parsedData = data;
+  if (typeof data === "string") {
+    try {
+      parsedData = JSON.parse(data);
+    } catch (e) {
+      // 解析失败，保持原样
+      console.warn("[QualityReviewCard] 无法解析 JSON 字符串:", e);
+    }
+  }
+
   // Extract geo_score from data
-  const geoScore = data.geo_score || data.geo_diagnosis;
-  const logicCheck = data.logic_check;
-  const seoMeta = data.seo_meta;
-  const totalScore = geoScore?.total_score || data.total_score || 0;
+  const geoScore = parsedData.geo_score || parsedData.geo_diagnosis;
+  const logicCheck = parsedData.logic_check;
+  const seoMeta = parsedData.seo_meta;
+  const totalScore = geoScore?.total_score || parsedData.total_score || 0;
 
   // Convert geo_score to QualityScore format if needed
   const scores = geoScore
@@ -913,9 +1512,49 @@ const QualityReviewCard: React.FC<{
       ? "usable"
       : "needs-optimization";
 
+  // Check if there's any content to show
+  const hasContent =
+    totalScore > 0 ||
+    seoMeta ||
+    logicCheck ||
+    parsedData.other_checks ||
+    (parsedData.fix_list && parsedData.fix_list.length > 0);
+
+  // 调试日志：检查内容
+  if (process.env.NODE_ENV === "development") {
+    console.log("[QualityReviewCard] 内容检查:", {
+      totalScore,
+      hasSeoMeta: !!seoMeta,
+      hasLogicCheck: !!logicCheck,
+      hasOtherChecks: !!parsedData.other_checks,
+      hasFixList: !!(parsedData.fix_list && parsedData.fix_list.length > 0),
+      hasContent,
+    });
+  }
+
+  // Don't render if there's no content
+  if (!hasContent) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[QualityReviewCard] 没有内容，不渲染卡片");
+    }
+    return null;
+  }
+
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 space-y-4">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-4 mt-2 space-y-4",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <Target size={12} className="mr-1" />
         {uiLanguage === "zh" ? "质量审查结果" : "Quality Review Results"}
       </h4>
@@ -927,30 +1566,68 @@ const QualityReviewCard: React.FC<{
           totalScore={totalScore}
           rating={rating}
           uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
         />
       )}
 
       {/* SEO Meta */}
       {seoMeta && (
         <div className="space-y-2">
-          <div className="text-[10px] text-purple-400/70 uppercase tracking-wider">
+          <div
+            className={cn(
+              "text-xs font-bold uppercase tracking-wider flex items-center",
+              isDarkTheme ? "text-blue-400" : "text-blue-600"
+            )}
+          >
+            <FileText size={12} className="mr-1" />
             {uiLanguage === "zh" ? "SEO 元数据" : "SEO Meta"}
           </div>
-          <div className="bg-purple-500/5 border border-purple-500/20 rounded p-2 space-y-1 text-xs">
+          <div
+            className={cn(
+              "border rounded-lg p-3 space-y-2",
+              isDarkTheme
+                ? "bg-blue-500/5 border-blue-500/20"
+                : "bg-blue-50 border-blue-200"
+            )}
+          >
             {seoMeta.title && (
               <div>
-                <span className="text-purple-400/70">
-                  {uiLanguage === "zh" ? "标题:" : "Title:"}
-                </span>{" "}
-                <span className="text-gray-300">{seoMeta.title}</span>
+                <div
+                  className={cn(
+                    "text-xs font-semibold mb-1",
+                    isDarkTheme ? "text-blue-300" : "text-blue-700"
+                  )}
+                >
+                  {uiLanguage === "zh" ? "标题 (Title)" : "Title"}
+                </div>
+                <div
+                  className={cn(
+                    "text-sm leading-relaxed",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  {seoMeta.title}
+                </div>
               </div>
             )}
             {seoMeta.description && (
               <div>
-                <span className="text-purple-400/70">
-                  {uiLanguage === "zh" ? "描述:" : "Description:"}
-                </span>{" "}
-                <span className="text-gray-300">{seoMeta.description}</span>
+                <div
+                  className={cn(
+                    "text-xs font-semibold mb-1",
+                    isDarkTheme ? "text-blue-300" : "text-blue-700"
+                  )}
+                >
+                  {uiLanguage === "zh" ? "描述 (Description)" : "Description"}
+                </div>
+                <div
+                  className={cn(
+                    "text-sm leading-relaxed",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  {seoMeta.description}
+                </div>
               </div>
             )}
           </div>
@@ -960,35 +1637,67 @@ const QualityReviewCard: React.FC<{
       {/* Logic Check */}
       {logicCheck && (
         <div className="space-y-1">
-          <div className="text-[10px] text-emerald-400/70 uppercase tracking-wider">
+          <div
+            className={cn(
+              "text-[10px] uppercase tracking-wider",
+              isDarkTheme ? "text-emerald-400/70" : "text-emerald-600"
+            )}
+          >
             {uiLanguage === "zh" ? "逻辑检查" : "Logic Check"}
           </div>
-          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2 text-xs text-gray-300 leading-relaxed">
+          <div
+            className={cn(
+              "border rounded p-2 text-xs leading-relaxed",
+              isDarkTheme
+                ? "bg-emerald-500/5 border-emerald-500/20 text-gray-300"
+                : "bg-emerald-50 border-emerald-200 text-gray-700"
+            )}
+          >
             {logicCheck}
           </div>
         </div>
       )}
 
       {/* Other Quality Checks */}
-      {data.other_checks && (
+      {parsedData.other_checks && (
         <div className="space-y-2">
-          <div className="text-[10px] text-blue-400/70 uppercase tracking-wider">
+          <div
+            className={cn(
+              "text-[10px] uppercase tracking-wider",
+              isDarkTheme ? "text-blue-400/70" : "text-blue-600"
+            )}
+          >
             {uiLanguage === "zh" ? "其他质量检查" : "Other Quality Checks"}
           </div>
-          <div className="bg-blue-500/5 border border-blue-500/20 rounded p-2 space-y-2 text-xs">
-            {data.other_checks.authenticity && (
+          <div
+            className={cn(
+              "border rounded p-2 space-y-2 text-xs",
+              isDarkTheme
+                ? "bg-blue-500/5 border-blue-500/20"
+                : "bg-blue-50 border-blue-200"
+            )}
+          >
+            {parsedData.other_checks.authenticity && (
               <div>
-                <span className="text-blue-400/70">
+                <span
+                  className={cn(
+                    isDarkTheme ? "text-blue-400/70" : "text-blue-600"
+                  )}
+                >
                   {uiLanguage === "zh" ? "真实性:" : "Authenticity:"}
                 </span>{" "}
                 <span
                   className={
-                    data.other_checks.authenticity.passed
-                      ? "text-emerald-400"
-                      : "text-red-400"
+                    parsedData.other_checks.authenticity.passed
+                      ? isDarkTheme
+                        ? "text-emerald-400"
+                        : "text-emerald-600"
+                      : isDarkTheme
+                      ? "text-red-400"
+                      : "text-red-600"
                   }
                 >
-                  {data.other_checks.authenticity.passed
+                  {parsedData.other_checks.authenticity.passed
                     ? uiLanguage === "zh"
                       ? "通过"
                       : "Passed"
@@ -998,14 +1707,22 @@ const QualityReviewCard: React.FC<{
                 </span>
               </div>
             )}
-            {data.other_checks.seo_depth && (
+            {parsedData.other_checks.seo_depth && (
               <div>
-                <span className="text-blue-400/70">
+                <span
+                  className={cn(
+                    isDarkTheme ? "text-blue-400/70" : "text-blue-600"
+                  )}
+                >
                   {uiLanguage === "zh" ? "SEO深度:" : "SEO Depth:"}
                 </span>{" "}
-                <span className="text-gray-300">
+                <span
+                  className={cn(
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
                   {uiLanguage === "zh" ? "关键词密度" : "Keyword Density"}:{" "}
-                  {data.other_checks.seo_depth.keyword_density || "N/A"}%
+                  {parsedData.other_checks.seo_depth.keyword_density || "N/A"}%
                 </span>
               </div>
             )}
@@ -1014,34 +1731,63 @@ const QualityReviewCard: React.FC<{
       )}
 
       {/* Fix List */}
-      {data.fix_list && data.fix_list.length > 0 && (
+      {parsedData.fix_list && parsedData.fix_list.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[10px] text-amber-400/70 uppercase tracking-wider">
+          <div
+            className={cn(
+              "text-[10px] uppercase tracking-wider",
+              isDarkTheme ? "text-amber-400/70" : "text-amber-600"
+            )}
+          >
             {uiLanguage === "zh" ? "需要修复的问题" : "Issues to Fix"}
           </div>
           <div className="space-y-1">
-            {data.fix_list.map((fix: any, i: number) => (
+            {parsedData.fix_list.map((fix: any, i: number) => (
               <div
                 key={i}
-                className="bg-amber-500/5 border border-amber-500/20 rounded p-2 text-xs"
+                className={cn(
+                  "border rounded p-2 text-xs",
+                  isDarkTheme
+                    ? "bg-amber-500/5 border-amber-500/20"
+                    : "bg-amber-50 border-amber-200"
+                )}
               >
                 {typeof fix === "string" ? (
-                  <div className="text-gray-300">{fix}</div>
+                  <div
+                    className={cn(
+                      isDarkTheme ? "text-gray-300" : "text-gray-700"
+                    )}
+                  >
+                    {fix}
+                  </div>
                 ) : (
                   <div className="space-y-1">
                     {fix.priority && (
-                      <div className="text-amber-400/70">
+                      <div
+                        className={cn(
+                          isDarkTheme ? "text-amber-400/70" : "text-amber-600"
+                        )}
+                      >
                         {uiLanguage === "zh" ? "优先级:" : "Priority:"}{" "}
                         {fix.priority}
                       </div>
                     )}
                     {fix.issue && (
-                      <div className="text-gray-300">
+                      <div
+                        className={cn(
+                          isDarkTheme ? "text-gray-300" : "text-gray-700"
+                        )}
+                      >
                         {uiLanguage === "zh" ? "问题:" : "Issue:"} {fix.issue}
                       </div>
                     )}
                     {fix.suggestion && (
-                      <div className="text-gray-400 italic">
+                      <div
+                        className={cn(
+                          "italic",
+                          isDarkTheme ? "text-gray-400" : "text-gray-600"
+                        )}
+                      >
                         {uiLanguage === "zh" ? "建议:" : "Suggestion:"}{" "}
                         {fix.suggestion}
                       </div>
@@ -1061,10 +1807,23 @@ const QualityReviewCard: React.FC<{
 const FinalArticleCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
-}> = ({ data, uiLanguage }) => {
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
+  // 调试日志
+  if (process.env.NODE_ENV === "development") {
+    console.log("[FinalArticleCard] 接收到的数据:", {
+      dataType: typeof data,
+      isString: typeof data === "string",
+      isObject: typeof data === "object" && data !== null,
+      hasArticleBody: !!data?.article_body,
+      hasContent: !!data?.content,
+      keys: typeof data === "object" && data !== null ? Object.keys(data) : [],
+    });
+  }
+
   // Try to parse JSON string if data is a string
   let parsedData = data;
-  if (typeof data === 'string') {
+  if (typeof data === "string") {
     try {
       parsedData = JSON.parse(data);
     } catch (e) {
@@ -1073,18 +1832,71 @@ const FinalArticleCard: React.FC<{
     }
   }
 
+  // 如果 data 已经是对象，但包含 JSON 字符串字段，尝试解析
+  if (typeof parsedData === "object" && parsedData !== null) {
+    // 检查是否有字段是 JSON 字符串
+    if (
+      parsedData.article_body &&
+      typeof parsedData.article_body === "string" &&
+      parsedData.article_body.trim().startsWith("{")
+    ) {
+      try {
+        const parsedBody = JSON.parse(parsedData.article_body);
+        if (typeof parsedBody === "object" && parsedBody !== null) {
+          // 合并解析后的内容
+          parsedData = { ...parsedData, ...parsedBody };
+        }
+      } catch (e) {
+        // 解析失败，保持原样
+      }
+    }
+  }
+
   // Extract fields from parsed data
-  const articleBody = parsedData.article_body || parsedData.content || parsedData.markdown || "";
+  const articleBody =
+    parsedData.article_body || parsedData.content || parsedData.markdown || "";
   const title = parsedData.title || parsedData.seo_meta?.title || "";
   const seoMeta = parsedData.seo_meta;
   const geoScore = parsedData.geo_score;
   const logicCheck = parsedData.logic_check;
   const qualityReview = parsedData.qualityReview || parsedData.quality_review;
 
+  // 调试日志：检查提取的内容
+  if (process.env.NODE_ENV === "development") {
+    console.log("[FinalArticleCard] 提取的内容:", {
+      hasArticleBody: !!articleBody,
+      articleBodyLength: articleBody?.length || 0,
+      articleBodyPreview: articleBody?.substring(0, 100),
+      hasTitle: !!title,
+      titleValue: title,
+      hasQualityReview: !!qualityReview,
+      qualityReviewType: typeof qualityReview,
+      qualityReviewKeys:
+        qualityReview && typeof qualityReview === "object"
+          ? Object.keys(qualityReview)
+          : [],
+      hasSeoMeta: !!seoMeta,
+      hasGeoScore: !!geoScore,
+      hasLogicCheck: !!logicCheck,
+    });
+  }
+
   if (!articleBody && !title) {
     return (
-      <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
-        <div className="text-xs text-gray-500 italic">
+      <div
+        className={cn(
+          "border rounded-lg p-4 mt-2",
+          isDarkTheme
+            ? "bg-white/5 border-white/10"
+            : "bg-gray-50 border-gray-200"
+        )}
+      >
+        <div
+          className={cn(
+            "text-xs italic",
+            isDarkTheme ? "text-gray-500" : "text-gray-600"
+          )}
+        >
           {uiLanguage === "zh"
             ? "暂无文章内容"
             : "No article content available"}
@@ -1094,38 +1906,94 @@ const FinalArticleCard: React.FC<{
   }
 
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 space-y-4">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-4 mt-2 space-y-4",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <FileText size={12} className="mr-1" />
         {uiLanguage === "zh" ? "最终文章" : "Final Article"}
       </h4>
 
       {/* Title */}
       {title && (
-        <div className="text-sm font-bold text-white">{title}</div>
+        <div
+          className={cn(
+            "text-sm font-bold",
+            isDarkTheme ? "text-white" : "text-gray-900"
+          )}
+        >
+          {title}
+        </div>
       )}
 
       {/* SEO Meta */}
       {seoMeta && (
-        <div className="space-y-1">
-          <div className="text-[10px] text-purple-400/70 uppercase tracking-wider">
+        <div className="space-y-2">
+          <div
+            className={cn(
+              "text-xs font-bold uppercase tracking-wider flex items-center",
+              isDarkTheme ? "text-blue-400" : "text-blue-600"
+            )}
+          >
+            <FileText size={12} className="mr-1" />
             {uiLanguage === "zh" ? "SEO 元数据" : "SEO Meta"}
           </div>
-          <div className="bg-purple-500/5 border border-purple-500/20 rounded p-2 space-y-1 text-xs">
+          <div
+            className={cn(
+              "border rounded-lg p-3 space-y-2",
+              isDarkTheme
+                ? "bg-blue-500/5 border-blue-500/20"
+                : "bg-blue-50 border-blue-200"
+            )}
+          >
             {seoMeta.title && (
               <div>
-                <span className="text-purple-400/70">
-                  {uiLanguage === "zh" ? "标题:" : "Title:"}
-                </span>{" "}
-                <span className="text-gray-300">{seoMeta.title}</span>
+                <div
+                  className={cn(
+                    "text-xs font-semibold mb-1",
+                    isDarkTheme ? "text-blue-300" : "text-blue-700"
+                  )}
+                >
+                  {uiLanguage === "zh" ? "标题 (Title)" : "Title"}
+                </div>
+                <div
+                  className={cn(
+                    "text-sm leading-relaxed",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  {seoMeta.title}
+                </div>
               </div>
             )}
             {seoMeta.description && (
               <div>
-                <span className="text-purple-400/70">
-                  {uiLanguage === "zh" ? "描述:" : "Description:"}
-                </span>{" "}
-                <span className="text-gray-300">{seoMeta.description}</span>
+                <div
+                  className={cn(
+                    "text-xs font-semibold mb-1",
+                    isDarkTheme ? "text-blue-300" : "text-blue-700"
+                  )}
+                >
+                  {uiLanguage === "zh" ? "描述 (Description)" : "Description"}
+                </div>
+                <div
+                  className={cn(
+                    "text-sm leading-relaxed",
+                    isDarkTheme ? "text-gray-300" : "text-gray-700"
+                  )}
+                >
+                  {seoMeta.description}
+                </div>
               </div>
             )}
           </div>
@@ -1134,28 +2002,62 @@ const FinalArticleCard: React.FC<{
 
       {/* Article Body */}
       {articleBody && (
-        <div className="prose prose-sm prose-invert max-w-none">
-          <div className="text-xs text-gray-300 leading-relaxed max-h-96 overflow-y-auto">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{articleBody}</ReactMarkdown>
+        <div
+          className={cn(
+            "prose prose-sm max-w-none",
+            isDarkTheme ? "prose-invert" : ""
+          )}
+        >
+          <div
+            className={cn(
+              "text-xs leading-relaxed max-h-96 overflow-y-auto",
+              isDarkTheme ? "text-gray-300" : "text-gray-700"
+            )}
+          >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {articleBody}
+            </ReactMarkdown>
           </div>
         </div>
       )}
 
       {/* Quality Review */}
       {qualityReview && (
-        <QualityReviewCard data={qualityReview} uiLanguage={uiLanguage} />
+        <QualityReviewCard
+          data={qualityReview}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
       )}
 
       {/* GEO Score (if not in quality review) */}
       {geoScore && !qualityReview && (
         <div className="space-y-1">
-          <div className="text-[10px] text-blue-400/70 uppercase tracking-wider">
+          <div
+            className={cn(
+              "text-[10px] uppercase tracking-wider",
+              isDarkTheme ? "text-blue-400/70" : "text-blue-600"
+            )}
+          >
             {uiLanguage === "zh" ? "GEO 评分" : "GEO Score"}
           </div>
-          <div className="bg-blue-500/5 border border-blue-500/20 rounded p-2 text-xs">
+          <div
+            className={cn(
+              "border rounded p-2 text-xs",
+              isDarkTheme
+                ? "bg-blue-500/5 border-blue-500/20"
+                : "bg-blue-50 border-blue-200"
+            )}
+          >
             {geoScore.total_score !== undefined && (
-              <div className="text-blue-400 font-bold">
-                {uiLanguage === "zh" ? "总分:" : "Total Score:"} {geoScore.total_score}/100
+              <div
+                className={cn(
+                  "font-bold",
+                  isDarkTheme ? "text-blue-400" : "text-blue-600"
+                )}
+              >
+                {uiLanguage === "zh" ? "总分:" : "Total Score:"}{" "}
+                {geoScore.total_score}/100
               </div>
             )}
           </div>
@@ -1165,10 +2067,22 @@ const FinalArticleCard: React.FC<{
       {/* Logic Check */}
       {logicCheck && (
         <div className="space-y-1">
-          <div className="text-[10px] text-emerald-400/70 uppercase tracking-wider">
+          <div
+            className={cn(
+              "text-[10px] uppercase tracking-wider",
+              isDarkTheme ? "text-emerald-400/70" : "text-emerald-600"
+            )}
+          >
             {uiLanguage === "zh" ? "逻辑检查" : "Logic Check"}
           </div>
-          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded p-2 text-xs text-gray-300 leading-relaxed">
+          <div
+            className={cn(
+              "border rounded p-2 text-xs leading-relaxed",
+              isDarkTheme
+                ? "bg-emerald-500/5 border-emerald-500/20 text-gray-300"
+                : "bg-emerald-50 border-emerald-200 text-gray-700"
+            )}
+          >
             {logicCheck}
           </div>
         </div>
@@ -1180,18 +2094,41 @@ const FinalArticleCard: React.FC<{
 const CompetitorAnalysisCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
-}> = ({ data, uiLanguage }) => {
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
   const t = AGENT_TEXT[uiLanguage];
 
   // If markdown field exists, render markdown directly
   if (data.markdown) {
     return (
-      <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2">
-        <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center mb-3">
+      <div
+        className={cn(
+          "border rounded-lg p-4 mt-2",
+          isDarkTheme
+            ? "bg-white/5 border-white/10"
+            : "bg-gray-50 border-gray-200"
+        )}
+      >
+        <h4
+          className={cn(
+            "text-xs font-bold uppercase tracking-widest flex items-center mb-3",
+            isDarkTheme ? "text-gray-400" : "text-gray-600"
+          )}
+        >
           <Target size={12} className="mr-1" /> {t.cardCompetitorAnalysis}
         </h4>
-        <div className="prose prose-sm prose-invert max-w-none">
-          <div className="text-xs text-gray-300 leading-relaxed">
+        <div
+          className={cn(
+            "prose prose-sm max-w-none",
+            isDarkTheme ? "prose-invert" : ""
+          )}
+        >
+          <div
+            className={cn(
+              "text-xs leading-relaxed",
+              isDarkTheme ? "text-gray-300" : "text-gray-700"
+            )}
+          >
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {data.markdown}
             </ReactMarkdown>
@@ -1203,8 +2140,20 @@ const CompetitorAnalysisCard: React.FC<{
 
   // Fallback: render old structured format
   return (
-    <div className="bg-white/5 border border-white/10 rounded-lg p-4 mt-2 space-y-4">
-      <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center">
+    <div
+      className={cn(
+        "border rounded-lg p-4 mt-2 space-y-4",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <h4
+        className={cn(
+          "text-xs font-bold uppercase tracking-widest flex items-center",
+          isDarkTheme ? "text-gray-400" : "text-gray-600"
+        )}
+      >
         <Target size={12} className="mr-1" /> {t.cardCompetitorAnalysis}
       </h4>
 
@@ -1293,46 +2242,107 @@ const CompetitorAnalysisCard: React.FC<{
 export const StreamEventDetails: React.FC<{
   event: AgentStreamEvent;
   uiLanguage: UILanguage;
+  isDarkTheme?: boolean;
   onImageFullscreen?: (url: string, prompt?: string, theme?: string) => void;
-}> = ({ event, uiLanguage, onImageFullscreen }) => {
+}> = ({ event, uiLanguage, isDarkTheme = true, onImageFullscreen }) => {
   const t = AGENT_TEXT[uiLanguage];
   switch (event.cardType) {
     case "serp":
-      return <SerpCard data={event.data} uiLanguage={uiLanguage} />;
+      return (
+        <SerpCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
+      );
     case "data":
-      return <DataCard data={event.data} uiLanguage={uiLanguage} />;
+      return (
+        <DataCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
+      );
     case "outline":
-      return <OutlineCard data={event.data} uiLanguage={uiLanguage} />;
+      return (
+        <OutlineCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
+      );
     case "competitor-analysis":
       return (
-        <CompetitorAnalysisCard data={event.data} uiLanguage={uiLanguage} />
+        <CompetitorAnalysisCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
       );
     case "search-preferences":
       return (
-        <SearchPreferencesCard data={event.data} uiLanguage={uiLanguage} />
+        <SearchPreferencesCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
       );
     case "google-search-results":
       return (
-        <GoogleSearchResultsCard data={event.data} uiLanguage={uiLanguage} />
+        <GoogleSearchResultsCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
       );
     case "firecrawl-result":
-      return <FirecrawlResultCard data={event.data} uiLanguage={uiLanguage} />;
+      return (
+        <FirecrawlResultCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
+      );
     case "dataforseo-competitors":
       return (
-        <DataForSEOCompetitorsCard data={event.data} uiLanguage={uiLanguage} />
+        <DataForSEOCompetitorsCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
       );
     case "dataforseo-keywords":
       return (
-        <DataForSEOKeywordsCard data={event.data} uiLanguage={uiLanguage} />
+        <DataForSEOKeywordsCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
       );
     case "website-audit-report":
       return (
-        <WebsiteAuditReportCard data={event.data} uiLanguage={uiLanguage} />
+        <WebsiteAuditReportCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
       );
     case "quality-review":
-      return <QualityReviewCard data={event.data} uiLanguage={uiLanguage} />;
+      return (
+        <QualityReviewCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
+      );
     case "final-article":
-      return <FinalArticleCard data={event.data} uiLanguage={uiLanguage} />;
+      return (
+        <FinalArticleCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
+      );
     case "image-gen":
       // Determine status from event data
       const imageStatus: ImageGenerationStatus =
@@ -1444,13 +2454,28 @@ const getAgentDescription = (
 };
 
 // Terminal Window Frame Component
-const TerminalWindow: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const TerminalWindow: React.FC<{
+  children: React.ReactNode;
+  isDarkTheme?: boolean;
+}> = ({ children, isDarkTheme = true }) => {
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-lg overflow-hidden shadow-2xl h-full flex flex-col">
+    <div
+      className={cn(
+        "border rounded-lg overflow-hidden shadow-2xl h-full flex flex-col",
+        isDarkTheme
+          ? "bg-[#0a0a0a] border-gray-800"
+          : "bg-white border-gray-300"
+      )}
+    >
       {/* Terminal Header */}
-      <div className="bg-[#1a1a1a] border-b border-gray-800 px-4 py-2 flex items-center justify-between shrink-0">
+      <div
+        className={cn(
+          "border-b px-4 py-2 flex items-center justify-between shrink-0",
+          isDarkTheme
+            ? "bg-[#1a1a1a] border-gray-800"
+            : "bg-gray-50 border-gray-300"
+        )}
+      >
         {/* Window Controls */}
         <div className="flex items-center space-x-2">
           <button className="w-3 h-3 rounded-full bg-red-500 hover:bg-red-600 transition-colors flex items-center justify-center group">
@@ -1475,7 +2500,12 @@ const TerminalWindow: React.FC<{ children: React.ReactNode }> = ({
 
         {/* Terminal Title */}
         <div className="flex-1 text-center">
-          <span className="text-xs text-gray-400 font-mono">
+          <span
+            className={cn(
+              "text-xs font-mono",
+              isDarkTheme ? "text-gray-400" : "text-gray-600"
+            )}
+          >
             agent-terminal
           </span>
         </div>
@@ -1485,7 +2515,12 @@ const TerminalWindow: React.FC<{ children: React.ReactNode }> = ({
       </div>
 
       {/* Terminal Content - Scrollable */}
-      <div className="bg-[#0a0a0a] flex-1 overflow-y-auto min-h-0">
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto min-h-0",
+          isDarkTheme ? "bg-[#0a0a0a]" : "bg-white"
+        )}
+      >
         {children}
       </div>
     </div>
@@ -1542,24 +2577,44 @@ const Cursor: React.FC = () => {
 };
 
 // Terminal Prompt Component
-const TerminalPrompt: React.FC<{ agentName: string }> = ({ agentName }) => {
+const TerminalPrompt: React.FC<{
+  agentName: string;
+  isDarkTheme?: boolean;
+}> = ({ agentName, isDarkTheme = true }) => {
   return (
-    <span className="text-emerald-400 font-mono">
-      <span className="text-gray-500">$</span>{" "}
-      <span className="text-blue-400">{agentName.toLowerCase()}</span>
-      <span className="text-gray-500">:</span>
-      <span className="text-emerald-400">~</span>
-      <span className="text-gray-500">$</span>{" "}
+    <span
+      className={cn(
+        "font-mono",
+        isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+      )}
+    >
+      <span className={isDarkTheme ? "text-gray-500" : "text-gray-400"}>$</span>{" "}
+      <span className={isDarkTheme ? "text-blue-400" : "text-blue-600"}>
+        {agentName.toLowerCase()}
+      </span>
+      <span className={isDarkTheme ? "text-gray-500" : "text-gray-400"}>:</span>
+      <span className={isDarkTheme ? "text-emerald-400" : "text-emerald-600"}>
+        ~
+      </span>
+      <span className={isDarkTheme ? "text-gray-500" : "text-gray-400"}>$</span>{" "}
     </span>
   );
 };
 
 // Code Highlight Component
-const CodeHighlight: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+const CodeHighlight: React.FC<{
+  children: React.ReactNode;
+  isDarkTheme?: boolean;
+}> = ({ isDarkTheme = true, children }) => {
   return (
-    <span className="bg-black/30 text-emerald-300 font-mono text-xs px-1.5 py-0.5 rounded border border-emerald-500/20">
+    <span
+      className={cn(
+        "font-mono text-xs px-1.5 py-0.5 rounded border",
+        isDarkTheme
+          ? "bg-black/30 text-emerald-300 border-emerald-500/20"
+          : "bg-gray-100 text-emerald-700 border-emerald-300"
+      )}
+    >
       {children}
     </span>
   );
@@ -1601,11 +2656,15 @@ const AgentWorkingIndicator: React.FC<{ agentName: string }> = ({
 interface AgentStreamFeedProps {
   events: AgentStreamEvent[];
   uiLanguage?: UILanguage;
+  isDarkTheme?: boolean;
+  isGenerating?: boolean; // 是否正在生成中
 }
 
 export const AgentStreamFeed: React.FC<AgentStreamFeedProps> = ({
   events,
   uiLanguage = "en",
+  isDarkTheme = true,
+  isGenerating = false,
 }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
   const [typingStates, setTypingStates] = useState<Record<string, boolean>>({});
@@ -1614,6 +2673,16 @@ export const AgentStreamFeed: React.FC<AgentStreamFeedProps> = ({
     prompt?: string;
     theme?: string;
   } | null>(null);
+
+  // 检测最后一个事件是否已完成
+  const lastEvent = events[events.length - 1];
+  const lastEventCompleted = lastEvent
+    ? typingStates[lastEvent.id] || false
+    : false;
+
+  // 如果正在生成中，但最后一个事件已完成，显示动态处理提示
+  const shouldShowProcessingIndicator =
+    isGenerating && events.length > 0 && lastEventCompleted;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -1677,12 +2746,21 @@ export const AgentStreamFeed: React.FC<AgentStreamFeedProps> = ({
   };
 
   return (
-    <TerminalWindow>
+    <TerminalWindow isDarkTheme={isDarkTheme}>
       <div className="p-6 space-y-4 font-mono text-sm">
         {events.length === 0 && (
-          <div className="text-gray-500 text-xs">
-            <TerminalPrompt agentName="system" />
-            <span className="text-gray-400">Waiting for agents to start</span>
+          <div
+            className={cn(
+              "text-xs",
+              isDarkTheme ? "text-gray-500" : "text-gray-600"
+            )}
+          >
+            <TerminalPrompt agentName="system" isDarkTheme={isDarkTheme} />
+            <span
+              className={cn(isDarkTheme ? "text-gray-400" : "text-gray-700")}
+            >
+              Waiting for agents to start
+            </span>
             <LoadingDots />
             <Cursor />
           </div>
@@ -1701,11 +2779,19 @@ export const AgentStreamFeed: React.FC<AgentStreamFeedProps> = ({
             >
               {/* Terminal-style line with prompt */}
               <div className="flex items-start space-x-2 mb-2">
-                <TerminalPrompt agentName={agentName} />
+                <TerminalPrompt
+                  agentName={agentName}
+                  isDarkTheme={isDarkTheme}
+                />
 
                 {/* Agent Description - Show when no message and no card */}
                 {!event.message && !event.cardType && agentDesc && (
-                  <div className="text-xs text-gray-400 italic flex items-center space-x-2">
+                  <div
+                    className={cn(
+                      "text-xs italic flex items-center space-x-2",
+                      isDarkTheme ? "text-gray-400" : "text-gray-600"
+                    )}
+                  >
                     <span>{agentDesc}</span>
                     <LoadingDots />
                     <Cursor />
@@ -1713,33 +2799,84 @@ export const AgentStreamFeed: React.FC<AgentStreamFeedProps> = ({
                 )}
 
                 {/* Message with typing effect */}
-                {event.message && (
-                  <div
-                    className={cn(
-                      "text-sm leading-relaxed flex-1",
-                      event.type === "error" ? "text-red-400" : "text-gray-300"
-                    )}
-                  >
-                    {showTyping ? (
-                      <TypingText
-                        text={event.message}
-                        speed={20}
-                        onComplete={() => handleTypingComplete(event.id)}
-                      />
-                    ) : (
-                      <>
-                        {highlightCodeInText(event.message).map((part, i) =>
-                          part.isCode ? (
-                            <CodeHighlight key={i}>{part.text}</CodeHighlight>
-                          ) : (
-                            <span key={i}>{part.text}</span>
-                          )
+                {event.message &&
+                  (() => {
+                    // Check if this is a transition message
+                    const isTransitionMessage =
+                      event.message.includes("Transitioning") ||
+                      event.message.includes("Preparing") ||
+                      event.message.includes("complete") ||
+                      event.message.includes("正在切换") ||
+                      event.message.includes("正在准备") ||
+                      event.message.includes("完成");
+
+                    return (
+                      <div
+                        className={cn(
+                          "text-sm leading-relaxed flex-1 flex items-center space-x-2",
+                          event.type === "error"
+                            ? "text-red-400"
+                            : isDarkTheme
+                            ? "text-gray-300"
+                            : "text-gray-700"
                         )}
-                        <Cursor />
-                      </>
-                    )}
-                  </div>
-                )}
+                      >
+                        {showTyping ? (
+                          <>
+                            <TypingText
+                              text={event.message}
+                              speed={20}
+                              onComplete={() => handleTypingComplete(event.id)}
+                            />
+                            {/* Show LoadingDots during typing for transition messages */}
+                            {isTransitionMessage && <LoadingDots />}
+                          </>
+                        ) : (
+                          <>
+                            {/* Transition messages always show LoadingDots */}
+                            {isTransitionMessage ? (
+                              <>
+                                <span>
+                                  {highlightCodeInText(event.message).map(
+                                    (part, i) =>
+                                      part.isCode ? (
+                                        <CodeHighlight
+                                          key={i}
+                                          isDarkTheme={isDarkTheme}
+                                        >
+                                          {part.text}
+                                        </CodeHighlight>
+                                      ) : (
+                                        <span key={i}>{part.text}</span>
+                                      )
+                                  )}
+                                </span>
+                                <LoadingDots />
+                                <Cursor />
+                              </>
+                            ) : (
+                              <>
+                                {highlightCodeInText(event.message).map(
+                                  (part, i) =>
+                                    part.isCode ? (
+                                      <CodeHighlight
+                                        key={i}
+                                        isDarkTheme={isDarkTheme}
+                                      >
+                                        {part.text}
+                                      </CodeHighlight>
+                                    ) : (
+                                      <span key={i}>{part.text}</span>
+                                    )
+                                )}
+                                <Cursor />
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
               </div>
 
               {/* Functional Cards */}
@@ -1748,6 +2885,7 @@ export const AgentStreamFeed: React.FC<AgentStreamFeedProps> = ({
                   <StreamEventDetails
                     event={event}
                     uiLanguage={uiLanguage}
+                    isDarkTheme={isDarkTheme}
                     onImageFullscreen={handleImageFullscreen}
                   />
                 </div>
@@ -1767,17 +2905,44 @@ export const AgentStreamFeed: React.FC<AgentStreamFeedProps> = ({
               )}
 
               {/* Timestamp (subtle) */}
-              <div className="ml-8 text-[10px] text-gray-600 mt-1">
+              <div
+                className={cn(
+                  "ml-8 text-[10px] mt-1",
+                  isDarkTheme ? "text-gray-600" : "text-gray-500"
+                )}
+              >
                 [{new Date(event.timestamp).toLocaleTimeString()}]
               </div>
             </div>
           );
         })}
 
+        {/* Show processing indicator if generating but no new events */}
+        {shouldShowProcessingIndicator && (
+          <div
+            className={cn(
+              "text-xs mt-4 flex items-center space-x-2",
+              isDarkTheme ? "text-gray-400" : "text-gray-600"
+            )}
+          >
+            <TerminalPrompt agentName="system" isDarkTheme={isDarkTheme} />
+            <span className="italic">
+              {uiLanguage === "zh" ? "正在处理中..." : "Processing..."}
+            </span>
+            <LoadingDots />
+            <Cursor />
+          </div>
+        )}
+
         {/* Always show cursor at the end */}
-        {events.length > 0 && (
-          <div className="text-gray-500 text-xs mt-4">
-            <TerminalPrompt agentName="system" />
+        {events.length > 0 && !shouldShowProcessingIndicator && (
+          <div
+            className={cn(
+              "text-xs mt-4",
+              isDarkTheme ? "text-gray-500" : "text-gray-600"
+            )}
+          >
+            <TerminalPrompt agentName="system" isDarkTheme={isDarkTheme} />
             <Cursor />
           </div>
         )}

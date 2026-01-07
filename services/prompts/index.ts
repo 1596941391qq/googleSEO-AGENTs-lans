@@ -1699,23 +1699,86 @@ Return JSON:
 
   /**
    * 生成Nano Banana 2 Prompt
+   * 增强版本：包含关键词和文章标题以提升图像与主题的相关性
    */
   generateNanoBananaPrompt: {
-    zh: (theme: string, description: string) => {
+    zh: (theme: string, description: string, keyword?: string, articleTitle?: string) => {
       // Nano Banana 2 使用自然语言提示词，不需要复杂的技术规格
-      // 直接使用主题和描述，用自然语言表达
+      // 增强：在描述中融入关键词和主题，提升图像与文章的相关性
+      let prompt = '';
+      
       if (description && description.trim()) {
-        return `${description}`;
+        prompt = description;
+      } else {
+        prompt = theme;
       }
-      return `${theme}`;
+      
+      // 如果有关键词，将其自然地融入prompt中
+      if (keyword && keyword.trim()) {
+        // 提取关键词的核心词汇（去除常见停用词）
+        const keywordWords = keyword.split(/\s+/).filter(word => 
+          word.length > 2 && !['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'].includes(word.toLowerCase())
+        );
+        
+        if (keywordWords.length > 0) {
+          // 将关键词自然地添加到prompt中
+          const coreKeywords = keywordWords.slice(0, 3).join(', ');
+          prompt = `${prompt}, featuring ${coreKeywords}, ${keyword}`;
+        }
+      }
+      
+      // 如果有文章标题，提取标题中的核心概念
+      if (articleTitle && articleTitle.trim()) {
+        // 提取标题中的关键实体和概念
+        const titleWords = articleTitle.split(/\s+/).filter(word => 
+          word.length > 3 && /^[A-Z]/.test(word)
+        );
+        if (titleWords.length > 0) {
+          const titleConcepts = titleWords.slice(0, 2).join(' ');
+          prompt = `${prompt}, related to ${titleConcepts}`;
+        }
+      }
+      
+      return prompt.trim();
     },
-    en: (theme: string, description: string) => {
+    en: (theme: string, description: string, keyword?: string, articleTitle?: string) => {
       // Nano Banana 2 uses natural language prompts, no need for complex technical specifications
-      // Use theme and description directly in natural language
+      // Enhanced: Incorporate keyword and article title to improve image relevance
+      let prompt = '';
+      
       if (description && description.trim()) {
-        return `${description}`;
+        prompt = description;
+      } else {
+        prompt = theme;
       }
-      return `${theme}`;
+      
+      // If keyword exists, naturally incorporate it into the prompt
+      if (keyword && keyword.trim()) {
+        // Extract core words from keyword (remove common stop words)
+        const keywordWords = keyword.split(/\s+/).filter(word => 
+          word.length > 2 && !['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'].includes(word.toLowerCase())
+        );
+        
+        if (keywordWords.length > 0) {
+          // Naturally add keywords to the prompt
+          const coreKeywords = keywordWords.slice(0, 3).join(', ');
+          prompt = `${prompt}, featuring ${coreKeywords}, ${keyword}`;
+        }
+      }
+      
+      // If article title exists, extract core concepts from title
+      if (articleTitle && articleTitle.trim()) {
+        // Extract key entities and concepts from title
+        const titleWords = articleTitle.split(/\s+/).filter(word => 
+          word.length > 3 && /^[A-Z]/.test(word)
+        );
+        if (titleWords.length > 0) {
+          const titleConcepts = titleWords.slice(0, 2).join(' ');
+          prompt = `${prompt}, related to ${titleConcepts}`;
+        }
+      }
+      
+      return prompt.trim();
     }
   }
 };
@@ -1731,12 +1794,14 @@ export function getImageCreativePrompt(
 export function getNanoBananaPrompt(
   theme: string,
   description: string,
-  language: 'zh' | 'en'
+  language: 'zh' | 'en',
+  keyword?: string,
+  articleTitle?: string
 ): string {
   const promptGenerator = IMAGE_CREATIVE_PROMPTS.generateNanoBananaPrompt;
   return language === 'zh'
-    ? promptGenerator.zh(theme, description)
-    : promptGenerator.en(theme, description);
+    ? promptGenerator.zh(theme, description, keyword, articleTitle)
+    : promptGenerator.en(theme, description, keyword, articleTitle);
 }
 
 // ============================================================================
