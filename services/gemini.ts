@@ -21,30 +21,60 @@ const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
-const apiCall = async (endpoint: string, body: any) => {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+const apiCall = async (endpoint: string, body: any, retries: number = 3) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5分钟超时
 
-  if (!response.ok) {
-    let errorData;
+  for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      errorData = await response.json();
-    } catch (e) {
-      // If response is not JSON, try to get text
-      const text = await response.text().catch(() => 'Unknown error');
-      throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
-    }
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
 
-    const errorMessage = errorData?.error || errorData?.message || `HTTP error! status: ${response.status}`;
-    throw new Error(errorMessage);
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          // If response is not JSON, try to get text
+          const text = await response.text().catch(() => 'Unknown error');
+          throw new Error(`HTTP error! status: ${response.status}, message: ${text}`);
+        }
+
+        const errorMessage = errorData?.error || errorData?.message || `HTTP error! status: ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
+      return response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+
+      // 如果是最后一次尝试，或者错误不是网络错误，直接抛出
+      if (attempt === retries || (error.name !== 'TypeError' && error.name !== 'AbortError')) {
+        // 提供更详细的错误信息
+        if (error.name === 'AbortError') {
+          throw new Error(`请求超时 (5分钟): ${endpoint}`);
+        } else if (error.message?.includes('Failed to fetch') || error.name === 'TypeError') {
+          throw new Error(`网络请求失败: ${endpoint}。请检查网络连接或服务器状态。错误详情: ${error.message}`);
+        }
+        throw error;
+      }
+
+      // 等待后重试（指数退避）
+      const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+      console.warn(`API调用失败 (尝试 ${attempt}/${retries})，${delay}ms 后重试:`, error.message);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 
-  return response.json();
+  throw new Error(`API调用失败: ${endpoint} (已重试 ${retries} 次)`);
 };
 
 export const translatePromptToSystemInstruction = async (userPrompt: string): Promise<string> => {
@@ -83,10 +113,10 @@ export const generateKeywords = async (
     industry,
     additionalSuggestions,
   });
-  return { 
-    keywords: result.keywords, 
+  return {
+    keywords: result.keywords,
     rawResponse: result.rawResponse || '',
-    searchResults: result.searchResults 
+    searchResults: result.searchResults
   };
 };
 
@@ -94,13 +124,19 @@ export const analyzeRankingProbability = async (
   keywords: KeywordData[],
   systemInstruction: string,
   uiLanguage: 'zh' | 'en' = 'en',
-  targetLanguage: TargetLanguage = 'en'
+  targetLanguage: TargetLanguage = 'en',
+  websiteUrl?: string,
+  websiteDR?: number,
+  targetSearchEngine: string = 'google'
 ): Promise<KeywordData[]> => {
   const result = await apiCall('/api/analyze-ranking', {
     keywords,
     systemInstruction,
     uiLanguage,
     targetLanguage,
+    websiteUrl,
+    websiteDR,
+    targetSearchEngine
   });
   return result.keywords;
 };
@@ -118,26 +154,14 @@ export const generateDeepDiveStrategy = async (
   return result.report;
 };
 
-export const enhancedDeepDive = async (
-  keyword: KeywordData,
-  uiLanguage: 'zh' | 'en',
-  targetLanguage: TargetLanguage,
-  strategyPrompt?: string
-): Promise<SEOStrategyReport> => {
-  const result = await apiCall('/api/deep-dive-enhanced', {
-    keyword,
-    uiLanguage,
-    targetLanguage,
-    strategyPrompt,
-  });
-  return result.report;
-};
-
 export const batchTranslateAndAnalyze = async (
   keywords: string, // comma-separated keywords
   targetLanguage: TargetLanguage,
   systemInstruction: string,
-  uiLanguage: 'zh' | 'en' = 'en'
+  uiLanguage: 'zh' | 'en' = 'en',
+  targetSearchEngine: string = 'google',
+  websiteUrl?: string,
+  websiteDR?: number
 ): Promise<{
   success: boolean;
   total: number;
@@ -149,6 +173,9 @@ export const batchTranslateAndAnalyze = async (
     targetLanguage,
     systemInstruction,
     uiLanguage,
+    targetSearchEngine,
+    websiteUrl,
+    websiteDR
   });
   return result;
 };
@@ -157,7 +184,10 @@ export const translateAndAnalyzeSingle = async (
   keyword: string,
   targetLanguage: TargetLanguage,
   systemInstruction: string,
-  uiLanguage: 'zh' | 'en' = 'en'
+  uiLanguage: 'zh' | 'en' = 'en',
+  targetSearchEngine: string = 'google',
+  websiteUrl?: string,
+  websiteDR?: number
 ): Promise<{
   success: boolean;
   original: string;
@@ -169,6 +199,9 @@ export const translateAndAnalyzeSingle = async (
     targetLanguage,
     systemInstruction,
     uiLanguage,
+    targetSearchEngine,
+    websiteUrl,
+    websiteDR
   });
   return result;
 };

@@ -110,7 +110,6 @@ import {
   translatePromptToSystemInstruction,
   translateText,
   generateDeepDiveStrategy,
-  enhancedDeepDive,
   batchTranslateAndAnalyze,
   translateAndAnalyzeSingle,
   DEFAULT_GEN_PROMPT_EN,
@@ -196,6 +195,8 @@ const TEXT = {
       "Will translate keywords to target language and analyze blue ocean opportunities.",
     batchInputPlaceholder: "Support multiple keywords (e.g manus,nanobanana)",
     btnBatchAnalyze: "Cross-Market Insights",
+    blueOceanScore: "Blue Ocean Score",
+    drComparison: "DR Comparison (You vs Avg)",
     batchAnalyzing: "Translating and analyzing...",
     batchResultsTitle: "BCross-Market Insights Results",
     originalKeyword: "Original",
@@ -289,7 +290,8 @@ const TEXT = {
     // Content Generation Tabs
     tabMyWebsite: "My Website",
     tabWebsiteData: "Website Data",
-    tabArticleRankings: "Article Rankings",
+    tabArticleRankings: "Projects",
+    tabProjects: "Projects",
     tabPublish: "Publish",
   },
   zh: {
@@ -360,6 +362,8 @@ const TEXT = {
     batchTranslateDesc: "将翻译keyword到目标语言并分析蓝海机会。",
     batchInputPlaceholder: "支持输入多个关键词（e.g manus,nanobanana）",
     btnBatchAnalyze: "跨市场洞察",
+    blueOceanScore: "蓝海信号分",
+    drComparison: "DR对比 (您 vs 均值)",
     batchAnalyzing: "正在跨市场洞察...",
     batchResultsTitle: "跨市场洞察结果",
     originalKeyword: "原始词",
@@ -452,7 +456,8 @@ const TEXT = {
     // Content Generation Tabs
     tabMyWebsite: "我的网站",
     tabWebsiteData: "网站数据",
-    tabArticleRankings: "文章排名",
+    tabArticleRankings: "内容项目",
+    tabProjects: "内容项目",
     tabPublish: "发布",
   },
 };
@@ -468,6 +473,13 @@ const LANGUAGES: { code: TargetLanguage; label: string }[] = [
   { code: "id", label: "Indonesian (Id)" },
   { code: "es", label: "Spanish (Es)" },
   { code: "ar", label: "Arabic (Ar)" },
+];
+
+const SEARCH_ENGINES = [
+  { code: "google", label: "Google", icon: Search },
+  { code: "bing", label: "Bing", icon: Globe },
+  { code: "baidu", label: "Baidu", icon: Search },
+  { code: "yandex", label: "Yandex", icon: Globe },
 ];
 
 // --- Components ---
@@ -1039,7 +1051,7 @@ const renderAgentDataTable = (
         {items.map((data, idx) => (
           <div key={idx} className="space-y-3">
             {/* Analysis Result Cards */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <div
                 className={`p-3 rounded-lg border ${
                   isDarkTheme
@@ -1065,13 +1077,39 @@ const renderAgentDataTable = (
                         ? "text-yellow-400"
                         : "text-yellow-600"
                       : isDarkTheme
-                      ? "text-red-400"
-                      : "text-red-600"
+                        ? "text-red-400"
+                        : "text-red-600"
                   }`}
                 >
                   {data.probability || "N/A"}
                 </div>
               </div>
+
+              {/* Blue Ocean Score Card */}
+              <div
+                className={`p-3 rounded-lg border ${
+                  isDarkTheme
+                    ? "bg-black border-emerald-500/30"
+                    : "bg-gray-50 border-gray-200"
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-bold mb-1 ${
+                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                  }`}
+                >
+                  BLUE OCEAN SCORE
+                </div>
+                <div
+                  className={`text-lg font-bold ${
+                    isDarkTheme ? "text-white" : "text-gray-900"
+                  }`}
+                >
+                  {data.blueOceanScore !== undefined ? Math.round(data.blueOceanScore) : "N/A"}
+                  <span className="text-[10px] font-normal text-white/40 ml-1">/ 100</span>
+                </div>
+              </div>
+
               <div
                 className={`p-3 rounded-lg border ${
                   isDarkTheme
@@ -1092,6 +1130,34 @@ const renderAgentDataTable = (
                   }`}
                 >
                   {data.topDomainType || "Unknown"}
+                </div>
+              </div>
+
+              {/* DR Comparison Card */}
+              <div
+                className={`p-3 rounded-lg border ${
+                  isDarkTheme
+                    ? "bg-black border-emerald-500/30"
+                    : "bg-gray-50 border-gray-200"
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-bold mb-1 ${
+                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                  }`}
+                >
+                  DR (YOU vs AVG)
+                </div>
+                <div
+                  className={`text-lg font-bold ${
+                    isDarkTheme ? "text-white" : "text-gray-900"
+                  }`}
+                >
+                  {data.websiteDR !== undefined ? Math.round(data.websiteDR) : "-"}
+                  <span className="text-[10px] font-normal text-white/40 mx-1">vs</span>
+                  {data.competitorDRs && data.competitorDRs.length > 0 
+                    ? Math.round(data.competitorDRs.reduce((a: number, b: number) => a + b, 0) / data.competitorDRs.length)
+                    : "-"}
                 </div>
               </div>
             </div>
@@ -2770,6 +2836,7 @@ export default function App() {
     step: "content-generation",
     seedKeyword: "",
     targetLanguage: "en",
+    targetSearchEngine: "google",
     keywords: [],
     error: null,
     isMining: false,
@@ -3162,6 +3229,8 @@ export default function App() {
       keyword_mining: 20,
       batch_translation: 20,
       deep_mining: 30,
+      article_generator: 100,
+      website_audit: 30,
     };
 
     const baseAmount = creditsMap[modeId];
@@ -3170,12 +3239,14 @@ export default function App() {
     }
 
     // Calculate actual amount based on keyword count (per 10 keywords)
-    // For mining/batch: every 10 keywords = baseAmount credits
-    // For deep-dive: fixed baseAmount (not based on keyword count)
+    // For mining/batch/audit: every 10 keywords = baseAmount credits
+    // For deep-dive/article-gen: fixed baseAmount (not based on keyword count)
     let amount = baseAmount;
     if (
       keywordCount &&
-      (modeId === "keyword_mining" || modeId === "batch_translation")
+      (modeId === "keyword_mining" ||
+        modeId === "batch_translation" ||
+        modeId === "website_audit")
     ) {
       // Round up: 1-10 keywords = 1x, 11-20 = 2x, 21-30 = 3x, etc.
       const multiplier = Math.ceil(keywordCount / 10);
@@ -3284,6 +3355,12 @@ export default function App() {
       const savedUiLanguage = localStorage.getItem("ui_language");
       if (savedUiLanguage === "zh" || savedUiLanguage === "en") {
         setState((prev) => ({ ...prev, uiLanguage: savedUiLanguage }));
+      } else {
+        // Simple browser language detection
+        const browserLang = navigator.language.toLowerCase();
+        if (browserLang.startsWith("zh")) {
+          setState((prev) => ({ ...prev, uiLanguage: "zh" }));
+        }
       }
     } catch (e) {
       console.error("Error loading settings from localStorage:", e);
@@ -5353,25 +5430,93 @@ export default function App() {
         currentTaskId
       );
 
-      // Call website audit API (streaming)
-      const response = await fetch("/api/website-audit", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId: websiteId,
-          websiteUrl: websiteToUse.url,
-          websiteDomain: websiteDomain,
-          targetLanguage: state.targetLanguage,
-          uiLanguage: state.uiLanguage,
-          wordsPerRound: state.wordsPerRound || 10,
-          miningStrategy: state.miningStrategy || "horizontal",
-          industry: state.miningConfig?.industry,
-          additionalSuggestions: state.miningConfig?.additionalSuggestions,
-        }),
-      });
+      // Call website audit API (streaming) with timeout and retry
+      let controller = new AbortController();
+      let timeoutId = setTimeout(() => controller.abort(), 600000); // 10分钟超时
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
+      let response;
+      let lastError: any = null;
+      const maxRetries = 3;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          response = await fetch("/api/website-audit", {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              Authorization: token ? `Bearer ${token}` : "",
+            },
+            body: JSON.stringify({
+              websiteId: websiteId,
+              websiteUrl: websiteToUse.url,
+              websiteDomain: websiteDomain,
+              targetLanguage: state.targetLanguage,
+              uiLanguage: state.uiLanguage,
+              wordsPerRound: state.wordsPerRound || 10,
+              miningStrategy: state.miningStrategy || "horizontal",
+              industry: state.miningConfig?.industry,
+              additionalSuggestions: state.miningConfig?.additionalSuggestions,
+            }),
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            const errorText = await response.text().catch(() => 'Unknown error');
+            throw new Error(`API error: ${response.status} - ${errorText}`);
+          }
+          
+          // 成功，跳出重试循环
+          break;
+        } catch (error: any) {
+          clearTimeout(timeoutId);
+          lastError = error;
+          
+          // 如果是最后一次尝试，或者错误不是网络错误，直接抛出
+          if (attempt === maxRetries || (error.name !== 'TypeError' && error.name !== 'AbortError')) {
+            if (error.name === 'AbortError') {
+              throw new Error(
+                state.uiLanguage === "zh"
+                  ? "请求超时 (10分钟)。请检查网络连接或稍后重试。"
+                  : "Request timeout (10 minutes). Please check your network connection or try again later."
+              );
+            } else if (error.message?.includes('Failed to fetch') || error.name === 'TypeError') {
+              throw new Error(
+                state.uiLanguage === "zh"
+                  ? `网络请求失败。请检查网络连接或服务器状态。错误详情: ${error.message}`
+                  : `Network request failed. Please check your network connection or server status. Error: ${error.message}`
+              );
+            }
+            throw error;
+          }
+          
+          // 等待后重试（指数退避）
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          console.warn(`[Website Audit] API调用失败 (尝试 ${attempt}/${maxRetries})，${delay}ms 后重试:`, error.message);
+          addLog(
+            state.uiLanguage === "zh"
+              ? `⚠️ 网络请求失败，${delay}ms 后重试 (${attempt}/${maxRetries})...`
+              : `⚠️ Network request failed, retrying in ${delay}ms (${attempt}/${maxRetries})...`,
+            "warning",
+            currentTaskId
+          );
+          await new Promise(resolve => setTimeout(resolve, delay));
+          
+          // 重新创建 controller 和 timeout
+          const newController = new AbortController();
+          const newTimeoutId = setTimeout(() => newController.abort(), 600000);
+          controller = newController;
+          timeoutId = newTimeoutId;
+        }
+      }
+      
+      if (!response) {
+        throw lastError || new Error(
+          state.uiLanguage === "zh"
+            ? "API调用失败 (已重试3次)"
+            : "API call failed (retried 3 times)"
+        );
       }
 
       // Handle streaming response
@@ -5859,6 +6004,12 @@ export default function App() {
 
           try {
             // Analyze single keyword (real-time)
+            // 获取网站DR (如果有选择网站)
+            let websiteDRValue: number | undefined = undefined;
+            if (selectedWebsite?.metrics?.domain_rating) {
+              websiteDRValue = selectedWebsite.metrics.domain_rating;
+            }
+
             const singleAnalysis = await analyzeRankingProbability(
               [keyword],
               getWorkflowPrompt(
@@ -5867,7 +6018,10 @@ export default function App() {
                 state.analyzePrompt
               ),
               state.uiLanguage,
-              state.targetLanguage
+              state.targetLanguage,
+              selectedWebsite?.domain || undefined,
+              websiteDRValue,
+              state.targetSearchEngine
             );
 
             if (singleAnalysis.length > 0) {
@@ -6128,9 +6282,74 @@ export default function App() {
         );
 
         await new Promise((resolve) => setTimeout(resolve, 1500));
-      } catch (err) {
-        console.error(err);
-        addLog(`Error in Round ${currentRound}: ${err}`, "error", taskId);
+      } catch (err: any) {
+        console.error(`[Mining Loop] Error in Round ${currentRound}:`, err);
+        
+        // 提供更详细的错误信息
+        let errorMessage = err?.message || String(err);
+        if (err?.message?.includes('Failed to fetch') || err?.name === 'TypeError') {
+          errorMessage = state.uiLanguage === "zh"
+            ? `网络请求失败: ${err.message}。请检查网络连接或服务器状态。`
+            : `Network request failed: ${err.message}. Please check your network connection or server status.`;
+        } else if (err?.name === 'AbortError') {
+          errorMessage = state.uiLanguage === "zh"
+            ? "请求超时。请检查网络连接或稍后重试。"
+            : "Request timeout. Please check your network connection or try again later.";
+        }
+        
+        addLog(
+          state.uiLanguage === "zh"
+            ? `❌ Round ${currentRound} 错误: ${errorMessage}`
+            : `❌ Round ${currentRound} error: ${errorMessage}`,
+          "error",
+          taskId
+        );
+        
+        addThought(
+          "decision",
+          state.uiLanguage === "zh"
+            ? `挖掘失败: ${errorMessage}`
+            : `Mining failed: ${errorMessage}`,
+          undefined,
+          taskId
+        );
+        
+        // 设置错误状态
+        setState((prev) => {
+          const updatedTasks = prev.taskManager.tasks.map((task) => {
+            if (task.id === taskId && task.miningState) {
+              return {
+                ...task,
+                miningState: {
+                  ...task.miningState,
+                  isMining: false,
+                },
+              };
+            }
+            return task;
+          });
+
+          if (taskId === prev.taskManager.activeTaskId) {
+            return {
+              ...prev,
+              isMining: false,
+              error: errorMessage,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          } else {
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          }
+        });
+        
         stopMiningRef.current = true;
       }
     }
@@ -6412,6 +6631,37 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         const lowProbCount = analyzedBatch.filter(
           (k) => k.probability === ProbabilityLevel.LOW
         ).length;
+
+        // Consume credits on first successful round (after getting keywords)
+        if (currentRound === 1 && analyzedBatch.length > 0) {
+          try {
+            addLog(
+              "Consuming credits based on keywords generated...",
+              "info",
+              taskId
+            );
+            await consumeCredits(
+              "website_audit",
+              `Website Audit - Round 1 (${state.targetLanguage.toUpperCase()})`,
+              analyzedBatch.length
+            );
+            addLog(
+              `✅ Credits consumed: ${
+                Math.ceil(analyzedBatch.length / 10) * 30
+              } credits. Remaining: ${credits?.remaining || 0}`,
+              "success",
+              taskId
+            );
+          } catch (error: any) {
+            console.error("[Credits] Failed to consume credits:", error);
+            addLog(
+              `⚠️ Warning: Credits consumption failed - ${error.message}`,
+              "warning",
+              taskId
+            );
+            // Continue mining even if credits fail (already got the keywords)
+          }
+        }
 
         addLog(
           state.uiLanguage === "zh"
@@ -6739,326 +6989,59 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     }
   };
 
-  const runEnhancedDeepDive = async (keyword: KeywordData, taskId: string) => {
-    try {
-      // Step 1: Generate strategy report using enhanced deep dive API
-      addLog("Starting enhanced deep dive analysis...", "info", taskId);
-      const report = await enhancedDeepDive(
-        keyword,
-        state.uiLanguage,
-        state.targetLanguage,
-        getWorkflowPrompt("deepDive", "deepdive-strategy", state.deepDivePrompt)
-      );
+  const handleStopBatch = () => {
+    stopBatchRef.current = true;
+    addLog("Batch analysis stopped by user.", "warning");
+  };
 
-      // Consume credits after successfully generating strategy (fixed 30 credits for deep dive)
-      // Skip credit consumption in local development environment
-      const isLocalDev =
-        import.meta.env.DEV ||
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1";
+  const handleStartBatch = async () => {
+    const batchInput = state.batchInputKeywords.trim();
+    if (!batchInput) return;
 
-      if (isLocalDev) {
-        addLog(
-          state.uiLanguage === "zh"
-            ? "本地测试模式：跳过 credit 消耗"
-            : "Local dev mode: Skipping credit consumption",
-          "info",
-          taskId
-        );
-      } else {
-        try {
-          addLog("Consuming credits for deep dive analysis...", "info", taskId);
-          await consumeCredits(
-            "deep_mining",
-            `Deep Dive Strategy - "${
-              keyword.keyword
-            }" (${state.targetLanguage.toUpperCase()})`
-          );
-          addLog(
-            `✅ Credits consumed: 30 credits. Remaining: ${
-              credits?.remaining || 0
-            }`,
-            "success",
-            taskId
-          );
-        } catch (error: any) {
-          console.error("[Credits] Failed to consume credits:", error);
-          addLog(
-            `⚠️ Warning: Credits consumption failed - ${error.message}`,
-            "warning",
-            taskId
-          );
-          // Continue showing results even if credits fail
-        }
-      }
+    const keywordList = batchInput
+      .split("\n")
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
 
-      // Step 2: Core keyword extraction (done by API)
-      setState((prev) => {
-        const updatedTasks = prev.taskManager.tasks.map((task) => {
-          if (task.id === taskId && task.deepDiveState) {
-            return {
-              ...task,
-              deepDiveState: {
-                ...task.deepDiveState,
-                deepDiveProgress: 50,
-                deepDiveCurrentStep:
-                  state.uiLanguage === "zh"
-                    ? "提取核心关键词..."
-                    : "Extracting core keywords...",
-              },
-            };
-          }
-          return task;
-        });
+    if (keywordList.length === 0) return;
 
-        if (taskId === prev.taskManager.activeTaskId) {
-          return {
-            ...prev,
-            deepDiveProgress: 50,
-            deepDiveCurrentStep:
-              state.uiLanguage === "zh"
-                ? "提取核心关键词..."
-                : "Extracting core keywords...",
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        } else {
-          return {
-            ...prev,
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        }
-      });
-
-      if (report.coreKeywords && report.coreKeywords.length > 0) {
-        addDeepDiveThought(
-          "keyword-extraction",
-          `Extracted ${report.coreKeywords.length} core keywords from generated content`,
-          { keywords: report.coreKeywords },
-          taskId
-        );
-        addLog(
-          `Core keywords: ${report.coreKeywords.join(", ")}`,
-          "success",
-          taskId
-        );
-      }
-
-      // Step 3: SERP verification (done by API)
-      setState((prev) => {
-        const updatedTasks = prev.taskManager.tasks.map((task) => {
-          if (task.id === taskId && task.deepDiveState) {
-            return {
-              ...task,
-              deepDiveState: {
-                ...task.deepDiveState,
-                deepDiveProgress: 70,
-                deepDiveCurrentStep:
-                  state.uiLanguage === "zh"
-                    ? "验证SERP竞争情况..."
-                    : "Verifying SERP competition...",
-              },
-            };
-          }
-          return task;
-        });
-
-        if (taskId === prev.taskManager.activeTaskId) {
-          return {
-            ...prev,
-            deepDiveProgress: 70,
-            deepDiveCurrentStep:
-              state.uiLanguage === "zh"
-                ? "验证SERP竞争情况..."
-                : "Verifying SERP competition...",
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        } else {
-          return {
-            ...prev,
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        }
-      });
-
-      if (report.serpCompetitionData && report.serpCompetitionData.length > 0) {
-        for (const serpData of report.serpCompetitionData) {
-          addDeepDiveThought(
-            "serp-verification",
-            `Searched SERP for "${serpData.keyword}"`,
-            {
-              keywords: [serpData.keyword],
-              serpResults: serpData.serpResults,
-              analysis: serpData.analysis,
-              serankingData: serpData.serankingData,
-            },
-            taskId
-          );
-        }
-        addLog(
-          `Analyzed competition for ${report.serpCompetitionData.length} core keywords`,
-          "success",
-          taskId
-        );
-      }
-
-      // Step 4: Ranking probability analysis (done by API)
-      setState((prev) => {
-        const updatedTasks = prev.taskManager.tasks.map((task) => {
-          if (task.id === taskId && task.deepDiveState) {
-            return {
-              ...task,
-              deepDiveState: {
-                ...task.deepDiveState,
-                deepDiveProgress: 90,
-                deepDiveCurrentStep:
-                  state.uiLanguage === "zh"
-                    ? "分析上首页概率..."
-                    : "Analyzing ranking probability...",
-              },
-            };
-          }
-          return task;
-        });
-
-        if (taskId === prev.taskManager.activeTaskId) {
-          return {
-            ...prev,
-            deepDiveProgress: 90,
-            deepDiveCurrentStep:
-              state.uiLanguage === "zh"
-                ? "分析上首页概率..."
-                : "Analyzing ranking probability...",
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        } else {
-          return {
-            ...prev,
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        }
-      });
-
-      if (report.rankingProbability && report.rankingAnalysis) {
-        addDeepDiveThought(
-          "probability-analysis",
-          `Estimated ranking probability: ${report.rankingProbability}`,
-          {
-            probability: report.rankingProbability,
-            analysis: report.rankingAnalysis,
-          },
-          taskId
-        );
-        addLog(
-          `Ranking probability: ${report.rankingProbability}`,
-          report.rankingProbability === ProbabilityLevel.HIGH
-            ? "success"
-            : report.rankingProbability === ProbabilityLevel.MEDIUM
-            ? "warning"
-            : "error",
-          taskId
-        );
-      }
-
-      // Complete - navigate to results with task isolation
-      const newDeepDiveEntry: DeepDiveArchiveEntry = {
-        id: `dd-arc-${Date.now()}`,
-        timestamp: Date.now(),
-        keyword: keyword.keyword,
-        strategyReport: report,
+    // Auto-create task if no active task exists
+    if (!state.taskManager.activeTaskId) {
+      addTask({
+        type: "batch",
+        inputKeywords: batchInput,
         targetLanguage: state.targetLanguage,
-      };
-
-      setState((prev) => {
-        const updatedArchives = [
-          newDeepDiveEntry,
-          ...prev.deepDiveArchives,
-        ].slice(0, 20);
-        localStorage.setItem(
-          "google_seo_deepdive_archives",
-          JSON.stringify(updatedArchives)
-        );
-
-        // Update task object
-        const updatedTasks = prev.taskManager.tasks.map((task) => {
-          if (task.id === taskId && task.deepDiveState) {
-            return {
-              ...task,
-              deepDiveState: {
-                ...task.deepDiveState,
-                isDeepDiving: false,
-                currentStrategyReport: report,
-                deepDiveProgress: 100,
-                deepDiveCurrentStep:
-                  state.uiLanguage === "zh"
-                    ? "分析完成！"
-                    : "Analysis complete!",
-              },
-            };
-          }
-          return task;
-        });
-
-        // Only update global state if this is the active task
-        if (taskId === prev.taskManager.activeTaskId) {
-          return {
-            ...prev,
-            step: "deep-dive-results",
-            isDeepDiving: false,
-            currentStrategyReport: report,
-            deepDiveProgress: 100,
-            deepDiveCurrentStep:
-              state.uiLanguage === "zh" ? "分析完成！" : "Analysis complete!",
-            deepDiveArchives: updatedArchives,
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        } else {
-          // Background task - only update archives and task object
-          return {
-            ...prev,
-            deepDiveArchives: updatedArchives,
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-            },
-          };
-        }
       });
-
-      addLog("Deep dive analysis complete!", "success", taskId);
-      playCompletionSound(); // Play sound on deep dive completion
-    } catch (e: any) {
-      console.error("Enhanced deep dive error:", e);
-      addLog(`Deep dive failed: ${e.message}`, "error", taskId);
-      setState((prev) => ({
-        ...prev,
-        isDeepDiving: false,
-        error: "Failed to complete deep dive analysis",
-        step: "results", // Go back to results page
-        deepDiveProgress: 0,
-        deepDiveCurrentStep: "",
-      }));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      return; // Exit and let user start batch analysis in the new task
     }
+
+    // Capture taskId at the start for isolation
+    const currentTaskId = state.taskManager.activeTaskId;
+
+    stopBatchRef.current = false;
+
+    // Initialize batch analysis state
+    setState((prev) => ({
+      ...prev,
+      step: "batch-analyzing",
+      batchKeywords: [],
+      batchThoughts: [],
+      batchCurrentIndex: 0,
+      batchTotalCount: keywordList.length,
+      batchInputKeywords: batchInput, // Store original input
+      logs: [],
+      error: null,
+    }));
+
+    addLog(
+      `Starting batch analysis for ${keywordList.length} keywords...`,
+      "info",
+      currentTaskId
+    );
+
+    // Run batch analysis
+    runBatchAnalysis(keywordList, currentTaskId);
   };
 
   // === Workflow Configuration Management ===
@@ -7801,11 +7784,20 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           );
 
           // Call translateAndAnalyzeSingle API which handles translation, DataForSEO, and analysis
+          // 获取网站DR (如果有选择网站)
+          let batchWebsiteDR: number | undefined = undefined;
+          if (batchSelectedWebsite?.metrics?.domain_rating) {
+            batchWebsiteDR = batchSelectedWebsite.metrics.domain_rating;
+          }
+
           const singleResult = await translateAndAnalyzeSingle(
             originalKeyword,
             state.targetLanguage,
             systemInstruction,
-            state.uiLanguage
+            state.uiLanguage,
+            state.targetSearchEngine,
+            batchSelectedWebsite?.domain || undefined,
+            batchWebsiteDR
           );
 
           if (!singleResult.success) {
@@ -8303,9 +8295,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   />
                   <StepItem
                     number={3}
-                    label={t.tabArticleRankings}
+                    label={t.tabProjects}
                     active={
-                      state.contentGeneration.activeTab === "article-rankings"
+                      state.contentGeneration.activeTab === "projects"
                     }
                     isDarkTheme={isDarkTheme}
                   />
@@ -8561,6 +8553,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               }}
               uiLanguage={state.uiLanguage}
               isDarkTheme={isDarkTheme}
+              token={token}
               articleGeneratorState={{
                 keyword: state.articleGeneratorState.keyword,
                 tone: state.articleGeneratorState.tone,
@@ -8965,7 +8958,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           <SelectTrigger
                             hideIcon
                             className={cn(
-                              "md:w-48 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
+                              "md:w-40 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
                               isDarkTheme
                                 ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
                                 : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
@@ -9013,6 +9006,72 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 )}
                               >
                                 {l.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        {/* Search Engine Selector */}
+                        <Select
+                          value={state.targetSearchEngine}
+                          onValueChange={(value) =>
+                            setState((prev) => ({
+                              ...prev,
+                              targetSearchEngine: value as any,
+                            }))
+                          }
+                        >
+                          <SelectTrigger
+                            hideIcon
+                            className={cn(
+                              "md:w-32 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
+                              isDarkTheme
+                                ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
+                                : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
+                            )}
+                          >
+                            <div className="flex items-center space-x-3 overflow-hidden">
+                              <Search
+                                size={14}
+                                className={cn(
+                                  "shrink-0",
+                                  isDarkTheme
+                                    ? "text-emerald-500"
+                                    : "text-emerald-600"
+                                )}
+                              />
+                              <span className="text-[11px] font-bold truncate">
+                                <SelectValue />
+                              </span>
+                            </div>
+                            <ChevronRight
+                              size={14}
+                              className={cn(
+                                "shrink-0",
+                                isDarkTheme
+                                  ? "text-neutral-700"
+                                  : "text-gray-500"
+                              )}
+                            />
+                          </SelectTrigger>
+                          <SelectContent
+                            className={cn(
+                              isDarkTheme
+                                ? "bg-black/90 border-emerald-500/30"
+                                : "bg-white border-emerald-500/30"
+                            )}
+                          >
+                            {SEARCH_ENGINES.map((se) => (
+                              <SelectItem
+                                key={se.code}
+                                value={se.code}
+                                className={cn(
+                                  isDarkTheme
+                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                )}
+                              >
+                                {se.label}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -11420,6 +11479,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         <th className="px-4 py-4 w-10"></th>
                         <th className="px-4 py-4">{t.originalKeyword}</th>
                         <th className="px-4 py-4">{t.translatedKeyword}</th>
+                        <th className="px-4 py-4">{t.blueOceanScore}</th>
+                        <th className="px-4 py-4">{t.drComparison}</th>
                         <th className="px-4 py-4">{t.colType}</th>
                         <th className="px-4 py-4 text-center">{t.colProb}</th>
                         <th className="px-4 py-4 text-right">Action</th>
@@ -11480,6 +11541,61 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 }
                               >
                                 {item.keyword}
+                              </td>
+                              <td
+                                className={`px-4 py-4 cursor-pointer font-bold ${
+                                  isDarkTheme ? "text-white" : "text-gray-900"
+                                }`}
+                                onClick={() =>
+                                  setState((prev) => ({
+                                    ...prev,
+                                    expandedRowId: isExpanded ? null : item.id,
+                                  }))
+                                }
+                              >
+                                {item.blueOceanScore !== undefined ? (
+                                  <div className="flex flex-col">
+                                    <span className={cn(
+                                      item.blueOceanScore >= 70 ? "text-emerald-400" :
+                                      item.blueOceanScore >= 40 ? "text-yellow-400" : "text-red-400"
+                                    )}>
+                                      {Math.round(item.blueOceanScore)}
+                                    </span>
+                                    <div className="w-12 h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
+                                      <div 
+                                        className={cn(
+                                          "h-full rounded-full",
+                                          item.blueOceanScore >= 70 ? "bg-emerald-500" :
+                                          item.blueOceanScore >= 40 ? "bg-yellow-500" : "bg-red-500"
+                                        )}
+                                        style={{ width: `${item.blueOceanScore}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-500">-</span>
+                                )}
+                              </td>
+                              <td
+                                className={`px-4 py-4 cursor-pointer ${
+                                  isDarkTheme ? "text-white/80" : "text-gray-700"
+                                }`}
+                                onClick={() =>
+                                  setState((prev) => ({
+                                    ...prev,
+                                    expandedRowId: isExpanded ? null : item.id,
+                                  }))
+                                }
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span className="font-bold">{item.websiteDR !== undefined ? Math.round(item.websiteDR) : "-"}</span>
+                                  <span className="text-[10px] text-slate-500">vs</span>
+                                  <span className="font-medium text-amber-400/80">
+                                    {item.competitorDRs && item.competitorDRs.length > 0 
+                                      ? Math.round(item.competitorDRs.reduce((a: number, b: number) => a + b, 0) / item.competitorDRs.length)
+                                      : "-"}
+                                  </span>
+                                </div>
                               </td>
                               <td className="px-4 py-4">
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -11558,7 +11674,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                     : "bg-gray-50 border-gray-200"
                                 }`}
                               >
-                                <td colSpan={6} className="px-4 py-6">
+                                <td colSpan={8} className="px-4 py-6">
                                   <div className="flex flex-col md:flex-row gap-6">
                                     <div className="flex-1 space-y-4">
                                       {/* SE Ranking Data Section */}
@@ -13059,6 +13175,43 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   </p>
                 </div>
                 <div className="flex gap-3">
+                  <button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch('/api/projects/save-keywords', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            userId: 1, // TODO: Get real userId
+                            projectName: state.seedKeyword,
+                            seedKeyword: state.seedKeyword,
+                            targetLanguage: state.targetLanguage,
+                            keywords: state.keywords
+                          })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                          alert(state.uiLanguage === 'zh' ? '已保存到项目管理' : 'Saved to Projects');
+                          setState(prev => ({
+                            ...prev,
+                            step: 'content-generation',
+                            contentGeneration: {
+                              ...prev.contentGeneration,
+                              activeTab: 'projects'
+                            }
+                          }));
+                        } else {
+                          throw new Error(result.error || 'Failed to save');
+                        }
+                      } catch (err: any) {
+                        alert(err.message);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                  >
+                    <Save className="w-4 h-4" />
+                    {state.uiLanguage === 'zh' ? '保存到项目' : 'Save to Project'}
+                  </button>
                   <button
                     onClick={() => startMining(true)}
                     className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded-md hover:bg-emerald-600 transition-colors text-sm font-medium"

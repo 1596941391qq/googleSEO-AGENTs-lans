@@ -211,6 +211,7 @@ interface ArticleGeneratorLayoutProps {
   onBack: () => void;
   uiLanguage?: "en" | "zh";
   isDarkTheme?: boolean;
+  token?: string | null;
   articleGeneratorState?: {
     keyword: string;
     tone: string;
@@ -267,6 +268,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
   onBack,
   uiLanguage = "en",
   isDarkTheme = true,
+  token,
   articleGeneratorState,
   onStateChange,
 }) => {
@@ -511,7 +513,10 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
     try {
       const response = await fetch("/api/visual-article", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
         body: JSON.stringify({
           ...config,
           uiLanguage: uiLanguage || "en",
@@ -946,6 +951,11 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
               onStart={startGeneration}
               uiLanguage={uiLanguage}
               isDarkTheme={isDarkTheme}
+              initialKeyword={state.keyword}
+              initialTone={state.tone}
+              initialAudience={state.targetAudience as "beginner" | "expert"}
+              initialVisualStyle={state.visualStyle}
+              initialTargetMarket={state.targetMarket}
             />
           )}
 

@@ -1,8 +1,87 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateVisualArticle } from './_shared/services/visual-article-service.js';
-import { parseRequestBody, setCorsHeaders, handleOptions } from './_shared/request-handler.js';
+import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { scrapeWebsite } from './_shared/tools/firecrawl.js';
+
+// Main app URL for credits API
+const MAIN_APP_URL = process.env.MAIN_APP_URL || process.env.VITE_MAIN_APP_URL || 'https://niche-mining-web.vercel.app';
+
+/**
+ * Check user credits balance
+ */
+async function checkCreditsBalance(token: string): Promise<{ remaining: number; total: number; used: number }> {
+  const response = await fetch(`${MAIN_APP_URL}/api/user/dashboard`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to fetch credits' }));
+    throw new Error(error.error || 'Failed to fetch credits');
+  }
+
+  const data = await response.json();
+  return {
+    remaining: data.credits?.remaining || 0,
+    total: data.credits?.total || 0,
+    used: data.credits?.used || 0,
+  };
+}
+
+/**
+ * Consume credits
+ */
+async function consumeCredits(
+  token: string,
+  modeId: string,
+  description: string,
+  amount: number
+): Promise<{ remaining: number; used: number }> {
+  const response = await fetch(`${MAIN_APP_URL}/api/credits/consume`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      credits: amount,
+      description,
+      relatedEntity: 'seo_agent_visual_article',
+      modeId,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Failed to consume credits' }));
+
+    if (error.error === 'Insufficient credits') {
+      throw new Error('INSUFFICIENT_CREDITS');
+    }
+
+    throw new Error(error.error || 'Failed to consume credits');
+  }
+
+  const result = await response.json();
+  return {
+    remaining: result.remaining,
+    used: result.used,
+  };
+}
+
+/**
+ * Extract token from Authorization header
+ */
+function extractToken(req: VercelRequest): string | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return null;
+  }
+  return authHeader.substring(7);
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -16,6 +95,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    // Extract and validate token
+    const token = extractToken(req);
+    if (!token) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Authorization token required for credits consumption'
+      });
+    }
+
     let body: any;
     try {
       body = parseRequestBody(req);
@@ -24,11 +112,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid request body', details: error.message });
     }
 
-    const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, reference, userId, projectId, projectName } = body;
+    const { 
+      keyword, 
+      tone, 
+      visualStyle, 
+      targetAudience, 
+      targetMarket, 
+      uiLanguage, 
+      targetLanguage, 
+      reference, 
+      userId, 
+      projectId, 
+      projectName,
+      skipCreditsCheck = false
+    } = body;
 
     // Validate keyword
     if (!keyword || typeof keyword !== 'string' || !keyword.trim()) {
       return res.status(400).json({ error: 'Missing or invalid keyword' });
+    }
+
+    // Check credits balance (fixed 100 credits for article generation)
+    if (!skipCreditsCheck) {
+      try {
+        const credits = await checkCreditsBalance(token);
+        const requiredCredits = 100;
+
+        if (credits.remaining < requiredCredits) {
+          return res.status(402).json({
+            error: 'Insufficient credits',
+            message: `This operation requires ${requiredCredits} credits, but you only have ${credits.remaining} credits remaining`,
+            required: requiredCredits,
+            remaining: credits.remaining,
+            rechargeUrl: `${MAIN_APP_URL}/console/pricing`
+          });
+        }
+      } catch (creditsError: any) {
+        console.error('Credits check error:', creditsError);
+        // Continue but log warning
+      }
     }
 
     const keywordString = keyword.trim();
@@ -167,6 +289,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           projectId: (finalArticle as any).projectId
         }
       });
+
+      // Consume credits after successful generation
+      if (!skipCreditsCheck && token) {
+        try {
+          await consumeCredits(
+            token,
+            'article_generator',
+            `Visual Article - "${keywordString}" (${finalTargetLanguage.toUpperCase()})`,
+            100
+          );
+        } catch (creditsError: any) {
+          console.error('Failed to consume credits for visual article:', creditsError);
+        }
+      }
+
       res.end();
     } catch (error: any) {
       console.error('[visual-article] Visual Article Error:', error);

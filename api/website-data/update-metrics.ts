@@ -105,20 +105,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log('[update-metrics] 📍 Fetching data for domain:', website.website_domain, 'location:', locationCode);
 
-    // 清除可能存在的旧缓存（确保获取到正确的域名数据）
-    // 这样可以避免使用之前 apple.com 的测试数据
-    try {
-      console.log('[update-metrics] 🗑️  Clearing old cache to ensure fresh data for domain:', website.website_domain);
-      // 清除所有相关缓存表的数据（强制清除，确保获取新数据）
-      await sql`DELETE FROM domain_overview_cache WHERE website_id = ${body.websiteId}`;
-      await sql`DELETE FROM domain_keywords_cache WHERE website_id = ${body.websiteId}`;
-      await sql`DELETE FROM domain_competitors_cache WHERE website_id = ${body.websiteId}`;
-      console.log('[update-metrics] ✅ Cleared old cache for website:', body.websiteId);
-    } catch (clearError: any) {
-      console.warn('[update-metrics] ⚠️ Failed to clear old cache (non-critical):', clearError.message);
-      // 继续执行，不清除缓存也不影响主流程
-    }
-
     // 调用 DataForSEO API 获取数据
     const [overview, keywords, competitors] = await Promise.all([
       getDomainOverview(website.website_domain, locationCode)
@@ -136,7 +122,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
         .catch((err) => {
           console.error('[update-metrics] ❌ Failed to get overview:', err.message);
-          console.error('[update-metrics] Error stack:', err.stack?.substring(0, 500));
           return null;
         }),
       getDomainKeywords(website.website_domain, locationCode, 50).catch((err) => {
@@ -149,14 +134,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     ]);
 
-    // 缓存概览数据
+    // 检查是否所有数据都为空
+    if (!overview && keywords.length === 0 && competitors.length === 0) {
+      console.warn('[update-metrics] ⚠️ All data sources returned empty results');
+    }
+
+    // 缓存概览数据 (使用 UPSERT 避免删除旧数据)
     if (overview) {
       console.log('[update-metrics] 💾 Caching overview data:', {
         websiteId: body.websiteId,
         organicTraffic: overview.organicTraffic,
         totalKeywords: overview.totalKeywords,
-        totalTraffic: overview.totalTraffic,
-        rankingDistribution: overview.rankingDistribution,
+        top10Count: overview.rankingDistribution.top10,
+        trafficCost: overview.trafficCost
       });
 
       await sql`

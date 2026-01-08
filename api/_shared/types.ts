@@ -78,6 +78,17 @@ export interface KeywordData {
   searchIntent?: string;
   intentAnalysis?: string;
 
+  // Domain Authority (new for "Big fish eats small fish")
+  websiteDR?: number;
+  competitorDRs?: number[];
+  canOutrankPositions?: number[];
+  top3Probability?: ProbabilityLevel;
+  top10Probability?: ProbabilityLevel;
+  relevanceScore?: number; // 0-1
+
+  // Blue Ocean Scoring (new)
+  blueOceanScore?: number; // 0-100
+
   // Verification
   isIndexed?: boolean;
 

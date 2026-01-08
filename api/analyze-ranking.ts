@@ -16,7 +16,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
     const body = parseRequestBody(req);
-    const { keywords, systemInstruction, uiLanguage, targetLanguage } = body;
+    const { 
+      keywords, 
+      systemInstruction, 
+      uiLanguage, 
+      targetLanguage,
+      targetSearchEngine = 'google',
+      websiteUrl,
+      websiteDR
+    } = body;
 
     if (!keywords || !Array.isArray(keywords) || keywords.length === 0 || !systemInstruction) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -34,7 +42,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 将语言代码转换为 DataForSEO 的 location_code 和 language_code
       const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage || 'en');
 
-      const dataForSEOResults = await fetchKeywordData(keywordStrings, locationCode, languageCode);
+      const dataForSEOResults = await fetchKeywordData(keywordStrings, locationCode, languageCode, targetSearchEngine);
 
       // Create a map for quick lookup
       const dataForSEODataMap = new Map();
@@ -108,7 +116,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         keywordsToAnalyze,
         systemInstruction,
         uiLanguage || 'en',
-        targetLanguage || 'en'
+        targetLanguage || 'en',
+        websiteUrl,
+        websiteDR,
+        targetSearchEngine
       );
     }
 

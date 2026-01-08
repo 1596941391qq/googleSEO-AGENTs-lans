@@ -12,6 +12,8 @@
  * 认证：Basic Auth (Base64 encoded login:password)
  */
 
+export type SearchEngine = 'google' | 'baidu' | 'bing' | 'yandex';
+
 const DATAFORSEO_LOGIN = process.env.DATAFORSEO_LOGIN || '';
 const DATAFORSEO_PASSWORD = process.env.DATAFORSEO_PASSWORD || '';
 const DATAFORSEO_BASE_URL = 'https://api.dataforseo.com/v3';
@@ -107,6 +109,7 @@ function getAuthHeader(): string {
  * @param keywords - 关键词数组
  * @param locationCode - 地区代码，默认 2840 (美国)，参考：https://docs.dataforseo.com/v3/appendix/locations
  * @param languageCode - 语言代码，默认 'en'
+ * @param engine - 搜索引擎，默认 'google'
  * @param retryCount - 重试次数，默认 3
  * @returns DataForSEO数据数组
  */
@@ -114,59 +117,58 @@ export async function fetchDataForSEOData(
   keywords: string[],
   locationCode: number = 2840,
   languageCode: string = 'en',
+  engine: SearchEngine = 'google',
   retryCount: number = 3
 ): Promise<DataForSEOKeywordData[]> {
-  const BATCH_SIZE = 100; // DataForSEO 支持每次最多1000个关键词
-  const DELAY_BETWEEN_BATCHES = 1000; // 批次之间延迟1秒
+  const BATCH_SIZE = engine === 'google' ? 100 : 50; // 不同引擎限制不同
+  const DELAY_BETWEEN_BATCHES = 1000;
 
   try {
-    console.log(`[DataForSEO] Fetching data for ${keywords.length} keywords`);
+    console.log(`[DataForSEO] Fetching ${engine} data for ${keywords.length} keywords`);
 
-    // 如果关键词数量较少，直接请求
     if (keywords.length <= BATCH_SIZE) {
-      return await fetchBatchWithRetry(keywords, locationCode, languageCode, retryCount);
+      return await fetchBatchWithRetry(keywords, locationCode, languageCode, engine, retryCount);
     }
 
-    // 分批处理
     const results: DataForSEOKeywordData[] = [];
     for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
       const batch = keywords.slice(i, i + BATCH_SIZE);
-      console.log(`[DataForSEO] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(keywords.length / BATCH_SIZE)}`);
-
-      const batchResults = await fetchBatchWithRetry(batch, locationCode, languageCode, retryCount);
+      const batchResults = await fetchBatchWithRetry(batch, locationCode, languageCode, engine, retryCount);
       results.push(...batchResults);
 
-      // 如果不是最后一批，等待一段时间再请求下一批
       if (i + BATCH_SIZE < keywords.length) {
         await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
       }
     }
 
-    console.log(`[DataForSEO] Successfully retrieved data for ${results.length} keywords`);
     return results;
   } catch (error: any) {
-    console.error('[DataForSEO] API call failed:', error);
+    console.error(`[DataForSEO] ${engine} API call failed:`, error);
     throw error;
   }
 }
 
 /**
  * 获取一批关键词数据（带重试逻辑）
- * 使用 DataForSEO Labs Google Ads Search Volume API
  */
 async function fetchBatchWithRetry(
   keywords: string[],
   locationCode: number,
   languageCode: string,
+  engine: SearchEngine,
   maxRetries: number
 ): Promise<DataForSEOKeywordData[]> {
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // 使用 Keywords Data API 的 Search Volume 端点
-      // 这个端点提供搜索量、CPC、竞争度等数据
-      const endpoint = `${DATAFORSEO_BASE_URL}/keywords_data/google_ads/search_volume/live`;
+      // 不同搜索引擎对应的端点
+      let endpoint = '';
+      if (engine === 'google') {
+        endpoint = `${DATAFORSEO_BASE_URL}/keywords_data/google_ads/search_volume/live`;
+      } else {
+        endpoint = `${DATAFORSEO_BASE_URL}/keywords_data/${engine}/search_volume/live`;
+      }
 
       const requestBody = [
         {
@@ -272,17 +274,24 @@ async function fetchBatchWithRetry(
  * @param keywords - 关键词数组（最多1000个）
  * @param locationCode - 地区代码，默认 2840 (美国)
  * @param languageCode - 语言代码，默认 'en'
+ * @param engine - 搜索引擎，支持 'google' 和 'bing'
  * @returns 关键词难度数据数组
  */
 export async function fetchKeywordDifficulty(
   keywords: string[],
   locationCode: number = 2840,
-  languageCode: string = 'en'
+  languageCode: string = 'en',
+  engine: SearchEngine = 'google'
 ): Promise<{ keyword: string; keyword_difficulty?: number }[]> {
-  try {
-    console.log(`[DataForSEO] Fetching keyword difficulty for ${keywords.length} keywords`);
+  // Baidu 和 Yandex 不支持 Bulk Keyword Difficulty API
+  if (engine === 'baidu' || engine === 'yandex') {
+    return keywords.map(kw => ({ keyword: kw }));
+  }
 
-    const endpoint = `${DATAFORSEO_BASE_URL}/dataforseo_labs/google/bulk_keyword_difficulty/live`;
+  try {
+    console.log(`[DataForSEO] Fetching ${engine} keyword difficulty for ${keywords.length} keywords`);
+
+    const endpoint = `${DATAFORSEO_BASE_URL}/dataforseo_labs/${engine}/bulk_keyword_difficulty/live`;
 
     const requestBody = [
       {
@@ -355,12 +364,14 @@ export async function fetchSingleKeywordData(
  * @param keywords - 关键词数组
  * @param locationCode - 位置代码，默认 2840 (美国)
  * @param languageCode - 语言代码，默认 'en'
+ * @param engine - 搜索引擎，默认 'google'
  * @returns 关键词数据数组（兼容格式）
  */
 export async function fetchKeywordData(
   keywords: string[],
   locationCode: number = 2840,
-  languageCode: string = 'en'
+  languageCode: string = 'en',
+  engine: SearchEngine = 'google'
 ): Promise<Array<{
   keyword: string;
   is_data_found: boolean;
@@ -373,12 +384,12 @@ export async function fetchKeywordData(
   try {
     // 并行调用两个 API：search_volume 和 keyword_difficulty
     const [volumeResults, difficultyResults] = await Promise.all([
-      fetchDataForSEOData(keywords, locationCode, languageCode).catch(err => {
-        console.warn('[DataForSEO] Search volume API failed:', err.message);
+      fetchDataForSEOData(keywords, locationCode, languageCode, engine).catch(err => {
+        console.warn(`[DataForSEO] Search volume API failed for ${engine}:`, err.message);
         return keywords.map(kw => ({ keyword: kw, is_data_found: false }));
       }),
-      fetchKeywordDifficulty(keywords, locationCode, languageCode).catch(err => {
-        console.warn('[DataForSEO] Keyword difficulty API failed:', err.message);
+      fetchKeywordDifficulty(keywords, locationCode, languageCode, engine).catch(err => {
+        console.warn(`[DataForSEO] Keyword difficulty API failed for ${engine}:`, err.message);
         return keywords.map(kw => ({ keyword: kw }));
       })
     ]);

@@ -17,24 +17,46 @@ import {
   User,
   Sparkles,
   AlertCircle,
+  HelpCircle,
+  BarChart3,
+  Layout,
+  PlusCircle,
+  Link2,
 } from "lucide-react";
+import { driver } from "driver.js";
+import "driver.js/dist/driver.css";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
-import { KeywordData } from "../../types";
+import { KeywordData } from "../types";
 
 // 定义本地类型
+import { ProjectDashboard } from "./projects/ProjectDashboard";
+
 interface WebsiteBinding {
   id: string;
   url: string;
   domain?: string;
   location?: string;
+  title?: string;
+  description?: string;
+  screenshot?: string;
+  industry?: string | null;
+  monthlyVisits?: number | null;
+  monthlyRevenue?: string;
+  marketingTools?: string[];
+  boundAt?: string | Date;
+  additionalInfo?: string;
+  keywordsCount?: number;
+  healthScore?: number;
+  top10Count?: number;
+  trafficCost?: number;
 }
 
 interface ContentGenerationState {
-  activeTab: "my-website" | "website-data" | "article-rankings" | "publish";
+  activeTab: "my-website" | "website-data" | "projects" | "publish";
   website: WebsiteBinding | null;
   [key: string]: any;
 }
@@ -50,6 +72,130 @@ import {
 } from "recharts";
 import { WebsiteManager } from "./WebsiteManager";
 import { WebsiteDataDashboard } from "./website-data";
+
+// Opportunity Insight Terminal Component
+const OpportunityTerminal: React.FC<{
+  isDarkTheme: boolean;
+  uiLanguage: "en" | "zh";
+  websiteId?: string;
+  url?: string;
+}> = ({ isDarkTheme, uiLanguage, websiteId, url }) => {
+  const [lines, setLines] = useState<string[]>([]);
+  const [currentLineIndex, setCurrentLineIndex] = useState(0);
+  const [currentCharIndex, setCurrentCharIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [fetchedInsights, setFetchedInsights] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchInsights = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch("/api/websites/insights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ websiteId, url, uiLanguage }),
+        });
+        const result = await response.json();
+        if (result.success) {
+          setFetchedInsights(result.data.insights);
+        } else {
+          throw new Error("Failed to fetch insights");
+        }
+      } catch (error) {
+        console.error("[OpportunityTerminal] Error:", error);
+        setFetchedInsights(
+          uiLanguage === "zh"
+            ? [
+                "> 正在扫描全域流量特征...",
+                "> 无法获取实时洞察，请重试。",
+                "> 系统就绪。",
+              ]
+            : [
+                "> Scanning global traffic...",
+                "> Failed to fetch insights.",
+                "> System ready.",
+              ]
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (websiteId || url) {
+      fetchInsights();
+    }
+  }, [websiteId, url, uiLanguage]);
+
+  useEffect(() => {
+    if (!loading && currentLineIndex < fetchedInsights.length) {
+      const timer = setTimeout(() => {
+        if (currentCharIndex < fetchedInsights[currentLineIndex].length) {
+          setCurrentCharIndex((prev) => prev + 1);
+        } else {
+          setLines((prev) => [...prev, fetchedInsights[currentLineIndex]]);
+          setCurrentLineIndex((prev) => prev + 1);
+          setCurrentCharIndex(0);
+        }
+      }, 30);
+      return () => clearTimeout(timer);
+    }
+  }, [currentLineIndex, currentCharIndex, fetchedInsights, loading]);
+
+  return (
+    <Card
+      className={cn(
+        "h-[420px] border-none rounded-[32px] overflow-hidden font-mono text-[10px] relative group",
+        isDarkTheme
+          ? "bg-black text-emerald-500"
+          : "bg-zinc-900 text-emerald-400"
+      )}
+    >
+      <div className="absolute top-4 left-6 flex gap-1.5">
+        <div className="w-2 h-2 rounded-full bg-red-500/50" />
+        <div className="w-2 h-2 rounded-full bg-amber-500/50" />
+        <div className="w-2 h-2 rounded-full bg-emerald-500/50" />
+      </div>
+      <div className="absolute top-4 right-6 flex items-center gap-2">
+        <div
+          className={cn(
+            "w-2 h-2 rounded-full bg-emerald-500",
+            !loading && "animate-pulse"
+          )}
+        />
+        <span className="text-[8px] font-black uppercase tracking-widest opacity-40">
+          {loading ? "SCANNING..." : "LIVE TERMINAL"}
+        </span>
+      </div>
+      <CardContent className="p-8 pt-14 space-y-2">
+        {lines.map((line, idx) => (
+          <div key={idx} className="opacity-80 leading-relaxed">
+            {line}
+          </div>
+        ))}
+        {!loading && currentLineIndex < fetchedInsights.length && (
+          <div className="flex items-center">
+            <span>
+              {fetchedInsights[currentLineIndex].substring(0, currentCharIndex)}
+            </span>
+            <span className="w-1.5 h-3.5 bg-emerald-500 ml-1 animate-pulse" />
+          </div>
+        )}
+        {loading && (
+          <div className="flex items-center gap-2 animate-pulse opacity-50">
+            <span>
+              {uiLanguage === "zh"
+                ? "> 正在初始化全域扫描..."
+                : "> Initializing global scan..."}
+            </span>
+            <Loader2 className="w-3 h-3 animate-spin" />
+          </div>
+        )}
+      </CardContent>
+      {/* Decorative Glow */}
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent pointer-events-none" />
+    </Card>
+  );
+};
 
 // Website Data Tab Component (独立组件，修复 hooks 问题)
 interface WebsiteDataTabProps {
@@ -1800,345 +1946,435 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
   // Render My Website Tab
   const renderMyWebsite = () => {
-    // Debug logging
-    console.log("[renderMyWebsite] Current state:", {
-      hasWebsite: !!state.website,
-      onboardingStep: state.onboardingStep,
-      hasDemoContent: !!state.demoContent,
-      websiteUrl: state.website?.url,
-    });
+    // Driver guide
+    const startGuide = () => {
+      const driverObj = driver({
+        showProgress: true,
+        overlayColor: isDarkTheme ? "#000000cc" : "#ffffffcc",
+        steps: [
+          {
+            element: "#driver-active-tasks-section",
+            popover: {
+              title:
+                uiLanguage === "zh" ? "🚀 管理活跃任务" : "🚀 Active Tasks",
+              description:
+                uiLanguage === "zh"
+                  ? "点击这里查看进行中的任务。点击右侧的 '+' 号可以快速添加新的挖词任务或进入图文工场。"
+                  : "Click here to view ongoing tasks. Click '+' to quickly add a new keyword mining task or enter the Visual Article factory.",
+              side: "right",
+              align: "start",
+            },
+          },
+          {
+            element: "#driver-website-data",
+            popover: {
+              title:
+                uiLanguage === "zh" ? "📊 查看网站数据" : "📊 Website Data",
+              description:
+                uiLanguage === "zh"
+                  ? "想要深度分析？点击这里查看当前网站的关键词排名、竞争对手和流量趋势。"
+                  : "Want deep analysis? Click here to view keyword rankings, competitors, and traffic trends for your website.",
+              side: "right",
+              align: "start",
+            },
+          },
+        ],
+      });
+      driverObj.drive();
+    };
 
     // Show loading state while checking website binding
     if (isCheckingWebsite) {
       return (
-        <div className="max-w-2xl mx-auto text-center py-20">
-          <div className="mb-8">
-            <div
-              className={cn(
-                "w-20 h-20 rounded-full mx-auto mb-6 flex items-center justify-center",
-                isDarkTheme
-                  ? "bg-emerald-500/10 border-2 border-emerald-500/30"
-                  : "bg-emerald-50 border-2 border-emerald-500/30"
-              )}
-            >
-              <Loader2 className="w-10 h-10 text-emerald-500 animate-spin" />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="text-center space-y-6">
+            <div className="relative">
+              <div className="w-24 h-24 rounded-full border-4 border-emerald-500/10 border-t-emerald-500 animate-spin mx-auto" />
+              <Globe className="w-10 h-10 text-emerald-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
             </div>
-            <h2
-              className={cn(
-                "text-3xl font-bold mb-3",
-                isDarkTheme ? "text-white" : "text-gray-900"
-              )}
-            >
-              {uiLanguage === "zh"
-                ? "人们开始害怕你的网站无处不在"
-                : "People are starting to fear your website is everywhere"}
-            </h2>
-            <p
-              className={cn(
-                "text-sm",
-                isDarkTheme ? "text-zinc-400" : "text-gray-600"
-              )}
-            >
-              {uiLanguage === "zh"
-                ? "正在检查网站绑定状态..."
-                : "Checking website binding status..."}
-            </p>
+            <div className="space-y-2">
+              <h2
+                className={cn(
+                  "text-2xl font-black",
+                  isDarkTheme ? "text-white" : "text-gray-900"
+                )}
+              >
+                {uiLanguage === "zh"
+                  ? "人们开始害怕你的网站无处不在"
+                  : "People are starting to fear your website is everywhere"}
+              </h2>
+              <p
+                className={cn(
+                  "text-sm opacity-60",
+                  isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                )}
+              >
+                {uiLanguage === "zh"
+                  ? "正在检查网站绑定状态..."
+                  : "Checking website binding status..."}
+              </p>
+            </div>
           </div>
         </div>
       );
     }
 
-    // If website is bound, show bound state
+    // Consolidated My Website View
     if (state.website) {
       return (
-        <div className="max-w-6xl mx-auto space-y-6">
-          {/* Top: Website Info & Quick Actions */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Website Info Card */}
-            <Card
-              className={cn(
-                "col-span-1",
-                isDarkTheme
-                  ? "bg-zinc-900 border-zinc-800"
-                  : "bg-white border-gray-200"
-              )}
-            >
-              <CardHeader>
-                <CardTitle
-                  className={cn(
-                    "flex items-center gap-2",
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  )}
-                >
-                  <Globe className="w-5 h-5 text-emerald-500" />
-                  {t.websiteInfo}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div>
-                  <div
-                    className={cn(
-                      "text-xs mb-1",
-                      isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                    )}
-                  >
-                    URL
-                  </div>
-                  <a
-                    href={state.website.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={cn(
-                      "text-sm font-medium flex items-center gap-1 hover:underline",
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-                    )}
-                  >
-                    {state.website.url}
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-
-                {state.website.screenshot && (
-                  <div className="mt-4">
-                    <img
-                      src={state.website.screenshot}
-                      alt={state.website.title || "Website screenshot"}
-                      className={cn(
-                        "w-full rounded-lg border",
-                        isDarkTheme ? "border-zinc-800" : "border-gray-200"
-                      )}
-                    />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Feature Guidance & Data Overview */}
-            <div className="col-span-1 lg:col-span-2 space-y-6">
-              <Card
+        <div className="max-w-7xl mx-auto space-y-12 pb-20">
+          {/* Welcome & Guide Section */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+            <div className="space-y-2">
+              <h2
                 className={cn(
-                  isDarkTheme
-                    ? "bg-zinc-900 border-zinc-800"
-                    : "bg-white border-gray-200"
-                )}
-              >
-                <CardHeader>
-                  <CardTitle
-                    className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
-                  >
-                    {uiLanguage === "zh" ? "功能指引" : "Feature Guidance"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "h-auto p-4 flex flex-col items-start gap-2",
-                        isDarkTheme
-                          ? "border-zinc-700 hover:bg-zinc-800"
-                          : "border-gray-200 hover:bg-gray-50"
-                      )}
-                      onClick={() => handleTabChange("website-data")}
-                    >
-                      <Hash className="w-5 h-5 text-emerald-500" />
-                      <div className="text-left">
-                        <div className="font-medium text-sm">
-                          {t.websiteData}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-xs mt-1",
-                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                          )}
-                        >
-                          {uiLanguage === "zh"
-                            ? "查看网站关键词数据"
-                            : "View website keyword data"}
-                        </div>
-                      </div>
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "h-auto p-4 flex flex-col items-start gap-2",
-                        isDarkTheme
-                          ? "border-zinc-700 hover:bg-zinc-800"
-                          : "border-gray-200 hover:bg-gray-50"
-                      )}
-                      onClick={() => handleTabChange("article-rankings")}
-                    >
-                      <TrendingUp className="w-5 h-5 text-emerald-500" />
-                      <div className="text-left">
-                        <div className="font-medium text-sm">
-                          {t.articleRankings}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-xs mt-1",
-                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                          )}
-                        >
-                          {uiLanguage === "zh"
-                            ? "查看文章排名机会"
-                            : "View article ranking opportunities"}
-                        </div>
-                      </div>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card
-                className={cn(
-                  isDarkTheme
-                    ? "bg-zinc-900 border-zinc-800"
-                    : "bg-white border-gray-200"
-                )}
-              >
-                <CardHeader>
-                  <CardTitle
-                    className={cn(isDarkTheme ? "text-white" : "text-gray-900")}
-                  >
-                    {t.dataOverview}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div
-                    className={cn(
-                      "text-sm text-center py-8",
-                      isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                    )}
-                  >
-                    {uiLanguage === "zh"
-                      ? "暂无数据 - 请先从其他标签页获取数据"
-                      : "No data yet - Please fetch data from other tabs first"}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Bottom: Website Manager */}
-          <Card
-            className={cn(
-              isDarkTheme
-                ? "bg-zinc-900 border-zinc-800"
-                : "bg-white border-gray-200"
-            )}
-          >
-            <CardHeader>
-              <CardTitle
-                className={cn(
-                  "flex items-center gap-2",
+                  "text-3xl font-black tracking-tight",
                   isDarkTheme ? "text-white" : "text-gray-900"
                 )}
               >
-                <Hash className="w-5 h-5 text-emerald-500" />
-                {uiLanguage === "zh" ? "所有网站" : "All Websites"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <WebsiteManager
-                userId={1} // TODO: Get from session
+                {uiLanguage === "zh" ? "工作台概览" : "Workbench Overview"}
+              </h2>
+              <p
+                className={cn(
+                  "text-sm font-medium opacity-60",
+                  isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                )}
+              >
+                {uiLanguage === "zh"
+                  ? "欢迎回来！在这里管理您的数字资产和 SEO 策略。"
+                  : "Welcome back! Manage your digital assets and SEO strategies here."}
+              </p>
+            </div>
+            <Button
+              onClick={startGuide}
+              variant="outline"
+              className="rounded-2xl border-emerald-500/20 bg-emerald-500/5 text-emerald-500 hover:bg-emerald-500/10 font-bold"
+            >
+              <HelpCircle className="w-4 h-4 mr-2" />
+              {uiLanguage === "zh" ? "新手引导" : "Newbie Guide"}
+            </Button>
+          </div>
+
+          {/* Top: Website Info & Feature Guidance */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* Section 1: Website Info (Current Bound Website) */}
+            <div className="lg:col-span-5 space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                <span className="text-xs font-black uppercase tracking-widest opacity-60">
+                  {uiLanguage === "zh" ? "当前站点" : "Current Site"}
+                </span>
+              </div>
+
+              {state.website ? (
+                <Card
+                  className={cn(
+                    "overflow-hidden border-none rounded-[32px] transition-all h-[420px] flex flex-col group",
+                    isDarkTheme ? "bg-zinc-900/50" : "bg-white shadow-sm"
+                  )}
+                >
+                  <div className="relative h-32 shrink-0 overflow-hidden">
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
+                    {state.website.screenshot ? (
+                      <img
+                        src={state.website.screenshot}
+                        alt="Website"
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-emerald-500/5 flex items-center justify-center">
+                        <Globe className="w-12 h-12 text-emerald-500/20" />
+                      </div>
+                    )}
+                    <div className="absolute bottom-4 left-6 z-20">
+                      <Badge className="bg-emerald-500 text-white border-none font-bold mb-1 scale-75 origin-left">
+                        {uiLanguage === "zh" ? "已绑定" : "Bound"}
+                      </Badge>
+                      <h3 className="text-xl font-black text-white truncate max-w-[300px] tracking-tight">
+                        {state.website.domain || state.website.url}
+                      </h3>
+                    </div>
+                  </div>
+                  <CardContent className="p-6 flex-1 flex flex-col justify-between relative">
+                    <div className="space-y-6">
+                      <div className="flex items-center justify-between p-3 rounded-2xl bg-black/40 backdrop-blur-md border border-white/5">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-xl bg-emerald-500/10">
+                            <Globe className="w-4 h-4 text-emerald-500" />
+                          </div>
+                          <span className="text-[10px] font-bold truncate max-w-[180px] opacity-60 mono">
+                            {state.website.url}
+                          </span>
+                        </div>
+                        <a
+                          href={state.website.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2 rounded-xl hover:bg-white/5 transition-colors text-emerald-500"
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                      </div>
+
+                      {/* Real Stats Grid */}
+                      <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                            {uiLanguage === "zh"
+                              ? "预估月流量"
+                              : "Est. Monthly Traffic"}
+                          </span>
+                          <p className="text-2xl font-black tracking-tighter text-white">
+                            {(() => {
+                              const visits = state.website.monthlyVisits || 0;
+                              if (visits >= 1000000000)
+                                return (visits / 1000000000).toFixed(1) + "B";
+                              if (visits >= 1000000)
+                                return (visits / 1000000).toFixed(1) + "M";
+                              if (visits >= 1000)
+                                return (visits / 1000).toFixed(1) + "K";
+                              return visits.toString();
+                            })()}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                            {uiLanguage === "zh"
+                              ? "索引关键词"
+                              : "Indexed Keywords"}
+                          </span>
+                          <p className="text-2xl font-black tracking-tighter text-white">
+                            {state.website.keywordsCount ? (
+                              state.website.keywordsCount >= 1000000 ? (
+                                (state.website.keywordsCount / 1000000).toFixed(
+                                  1
+                                ) + "M"
+                              ) : (
+                                state.website.keywordsCount.toLocaleString()
+                              )
+                            ) : (
+                              <span className="text-zinc-600 animate-pulse text-lg">
+                                {uiLanguage === "zh"
+                                  ? "同步中..."
+                                  : "Syncing..."}
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                            {uiLanguage === "zh" ? "流量价值" : "Traffic Value"}
+                          </span>
+                          <p className="text-xs font-black uppercase tracking-tight text-emerald-500">
+                            {state.website.trafficCost
+                              ? "$" +
+                                (state.website.trafficCost >= 1000000
+                                  ? (
+                                      state.website.trafficCost / 1000000
+                                    ).toFixed(1) + "M"
+                                  : state.website.trafficCost.toLocaleString())
+                              : "$0.00"}
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                            {uiLanguage === "zh"
+                              ? "前10名关键词"
+                              : "Top 10 Rankings"}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 flex-1 bg-zinc-800 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400"
+                                style={{
+                                  width: `${Math.min(
+                                    100,
+                                    ((state.website.top10Count || 0) /
+                                      (state.website.keywordsCount || 100)) *
+                                      100
+                                  )}%`,
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs font-black text-emerald-500">
+                              {state.website.top10Count?.toLocaleString() ||
+                                "0"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Footer Tech Stack */}
+                    <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                      <div className="flex flex-wrap gap-1.5">
+                        {(
+                          state.website.marketingTools || [
+                            "Analytics",
+                            "SEO",
+                            "Meta",
+                          ]
+                        ).map((tool, i) => (
+                          <span
+                            key={i}
+                            className="px-2 py-0.5 rounded-md bg-zinc-800/50 text-[7px] font-black uppercase tracking-wider text-zinc-400 border border-white/5"
+                          >
+                            {tool}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex gap-1">
+                        {[1, 2, 3].map((i) => (
+                          <div
+                            key={i}
+                            className="w-1 h-1 rounded-full bg-emerald-500/20"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card
+                  className={cn(
+                    "p-12 text-center border-dashed border-2 rounded-[32px] flex flex-col items-center justify-center space-y-4 h-full",
+                    isDarkTheme
+                      ? "bg-transparent border-zinc-800"
+                      : "bg-gray-50 border-gray-200"
+                  )}
+                >
+                  <div className="p-4 rounded-full bg-emerald-500/10">
+                    <PlusCircle className="w-8 h-8 text-emerald-500" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="font-bold">
+                      {uiLanguage === "zh" ? "尚未绑定站点" : "No site bound"}
+                    </p>
+                    <p className="text-xs opacity-60">
+                      {uiLanguage === "zh"
+                        ? "从下方的资产地图中选择一个站点开始"
+                        : "Select a site from the asset discovery below to start"}
+                    </p>
+                  </div>
+                </Card>
+              )}
+            </div>
+
+            {/* Section 2: Opportunity Insight Terminal */}
+            <div className="lg:col-span-7 space-y-4">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                <span className="text-xs font-black uppercase tracking-widest opacity-60">
+                  {uiLanguage === "zh" ? "机会洞察" : "Opportunity Insights"}
+                </span>
+              </div>
+
+              <OpportunityTerminal
                 isDarkTheme={isDarkTheme}
                 uiLanguage={uiLanguage}
-                onWebsiteSelect={(website) => {
-                  setState({ website });
-                }}
-                onAddWebsite={(url) => {
-                  handleAddWebsiteFromManager(url);
-                }}
-                onWebsiteBind={(website) => {
-                  // Bind website and set to bound state
-                  const boundWebsite = {
-                    id: website.id,
-                    url: website.url,
-                    domain: website.domain,
-                    title: website.title,
-                    description: website.description,
-                    screenshot: website.screenshot,
-                    industry: website.industry || null,
-                    monthlyVisits: website.monthlyVisits || null,
-                    monthlyRevenue: website.monthlyRevenue || null,
-                    marketingTools: website.marketingTools || [],
-                    boundAt: website.boundAt || new Date().toISOString(),
-                  };
+                websiteId={state.website?.id}
+                url={state.website?.url}
+              />
+            </div>
+          </div>
 
-                  // Save to localStorage as backup
-                  try {
-                    localStorage.setItem(
-                      "google_seo_bound_website",
-                      JSON.stringify(boundWebsite)
+          {/* Section 3: All Websites (Asset Map) */}
+          <div className="space-y-6 pt-6 border-t border-white/5">
+            <WebsiteManager
+              userId={1} // TODO: Get from session
+              isDarkTheme={isDarkTheme}
+              uiLanguage={uiLanguage}
+              onWebsiteSelect={(website) => {
+                setState({ website });
+              }}
+              onAddWebsite={(url) => {
+                handleAddWebsiteFromManager(url);
+              }}
+              onWebsiteBind={(website) => {
+                // Bind website and set to bound state
+                const boundWebsite = {
+                  id: website.id,
+                  url: website.url,
+                  domain: website.domain,
+                  title: website.title,
+                  description: website.description,
+                  screenshot: website.screenshot,
+                  industry: website.industry || null,
+                  monthlyVisits: website.monthlyVisits || null,
+                  monthlyRevenue: website.monthlyRevenue || null,
+                  marketingTools: website.marketingTools || [],
+                  boundAt: website.boundAt || new Date().toISOString(),
+                };
+
+                // Save to localStorage as backup
+                try {
+                  localStorage.setItem(
+                    "google_seo_bound_website",
+                    JSON.stringify(boundWebsite)
+                  );
+                } catch (error) {
+                  console.error(
+                    "[Content Generation] Failed to save website to localStorage:",
+                    error
+                  );
+                }
+
+                setState({
+                  website: boundWebsite,
+                  onboardingStep: 5, // Set to bound state
+                });
+
+                // Update user preferences to set this as current website
+                fetch("/api/websites/set-default", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    websiteId: website.id,
+                    userId: 1,
+                  }),
+                })
+                  .then((response) => {
+                    if (!response.ok) {
+                      throw new Error("Failed to set default website");
+                    }
+                  })
+                  .catch((error) => {
+                    console.error(
+                      "[Content Generation] Error setting default website:",
+                      error
                     );
+                  });
+              }}
+              onWebsiteUnbind={(websiteId) => {
+                // Only unbind if this is the current website
+                if (state.website?.id === websiteId) {
+                  // Clear localStorage
+                  try {
+                    localStorage.removeItem("google_seo_bound_website");
                   } catch (error) {
                     console.error(
-                      "[Content Generation] Failed to save website to localStorage:",
+                      "[Content Generation] Failed to clear website from localStorage:",
                       error
                     );
                   }
 
                   setState({
-                    website: boundWebsite,
-                    onboardingStep: 5, // Set to bound state
+                    website: null,
+                    onboardingStep: 0,
+                    websiteData: null,
+                    demoContent: null,
                   });
-
-                  // Update user preferences to set this as current website
-                  fetch("/api/websites/set-default", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      websiteId: website.id,
-                      userId: 1,
-                    }),
-                  })
-                    .then((response) => {
-                      if (!response.ok) {
-                        throw new Error("Failed to set default website");
-                      }
-                      console.log(
-                        "[Content Generation] Default website set successfully"
-                      );
-                    })
-                    .catch((error) => {
-                      console.error(
-                        "[Content Generation] Failed to set default website:",
-                        error
-                      );
-                    });
-                }}
-                onWebsiteUnbind={(websiteId) => {
-                  // Only unbind if this is the current website
-                  if (state.website?.id === websiteId) {
-                    // Clear localStorage
-                    try {
-                      localStorage.removeItem("google_seo_bound_website");
-                    } catch (error) {
-                      console.error(
-                        "[Content Generation] Failed to clear website from localStorage:",
-                        error
-                      );
-                    }
-
-                    setState({
-                      website: null,
-                      onboardingStep: 0,
-                      websiteData: null,
-                      demoContent: null,
-                    });
-                    setUrlInput("");
-                    setTempUrl("");
-                    setQa1("");
-                    setQa2("");
-                    setQa3([]);
-                    setQa4("");
-                  }
-                }}
-                currentWebsiteId={state.website?.id}
-              />
-            </CardContent>
-          </Card>
+                  setUrlInput("");
+                  setTempUrl("");
+                  setQa1("");
+                  setQa2("");
+                  setQa3([]);
+                  setQa4("");
+                }
+              }}
+              currentWebsiteId={state.website?.id}
+            />
+          </div>
         </div>
       );
     }
@@ -3211,6 +3447,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
   // Old functions removed - now using WebsiteDataTab, ArticleRankingsTab, and PublishTab components
 
+  // Main render return for ContentGenerationView
   return (
     <div className="max-w-7xl mx-auto mt-16">
       {/* Tab Content - No top tabs needed, they're in sidebar */}
@@ -3223,11 +3460,26 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           onGenerateArticle={onGenerateArticle}
         />
       )}
-      {state.activeTab === "article-rankings" && (
-        <ArticleRankingsTab
-          website={state.website}
+      {state.activeTab === "projects" && (
+        <ProjectDashboard
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
+          onGenerateContent={(kw) => {
+            if (onGenerateArticle) {
+              // Map KeywordWithStatus to KeywordData for compatibility
+              onGenerateArticle({
+                id: kw.id,
+                keyword: kw.keyword,
+                translation: kw.translation || "",
+                intent: kw.intent as any,
+                volume: kw.volume || 0,
+                probability: kw.probability as any,
+              });
+            }
+          }}
+          onViewDraft={(kw) => {
+            // Draft viewing logic is inside ProjectDashboard
+          }}
         />
       )}
       {state.activeTab === "publish" && (

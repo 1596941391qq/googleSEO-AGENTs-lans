@@ -28,6 +28,7 @@ interface SidebarLinkProps {
   isDarkTheme?: boolean;
   showBadge?: boolean;
   isCollapsed?: boolean;
+  id?: string;
 }
 
 const SidebarLink: React.FC<SidebarLinkProps> = ({
@@ -38,8 +39,10 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({
   isDarkTheme = true,
   showBadge = false,
   isCollapsed = false,
+  id,
 }) => (
   <button
+    id={id}
     onClick={onClick}
     className={`w-full flex items-center px-3 py-2 rounded transition-all text-xs font-bold uppercase tracking-wider relative ${
       isCollapsed ? "justify-center space-x-0" : "space-x-3"
@@ -88,12 +91,12 @@ interface SidebarProps {
   step: string;
   isDarkTheme: boolean;
   onContentGeneration?: (
-    tab?: "my-website" | "website-data" | "article-rankings" | "publish"
+    tab?: "my-website" | "website-data" | "projects" | "publish"
   ) => void;
   contentGenerationTab?:
     | "my-website"
     | "website-data"
-    | "article-rankings"
+    | "projects"
     | "publish";
   onTestAgents?: () => void;
   onDeepDive?: () => void;
@@ -126,7 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ? {
           myWebsite: "我的网站",
           websiteData: "网站数据",
-          articleRankings: "文章排名",
+          projects: "内容项目",
           publish: "发布",
           visualArticle: "AI 图文工场",
           activeTasks: "进行中的任务",
@@ -139,7 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       : {
           myWebsite: "My Website",
           websiteData: "Website Data",
-          articleRankings: "Article Rankings",
+          projects: "Projects",
           publish: "Publish",
           visualArticle: "AI Visual Article",
           activeTasks: "Active Tasks",
@@ -287,14 +290,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }
               isDarkTheme={isDarkTheme}
               isCollapsed={isCollapsed}
+              id="driver-website-data"
             />
             <SidebarLink
               icon={<TrendingUp size={14} />}
-              label={labels.articleRankings}
-              onClick={() => onContentGeneration("article-rankings")}
+              label={labels.projects}
+              onClick={() => onContentGeneration("projects")}
               active={
                 step === "content-generation" &&
-                contentGenerationTab === "article-rankings"
+                contentGenerationTab === "projects"
               }
               isDarkTheme={isDarkTheme}
               isCollapsed={isCollapsed}
@@ -313,7 +317,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
-        <div>
+        <div id="driver-active-tasks-section">
           {!isCollapsed && (
             <div className="flex items-center justify-between px-3 mb-4 animate-in fade-in duration-300">
               <span
@@ -325,6 +329,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
               {tasks.length < maxTasks && (
                 <button
+                  id="driver-add-task"
                   onClick={onTaskAdd}
                   className="text-emerald-500 hover:text-emerald-400 p-1 transition-colors"
                 >

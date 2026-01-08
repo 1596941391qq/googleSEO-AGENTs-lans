@@ -18,7 +18,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const body = parseRequestBody(req);
-    const { keywords, keywordsFromAudit, targetLanguage, systemInstruction, uiLanguage } = body;
+    const { 
+      keywords, 
+      keywordsFromAudit, 
+      targetLanguage, 
+      systemInstruction, 
+      uiLanguage,
+      targetSearchEngine = 'google', // 新增：目标搜索引擎
+      websiteUrl, // 可选：用于存量拓新模式的DR对比
+      websiteDR // 可选：预计算的DR
+    } = body;
 
     // 支持两种输入方式：
     // 1. keywords (字符串): 手动输入的关键词，需要翻译
@@ -134,9 +143,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { getDataForSEOLocationAndLanguage } = await import('./_shared/tools/dataforseo.js');
       const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
       
-      console.log(`[DataForSEO] Fetching data for ${translatedKeywordsList.length} keywords (location: ${locationCode}, language: ${languageCode})`);
+      console.log(`[DataForSEO] Fetching data for ${translatedKeywordsList.length} keywords (location: ${locationCode}, language: ${languageCode}, engine: ${targetSearchEngine})`);
       
-      const dataForSEOResults = await fetchKeywordData(translatedKeywordsList, locationCode, languageCode);
+      const dataForSEOResults = await fetchKeywordData(translatedKeywordsList, locationCode, languageCode, targetSearchEngine);
 
       // Create a map for quick lookup (保持向后兼容性)
       dataForSEOResults.forEach(data => {
@@ -213,7 +222,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         keywordsToAnalyze,
         systemInstruction || 'You are an SEO expert analyzing keyword ranking opportunities.',
         uiLanguage || 'en',
-        targetLanguage
+        targetLanguage,
+        websiteUrl,
+        websiteDR,
+        targetSearchEngine
       );
     }
 

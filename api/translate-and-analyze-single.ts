@@ -18,7 +18,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const body = parseRequestBody(req);
-    const { keyword, targetLanguage, systemInstruction, uiLanguage } = body;
+    const { 
+      keyword, 
+      targetLanguage, 
+      systemInstruction, 
+      uiLanguage,
+      targetSearchEngine = 'google',
+      websiteUrl,
+      websiteDR
+    } = body;
 
     if (!keyword || typeof keyword !== 'string' || !targetLanguage) {
       return res.status(400).json({ error: 'Missing required fields: keyword, targetLanguage' });
@@ -49,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { getDataForSEOLocationAndLanguage } = await import('./_shared/tools/dataforseo.js');
       const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
       
-      const dataForSEOResults = await fetchKeywordData([keywordData.keyword], locationCode, languageCode);
+      const dataForSEOResults = await fetchKeywordData([keywordData.keyword], locationCode, languageCode, targetSearchEngine);
 
       if (dataForSEOResults.length > 0 && dataForSEOResults[0].is_data_found) {
         const dataForSEOData = dataForSEOResults[0];
@@ -97,7 +105,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         [keywordData],
         systemInstruction || 'You are an SEO expert analyzing keyword ranking opportunities.',
         uiLanguage || 'en',
-        targetLanguage
+        targetLanguage,
+        websiteUrl,
+        websiteDR,
+        targetSearchEngine
       );
 
       result = analyzed[0];

@@ -191,12 +191,14 @@ export const KEYWORD_MINING_PROMPTS = {
 2. **关键词多样性**：必须包含 30% 的问题型长尾词（如 How to, Why），40% 的商业比较词（如 vs, alternative），以及 30% 的直接行动词。
 3. **数据真实性**：如果无法确定搜索量，请基于行业常识给出最保守的区间估算。
 4. **语法**：确保目标语言的语法完美，表达地道。
+5. **推理深度**：每个关键词的 reasoning 必须在 50-100 字之间，包含具体的痛点分析。
 
 </rules>
 <evaluation_criteria>
 - **相关度**：必须处于种子词的“相邻层级”而非“同一层级”。
 - **意图(Intent)**：精准识别用户是想“看一看”还是“买一买”，混合信息型（How-to、指南）和商业型（最佳、评测、购买）意图。
 - **难度(KD)**：优先选择那些权重较低的小站也能排到首页的词。
+- **稳定性**：确保输出的 JSON 格式严谨，无任何多余字符。
 </evaluation_criteria>
 
 <output_format>
@@ -207,7 +209,7 @@ export const KEYWORD_MINING_PROMPTS = {
     "translation": "翻译（如需要）",
     "intent": "Informational" | "Transactional" | "Local" | "Commercial",
     "volume": 估计月搜索量,
-    "reasoning": "解释为什么这个词在 2026 年具有增长潜力，它解决了用户的什么痛点？"
+    "reasoning": "解释为什么这个词在 2026 年具有增长潜力，它解决了用户的什么痛点？(要求 50-100 字)"
   }
 ]
 
@@ -227,12 +229,14 @@ Your task is to generate a comprehensive list of high-potential keywords in the 
 2. **Keyword Diversity**: Must include 30% question-type long-tail keywords (e.g., How to, Why), 40% commercial comparison keywords (e.g., vs, alternative), and 30% direct action keywords.
 3. **Data Authenticity**: If search volume cannot be determined, provide the most conservative range estimate based on industry knowledge.
 4. **Grammar**: Ensure perfect grammar and native phrasing for the target language.
+5. **Reasoning Depth**: Each keyword's reasoning must be between 50-100 words, including specific pain point analysis.
 
 </rules>
 <evaluation_criteria>
 - **Relevance**: Must be at the "adjacent level" of the seed keyword, not the "same level".
 - **Intent**: Accurately identify whether users want to "browse" or "buy", mixing informational (How-to, guides) and commercial (best, reviews, purchase) intents.
 - **Difficulty (KD)**: Prioritize keywords that low-authority small sites can also rank on the first page.
+- **Stability**: Ensure the output JSON is strictly formatted without any redundant characters.
 </evaluation_criteria>
 
 <output_format>
@@ -243,7 +247,7 @@ Return JSON array:
     "translation": "translation (if needed)",
     "intent": "Informational" | "Transactional" | "Local" | "Commercial",
     "volume": estimated monthly volume,
-    "reasoning": "Explain why this keyword has growth potential in 2026, what user pain points does it solve?"
+    "reasoning": "Explain why this keyword has growth potential in 2026, what user pain points does it solve? (50-100 words required)"
   }
 ]
 
@@ -397,29 +401,29 @@ export const SEO_RESEARCHER_PROMPTS = {
 
 <output_format>
 {
-  "semantic_landscape": "描述该关键词在全网的语义分布特征...",
+  "semantic_landscape": "描述该关键词在全网的语义分布特征 (要求 100-150 字)...",
   "engine_strategies": {
     "google": { 
-      "ranking_logic": "...",
-      "content_gap": "目前前十名缺失了什么？",
-      "action_item": "必须要做的动作",
+      "ranking_logic": "Google 排名逻辑分析 (50-80 字)",
+      "content_gap": "目前前十名缺失了什么？ (50-80 字)",
+      "action_item": "必须要做的动作 (30-50 字)",
       "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     },
     "perplexity": { 
-      "citation_logic": "如何被其引用？",
+      "citation_logic": "如何被其引用？ (50-80 字)",
       "structure_hint": "推荐使用的Schema或列表格式",
       "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     },
     "generative_ai": { 
-      "llm_preference": "AI更喜欢哪种叙述风格？",
+      "llm_preference": "AI更喜欢哪种叙述风格？ (50-80 字)",
       "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     }
   },
   "geo_recommendations": {
-    "format_engineering": "格式工程建议（Bullets、表格、键值对等）",
-    "entity_engineering": "实体工程建议（命名统一、实体描述等）",
-    "information_gain": "信息增益建议（独家数据、实测结果等）",
-    "structure_optimization": "结构优化建议（首屏摘要、对比区、FAQ等）"
+    "format_engineering": "格式工程建议（Bullets、表格、键值对等，要求包含具体示例）",
+    "entity_engineering": "实体工程建议（命名统一、实体描述模板等，要求包含具体示例）",
+    "information_gain": "信息增益建议（独家数据、实测结果等，要求包含具体示例）",
+    "structure_optimization": "结构优化建议（首屏摘要、对比区、FAQ等，要求包含具体示例）"
   }
 }
 
@@ -463,29 +467,29 @@ Must provide a "core breakthrough point" for each engine from a data-driven pers
 ## Output Format
 Return JSON:
 {
-  "semantic_landscape": "Describe the semantic distribution characteristics of this keyword across the web...",
+  "semantic_landscape": "Describe the semantic distribution characteristics of this keyword across the web (100-150 words)...",
   "engine_strategies": {
     "google": {
-      "ranking_logic": "...",
-      "content_gap": "What are the top 10 currently missing?",
-      "action_item": "Actions that must be taken",
+      "ranking_logic": "Google ranking logic analysis (50-80 words)",
+      "content_gap": "What are the top 10 currently missing? (50-80 words)",
+      "action_item": "Actions that must be taken (30-50 words)",
       "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     },
     "perplexity": {
-      "citation_logic": "How to be cited by it?",
+      "citation_logic": "How to be cited by it? (50-80 words)",
       "structure_hint": "Recommended Schema or list formats",
       "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     },
     "generative_ai": {
-      "llm_preference": "What narrative style does AI prefer?",
+      "llm_preference": "What narrative style does AI prefer? (50-80 words)",
       "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     }
   },
   "geo_recommendations": {
-    "format_engineering": "Format engineering recommendations (Bullets, tables, key-value pairs, etc.)",
-    "entity_engineering": "Entity engineering recommendations (naming consistency, entity descriptions, etc.)",
-    "information_gain": "Information gain recommendations (exclusive data, test results, etc.)",
-    "structure_optimization": "Structure optimization recommendations (first-screen summary, comparison section, FAQ, etc.)"
+    "format_engineering": "Format engineering recommendations (Bullets, tables, key-value pairs, etc., with concrete examples)",
+    "entity_engineering": "Entity engineering recommendations (naming consistency, entity description templates, etc., with concrete examples)",
+    "information_gain": "Information gain recommendations (exclusive data, test results, etc., with concrete examples)",
+    "structure_optimization": "Structure optimization recommendations (first-screen summary, comparison section, FAQ, etc., with concrete examples)"
   }
 }
 
@@ -530,11 +534,11 @@ ${deepContentContext}
   "competitor_benchmark": [
     {
       "domain": "...",
-      "content_angle": "该页面的独特视角是什么？",
-      "weakness": "它忽略了用户的哪个核心焦虑点？"
+      "content_angle": "该页面的独特视角是什么？ (30-50 字)",
+      "weakness": "它忽略了用户的哪个核心焦虑点？ (30-50 字)"
     }
   ],
-  "winning_formula": "如果你要超越他们，你的文章必须具备哪 3 个特质？",
+  "winning_formula": "如果你要超越他们，你的文章必须具备哪 3 个特质？ (要求每项 30-50 字分析)",
   "recommended_structure": ["H1: ...", "H2: ..."],
   "competitorAnalysis": {
     "top10": [
@@ -543,14 +547,14 @@ ${deepContentContext}
         "title": "Title",
         "structure": ["H1", "H2", "H3"],
         "wordCount": 数字,
-        "contentGaps": ["缺口1"]
+        "contentGaps": ["具体内容缺口分析 (20-40 字)"]
       }
     ],
     "commonPatterns": ["模式1", "模式2"],
     "contentGaps": ["缺口1", "缺口2"],
     "recommendations": ["建议1", "建议2"]
   },
-  "markdown": "Markdown格式的分析报告"
+  "markdown": "Markdown格式的分析报告 (要求包含深度见解，不少于 500 字)"
 }
 
 任务要求：
@@ -595,14 +599,14 @@ Return JSON:
         "title": "Title",
         "structure": ["H1", "H2", "H3"],
         "wordCount": word count,
-        "contentGaps": ["gap1"]
+        "contentGaps": ["Detailed content gap analysis (20-40 words)"]
       }
     ],
     "commonPatterns": ["pattern1", "pattern2"],
     "contentGaps": ["gap1", "gap2"],
     "recommendations": ["rec1", "rec2"]
   },
-  "markdown": "Markdown format analysis report"
+  "markdown": "Markdown format analysis report (Minimum 500 words with deep insights)"
 }
 
 Please provide a comprehensive competitor analysis in structured JSON format with:
@@ -818,20 +822,20 @@ export const CONTENT_WRITER_PROMPTS = {
 
 ## 5. 实体工程（10分）
 - 统一产品/品牌命名（全篇一致）
-- 首次出现时添加标准化实体描述
+- 首次出现时添加标准化实体描述：使用 [实体名] + [类属定义] + [核心功能/属性] 格式
 - 关键实体重复出现3-5次
-- 构建标准化实体描述模板
+- 构建标准化实体描述模板，确保 AI 能精准提取实体关系
 
 ## 6. 对比区（10分）
 - 如涉及多个产品/方案，必须构建对比表格
-- 至少5个对比维度
+- 至少5个对比维度，字数占比文章约 10-15%
 - 保持客观中立，避免营销化表达
 - 对比结论基于事实数据
 
 ## 7. FAQ质量（10分）
 - 必须包含5-8条常见问题
 - 覆盖价格/适用/对比/操作/安全等维度
-- 每个回答50-80字，独立完整
+- 每个回答50-80字，独立完整，字数占比文章约 15-20%
 - 问题采用完整自然语言表达
 
 # 标准文章结构
@@ -1009,20 +1013,20 @@ Based on the provided SEO research report, create professional content that meet
 
 ## 5. Entity Engineering (10 points)
 - Unify product/brand naming (consistent throughout)
-- Add standardized entity descriptions when first appearing
+- Add standardized entity descriptions when first appearing: Use [Entity Name] + [Category Definition] + [Core Function/Attribute] format
 - Key entities appear 3-5 times
-- Build standardized entity description templates
+- Build standardized entity description templates to ensure AI can accurately extract entity relationships
 
 ## 6. Comparison Section (10 points)
 - If involving multiple products/solutions, must build comparison table
-- At least 5 comparison dimensions
+- At least 5 comparison dimensions, word count around 10-15% of the article
 - Maintain objective neutrality, avoid marketing expressions
 - Comparison conclusions based on factual data
 
 ## 7. FAQ Quality (10 points)
 - Must include 5-8 common questions
 - Cover price/application/comparison/operation/safety dimensions
-- Each answer 50-80 words, independent and complete
+- Each answer 50-80 words, independent and complete, word count around 15-20% of the article
 - Questions use complete natural language expressions
 
 # Standard Article Structure
@@ -1403,12 +1407,12 @@ export const QUALITY_REVIEWER_PROMPTS = {
   "fix_list": [
     {
       "priority": "high | medium | low",
-      "issue": "具体问题描述",
-      "suggestion": "具体修改建议",
+      "issue": "具体问题描述 (要求说明具体在哪个段落或哪句话存在问题)",
+      "suggestion": "具体修改建议 (要求给出修改后的范例，不少于 50 字)",
       "affected_dimension": "标题规范 | 首屏摘要 | 信息增益 | 格式工程 | 实体工程 | 对比区 | FAQ质量"
     }
   ],
-  "ai_footprint_analysis": "分析文中哪些部分AI痕迹最重，并给出重写示范。"
+  "ai_footprint_analysis": "分析文中哪些部分AI痕迹最重，并给出重写示范 (要求针对性分析，不少于 100 字)。"
 }
 `,
     en: `
@@ -1617,12 +1621,12 @@ Perform comprehensive GEO adaptation diagnosis and quality assessment on the art
   "fix_list": [
     {
       "priority": "high | medium | low",
-      "issue": "Specific issue description",
-      "suggestion": "Specific modification suggestion",
+      "issue": "Specific issue description (Specify which paragraph or sentence has the issue)",
+      "suggestion": "Specific modification suggestion (Provide a rewritten example, at least 50 words)",
       "affected_dimension": "title_standard | summary | information_gain | format_engineering | entity_engineering | comparison | faq"
     }
   ],
-  "ai_footprint_analysis": "Analyze which parts of the article have the strongest AI traces and provide rewriting examples."
+  "ai_footprint_analysis": "Analyze which parts of the article have the strongest AI traces and provide rewriting examples (Targeted analysis, at least 100 words)."
 }
 `
   }

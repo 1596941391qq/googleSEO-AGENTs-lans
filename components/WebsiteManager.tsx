@@ -9,6 +9,11 @@ import {
   AlertCircle,
   X,
   Link2,
+  ExternalLink,
+  Zap,
+  Activity,
+  BarChart3,
+  Search,
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -33,6 +38,13 @@ export interface Website {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  // New fields for UI
+  healthScore?: number;
+  estTraffic?: string;
+  keywordsCount?: number;
+  top10Count?: number;
+  trafficCost?: number;
+  statusBadges?: string[];
 }
 
 export interface WebsitesListData {
@@ -239,6 +251,18 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
         throw new Error("Invalid save response");
       }
 
+      // Step 3: Trigger metrics update in background (don't await)
+      fetch("/api/website-data/update-metrics", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          websiteId: saveData.data.websiteId,
+          userId,
+        }),
+      }).catch((err) =>
+        console.warn("[WebsiteManager] Failed to trigger initial metrics:", err)
+      );
+
       // If onAddWebsite callback is provided, trigger the demo flow
       if (onAddWebsite) {
         onAddWebsite(processedUrl);
@@ -393,42 +417,45 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2
-            className={cn(
-              "text-lg font-semibold",
-              isDarkTheme ? "text-white" : "text-gray-900"
-            )}
-          >
-            {uiLanguage === "zh" ? "我的网站" : "My Websites"}
-          </h2>
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <h1
+              className={cn(
+                "text-4xl font-black tracking-tighter italic uppercase",
+                isDarkTheme ? "text-white" : "text-gray-900"
+              )}
+            >
+              {uiLanguage === "zh" ? "资产地图" : "Asset"}{" "}
+              <span className="text-emerald-500">
+                {uiLanguage === "zh" ? "Asset Discovery" : "Discovery"}
+              </span>
+            </h1>
+          </div>
           <p
             className={cn(
-              "text-sm mt-1",
+              "text-sm font-medium opacity-60",
               isDarkTheme ? "text-zinc-400" : "text-gray-600"
             )}
           >
             {uiLanguage === "zh"
-              ? `${data.websites.length} 个网站`
-              : `${data.websites.length} website${
-                  data.websites.length > 1 ? "s" : ""
-                }`}
+              ? "集成 DataForSEO Labs 实时数据，深度透视全域 SEO 表现"
+              : "Integrated DataForSEO Labs real-time data, deep insight into global SEO performance"}
           </p>
         </div>
         {!showAddWebsite ? (
           <Button
-            variant="outline"
-            size="sm"
+            size="lg"
             onClick={() => setShowAddWebsite(true)}
+            className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl px-6 py-6 shadow-[0_0_20px_rgba(16,185,129,0.2)] transition-all hover:scale-105"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            {uiLanguage === "zh" ? "添加网站" : "Add Website"}
+            <Plus className="w-5 h-5 mr-2" />
+            {uiLanguage === "zh" ? "绑定新站点" : "Bind New Site"}
           </Button>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 bg-zinc-900/50 p-2 rounded-2xl border border-white/5 backdrop-blur-xl">
             <Input
               type="url"
               value={newWebsiteUrl}
@@ -437,10 +464,10 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
                 uiLanguage === "zh" ? "输入网站URL" : "Enter website URL"
               }
               className={cn(
-                "w-64 h-8",
+                "w-64 h-12 rounded-xl",
                 isDarkTheme
-                  ? "bg-zinc-900 border-zinc-700 text-white"
-                  : "bg-white border-gray-300"
+                  ? "bg-black border-white/10 text-white"
+                  : "bg-white border-gray-200"
               )}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -453,33 +480,35 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
               disabled={addingWebsite}
             />
             <Button
-              size="sm"
+              size="lg"
               onClick={handleAddWebsite}
               disabled={addingWebsite}
+              className="bg-emerald-500 hover:bg-emerald-600 rounded-xl"
             >
               {addingWebsite ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <Plus className="w-4 h-4" />
+                <Plus className="w-5 h-5" />
               )}
             </Button>
             <Button
               variant="ghost"
-              size="sm"
+              size="lg"
               onClick={() => {
                 setShowAddWebsite(false);
                 setNewWebsiteUrl("");
               }}
               disabled={addingWebsite}
+              className="rounded-xl"
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </Button>
           </div>
         )}
       </div>
 
-      {/* Websites List */}
-      <div className="space-y-3">
+      {/* Websites List - Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {data.websites.map((website) => (
           <WebsiteCard
             key={website.id}
@@ -528,195 +557,193 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
   isSettingDefault,
   isDeleting,
 }) => {
-  const formatDate = (date: Date | string | null) => {
-    if (!date) return null;
-
-    const d = new Date(date);
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (uiLanguage === "zh") {
-      if (diffMins < 60) return `${diffMins}分钟前`;
-      if (diffHours < 24) return `${diffHours}小时前`;
-      if (diffDays < 7) return `${diffDays}天前`;
-      return d.toLocaleDateString("zh-CN");
-    } else {
-      if (diffMins < 60) return `${diffMins}m ago`;
-      if (diffHours < 24) return `${diffHours}h ago`;
-      if (diffDays < 7) return `${diffDays}d ago`;
-      return d.toLocaleDateString("en-US");
-    }
+  // Format traffic and keywords
+  const formatNumber = (num: number) => {
+    if (num >= 1000000000) return (num / 1000000000).toFixed(1) + "B";
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+    if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+    return num.toString();
   };
 
-  const lastAccessed = formatDate(website.lastAccessedAt || website.updatedAt);
+  const estTraffic = formatNumber(website.monthlyVisits || 0);
+  const keywordsCount = website.keywordsCount || 0;
+  const top10Count = website.top10Count || 0;
+
+  // Derive status badges from real data
+  const statusBadges = React.useMemo(() => {
+    if (website.statusBadges && website.statusBadges.length > 0)
+      return website.statusBadges;
+
+    const badges = [];
+    if (keywordsCount > 100) {
+      badges.push(uiLanguage === "zh" ? "活跃索引" : "ACTIVE INDEX");
+    }
+    if (top10Count > 50) {
+      badges.push(uiLanguage === "zh" ? "高权重站" : "HIGH AUTHORITY");
+    }
+    if (badges.length === 0) {
+      badges.push(uiLanguage === "zh" ? "扫描中" : "SCANNING");
+    }
+    return badges;
+  }, [website.statusBadges, keywordsCount, top10Count, uiLanguage]);
+
+  // Ensure screenshot is a valid image source (handle base64 missing prefix)
+  const screenshotSrc = React.useMemo(() => {
+    if (!website.screenshot) return null;
+    if (
+      website.screenshot.startsWith("http") ||
+      website.screenshot.startsWith("data:")
+    ) {
+      return website.screenshot;
+    }
+    // If it looks like base64 but missing prefix, add it
+    if (/^[A-Za-z0-9+/=]{100,}$/.test(website.screenshot)) {
+      return `data:image/png;base64,${website.screenshot}`;
+    }
+    return website.screenshot;
+  }, [website.screenshot]);
 
   return (
     <Card
       className={cn(
-        "transition-all cursor-pointer hover:shadow-md",
-        isCurrent && "ring-2 ring-emerald-500",
-        isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white border-gray-200"
+        "group relative overflow-hidden transition-all duration-500 border-none rounded-[32px]",
+        isDarkTheme ? "bg-[#0f0f0f]/80" : "bg-white",
+        "hover:scale-[1.02] hover:shadow-[0_20px_40px_rgba(0,0,0,0.4)]",
+        isCurrent && "ring-2 ring-emerald-500/50"
       )}
-      onClick={onSelect}
     >
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          {/* Left: Website Info */}
-          <div className="flex items-center space-x-3 flex-1 min-w-0">
-            {/* Icon/Favicon */}
+      {/* Background Glow */}
+      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+
+      {/* Top Image Section */}
+      <div className="relative h-48 overflow-hidden rounded-[24px] m-3">
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10" />
+        {screenshotSrc ? (
+          <img
+            src={screenshotSrc}
+            alt={website.title || website.domain}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          />
+        ) : (
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+            <Globe className="w-12 h-12 text-zinc-700" />
+          </div>
+        )}
+
+        {/* Top 10 Rankings Overlay */}
+        <div className="absolute top-4 right-4 z-20 flex flex-col items-center justify-center min-w-[56px] h-14 px-2 rounded-xl bg-black/40 backdrop-blur-md border border-white/10">
+          <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">
+            TOP 10
+          </span>
+          <span className="text-xl font-black text-white leading-none">
+            {formatNumber(top10Count)}
+          </span>
+        </div>
+
+        {/* Status Badges Overlay */}
+        <div className="absolute bottom-4 left-4 z-20 flex gap-2">
+          {statusBadges.map((badge, idx) => (
             <div
-              className={cn(
-                "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                isDarkTheme ? "bg-zinc-800" : "bg-gray-100"
-              )}
+              key={idx}
+              className="px-2 py-1 rounded-md bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-[9px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1"
             >
-              <Globe
-                className={cn(
-                  "w-5 h-5",
-                  isDarkTheme ? "text-zinc-400" : "text-gray-500"
-                )}
+              <Zap size={8} />
+              {badge}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <CardContent className="p-6 pt-2 space-y-6 relative z-10">
+        {/* Title & URL */}
+        <div className="space-y-1">
+          <h3
+            className={cn(
+              "text-xl font-black tracking-tight truncate",
+              isDarkTheme ? "text-white" : "text-gray-900"
+            )}
+          >
+            {website.title || website.domain}
+          </h3>
+          <div className="flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
+            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
+              HTTPS://
+            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[150px]">
+              {website.domain}
+            </span>
+            <ExternalLink size={10} className="text-zinc-500" />
+          </div>
+        </div>
+
+        {/* Progress Bars (Decorative like image) */}
+        <div className="flex gap-1">
+          {[40, 60, 30, 80, 50, 90].map((w, i) => (
+            <div
+              key={i}
+              className="h-1.5 flex-1 rounded-full bg-zinc-800 overflow-hidden"
+            >
+              <div
+                className="h-full bg-emerald-500/40"
+                style={{ width: `${w}%` }}
               />
             </div>
+          ))}
+        </div>
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center space-x-2">
-                <h3
-                  className={cn(
-                    "font-medium truncate",
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  )}
-                >
-                  {website.title || website.domain}
-                </h3>
-                {website.isDefault && (
-                  <Badge
-                    variant="secondary"
-                    className="flex-shrink-0 text-xs px-2 py-0"
-                  >
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    {uiLanguage === "zh" ? "默认" : "Default"}
-                  </Badge>
-                )}
-                {isCurrent && (
-                  <Badge className="flex-shrink-0 text-xs px-2 py-0">
-                    {uiLanguage === "zh" ? "当前" : "Current"}
-                  </Badge>
-                )}
-              </div>
-              <p
-                className={cn(
-                  "text-sm truncate mt-0.5",
-                  isDarkTheme ? "text-zinc-400" : "text-gray-500"
-                )}
-              >
-                {website.url}
-              </p>
-              {lastAccessed && (
-                <p
-                  className={cn(
-                    "text-xs mt-1",
-                    isDarkTheme ? "text-zinc-500" : "text-gray-400"
-                  )}
-                >
-                  {uiLanguage === "zh" ? "最后访问" : "Last accessed"}:{" "}
-                  {lastAccessed}
-                </p>
-              )}
-            </div>
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="p-4 rounded-2xl bg-zinc-900/50 border border-white/5 space-y-1">
+            <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block">
+              EST. TRAFFIC
+            </span>
+            <span className="text-lg font-black text-white">{estTraffic}</span>
           </div>
+          <div className="p-4 rounded-2xl bg-zinc-900/50 border border-white/5 space-y-1">
+            <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block">
+              KEYWORDS
+            </span>
+            <span className="text-lg font-black text-white">
+              {keywordsCount.toLocaleString()}
+            </span>
+          </div>
+        </div>
 
-          {/* Right: Actions */}
-          <div className="flex items-center space-x-2 flex-shrink-0 ml-4">
-            {!isCurrent && onBind && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onBind();
-                }}
-              >
-                <Link2 className="w-3 h-3 mr-1" />
+        {/* Actions Row */}
+        <div className="flex gap-2">
+          <Button
+            onClick={() => (onBind ? onBind() : onSelect())}
+            className={cn(
+              "flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
+              isCurrent
+                ? "bg-emerald-500 text-white hover:bg-emerald-600"
+                : "bg-white text-black hover:bg-zinc-200"
+            )}
+          >
+            {isCurrent ? (
+              <>
+                <CheckCircle className="w-4 h-4 mr-2" />
+                {uiLanguage === "zh" ? "当前站点" : "Current Site"}
+              </>
+            ) : (
+              <>
+                <Link2 className="w-4 h-4 mr-2" />
                 {uiLanguage === "zh" ? "绑定" : "Bind"}
-              </Button>
+              </>
             )}
-            {isCurrent && onUnbind && (
-              <Button
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "text-xs",
-                  isDarkTheme
-                    ? "border-red-500/30 text-red-400 hover:bg-red-500/10"
-                    : "border-red-500/30 text-red-600 hover:bg-red-50"
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (
-                    confirm(
-                      uiLanguage === "zh"
-                        ? "确定要解绑这个网站吗？"
-                        : "Are you sure you want to unbind this website?"
-                    )
-                  ) {
-                    onUnbind();
-                  }
-                }}
-              >
-                <X className="w-3 h-3 mr-1" />
-                {uiLanguage === "zh" ? "解绑" : "Unbind"}
-              </Button>
-            )}
-            {!website.isDefault && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs"
-                disabled={isSettingDefault}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSetDefault();
-                }}
-              >
-                {isSettingDefault ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : uiLanguage === "zh" ? (
-                  "设为默认"
-                ) : (
-                  "Set Default"
-                )}
-              </Button>
-            )}
+          </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-              disabled={isDeleting}
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete();
-              }}
-            >
-              {isDeleting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-            </Button>
-
-            <ChevronRight
-              className={cn(
-                "w-5 h-5",
-                isDarkTheme ? "text-zinc-500" : "text-gray-400"
-              )}
-            />
-          </div>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="w-12 h-12 rounded-xl border-white/10 bg-zinc-900/50 text-zinc-500 hover:text-red-500 hover:bg-red-500/10 transition-all"
+          >
+            <Trash2 className="w-5 h-5" />
+          </Button>
         </div>
       </CardContent>
     </Card>

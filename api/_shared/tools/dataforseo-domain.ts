@@ -236,9 +236,107 @@ function getLocationAndLanguageNames(locationCode: number): { locationName: stri
 }
 
 /**
- * 重试请求的辅助函数（处理 429 速率限制错误）
+ * 批量获取域名概览数据
+ * 
+ * @param domains - 域名数组
+ * @param locationCode - 地区代码
+ * @returns 域名与数据的映射
  */
-async function fetchWithRetry(
+export async function getBatchDomainOverview(
+  domains: string[],
+  locationCode: number = 2840
+): Promise<Map<string, DomainOverview>> {
+  const domainMap = new Map<string, DomainOverview>();
+  if (domains.length === 0) return domainMap;
+
+  // 去重并清洗域名
+  const uniqueDomains = Array.from(new Set(domains.map(d => d.replace(/^https?:\/\//, '').split('/')[0])));
+  
+  // DataForSEO API 通常限制一次 100 个任务
+  const BATCH_SIZE = 50;
+  
+  for (let i = 0; i < uniqueDomains.length; i += BATCH_SIZE) {
+    const chunk = uniqueDomains.slice(i, i + BATCH_SIZE);
+    const requestBodies = chunk.map(domain => ({
+      filters: [["domain", "=", domain]],
+      limit: 1
+    }));
+
+    try {
+      const endpoint = `${DATAFORSEO_BASE_URL}/domain_analytics/whois/overview/live`;
+      const response = await fetchWithRetry(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': getAuthHeader(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBodies),
+      });
+
+      if (!response.ok) {
+        console.warn(`[DataForSEO Domain] Batch API error: ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+      if (!data.tasks) continue;
+
+      data.tasks.forEach((task: any, index: number) => {
+        if (task.result && task.result[0] && task.result[0].items && task.result[0].items[0]) {
+          const item = task.result[0].items[0];
+          const metrics = item.metrics;
+          if (!metrics) return;
+
+          const organic = metrics.organic || {};
+          const pos1 = Number(organic.pos_1) || 0;
+          const pos2_3 = Number(organic.pos_2_3) || 0;
+          const pos4_10 = Number(organic.pos_4_10) || 0;
+
+          // 简单计算一个类似 DR 的值 (0-100)
+          // DataForSEO 没有直接 DR，我们使用引用域名数和流量来估算
+          const referringDomains = Number(item.backlinks_info?.referring_domains) || 0;
+          const dr = Math.min(Math.round(Math.log10(referringDomains + 1) * 15), 100);
+
+          domainMap.set(chunk[index], {
+            domain: chunk[index],
+            organicTraffic: Number(organic.etv) || 0,
+            paidTraffic: 0,
+            totalTraffic: Number(organic.etv) || 0,
+            totalKeywords: Number(organic.count) || 0,
+            newKeywords: 0,
+            lostKeywords: 0,
+            improvedKeywords: 0,
+            declinedKeywords: 0,
+            avgPosition: 0,
+            trafficCost: 0,
+            rankingDistribution: {
+              top3: pos1 + pos2_3,
+              top10: pos1 + pos2_3 + pos4_10,
+              top50: 0,
+              top100: 0
+            },
+            // 扩展字段，用于存储计算出的 DR
+            backlinksInfo: {
+              referringDomains,
+              referringMainDomains: referringDomains,
+              referringPages: Number(item.backlinks_info?.referring_pages) || 0,
+              dofollow: 0,
+              backlinks: Number(item.backlinks_info?.backlinks) || 0,
+            }
+          } as any);
+          
+          // 给对象手动添加计算好的 dr
+          const entry = domainMap.get(chunk[index]);
+          if (entry) (entry as any).dr = dr;
+        }
+      });
+    } catch (error) {
+      console.error(`[DataForSEO Domain] Batch API failed:`, error);
+    }
+  }
+
+  return domainMap;
+}
   url: string,
   options: RequestInit,
   maxRetries: number = 3,

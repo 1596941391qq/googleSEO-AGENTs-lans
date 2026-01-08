@@ -302,17 +302,28 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
 
     // 如果还是没有 qualityReview，但从 geo_score 或 logic_check 存在，构建一个 qualityReview 对象
     if (!qualityReview) {
-      const hasGeoScore = !!(finalArticle.geo_score || (fallbackData && fallbackData.geo_score));
-      const hasLogicCheck = !!(
-        finalArticle.logic_check || (fallbackData && fallbackData.logic_check)
+      const hasGeoScore = !!(
+        finalArticle.geo_score ||
+        (fallbackData && fallbackData.geo_score)
       );
-      const hasSeoMeta = !!(finalArticle.seo_meta || (fallbackData && fallbackData.seo_meta));
+      const hasLogicCheck = !!(
+        finalArticle.logic_check ||
+        (fallbackData && fallbackData.logic_check)
+      );
+      const hasSeoMeta = !!(
+        finalArticle.seo_meta ||
+        (fallbackData && fallbackData.seo_meta)
+      );
 
       if (hasGeoScore || hasLogicCheck || hasSeoMeta) {
         qualityReview = {
-          geo_score: finalArticle.geo_score || (fallbackData && fallbackData.geo_score),
-          logic_check: finalArticle.logic_check || (fallbackData && fallbackData.logic_check),
-          seo_meta: finalArticle.seo_meta || (fallbackData && fallbackData.seo_meta),
+          geo_score:
+            finalArticle.geo_score || (fallbackData && fallbackData.geo_score),
+          logic_check:
+            finalArticle.logic_check ||
+            (fallbackData && fallbackData.logic_check),
+          seo_meta:
+            finalArticle.seo_meta || (fallbackData && fallbackData.seo_meta),
         };
       }
     }
@@ -390,9 +401,7 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
             onClick={() => setIsQualityReviewExpanded(!isQualityReviewExpanded)}
             className={cn(
               "w-full p-4 flex items-center justify-between transition-colors",
-              isDarkTheme
-                ? "hover:bg-white/10"
-                : "hover:bg-gray-100"
+              isDarkTheme ? "hover:bg-white/10" : "hover:bg-gray-100"
             )}
           >
             <h4
@@ -407,16 +416,12 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
             {isQualityReviewExpanded ? (
               <ChevronUp
                 size={20}
-                className={cn(
-                  isDarkTheme ? "text-gray-400" : "text-gray-600"
-                )}
+                className={cn(isDarkTheme ? "text-gray-400" : "text-gray-600")}
               />
             ) : (
               <ChevronDown
                 size={20}
-                className={cn(
-                  isDarkTheme ? "text-gray-400" : "text-gray-600"
-                )}
+                className={cn(isDarkTheme ? "text-gray-400" : "text-gray-600")}
               />
             )}
           </button>
@@ -483,7 +488,9 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                             isDarkTheme ? "text-blue-300" : "text-blue-700"
                           )}
                         >
-                          {uiLanguage === "zh" ? "描述 (Description)" : "Description"}
+                          {uiLanguage === "zh"
+                            ? "描述 (Description)"
+                            : "Description"}
                         </div>
                         <div
                           className={cn(
@@ -532,7 +539,9 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                       isDarkTheme ? "text-blue-400/70" : "text-blue-600"
                     )}
                   >
-                    {uiLanguage === "zh" ? "其他质量检查" : "Other Quality Checks"}
+                    {uiLanguage === "zh"
+                      ? "其他质量检查"
+                      : "Other Quality Checks"}
                   </div>
                   <div
                     className={cn(
@@ -586,9 +595,12 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                             isDarkTheme ? "text-gray-300" : "text-gray-700"
                           )}
                         >
-                          {uiLanguage === "zh" ? "关键词密度" : "Keyword Density"}:{" "}
-                          {qualityReview.other_checks.seo_depth.keyword_density ||
-                            "N/A"}
+                          {uiLanguage === "zh"
+                            ? "关键词密度"
+                            : "Keyword Density"}
+                          :{" "}
+                          {qualityReview.other_checks.seo_depth
+                            .keyword_density || "N/A"}
                           %
                         </span>
                       </div>
@@ -644,7 +656,9 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                             {fix.issue && (
                               <div
                                 className={cn(
-                                  isDarkTheme ? "text-gray-300" : "text-gray-700"
+                                  isDarkTheme
+                                    ? "text-gray-300"
+                                    : "text-gray-700"
                                 )}
                               >
                                 {uiLanguage === "zh" ? "问题:" : "Issue:"}{" "}
@@ -655,7 +669,9 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                               <div
                                 className={cn(
                                   "italic",
-                                  isDarkTheme ? "text-gray-400" : "text-gray-600"
+                                  isDarkTheme
+                                    ? "text-gray-400"
+                                    : "text-gray-600"
                                 )}
                               >
                                 {uiLanguage === "zh" ? "建议:" : "Suggestion:"}{" "}

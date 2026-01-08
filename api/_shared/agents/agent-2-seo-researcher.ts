@@ -8,8 +8,103 @@
 import { callGeminiAPI } from '../gemini.js';
 import { fetchSerpResults, type SerpData } from '../tools/serp-search.js';
 import { getSEOResearcherPrompt } from '../../../services/prompts/index.js';
-import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport } from '../types.js';
-import { fetchKeywordData } from '../tools/dataforseo.js';
+import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
+import { fetchKeywordData, SearchEngine } from '../tools/dataforseo.js';
+import { getDomainOverview } from '../tools/dataforseo-domain.js';
+
+/**
+ * 辅助函数：计算蓝海信号分值 (Workflow 1)
+ */
+export function calculateBlueOceanScore(analysis: any): number {
+  let score = 0;
+  
+  // 1. 弱竞争者判断 (AI判断结果中包含)
+  if (analysis.topDomainType === 'Forum/Social' || analysis.topDomainType === 'Weak Page') {
+    score += 30;
+  }
+  
+  // 2. 内容相关性判断 (从 intentAnalysis 提取关键词)
+  const lowRelevanceKeywords = ['不相关', 'irrelevant', 'off-topic', '弱相关', 'weakly related'];
+  if (analysis.intentAnalysis && lowRelevanceKeywords.some(k => analysis.intentAnalysis.toLowerCase().includes(k))) {
+    score += 25;
+  }
+  
+  // 3. 内容深度与质量 (从 reasoning 提取关键词)
+  const lowQualityKeywords = ['short', 'thin content', '字数少', '浅显', 'outdated', '过时', 'old'];
+  if (analysis.reasoning && lowQualityKeywords.some(k => analysis.reasoning.toLowerCase().includes(k))) {
+    score += 20;
+  }
+
+  // 4. SERP 结果数量
+  if (analysis.serpResultCount !== undefined && analysis.serpResultCount < 10000) {
+    score += 15;
+  } else if (analysis.serpResultCount !== undefined && analysis.serpResultCount < 100000) {
+    score += 10;
+  }
+
+  // 限制最大分数为 100
+  return Math.min(score, 100);
+}
+
+/**
+ * 辅助函数：计算“大鱼吃小鱼”概率 (Workflow 3)
+ */
+export function calculateOutrankProbability(
+  websiteDR: number,
+  competitorDRs: number[],
+  relevanceScore: number = 0.5
+): {
+  canOutrankPositions: number[];
+  top3Probability: ProbabilityLevel;
+  top10Probability: ProbabilityLevel;
+  finalProbability: ProbabilityLevel;
+} {
+  const canOutrankPositions: number[] = [];
+  
+  // 1. 判断可超越的位置
+  competitorDRs.forEach((dr, index) => {
+    // 权威优势: websiteDR > competitorDR
+    // 或者相关性优势: relevanceScore > 0.7
+    if (websiteDR > dr || relevanceScore > 0.7) {
+      canOutrankPositions.push(index + 1);
+    }
+  });
+
+  // 2. Top 3 概率计算
+  let top3Probability = ProbabilityLevel.LOW;
+  const top3AvgDR = competitorDRs.slice(0, 3).reduce((a, b) => a + b, 0) / Math.max(1, Math.min(3, competitorDRs.length));
+  const canOutrankTop3 = canOutrankPositions.some(p => p <= 3);
+  
+  if (canOutrankTop3 && websiteDR >= top3AvgDR - 3) {
+    top3Probability = ProbabilityLevel.HIGH;
+  } else if (canOutrankTop3) {
+    top3Probability = ProbabilityLevel.MEDIUM;
+  }
+
+  // 3. Top 10 概率计算
+  let top10Probability = ProbabilityLevel.LOW;
+  const top10AvgDR = competitorDRs.reduce((a, b) => a + b, 0) / Math.max(1, competitorDRs.length);
+  const canOutrankTop10Count = canOutrankPositions.filter(p => p <= 10).length;
+  
+  if (canOutrankTop10Count >= 3 || websiteDR >= top10AvgDR) {
+    top10Probability = ProbabilityLevel.HIGH;
+  } else if (canOutrankTop10Count >= 1) {
+    top10Probability = ProbabilityLevel.MEDIUM;
+  }
+
+  // 4. 最终概率判定
+  let finalProbability = top10Probability;
+  if (top3Probability === ProbabilityLevel.HIGH) {
+    finalProbability = ProbabilityLevel.HIGH; // 这里的 HIGH 在 UI 上可以显示为 "HIGH (Top 3)"
+  }
+
+  return {
+    canOutrankPositions,
+    top3Probability,
+    top10Probability,
+    finalProbability
+  };
+}
 
 /**
  * 搜索引擎偏好分析结果（Markdown格式）
@@ -795,15 +890,36 @@ function extractPartialJSON(text: string): any {
 
 /**
  * Analyze Ranking Probability
- * Moved from gemini.ts
+ * Updated to support "Big fish eats small fish" and explicit scoring
  */
 export const analyzeRankingProbability = async (
   keywords: KeywordData[],
   systemInstruction: string,
   uiLanguage: 'zh' | 'en' = 'en',
-  targetLanguage: TargetLanguage = 'en'
+  targetLanguage: TargetLanguage = 'en',
+  websiteUrl?: string,
+  websiteDR?: number,
+  searchEngine: SearchEngine = 'google'
 ): Promise<KeywordData[]> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
+  const engineName = searchEngine.charAt(0).toUpperCase() + searchEngine.slice(1);
+
+  // 如果提供了网站URL但没提供DR，尝试获取网站自身的DR
+  let siteDR = websiteDR;
+  if (websiteUrl && siteDR === undefined) {
+    try {
+      console.log(`[Agent 2] Fetching DR for target website: ${websiteUrl}`);
+      const overview = await getDomainOverview(websiteUrl);
+      if (overview) {
+        // 使用之前定义的估算公式
+        const referringDomains = overview.backlinksInfo?.referringDomains || 0;
+        siteDR = Math.min(Math.round(Math.log10(referringDomains + 1) * 15), 100);
+        console.log(`[Agent 2] Estimated site DR: ${siteDR}`);
+      }
+    } catch (e) {
+      console.warn(`[Agent 2] Failed to fetch site DR:`, e);
+    }
+  }
 
   const analyzeSingleKeyword = async (keywordData: KeywordData): Promise<KeywordData> => {
     // Step 1: Fetch real Google SERP results
@@ -816,9 +932,27 @@ export const analyzeRankingProbability = async (
       serpData = await fetchSerpResults(keywordData.keyword, targetLanguage);
       serpResults = serpData.results || [];
       serpResultCount = serpData.totalResults || -1;
-      console.log(`Fetched ${serpResults.length} search results for "${keywordData.keyword}" (analyzing all for competition)`);
+      console.log(`Fetched ${serpResults.length} search results for "${keywordData.keyword}"`);
     } catch (error: any) {
       console.warn(`Failed to fetch SERP for ${keywordData.keyword}:`, error.message);
+    }
+
+    // Step 1.5: Fetch DR for Top 10 competitors if in "Audit" mode
+    let competitorDRs: number[] = [];
+    if (siteDR !== undefined && serpResults.length > 0) {
+      try {
+        const topDomains = serpResults.slice(0, 10).map(r => r.url).filter(Boolean);
+        if (topDomains.length > 0) {
+          console.log(`[Agent 2] Fetching DR for top ${topDomains.length} competitors...`);
+          const domainMap = await getBatchDomainOverview(topDomains);
+          competitorDRs = topDomains.map(url => {
+            const domain = url.replace(/^https?:\/\//, '').split('/')[0];
+            return (domainMap.get(domain) as any)?.dr || 0;
+          });
+        }
+      } catch (e) {
+        console.warn(`[Agent 2] Failed to fetch competitor DRs:`, e);
+      }
     }
 
     // Step 2: Build system instruction with real SERP data
@@ -828,8 +962,9 @@ export const analyzeRankingProbability = async (
     const serpContext = serpResults.length > 0
       ? `\n\nTOP GOOGLE SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\nNote: These are the TOP ranking results provided to you for competition analysis, NOT all search results.\n\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
         const snippet = r.snippet ? (r.snippet.length > maxSerpSnippetLength ? r.snippet.substring(0, maxSerpSnippetLength) + '...' : r.snippet) : '';
-        return `${i + 1}. Title: ${r.title}\n   URL: ${r.url}\n   Snippet: ${snippet}`;
-      }).join('\n\n')}\n\nEstimated Total Results on Google: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: The results shown above are only the TOP-RANKING pages from Google's first page. There may be thousands of other lower-ranking results not shown here. Use these top results to assess the QUALITY of competition you need to beat.`
+        const drInfo = competitorDRs[i] !== undefined ? ` (Domain Authority: ${competitorDRs[i]})` : '';
+        return `${i + 1}. Title: ${r.title}\n   URL: ${r.url}${drInfo}\n   Snippet: ${snippet}`;
+      }).join('\n\n')}\n\nEstimated Total Results on Google: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: Use these top results to assess the QUALITY of competition you need to beat.${siteDR !== undefined ? `\n\nYOUR WEBSITE AUTHORITY: ${siteDR}. Compare this with competitors to judge if you can outrank them.` : ''}`
       : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
 
     // Add DataForSEO data context if available (use dataForSEOData or serankingData for backward compatibility)
@@ -884,9 +1019,15 @@ ACTION: Analyze SERP results first. Do NOT automatically assign HIGH probability
     const fullSystemInstruction = `
 ${systemInstruction}
 
-TASK: Analyze the Google SERP competition for the keyword: "${keywordData.keyword}".
+TASK: Analyze the ${engineName} SERP competition for the keyword: "${keywordData.keyword}".
 ${serpContext}
 ${dataForSEOContext}
+
+**SEARCH ENGINE CONTEXT: ${engineName}**
+${searchEngine === 'google' ? '- Google focuses on E-E-A-T, helpful content, and specific SERP features like SGE, Featured Snippets, and PAA.' : ''}
+${searchEngine === 'baidu' ? '- Baidu prioritizes Chinese-language content, mobile-first indexing, and its own ecosystem (Baidu Zhidao, Baike, Baijiahao). Heavy weight on homepage and meta tags.' : ''}
+${searchEngine === 'bing' ? '- Bing values exact match keywords, social signals, and multimedia content. It also features AI-driven Web Answers.' : ''}
+${searchEngine === 'yandex' ? '- Yandex is dominant in Russian markets, emphasizing regional targeting (GEO), user behavior signals, and Yandex Zen integration.' : ''}
 
 **STEP 1: PREDICT SEARCH INTENT**
 First, predict what the user's search intent is when they type this keyword. Consider:
@@ -955,6 +1096,7 @@ Return a JSON object:
   "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
+  "relevanceScore": number (0-1 scale, how well your site topic matches this keyword),
   "reasoning": "Detailed explanation in ${uiLangName} based on the real SERP results - provide comprehensive analysis",
   "topSerpSnippets": ${topSerpSnippetsJson}
 }`;
@@ -977,6 +1119,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
                 serpResultCount: { type: 'number' },
                 topDomainType: { type: 'string' },
                 probability: { type: 'string', enum: ['High', 'Medium', 'Low'] },
+                relevanceScore: { type: 'number' },
                 reasoning: { type: 'string' },
                 topSerpSnippets: {
                   type: 'array',
@@ -1311,9 +1454,34 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         analysis.topDomainType = 'Weak Page';
       }
 
+      // 计算蓝海评分 (Workflow 1)
+      const blueOceanScore = calculateBlueOceanScore(analysis);
+      
+      // 计算大鱼吃小鱼概率 (Workflow 3)
+      let outrankData = {
+        canOutrankPositions: [] as number[],
+        top3Probability: ProbabilityLevel.LOW,
+        top10Probability: ProbabilityLevel.LOW,
+        finalProbability: analysis.probability as ProbabilityLevel
+      };
+
+      if (siteDR !== undefined && competitorDRs.length > 0) {
+        outrankData = calculateOutrankProbability(siteDR, competitorDRs, analysis.relevanceScore || 0.5);
+        // 如果网站审计模式下计算出的概率更高，则使用它
+        if (outrankData.finalProbability === ProbabilityLevel.HIGH) {
+          analysis.probability = ProbabilityLevel.HIGH;
+        }
+      }
+
       return {
         ...keywordData,
         ...analysis,
+        blueOceanScore,
+        websiteDR: siteDR,
+        competitorDRs,
+        canOutrankPositions: outrankData.canOutrankPositions,
+        top3Probability: outrankData.top3Probability,
+        top10Probability: outrankData.top10Probability,
         rawResponse: response.text,
         searchResults: response.searchResults // 添加联网搜索结果
       };

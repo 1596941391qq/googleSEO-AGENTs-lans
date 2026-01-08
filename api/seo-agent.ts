@@ -45,6 +45,8 @@ function getCreditsCost(mode: string, keywordCount?: number): number {
     'keyword_mining': 20,
     'batch_translation': 20,
     'deep_dive': 30,
+    'article_generator': 100,
+    'website_audit': 30,
   };
 
   const baseAmount = creditsMap[mode];
@@ -52,13 +54,13 @@ function getCreditsCost(mode: string, keywordCount?: number): number {
     throw new Error(`Invalid mode: ${mode}`);
   }
 
-  // For deep_dive, fixed cost
-  if (mode === 'deep_dive') {
+  // For fixed cost modes
+  if (mode === 'deep_dive' || mode === 'article_generator') {
     return baseAmount;
   }
 
-  // For mining and batch, calculate based on keyword count (per 10 keywords)
-  if (keywordCount && (mode === 'keyword_mining' || mode === 'batch_translation')) {
+  // For modes based on keyword count (per 10 keywords)
+  if (keywordCount && (mode === 'keyword_mining' || mode === 'batch_translation' || mode === 'website_audit')) {
     const multiplier = Math.ceil(keywordCount / 10);
     return baseAmount * multiplier;
   }

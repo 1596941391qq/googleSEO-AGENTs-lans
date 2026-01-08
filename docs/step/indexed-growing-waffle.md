@@ -1,13 +1,13 @@
-# 4种挖词模式运作逻辑分析
+# 4 种挖词模式运作逻辑分析
 
 **视角**: 产品经理 & Programmatic SEO 专家
 **日期**: 2026-01-06
 
 ---
 
-## 核心发现：2×2矩阵结构
+## 核心发现：2×2 矩阵结构
 
-实际是 **2大模式 × 2子模式 = 4种工作流**：
+实际是 **2 大模式 × 2 子模式 = 4 种工作流**：
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -21,20 +21,27 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**4种组合工作流**：
+**4 种组合工作流 + 1 种独立工作流**：
 
 1. ✅ **蓝海模式 + 关键词挖掘** - 从零发现蓝海关键词
-2. ✅ **蓝海模式 + 跨市场洞察** - 翻译关键词并分析跨市场机会
+2. ✅ **蓝海模式 + 跨市场洞察** - 翻译关键词并分析跨市场机会 (支持搜索引擎维度)
 3. ✅ **存量拓新 + 关键词挖掘** - 分析网站缺口发现新机会
-4. ✅ **存量拓新 + 跨市场洞察** - 网站关键词的跨市场分析
+4. ✅ **存量拓新 + 跨市场洞察** - 网站关键词的跨市场分析 (支持搜索引擎维度)
+5. ✅ **存量拓新 + 关键词质量分析** - 评估现有关键词的好词坏词 (新增工作流)
 
-**UI代码位置**：
-- **主切换器** (App.tsx 8238-8271): `miningMode` = "blue-ocean" | "existing-website-audit"
-- **子切换器** (App.tsx 8276-8302): `activeTab` = "mining" | "batch"
+**UI 代码位置**：
+
+- **工作流 1-4**: 文章生成器的挖词界面
+  - **主切换器** (App.tsx 8238-8271): `miningMode` = "blue-ocean" | "existing-website-audit"
+  - **子切换器** (App.tsx 8276-8302): `activeTab` = "mining" | "batch"
+- **工作流 5**: 网站数据仪表板
+  - **入口**: `WebsiteDataDashboard` → "关键词情报" 视图
+  - **组件**: `KeywordIntelligenceView.tsx`
 
 ---
 
-## 工作流1: 蓝海模式 + 关键词挖掘
+## 工作流 1: 蓝海模式 + 关键词挖掘
+
 **状态**: `miningMode="blue-ocean"` + `activeTab="mining"`
 
 ### 运作逻辑 (As-Is)
@@ -98,6 +105,7 @@
 ### 核心特性
 
 **SCAMPER 创意方法** (agent-1-keyword-mining.ts 149-155):
+
 ```
 Prompt (Round 2+):
 "Use the 'SCAMPER' method.
@@ -108,21 +116,24 @@ Example: If seed is 'AI Pet Photos', think:
 ```
 
 **双策略模式**:
+
 - **Horizontal (横向)**: 探索不同主题 (如 dog food → pet accessories, pet training)
 - **Vertical (纵向)**: 深挖同一主题 (如 dog food → grain-free dog food → senior dog nutrition)
 
-**蓝海概率判断** (当前为AI黑盒):
+**蓝海概率判断** (当前为 AI 黑盒):
+
 - Agent 2 使用 Gemini 判断 → HIGH/MEDIUM/LOW
 - ⚠️ **无显式评分算法** (改进建议见后)
 
 ### 关键缺失
 
-1. **蓝海信号评分算法** - 当前依赖AI黑盒判断，无明确分数
-2. **Firecrawl深度分析** - 仅在存量拓新使用，蓝海模式缺失
+1. **蓝海信号评分算法** - 当前依赖 AI 黑盒判断，无明确分数
+2. **Firecrawl 深度分析** - 仅在存量拓新使用，蓝海模式缺失
 
 ---
 
-## 工作流2: 蓝海模式 + 跨市场洞察
+## 工作流 2: 蓝海模式 + 跨市场洞察
+
 **状态**: `miningMode="blue-ocean"` + `activeTab="batch"`
 
 ### 运作逻辑 (As-Is)
@@ -152,16 +163,33 @@ Example: If seed is 'AI Pet Photos', think:
 │  ├─ "manus" → "马努斯"                                      │
 │  └─ 输出: { original, translated }                          │
 │                                                              │
-│ Step 2: DataForSEO 获取目标市场数据                          │
-│  ├─ fetchKeywordData(translatedKeywords, locationCode, lang)│
-│  ├─ locationCode: zh=2166(中国), en=2840(美国)              │
-│  └─ 返回: volume, difficulty, cpc, competition              │
+│ Step 2: 用户选择分析维度                                      │
+│  ├─ targetLocation: "zh" (目标地区)                          │
+│  ├─ targetSearchEngine: "google" | "baidu" | "bing" | "yandex" │
+│  └─ 多维度组合: 地区 × 搜索引擎                              │
 │                                                              │
-│ Step 3: 预筛选                                               │
+│ Step 3: DataForSEO 获取目标市场数据 (按地区+搜索引擎)        │
+│  ├─ fetchKeywordData(translatedKeywords, locationCode, lang, engine)│
+│  ├─ locationCode: zh=2166(中国), en=2840(美国)              │
+│  ├─ searchEngine: "google" | "baidu" | "bing" | "yandex"    │
+│  ├─ 搜索引擎映射:                                            │
+│  │   ├─ Google: 全球通用 (2840=美国, 2166=中国)             │
+│  │   ├─ Baidu: 仅中国 (2166)                                │
+│  │   ├─ Bing: 全球通用 (2840=美国, 2166=中国)               │
+│  │   └─ Yandex: 俄罗斯/东欧 (2948=俄罗斯)                  │
+│  └─ 返回: volume, difficulty, cpc, competition (特定引擎数据)│
+│                                                              │
+│ Step 4: 预筛选                                               │
 │  └─ difficulty > 40 → 标记 LOW, 跳过分析                    │
 │                                                              │
-│ Step 4: Agent 2 分析排名概率                                 │
-│  └─ analyzeRankingProbability() (与工作流1相同)             │
+│ Step 5: Agent 2 分析排名概率 (按搜索引擎)                    │
+│  ├─ analyzeRankingProbability(keyword, targetSearchEngine)  │
+│  ├─ 不同搜索引擎的SERP特征:                                  │
+│  │   ├─ Google: SGE、Featured Snippets、People Also Ask   │
+│  │   ├─ Baidu: 百度知道、百度百科、百家号                   │
+│  │   ├─ Bing: Web Answers、Related Searches                │
+│  │   └─ Yandex: 本地化结果、Yandex Zen                      │
+│  └─ 输出: probability (基于特定搜索引擎的竞争分析)            │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -176,30 +204,59 @@ Example: If seed is 'AI Pet Photos', think:
 ### 核心特性
 
 **翻译处理**:
-- 每批5个关键词并行翻译
+
+- 每批 5 个关键词并行翻译
 - 使用 Gemini API 进行上下文感知翻译
-- Translation列保留原始词供参考
+- Translation 列保留原始词供参考
 
 **地域映射** (dataforseo.ts):
+
 ```typescript
 const locationMapping = {
-  'zh': 2166, // 中国
-  'en': 2840, // 美国
-  'ja': 2384, // 日本
-  'ko': 2346, // 韩国
+  zh: 2166, // 中国
+  en: 2840, // 美国
+  ja: 2384, // 日本
+  ko: 2346, // 韩国
   // ... 更多市场
-}
+};
+```
+
+**搜索引擎维度** (新增):
+
+- **支持引擎**: Google、Baidu、Bing、Yandex
+- **搜索引擎特征**:
+  - Google: 全球支持，SGE、Featured Snippets、People Also Ask
+  - Baidu: 主要支持中国，百度知道、百度百科、百家号
+  - Bing: 全球支持，Web Answers、Related Searches
+  - Yandex: 俄罗斯/东欧，Yandex Zen、本地化结果
+
+**双维度分析逻辑**:
+
+- **维度 1: 目标地区** - 决定搜索量、竞争难度、文化背景
+- **维度 2: 搜索引擎** - 决定 SERP 特征、排名算法、优化策略
+- **组合分析**: 同一关键词在不同地区+搜索引擎组合下的表现差异
+
+**使用示例**:
+
+```
+关键词: "AI headshot"
+- Google (美国): volume=12000, KD=45, SGE机会高 → 竞争激烈
+- Baidu (中国): volume=800, KD=30, 百度知道机会高 → 蓝海机会
+结论: 美国Google竞争激烈，中国Baidu是蓝海，建议优先投入Baidu市场
 ```
 
 ### 关键缺失
 
 1. **跨市场对比** - 仅显示目标市场数据，无源市场对比
-2. **文化差异分析** - 仅直译，未考虑本地术语偏好
-3. **可视化** - 仅表格展示，无散点图/机会矩阵
+2. **搜索引擎对比** - 仅显示单一搜索引擎数据，无多引擎对比
+3. **文化差异分析** - 仅直译，未考虑本地术语偏好
+4. **可视化** - 仅表格展示，无散点图/机会矩阵
+5. **搜索引擎特定优化建议** - 未针对不同搜索引擎提供差异化策略
 
 ---
 
-## 工作流3: 存量拓新 + 关键词挖掘
+## 工作流 3: 存量拓新 + 关键词挖掘
+
 **状态**: `miningMode="existing-website-audit"` + `activeTab="mining"`
 
 ### 运作逻辑 (As-Is)
@@ -240,18 +297,96 @@ const locationMapping = {
 │  │   ├─ 对比竞争对手关键词                                   │
 │  │   └─ 识别高转化长尾词缺口                                 │
 │  └─ 输出: KeywordData[] (source: 'website-audit')           │
+│                                                              │
+│ Step 4: DR值计算与权威性评估                                 │
+│  ├─ 获取网站DR值 (Domain Rating)                            │
+│  │   ├─ 数据源: DataForSEO / Ahrefs API                     │
+│  │   ├─ 计算网站权威值 (Authority Score)                     │
+│  │   └─ 存储: websiteDR, websiteAuthority                   │
+│  └─ 用于后续"大鱼吃小鱼"判断                                 │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
-│ 返回前端 → 初始关键词展示                                    │
-│  └─ 自动触发 runWebsiteAuditMiningLoop()                    │
+│ Agent 2 排名概率分析 (增强版 - 存量拓新模式)                 │
+│                                                              │
+│ Step 1: SERP分析 - 获取Top 10结果                            │
+│  ├─ agent-2-seo-researcher.ts → analyzeRankingProbability()│
+│  ├─ SERP API: 获取Top 10搜索结果                            │
+│  └─ 提取: 每个结果的domain, title, snippet                  │
+│                                                              │
+│ Step 2: "大鱼吃小鱼"判断逻辑                                  │
+│  ├─ 计算竞争对手DR值                                         │
+│  │   ├─ 获取Top 10中每个域名的DR值                           │
+│  │   └─ competitorDRs[] = [DR1, DR2, ..., DR10]            │
+│  │                                                           │
+│  ├─ 权威值对比                                               │
+│  │   ├─ 如果 websiteDR > competitorDRs[i]                   │
+│  │   │   └─ 标记: "可以吃掉" (canOutrank)                   │
+│  │   └─ 如果 websiteDR >= competitorDRs[i] + 5              │
+│  │       └─ 标记: "高概率吃掉" (highConfidence)             │
+│  │                                                           │
+│  ├─ 相关性评估                                               │
+│  │   ├─ AI分析: 网站内容 vs 竞争对手内容                     │
+│  │   ├─ 如果相关性更强 (relevanceScore > 0.7)               │
+│  │   └─ 即使DR略低，也能排在前面                             │
+│  │                                                           │
+│  └─ 综合判断                                                 │
+│      ├─ 能吃掉前面网页的条件:                                │
+│      │   ├─ websiteDR > competitorDR (权威优势)              │
+│      │   └─ 或 relevanceScore > 0.7 (相关性优势)            │
+│      └─ 输出: canOutrankPositions[] (可超越的位置列表)      │
+│                                                              │
+│ Step 3: Top 3 vs Top 10 概率区分                             │
+│  ├─ Top 3 概率计算                                           │
+│  │   ├─ 条件: 能吃掉前3个中的至少1个                         │
+│  │   ├─ 且 websiteDR >= Top3平均DR - 3                      │
+│  │   └─ 输出: top3Probability (HIGH/MEDIUM/LOW)             │
+│  │                                                           │
+│  ├─ Top 10 概率计算                                          │
+│  │   ├─ 条件: 能吃掉Top 10中的至少3个                        │
+│  │   ├─ 或 websiteDR >= Top10平均DR                          │
+│  │   └─ 输出: top10Probability (HIGH/MEDIUM/LOW)            │
+│  │                                                           │
+│  └─ 最终概率判断                                             │
+│      ├─ 如果 top3Probability = HIGH                          │
+│      │   └─ probability = "HIGH (Top 3)"                    │
+│      ├─ 如果 top10Probability = HIGH && top3Probability < HIGH│
+│      │   └─ probability = "HIGH (Top 10)"                    │
+│      └─ 否则: probability = MEDIUM/LOW                       │
+│                                                              │
+│ Step 4: 输出增强的KeywordData                                │
+│  ├─ 基础字段: volume, difficulty, cpc                       │
+│  ├─ 概率字段: probability (HIGH/MEDIUM/LOW)                 │
+│  ├─ 新增字段:                                                │
+│  │   ├─ top3Probability: "HIGH" | "MEDIUM" | "LOW"          │
+│  │   ├─ top10Probability: "HIGH" | "MEDIUM" | "LOW"         │
+│  │   ├─ canOutrankPositions: number[] (可超越的位置)        │
+│  │   ├─ websiteDR: number (网站DR值)                        │
+│  │   └─ competitorDRs: number[] (Top 10竞争对手DR值)        │
+│  └─ 输出: 完整 KeywordData[] (含概率分级)                    │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 返回前端 → KeywordTable 展示 (增强版)                        │
+│  ├─ Probability 过滤器: ALL/HIGH/MEDIUM/LOW                 │
+│  ├─ 新增过滤器: Top 3 / Top 10                              │
+│  ├─ 排序: Volume/Difficulty/Probability/Top3Probability     │
+│  ├─ 展开行: 显示详细信息                                     │
+│  │   ├─ SERP snippets                                       │
+│  │   ├─ DR值对比 (网站 vs 竞争对手)                          │
+│  │   ├─ 可超越位置标记                                       │
+│  │   └─ Top 3 vs Top 10 概率分析                            │
+│  └─ 视觉标记:                                                │
+│      ├─ 🟢 HIGH (Top 3) - 高概率排前三                       │
+│      ├─ 🟡 HIGH (Top 10) - 高概率排首页                      │
+│      └─ 🔴 MEDIUM/LOW - 需要更多优化                         │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ 循环挖掘 (App.tsx 5845-6113)                                │
 │  ├─ 使用网站审计关键词作为种子                               │
 │  ├─ Round 2+: 调用 /api/seo-agent (keyword_mining)         │
-│  │   └─ 与工作流1相同的流程                                  │
+│  │   └─ 与工作流1相同的流程 (但使用存量拓新增强分析)         │
 │  ├─ 停止条件: HIGH>=3 或 轮次>=5                            │
 │  └─ 聚合结果 → KeywordTable展示                             │
 └─────────────────────────────────────────────────────────────┘
@@ -260,15 +395,18 @@ const locationMapping = {
 ### 核心特性
 
 **网站内容分析**:
-- Firecrawl 抓取完整网站内容 (Markdown格式)
+
+- Firecrawl 抓取完整网站内容 (Markdown 格式)
 - 分析当前覆盖的主题和关键词
 
 **竞争对手研究**:
-- 自动获取前3个竞争对手
-- 提取每个竞争对手的前50关键词
-- AI对比分析内容缺口
+
+- 自动获取前 3 个竞争对手
+- 提取每个竞争对手的前 50 关键词
+- AI 对比分析内容缺口
 
 **缺口识别逻辑** (EXISTING_WEBSITE_AUDIT_PROMPTS):
+
 ```
 AI任务:
 1. 分析网站已覆盖主题
@@ -279,15 +417,176 @@ AI任务:
    - 未利用的流量空间
 ```
 
+**DR 值计算与权威性评估**:
+
+- **Domain Rating (DR) 获取**:
+  - 数据源: DataForSEO Domain Analytics API / Ahrefs API
+  - 获取网站 DR 值 (Domain Rating)
+  - 计算网站权威值 (Authority Score)
+  - 存储: `websiteDR`, `websiteAuthority`
+- **用途**: 用于后续"大鱼吃小鱼"判断逻辑
+
+**"大鱼吃小鱼"判断逻辑** (大鱼吃小鱼算法):
+
+- **核心思想**: 判断网站能否"吃掉"（超越）SERP 中排名靠前的网页
+- **判断维度**:
+
+  1. **权威值对比**:
+
+     - 如果 `websiteDR > competitorDR[i]` → 标记为"可以吃掉"
+     - 如果 `websiteDR >= competitorDR[i] + 5` → 标记为"高概率吃掉"
+     - 权威值优势越大，超越概率越高
+
+  2. **相关性评估**:
+
+     - AI 分析: 网站内容 vs 竞争对手内容的相关性
+     - 如果 `relevanceScore > 0.7` → 即使 DR 略低，也能排在前面
+     - 相关性强的网站更容易获得排名
+
+  3. **综合判断**:
+     - 能吃掉前面网页的条件:
+       - `websiteDR > competitorDR` (权威优势)
+       - 或 `relevanceScore > 0.7` (相关性优势)
+     - 输出: `canOutrankPositions[]` (可超越的位置列表，如 [1, 3, 5])
+
+**Top 3 vs Top 10 概率区分**:
+
+- **设计目的**: 区分"可能排在首页"和"排在前三的概率较大"
+- **Top 3 概率计算**:
+  - 条件 1: 能吃掉前 3 个中的至少 1 个
+  - 条件 2: `websiteDR >= Top3平均DR - 3`
+  - 输出: `top3Probability` (HIGH/MEDIUM/LOW)
+  - 含义: 排在前三的概率评估
+- **Top 10 概率计算**:
+  - 条件 1: 能吃掉 Top 10 中的至少 3 个
+  - 条件 2: 或 `websiteDR >= Top10平均DR`
+  - 输出: `top10Probability` (HIGH/MEDIUM/LOW)
+  - 含义: 排在首页的概率评估
+- **最终概率判断逻辑**:
+
+  ```
+  如果 top3Probability = HIGH
+    → probability = "HIGH (Top 3)"  // 高概率排前三
+
+  如果 top10Probability = HIGH && top3Probability < HIGH
+    → probability = "HIGH (Top 10)"  // 高概率排首页，但前三不确定
+
+  否则
+    → probability = MEDIUM/LOW  // 需要更多优化
+  ```
+
+**增强的 KeywordData 输出**:
+
+- 基础字段: `volume`, `difficulty`, `cpc`, `probability`
+- 新增字段:
+  - `top3Probability`: "HIGH" | "MEDIUM" | "LOW"
+  - `top10Probability`: "HIGH" | "MEDIUM" | "LOW"
+  - `canOutrankPositions`: `number[]` (可超越的位置，如 [1, 3, 5])
+  - `websiteDR`: `number` (网站 DR 值)
+  - `competitorDRs`: `number[]` (Top 10 竞争对手 DR 值数组)
+  - `relevanceScore`: `number` (相关性评分 0-1)
+
+**UI 展示增强**:
+
+- Probability 过滤器: ALL/HIGH/MEDIUM/LOW
+- 新增过滤器: **Top 3** / **Top 10** (区分不同概率等级)
+- 排序选项: Volume/Difficulty/Probability/Top3Probability
+- 展开行详细信息:
+  - SERP snippets (搜索结果摘要)
+  - DR 值对比图表 (网站 vs 竞争对手)
+  - 可超越位置标记 (高亮显示)
+  - Top 3 vs Top 10 概率分析
+- 视觉标记:
+  - 🟢 **HIGH (Top 3)** - 高概率排前三
+  - 🟡 **HIGH (Top 10)** - 高概率排首页
+  - 🔴 **MEDIUM/LOW** - 需要更多优化
+
 ### 关键缺失
 
 1. **已排名关键词提取** - ❌ 不提取网站现有排名
-2. **Quick Wins识别** - ❌ 无法识别位置11-30的优化机会
+2. **Quick Wins 识别** - ❌ 无法识别位置 11-30 的优化机会
 3. **内容优化建议** - ⚠️ 仅生成关键词，无具体优化动作
+
+### 存量拓新核心功能 (需实现)
+
+**1. DR 值计算与权威性评估** ⚠️ **待实现**
+
+- 文件: `api/_shared/agents/agent-2-seo-researcher.ts`
+- 功能: 集成 DataForSEO Domain Analytics API 或 Ahrefs API
+- 实现:
+  - 获取网站 DR 值 (Domain Rating)
+  - 获取 SERP 中 Top 10 域名的 DR 值
+  - 计算权威值对比
+- 输出: `websiteDR`, `competitorDRs[]`
+
+**2. "大鱼吃小鱼"判断算法** ⚠️ **待实现**
+
+- 文件: `api/_shared/agents/agent-2-seo-researcher.ts`
+- 功能: 新增 `calculateOutrankProbability()` 函数
+- 算法逻辑:
+  ```
+  对于每个关键词的SERP结果:
+    1. 获取Top 10域名的DR值
+    2. 对比 websiteDR vs competitorDRs[i]
+    3. 计算相关性评分 (AI分析)
+    4. 判断可超越位置:
+       - 如果 websiteDR > competitorDR[i] → 可超越
+       - 如果 relevanceScore > 0.7 → 可超越
+    5. 输出: canOutrankPositions[]
+  ```
+- 输出: `canOutrankPositions: number[]` (如 [1, 3, 5])
+
+**3. Top 3 vs Top 10 概率区分** ⚠️ **待实现**
+
+- 文件: `api/_shared/agents/agent-2-seo-researcher.ts`
+- 功能: 新增 `calculateTop3Top10Probability()` 函数
+- 实现逻辑:
+
+  ```
+  // Top 3 概率
+  top3AvgDR = average(competitorDRs[0..2])
+  canOutrankTop3 = count(canOutrankPositions <= 3) >= 1
+  if (canOutrankTop3 && websiteDR >= top3AvgDR - 3)
+    top3Probability = "HIGH"
+  else if (canOutrankTop3)
+    top3Probability = "MEDIUM"
+  else
+    top3Probability = "LOW"
+
+  // Top 10 概率
+  top10AvgDR = average(competitorDRs[0..9])
+  canOutrankTop10 = count(canOutrankPositions) >= 3
+  if (canOutrankTop10 || websiteDR >= top10AvgDR)
+    top10Probability = "HIGH"
+  else if (canOutrankTop10)
+    top10Probability = "MEDIUM"
+  else
+    top10Probability = "LOW"
+
+  // 最终概率
+  if (top3Probability === "HIGH")
+    probability = "HIGH (Top 3)"
+  else if (top10Probability === "HIGH")
+    probability = "HIGH (Top 10)"
+  else
+    probability = top10Probability
+  ```
+
+- 输出: `top3Probability`, `top10Probability`, `probability` (带 Top 3/Top 10 标记)
+
+**4. UI 展示增强** ⚠️ **待实现**
+
+- 文件: `components/article-generator/KeywordTable.tsx` (或相关组件)
+- 功能:
+  - 新增 Top 3/Top 10 过滤器
+  - 显示 DR 值对比图表
+  - 高亮可超越位置
+  - 视觉标记: 🟢 HIGH (Top 3) / 🟡 HIGH (Top 10) / 🔴 MEDIUM/LOW
 
 ---
 
-## 工作流4: 存量拓新 + 跨市场洞察
+## 工作流 4: 存量拓新 + 跨市场洞察
+
 **状态**: `miningMode="existing-website-audit"` + `activeTab="batch"`
 
 ### 运作逻辑 (As-Is)
@@ -323,11 +622,16 @@ AI任务:
 │  ├─ keywordsForAnalysis = keywordsFromAudit.map(...)       │
 │  └─ translation = keyword (相同，无翻译)                     │
 │                                                              │
-│ Step 2: DataForSEO 获取目标市场数据                          │
-│  └─ (与工作流2相同)                                          │
+│ Step 2: 用户选择分析维度                                      │
+│  ├─ targetLocation: "zh" (目标地区)                          │
+│  ├─ targetSearchEngine: "google" | "baidu" | "bing" | "yandex" │
+│  └─ 多维度组合: 地区 × 搜索引擎                              │
 │                                                              │
-│ Step 3: 预��选 + Agent 2分析                                 │
-│  └─ (与工作流2相同)                                          │
+│ Step 3: DataForSEO 获取目标市场数据 (按地区+搜索引擎)        │
+│  └─ (与工作流2相同，支持搜索引擎维度)                          │
+│                                                              │
+│ Step 4: 预筛选 + Agent 2分析 (按搜索引擎)                     │
+│  └─ (与工作流2相同，支持搜索引擎维度)                          │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -335,46 +639,392 @@ AI任务:
 │  ├─ Keyword列: 关键词 (如 "生酮饮食")                       │
 │  ├─ Translation列: 与Keyword相同 (无翻译)                   │
 │  ├─ source: 'website-audit' (标记来源)                      │
-│  └─ Volume, Difficulty, Probability (目标市场数据)          │
+│  ├─ SearchEngine列: 目标搜索引擎 (如 "Google", "Baidu")      │
+│  ├─ Location列: 目标地区 (如 "中国", "美国")                │
+│  └─ Volume, Difficulty, Probability (特定引擎+地区数据)     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### 核心特性
 
 **自动获取网站关键词**:
+
 - 调用 `/api/website-data/keywords-only`
-- 返回前20个关键词 (已经是目标语言)
+- 返回前 20 个关键词 (已经是目标语言)
 - 跳过翻译步骤
 
-**与工作流2的区别**:
+**搜索引擎维度支持** (与工作流 2 相同):
+
+- 支持多搜索引擎选择: Google、Baidu、Bing、Yandex
+- 按搜索引擎获取不同的 SERP 数据和竞争分析
+- 提供搜索引擎特定的优化建议
+
+**与工作流 2 的区别**:
+
 ```
 工作流2 (手动输入):
   keywords: "manus, nanobanana"
   → 需要翻译 → "马努斯, 纳米香蕉"
+  → 选择搜索引擎 → 分析
 
 工作流4 (网站获取):
   keywordsFromAudit: ["生酮饮食", "低碳水化合物"]
   → 跳过翻译 (已是目标语言)
+  → 选择搜索引擎 → 分析
 ```
 
 ### 关键缺失
 
-与工作流2相同的缺失点
+与工作流 2 相同的缺失点
 
 ---
 
-## 4种工作流差异对比
+## 工作流 5: 关键词质量分析 (好词坏词评估)
 
-| 维度 | 工作流1 | 工作流2 | 工作流3 | 工作流4 |
-|------|---------|---------|---------|---------|
-| **主模式** | 蓝海 | 蓝海 | 存量拓新 | 存量拓新 |
-| **子模式** | 挖掘 | 跨市场 | 挖掘 | 跨市场 |
-| **输入源** | 种子词 | 手动输入 | 网站 | 网站 |
-| **需翻译** | ❌ | ✅ | ❌ | ❌ |
-| **数据来源** | Gemini AI生成 | 手动输入 | Firecrawl+竞争对手 | 网站关键词API |
-| **核心API** | /api/seo-agent | /api/batch-translate-analyze | /api/website-audit | /api/batch-translate-analyze |
-| **循环挖掘** | ✅ (SCAMPER) | ❌ | ✅ (基于缺口) | ❌ |
-| **Translation列** | - | 原始词 | - | = Keyword |
+**状态**: 新增独立工作流 - 基于现有关键词的质量评估
+
+**参考功能**: `KeywordIntelligenceView` (关键词情报功能)
+
+### 运作逻辑 (To-Be)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 用户选择网站 (WebsiteDataDashboard)                          │
+│  ├─ websiteId: 从下拉列表选择                                 │
+│  ├─ 切换到 "关键词情报" 视图                                  │
+│  └─ 点击 "分析关键词机会"                                     │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ POST /api/website-data/analyze-keyword-recommendations       │
+│  ├─ websiteId: 网站ID                                        │
+│  ├─ topN: 10 (分析前N个关键词)                                │
+│  └─ userId: 用户ID                                           │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ Step 1: 获取网站排名关键词                                    │
+│  ├─ 查询数据库: domain_keywords 表                           │
+│  ├─ 筛选条件: websiteId, 按排名排序                          │
+│  ├─ 返回: 前10个关键词及其数据                                │
+│  └─ 数据字段: keyword, msv, kd, cpc, intent, current_rank   │
+│                                                              │
+│ Step 2: AI分析关键词质量 (Gemini API)                        │
+│  ├─ 输入: 10个关键词的完整数据 (MSV, KD, CPC, Intent等)      │
+│  ├─ Prompt: EXISTING_KEYWORD_ANALYSIS_PROMPTS               │
+│  ├─ AI任务:                                                  │
+│  │   ├─ 分析每个关键词的商业价值                              │
+│  │   ├─ 评估竞争难度和排名潜力                                │
+│  │   ├─ 识别搜索意图匹配度                                    │
+│  │   ├─ 计算推荐指数 (1-5星)                                 │
+│  │   └─ 分类: 好词/坏词/中性词                               │
+│  └─ 输出: KeywordRecommendationReport (JSON)                │
+│                                                              │
+│ Step 3: 关键词分类与优先级排序                                │
+│  ├─ 优先级1 (最值得投入):                                    │
+│  │   ├─ 低难度 (KD <= 30)                                    │
+│  │   ├─ 高价值 (MSV >= 500)                                  │
+│  │   ├─ 商业意图匹配                                          │
+│  │   └─ 推荐指数 >= 4                                        │
+│  │                                                           │
+│  ├─ 优先级2 (值得布局):                                       │
+│  │   ├─ 中等难度 (30 < KD <= 50)                             │
+│  │   ├─ 中等价值 (100 <= MSV < 500)                          │
+│  │   ├─ 意图匹配良好                                          │
+│  │   └─ 推荐指数 = 3                                         │
+│  │                                                           │
+│  ├─ 优先级3 (战略储备):                                       │
+│  │   ├─ 高难度但长期价值 (KD > 50, MSV高)                    │
+│  │   ├─ 品牌相关词                                            │
+│  │   └─ 推荐指数 = 2                                         │
+│  │                                                           │
+│  └─ 不推荐清单 (坏词):                                       │
+│      ├─ 意图不匹配 (如: 信息型词用于商业网站)                 │
+│      ├─ 竞争过大 (KD > 70, 且无竞争优势)                      │
+│      ├─ 搜索量过低 (MSV < 50)                                │
+│      └─ 推荐指数 = 1                                         │
+│                                                              │
+│ Step 4: 生成优化建议                                          │
+│  ├─ 好词建议:                                                 │
+│  │   ├─ 内容类型 (如: "产品对比文章", "购买指南")            │
+│  │   ├─ 建议字数 (如: "2000-3000字")                         │
+│  │   ├─ 差异化策略 (如: "添加实际案例", "包含价格对比")      │
+│  │   └─ 预期效果 (如: "3个月内排到Top 10")                   │
+│  │                                                           │
+│  └─ 坏词建议:                                                 │
+│      ├─ 不推荐原因 (如: "意图不匹配", "竞争过大")             │
+│      └─ 替代方案 (如: "建议使用长尾词变体")                   │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 返回前端 → KeywordIntelligenceView 展示                      │
+│                                                              │
+│ UI组件:                                                      │
+│  ├─ 执行摘要 (Executive Summary)                             │
+│  │   ├─ Top 5 关键词列表                                      │
+│  │   ├─ 整体机会评级 (High/Medium/Low)                       │
+│  │   ├─ 高价值关键词数量                                      │
+│  │   └─ 平均难度 (KD)                                        │
+│  │                                                           │
+│  ├─ 关键词推荐列表 (按优先级分组)                             │
+│  │   ├─ 优先级1: 最值得投入 (绿色标记)                        │
+│  │   ├─ 优先级2: 值得布局 (黄色标记)                          │
+│  │   ├─ 优先级3: 战略储备 (蓝色标记)                          │
+│  │   └─ 不推荐清单: 坏词 (红色标记)                          │
+│  │                                                           │
+│  ├─ 关键词详情卡片                                            │
+│  │   ├─ 关键词名称                                            │
+│  │   ├─ 核心数据: MSV, KD, CPC, Intent                      │
+│  │   ├─ 推荐指数: 1-5星 (竖条显示)                           │
+│  │   ├─ SERP机会: AI Overview, Featured Snippet标记         │
+│  │   ├─ 内容策略: 内容类型、建议字数                          │
+│  │   ├─ 优势差异化: 具体优化建议                              │
+│  │   └─ 预期效果: 排名潜力、流量预估                          │
+│  │                                                           │
+│  └─ 操作按钮                                                  │
+│      ├─ "生成文章" (针对好词)                                 │
+│      ├─ "导出CSV" (导出所有分析结果)                          │
+│      └─ "全部部署" (批量生成文章)                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 核心特性
+
+**基于现有关键词的质量评估**:
+
+- 输入: 网站已排名的前 10 个关键词
+- 分析维度:
+  - **商业价值**: MSV (月搜索量)、CPC (点击成本)
+  - **竞争难度**: KD (关键词难度)
+  - **意图匹配**: 搜索意图 vs 网站定位
+  - **排名潜力**: 当前排名 + 优化空间
+
+**好词识别标准**:
+
+- ✅ **优先级 1 (最值得投入)**:
+
+  - KD <= 30 (低难度)
+  - MSV >= 500 (高搜索量)
+  - 商业意图匹配 (Transactional/Commercial)
+  - 推荐指数 >= 4 星
+  - 示例: "best ai headshot generator" (MSV=1200, KD=25, Intent=Commercial)
+
+- ✅ **优先级 2 (值得布局)**:
+  - 30 < KD <= 50 (中等难度)
+  - 100 <= MSV < 500 (中等搜索量)
+  - 意图匹配良好
+  - 推荐指数 = 3 星
+  - 示例: "ai photo editor free" (MSV=300, KD=40, Intent=Informational)
+
+**坏词识别标准**:
+
+- ❌ **不推荐清单 (坏词)**:
+  - 意图不匹配 (如: 信息型词用于电商网站)
+  - 竞争过大 (KD > 70, 且无竞争优势)
+  - 搜索量过低 (MSV < 50)
+  - 推荐指数 = 1 星
+  - 示例: "what is ai" (MSV=30, KD=80, Intent=Informational, 不适合商业网站)
+
+**AI 分析逻辑** (EXISTING_KEYWORD_ANALYSIS_PROMPTS):
+
+```
+AI任务:
+1. 分析每个关键词的商业价值
+   - MSV是否足够高?
+   - CPC是否具有商业价值?
+   - 搜索意图是否匹配网站定位?
+
+2. 评估竞争难度和排名潜力
+   - KD是否在可接受范围?
+   - 当前排名位置 (如果已有排名)
+   - 优化后能否提升排名?
+
+3. 识别搜索意图匹配度
+   - Informational: 适合博客/内容站
+   - Commercial: 适合产品对比/评测站
+   - Transactional: 适合电商/服务网站
+   - Navigational: 品牌相关词
+
+4. 计算推荐指数 (1-5星)
+   - 5星: 完美匹配，高价值低难度
+   - 4星: 优秀机会，值得投入
+   - 3星: 良好机会，可布局
+   - 2星: 战略储备，长期价值
+   - 1星: 不推荐，坏词
+
+5. 生成优化建议
+   - 好词: 内容类型、字数、差异化策略
+   - 坏词: 不推荐原因、替代方案
+```
+
+**输出报告结构**:
+
+```json
+{
+  "report_metadata": {
+    "title": "关键词推荐决策报告",
+    "target_market": "美国",
+    "language": "en",
+    "primary_keyword": "ai headshot",
+    "analysis_date": "2026-01-06"
+  },
+  "executive_summary": {
+    "top_5_keywords": [...],
+    "overall_assessment": {
+      "feasibility": "High",
+      "high_value_keyword_count": 5,
+      "average_kd": 35,
+      "opportunity_rating": "High"
+    }
+  },
+  "keyword_recommendation_list": [
+    {
+      "priority": 1,
+      "label": "最值得投入",
+      "keywords": [
+        {
+          "keyword": "best ai headshot generator",
+          "metrics": { "msv": 1200, "kd": 25, "cpc": 2.5, "intent": "Commercial" },
+          "strategy": {
+            "content_type": "产品对比文章",
+            "suggested_word_count": "2500-3000字",
+            "differentiation": "添加实际案例和价格对比"
+          },
+          "expected_results": {
+            "ranking_potential": "3个月内排到Top 10",
+            "monthly_traffic_est": "300-500访问"
+          },
+          "recommendation_index": 5
+        }
+      ]
+    },
+    {
+      "priority": 2,
+      "label": "值得布局",
+      "keywords": [...]
+    },
+    {
+      "priority": 3,
+      "label": "战略储备",
+      "keywords": [...]
+    }
+  ]
+}
+```
+
+### 与关键词情报功能的关联
+
+**参考实现**:
+
+- UI 组件: `components/website-data/KeywordIntelligenceView.tsx`
+- API 端点: `/api/website-data/analyze-keyword-recommendations`
+- 数据表: `domain_keywords` (存储网站关键词数据)
+
+**工作流 5 的定位**:
+
+- 不是挖新词，而是**评估现有关键词质量**
+- 帮助用户识别哪些词值得继续投入，哪些词应该放弃
+- 为每个好词提供具体的优化建议和部署方案
+
+**UI 入口位置**:
+
+- **独立入口**: `WebsiteDataDashboard` → "关键词情报" 视图
+- **与工作流 1-4 的区别**: 工作流 1-4 在文章生成器的挖词界面，工作流 5 在网站数据仪表板
+- **使用场景**: 当网站已有排名关键词时，评估这些关键词的质量和优化潜力
+
+### 关键缺失
+
+1. **多搜索引擎支持** - 当前仅分析 Google 数据，未考虑 Baidu/Bing 等
+2. **历史趋势分析** - 未分析关键词的历史排名变化趋势
+3. **竞争对手对比** - 未对比竞争对手在同一关键词上的表现
+4. **批量优化建议** - 未提供关键词组合优化的建议
+
+### 坏词处理建议
+
+**识别到坏词后的行动**:
+
+- **不推荐原因分析**: 明确说明为什么该词不适合（意图不匹配、竞争过大、搜索量过低等）
+- **替代方案**: 提供相似但更适合的长尾词变体
+- **决策建议**:
+  - 如果当前排名靠前但价值低 → 考虑优化内容转向更高价值词
+  - 如果排名靠后且价值低 → 建议放弃，将资源投入好词
+- **预防措施**: 记录坏词特征，避免在未来挖词时选择类似词
+
+---
+
+## 5 种工作流差异对比
+
+| 维度               | 工作流 1       | 工作流 2                     | 工作流 3           | 工作流 4                     | 工作流 5                                          |
+| ------------------ | -------------- | ---------------------------- | ------------------ | ---------------------------- | ------------------------------------------------- |
+| **主模式**         | 蓝海           | 蓝海                         | 存量拓新           | 存量拓新                     | 存量拓新                                          |
+| **子模式**         | 挖掘           | 跨市场                       | 挖掘               | 跨市场                       | 质量分析                                          |
+| **输入源**         | 种子词         | 手动输入                     | 网站               | 网站                         | 网站现有关键词                                    |
+| **UI 入口**        | 挖词界面       | 挖词界面                     | 挖词界面           | 挖词界面                     | 网站数据仪表板                                    |
+| **需翻译**         | ❌             | ✅                           | ❌                 | ❌                           | ❌                                                |
+| **搜索引擎维度**   | ❌             | ✅ (新增)                    | ❌                 | ✅ (新增)                    | ❌                                                |
+| **数据来源**       | Gemini AI 生成 | 手动输入                     | Firecrawl+竞争对手 | 网站关键词 API               | 网站关键词数据库                                  |
+| **核心 API**       | /api/seo-agent | /api/batch-translate-analyze | /api/website-audit | /api/batch-translate-analyze | /api/website-data/analyze-keyword-recommendations |
+| **循环挖掘**       | ✅ (SCAMPER)   | ❌                           | ✅ (基于缺口)      | ❌                           | ❌                                                |
+| **Translation 列** | -              | 原始词                       | -                  | = Keyword                    | -                                                 |
+| **输出类型**       | 新关键词列表   | 跨市场关键词                 | 新关键词列表       | 跨市场关键词                 | 好词/坏词分类                                     |
+| **核心价值**       | 发现蓝海机会   | 跨市场机会                   | 网站缺口分析       | 跨市场分析                   | 关键词质量评估                                    |
+
+---
+
+## 工作流之间的关系与使用场景
+
+### 工作流使用顺序建议
+
+**场景 1: 新网站从零开始**
+
+1. **工作流 1** (蓝海模式 + 关键词挖掘) → 发现初始关键词机会
+2. **工作流 2** (蓝海模式 + 跨市场洞察) → 分析跨市场机会（可选）
+3. 生成内容并上线
+4. **工作流 5** (关键词质量分析) → 评估已排名关键词质量
+
+**场景 2: 已有网站优化**
+
+1. **工作流 5** (关键词质量分析) → 先评估现有关键词，识别好词和坏词
+2. **工作流 3** (存量拓新 + 关键词挖掘) → 基于网站缺口发现新机会
+3. **工作流 4** (存量拓新 + 跨市场洞察) → 分析现有关键词的跨市场机会（可选）
+4. 针对好词优化内容，针对新词生成内容
+
+**场景 3: 多市场扩展**
+
+1. **工作流 2/4** (跨市场洞察) → 选择目标地区和搜索引擎
+2. 分析不同市场+搜索引擎组合下的机会
+3. 优先投入高机会市场
+
+### 工作流之间的数据流转
+
+**工作流 3 → 工作流 5**:
+
+- 工作流 3 发现的新关键词 → 可以导入工作流 5 进行评估
+- 评估这些新词是否值得投入资源
+
+**工作流 5 → 工作流 1/3**:
+
+- 工作流 5 识别的好词 → 可以作为种子词输入工作流 1/3
+- 基于好词挖掘相关长尾词
+
+**工作流 2/4 → 工作流 1/3**:
+
+- 跨市场分析发现的机会词 → 可以输入工作流 1/3 进一步挖掘
+- 在目标市场深度挖掘相关词
+
+### 工作流 5 的特殊性
+
+**独立工作流的原因**:
+
+- 工作流 1-4 专注于"发现新机会"
+- 工作流 5 专注于"评估现有质量"
+- 两者目标不同，但可以配合使用
+
+**与其他工作流的配合**:
+
+- **工作流 5 的好词** → 可以输入工作流 1/3 挖掘相关词
+- **工作流 5 的坏词** → 避免在工作流 1/3 中选择类似词
+- **工作流 3 的新词** → 可以输入工作流 5 评估质量
 
 ---
 
@@ -382,61 +1032,141 @@ AI任务:
 
 ### P0 - 立即改进 (核心缺失)
 
-**1. 工作流1+3 (关键词挖掘) - 蓝海信号评分**
+**1. 工作流 1+3 (关键词挖掘) - 蓝海信号评分**
+
 - 文件: `api/_shared/agents/agent-2-seo-researcher.ts`
 - 功能: 新增 `calculateBlueOceanScore()` 函数
-- 替代: AI黑盒判断 → 显式评分算法
+- 替代: AI 黑盒判断 → 显式评分算法
 - 评分规则:
-  - 弱竞争者 (>5个低权重域名): +30
+  - 弱竞争者 (>5 个低权重域名): +30
   - 内容不相关: +25
-  - 低内容深度 (<800字): +20
+  - 低内容深度 (<800 字): +20
   - 广告填充: +15
-  - 过时内容 (>2年): +10
+  - 过时内容 (>2 年): +10
   - 总分 >= 70: HIGH, >= 40: MEDIUM, <40: LOW
 
-**2. 工作流3 (存量拓新+挖掘) - 已排名关键词提取**
+**2. 工作流 3 (存量拓新+挖掘) - DR 值计算与"大鱼吃小鱼"算法** ⭐ **核心功能**
+
+- 文件: `api/_shared/agents/agent-2-seo-researcher.ts`
+- 功能 1: DR 值计算与权威性评估
+  - 集成 DataForSEO Domain Analytics API 或 Ahrefs API
+  - 获取网站 DR 值 (Domain Rating)
+  - 获取 SERP 中 Top 10 域名的 DR 值
+  - 计算权威值对比
+- 功能 2: "大鱼吃小鱼"判断算法
+  - 新增 `calculateOutrankProbability()` 函数
+  - 判断网站能否"吃掉"（超越）SERP 中排名靠前的网页
+  - 判断维度:
+    - 权威值对比: `websiteDR > competitorDR[i]` → 可超越
+    - 相关性评估: `relevanceScore > 0.7` → 可超越
+  - 输出: `canOutrankPositions[]` (可超越的位置列表)
+- 功能 3: Top 3 vs Top 10 概率区分
+  - 新增 `calculateTop3Top10Probability()` 函数
+  - Top 3 概率: 能吃掉前 3 个中的至少 1 个 + DR 条件
+  - Top 10 概率: 能吃掉 Top 10 中的至少 3 个 + DR 条件
+  - 输出: `top3Probability`, `top10Probability`, `probability` (带 Top 3/Top 10 标记)
+- UI 展示:
+  - 新增 Top 3/Top 10 过滤器
+  - 显示 DR 值对比图表
+  - 高亮可超越位置
+  - 视觉标记: 🟢 HIGH (Top 3) / 🟡 HIGH (Top 10) / 🔴 MEDIUM/LOW
+
+**3. 工作流 3 (存量拓新+挖掘) - 已排名关键词提取**
+
 - 新文件: `api/website-data/ranked-keywords.ts`
-- 功能: DataForSEO `ranked_keywords` API集成
+- 功能: DataForSEO `ranked_keywords` API 集成
 - 分类输出:
-  - Quick Wins (位置11-30, volume>=100, KD<50)
-  - Long-term (位置31-50)
-  - Top Rankings (位置1-10)
-- UI展示:
-  - 新增Quick Wins表格 (App.tsx)
+  - Quick Wins (位置 11-30, volume>=100, KD<50)
+  - Long-term (位置 31-50)
+  - Top Rankings (位置 1-10)
+- UI 展示:
+  - 新增 Quick Wins 表格 (App.tsx)
   - 显示当前排名 + 优化建议
 
-**3. 工作流2+4 (跨市场洞察) - 跨市场对比分析**
+**4. 工作流 2+4 (跨市场洞察) - 搜索引擎维度支持** ⭐ **新增功能**
+
+- 文件: `api/batch-translate-analyze.ts`
+- 功能 1: 新增搜索引擎选择器
+  - 支持: Google、Baidu、Bing、Yandex
+  - 用户可选择目标搜索引擎
+  - 不同搜索引擎对应不同的 SERP 特征
+- 功能 2: 搜索引擎特定的数据获取
+  - DataForSEO API 按搜索引擎获取数据
+  - 搜索引擎映射: Google(全球)、Baidu(中国)、Bing(全球)、Yandex(俄罗斯/东欧)
+  - 返回搜索引擎特定的 volume、difficulty、cpc 数据
+- 功能 3: 搜索引擎特定的竞争分析
+  - Agent 2 按搜索引擎分析 SERP 特征
+  - Google: SGE、Featured Snippets、People Also Ask
+  - Baidu: 百度知道、百度百科、百家号
+  - Bing: Web Answers、Related Searches
+  - Yandex: Yandex Zen、本地化结果
+- UI 展示:
+  - 新增搜索引擎选择器 (下拉菜单)
+  - KeywordTable 新增 "Search Engine" 列
+  - 显示搜索引擎特定的优化建议
+
+**5. 工作流 2+4 (跨市场洞察) - 跨市场对比分析**
+
 - 文件: `api/batch-translate-analyze.ts`
 - 功能: 新增 `compareMarkets()` 函数
 - 对比维度:
   - volumeDelta: 源市场 vs 目标市场搜索量差异
-  - difficultyDelta: KD难度差异
+  - difficultyDelta: KD 难度差异
   - opportunity: HIGH (volume>50% && KD<-10) / MEDIUM / LOW
-- UI展示:
+- UI 展示:
   - KeywordTable 新增 "Market Comparison" 列
   - 显示 Delta 值 (绿色/红色标记)
 
-### P1 - 1个月内 (功能增强)
+**6. 工作流 5 (关键词质量分析) - 好词坏词评估** ⭐ **新增工作流**
 
-**4. 工作流3 (存量拓新) - 长尾挖掘**
+- 文件: `api/website-data/analyze-keyword-recommendations.ts` (已存在)
+- UI 组件: `components/website-data/KeywordIntelligenceView.tsx` (已存在)
+- 功能: 基于现有关键词的质量评估
+- 实现逻辑:
+  - 获取网站排名前 10 的关键词
+  - AI 分析每个关键词的商业价值、竞争难度、意图匹配度
+  - 分类: 优先级 1(好词) / 优先级 2(值得布局) / 优先级 3(战略储备) / 不推荐(坏词)
+  - 生成优化建议: 内容类型、字数、差异化策略
+- 输出:
+  - 好词列表: 推荐指数 4-5 星，提供具体优化建议
+  - 坏词列表: 推荐指数 1 星，说明不推荐原因
+  - 执行摘要: Top 5 关键词、整体机会评级
+
+### P1 - 1 个月内 (功能增强)
+
+**7. 工作流 3 (存量拓新) - 长尾挖掘**
+
 - 新文件: `api/_shared/tools/google-suggestions.ts`
 - 功能: Google Autocomplete + PAA API
 - 集成点: website-audit.ts
 - 输出: 从已排名词发现相关长尾词
 
-**5. 工作流2+4 (跨市场) - 文化差异分析**
+**8. 工作流 2+4 (跨市场) - 文化差异分析**
+
 - 功能: `analyzeCulturalVariants()` 函数
-- AI分析: 本地术语偏好、文化上下文
+- AI 分析: 本地术语偏好、文化上下文
 - 示例: "AI headshot" → "证件照" (中国) vs "就活写真" (日本)
 
-**6. 工作流2+4 (跨市场) - 可视化**
+**9. 工作流 2+4 (跨市场) - 可视化**
+
+**10. 工作流 5 (关键词质量分析) - 多搜索引擎支持**
+
+- 文件: `api/website-data/analyze-keyword-recommendations.ts`
+- 功能: 扩展关键词质量分析，支持多搜索引擎
+- 实现:
+  - 按搜索引擎获取关键词数据 (Google/Baidu/Bing/Yandex)
+  - 分析不同搜索引擎下的关键词表现差异
+  - 提供搜索引擎特定的优化建议
+- 输出: 每个关键词在不同搜索引擎下的质量评估
+
 - 新文件: `components/CrossMarketChart.tsx`
 - 图表: 散点图 (X=volume, Y=difficulty, 颜色=opportunity)
-- UI集成: Tabs (Table View / Chart View)
+- UI 集成: Tabs (Table View / Chart View)
 
-### P2 - 3个月内 (新功能)
+### P2 - 3 个月内 (新功能)
 
-**7. 数据库持久化** (影响所有工作流)
+**11. 数据库持久化** (影响所有工作流)
+
 - 表结构:
   - workspaces (工作区管理)
   - mining_sessions (挖词会话)
@@ -449,49 +1179,74 @@ AI任务:
 
 ## 关键产品洞察
 
-### 1. 2×2矩阵的优势
+### 1. 2×2 矩阵的优势
 
 **为什么这个设计好？**
 
 ✅ **模式复用**: 跨市场洞察在两种主模式下都可用
+
 - 蓝海模式: 翻译手动输入的关键词
 - 存量拓新: 分析网站关键词的跨市场机会
 
 ✅ **用户路径清晰**:
+
 - 先选主模式 (我有网站吗？)
 - 再选子模式 (我要挖新词还是分析市场？)
 
 ✅ **代码复用**:
-- `batch-translate-analyze.ts` 同时服务工作流2和4
-- `keyword-mining-service.ts` 同时服务工作流1和3
+
+- `batch-translate-analyze.ts` 同时服务工作流 2 和 4
+- `keyword-mining-service.ts` 同时服务工作流 1 和 3
 
 ### 2. 当前实现的完整度
 
-| 工作流 | 完整度 | 核心缺失 |
-|-------|-------|---------|
-| 工作流1 | 85% | 蓝海评分算法 |
-| 工作流2 | 70% | 跨市场对比 |
-| 工作流3 | 60% | 已排名关键词提取 |
-| 工作流4 | 70% | 跨市场对比 |
+| 工作流   | 完整度 | 核心缺失                                                         |
+| -------- | ------ | ---------------------------------------------------------------- |
+| 工作流 1 | 85%    | 蓝海评分算法                                                     |
+| 工作流 2 | 65%    | 搜索引擎维度支持、跨市场对比                                     |
+| 工作流 3 | 50%    | DR 值计算、"大鱼吃小鱼"算法、Top 3/Top 10 区分、已排名关键词提取 |
+| 工作流 4 | 65%    | 搜索引擎维度支持、跨市场对比                                     |
+| 工作流 5 | 80%    | 多搜索引擎支持、历史趋势分析                                     |
 
 **整体评估**: 基础功能完整，高级功能缺失
 
 ### 3. 改进后的用户价值
 
-**工作流1 (蓝海+挖掘) 改进后**:
+**工作流 1 (蓝海+挖掘) 改进后**:
+
 - ✅ 显式蓝海分数 (可解释性)
-- ✅ MEDIUM词的深度洞察 (Firecrawl)
-- 🎯 用户价值: 从 "AI说是蓝海" → "具体哪里是蓝海，为什么"
+- ✅ MEDIUM 词的深度洞察 (Firecrawl)
+- 🎯 用户价值: 从 "AI 说是蓝海" → "具体哪里是蓝海，为什么"
 
-**工作流2+4 (跨市场洞察) 改进后**:
-- ✅ 跨市场Delta对比 (一目了然)
+**工作流 2+4 (跨市场洞察) 改进后**:
+
+- ✅ 搜索引擎维度支持 (Google/Baidu/Bing/Yandex)
+- ✅ 跨市场 Delta 对比 (一目了然)
 - ✅ 文化差异变体 (本地化)
-- 🎯 用户价值: 从 "目标市场有搜索量" → "比源市场高150%，竞争低17点"
+- ✅ 搜索引擎特定的 SERP 分析
+- 🎯 用户价值:
+  - 从 "目标市场有搜索量" → "比源市场高 150%，竞争低 17 点"
+  - 从 "单一搜索引擎分析" → "Google 竞争激烈，Baidu 是蓝海机会"
 
-**工作流3 (存量拓新+挖掘) 改进后**:
-- ✅ Quick Wins识别 (立即见效)
+**工作流 5 (关键词质量分析) 改进后**:
+
+- ✅ 好词坏词自动分类 (优先级 1-3 + 不推荐)
+- ✅ 推荐指数评分 (1-5 星)
+- ✅ 具体优化建议 (内容类型、字数、差异化策略)
+- ✅ 预期效果评估 (排名潜力、流量预估)
+- 🎯 用户价值: 从 "不知道哪些词值得做" → "明确知道 5 个好词优先投入，3 个坏词应该放弃"
+
+**工作流 3 (存量拓新+挖掘) 改进后**:
+
+- ✅ DR 值计算与权威性评估 (量化网站权威)
+- ✅ "大鱼吃小鱼"算法 (判断能否超越竞争对手)
+- ✅ Top 3 vs Top 10 概率区分 (精准判断排名概率)
+- ✅ Quick Wins 识别 (立即见效)
 - ✅ 具体优化建议 (可执行)
-- 🎯 用户价值: 从 "发现新关键词" → "优化32个现有词可+2300流量"
+- 🎯 用户价值:
+  - 从 "发现新关键词" → "优化 32 个现有词可+2300 流量"
+  - 从 "可能排在首页" → "DR 值 65，可吃掉前 3 个中的 2 个，高概率排 Top 3"
+  - 从 "模糊的概率判断" → "明确区分 Top 3 和 Top 10 概率，优先优化 Top 3 机会"
 
 ---
 
@@ -499,32 +1254,62 @@ AI任务:
 
 ### 核心理解
 
-这不是4个独立模式，而是：
-- **2个主模式** (蓝海 vs 存量拓新) - 起点不同
-- **2个子模式** (挖掘 vs 跨市场) - 目标不同
-- **4种组合工作流** - 覆盖不同使用场景
+这不是 4 个独立模式，而是：
+
+- **2 个主模式** (蓝海 vs 存量拓新) - 起点不同
+- **2 个子模式** (挖掘 vs 跨市场) - 目标不同
+- **4 种组合工作流** (工作流 1-4) - 覆盖不同使用场景
+- **1 种独立工作流** (工作流 5) - 评估现有关键词质量
+
+**工作流分类**:
+
+- **发现型工作流** (工作流 1-4): 专注于发现新的关键词机会
+  - 工作流 1: 从种子词发现蓝海机会
+  - 工作流 2: 跨市场发现机会
+  - 工作流 3: 从网站缺口发现机会
+  - 工作流 4: 从网站关键词跨市场发现机会
+- **评估型工作流** (工作流 5): 专注于评估现有关键词质量
+  - 识别好词和坏词
+  - 提供优化建议
 
 ### 当前状态
 
 ✅ **已实现**:
-- 完整的UI切换逻辑 (2×2矩阵)
-- 4种工作流的基础功能
-- Agent系统 (Agent 1生成, Agent 2分析)
-- DataForSEO数据集成
+
+- 完整的 UI 切换逻辑 (2×2 矩阵)
+- 4 种工作流的基础功能
+- 工作流 5 (关键词质量分析) - 基础功能已实现
+- Agent 系统 (Agent 1 生成, Agent 2 分析)
+- DataForSEO 数据集成
 
 ❌ **核心缺失**:
+
 - 显式蓝海评分算法
+- DR 值计算与权威性评估 (存量拓新模式)
+- "大鱼吃小鱼"判断算法 (存量拓新模式)
+- Top 3 vs Top 10 概率区分 (存量拓新模式)
 - 已排名关键词提取
+- **搜索引擎维度支持** (工作流 2+4) ⭐ **新增需求**
 - 跨市场对比分析
+- 工作流 5 的多搜索引擎支持
 
 ### 实施建议
 
-**快速见效** (P0改进):
-1. 工作流1: 蓝海评分 (1天)
-2. 工作流3: Quick Wins (2天)
-3. 工作流2+4: 跨市场对比 (2天)
+**快速见效** (P0 改进):
 
-**累计影响**: 5天开发，覆盖所有4种工作流核心功能
+1. 工作流 1: 蓝海评分 (1 天)
+2. 工作流 3: DR 值计算与"大鱼吃小鱼"算法 (3 天)
+   - DR 值计算与权威性评估 (1 天)
+   - "大鱼吃小鱼"判断算法 (1 天)
+   - Top 3 vs Top 10 概率区分 (1 天)
+3. 工作流 3: Quick Wins (2 天)
+4. **工作流 2+4: 搜索引擎维度支持** (2 天) ⭐ **新增**
+   - 搜索引擎选择器 UI (0.5 天)
+   - DataForSEO 多引擎 API 集成 (1 天)
+   - Agent 2 搜索引擎特定分析 (0.5 天)
+5. 工作流 2+4: 跨市场对比 (2 天)
+
+**累计影响**: 10 天开发，覆盖所有 5 种工作流核心功能，特别是跨市场洞察的搜索引擎维度支持
 
 ---
 

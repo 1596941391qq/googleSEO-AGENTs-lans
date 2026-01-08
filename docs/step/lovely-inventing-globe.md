@@ -26,20 +26,22 @@
 
 ### 1.2 多智能体系统架构
 
-**已实现的5个专业 AI Agent:**
+**已实现的 5 个专业 AI Agent:**
 
 1. **Agent 1 - 关键词挖掘专家** (`agent-1-keyword-mining.ts`)
-   - 输入：种子关键词或网站URL
+
+   - 输入：种子关键词或网站 URL
    - 功能：生成蓝海关键词、网站审核模式
    - 输出：关键词列表 + 搜索意图分类
 
-2. **Agent 2 - SEO研究员** (`agent-2-seo-researcher.ts`)
-   - 阶段A：搜索偏好分析
+2. **Agent 2 - SEO 研究员** (`agent-2-seo-researcher.ts`)
+
+   - 阶段 A：搜索偏好分析
      - 分析 Google/Perplexity/ChatGPT/Claude 排名因素
      - 生成针对性优化策略
-   - 阶段B：竞品分析
-     - 抓取Top 10 SERP结果
-     - 提取内容结构 (H1/H2/H3层级)
+   - 阶段 B：竞品分析
+     - 抓取 Top 10 SERP 结果
+     - 提取内容结构 (H1/H2/H3 层级)
      - 识别内容框架和风格
      - 发现内容缺口和机会
    - 输出：
@@ -47,30 +49,32 @@
      - `CompetitorAnalysisResult`: 制胜公式、推荐结构
 
 3. **Agent 3 - 内容作家** (`agent-3-content-writer.ts`)
-   - 输入：SEO策略报告 + 大纲 + 参考资料
+
+   - 输入：SEO 策略报告 + 大纲 + 参考资料
    - 功能：
-     - 基于策略生成SEO优化内容
+     - 基于策略生成 SEO 优化内容
      - 遵循竞品结构和风格
      - 目标关键词最优位置注入
-     - GEO优化（本地化内容、案例研究、区域数据）
-     - AIO优化（Q&A格式、结构化数据、AI友好语言）
-   - 输出：完整文章 + meta标签
+     - GEO 优化（本地化内容、案例研究、区域数据）
+     - AIO 优化（Q&A 格式、结构化数据、AI 友好语言）
+   - 输出：完整文章 + meta 标签
 
 4. **Agent 4 - 质量审查员** (`agent-4-quality-reviewer.ts`)
+
    - 功能：
-     - 关键词密度验证（目标1-2%）
-     - AI概率检测
-     - GEO/AIO合规检查
+     - 关键词密度验证（目标 1-2%）
+     - AI 概率检测
+     - GEO/AIO 合规检查
      - 可读性评分（Flesch Reading Ease）
      - 质量评分（0-100）
-   - 状态：**逻辑实现但UI集成不完整**
+   - 状态：**逻辑实现但 UI 集成不完整**
 
 5. **Agent 5 - 图片创意总监** (`agent-5-image-creative.ts`)
    - 功能：
-     - 从内容中提取4-6个视觉主题
+     - 从内容中提取 4-6 个视觉主题
      - 生成优化的 Nano Banana 2 API prompts
-     - 并行调用图片生成API（1-2张AI图片）
-     - 支持参考URL截图（第3张图片）
+     - 并行调用图片生成 API（1-2 张 AI 图片）
+     - 支持参考 URL 截图（第 3 张图片）
      - 下载并添加元数据
      - 规划图片在文章中的位置
    - 输出：图片数组 + 放置建议
@@ -85,27 +89,35 @@
 // 事件类型
 interface AgentStreamEvent {
   id: string;
-  agentId: 'tracker' | 'researcher' | 'strategist' | 'writer' | 'artist';
-  type: 'log' | 'card' | 'error';
-  cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' |
-             'image-gen' | 'competitor-analysis' | 'search-preferences';
+  agentId: "tracker" | "researcher" | "strategist" | "writer" | "artist";
+  type: "log" | "card" | "error";
+  cardType?:
+    | "serp"
+    | "data"
+    | "outline"
+    | "streaming-text"
+    | "image-gen"
+    | "competitor-analysis"
+    | "search-preferences";
   data?: any;
 }
 ```
 
 **关键特性：**
+
 - 语言自动检测（中文 vs 英文）
 - 目标市场支持：US, UK, CA, AU, DE, FR, JP, CN
 - 参考资料支持：
   - 文档上传 + 内容提取
-  - URL抓取 + Firecrawl截图
+  - URL 抓取 + Firecrawl 截图
 - 实时进度追踪
-- Agent编排协调
-- 图片管理（1-2张AI图 + 1张URL截图）
+- Agent 编排协调
+- 图片管理（1-2 张 AI 图 + 1 张 URL 截图）
 
 ### 1.4 数据库架构 (PostgreSQL)
 
 **内容管理表：**
+
 ```sql
 projects (id, user_id, name, seed_keyword, target_language, created_at, updated_at)
 keywords (id, project_id, keyword, translation, intent, volume, probability, is_selected)
@@ -117,12 +129,14 @@ published_articles (user_id, title, content, images, keyword, tone,
 ```
 
 **网站数据表（Phase 3）：**
+
 ```sql
 websites (id, user_id, url, domain, name, is_default, created_at)
 website_data (website_id, metrics, keywords, competitors, last_updated)
 ```
 
 **当前实现的数据库功能：**
+
 - `createOrGetProject()` - 自动创建/获取项目
 - `saveContentDraft()` - 保存内容草稿（多版本支持）
 - `saveImages()` - 图片元数据存储
@@ -137,44 +151,49 @@ website_data (website_id, metrics, keywords, competitors, last_updated)
 #### 🚨 关键问题
 
 1. **缺少批量生产能力**
+
    - 当前流程：单个关键词 → 单篇文章
-   - PSEO需求：批量关键词 → 批量文章（100-1000篇规模）
+   - PSEO 需求：批量关键词 → 批量文章（100-1000 篇规模）
    - 影响：无法实现规模化内容生产
 
 2. **缺少内容模板系统**
-   - Agent 3当前生成的文章结构不可复用
-   - 无法定义统一的内容框架（如：商品评测、How-to指南、对比文章）
+
+   - Agent 3 当前生成的文章结构不可复用
+   - 无法定义统一的内容框架（如：商品评测、How-to 指南、对比文章）
    - 缺少变量注入系统（如：{keyword}, {location}, {price}）
 
 3. **Agent 4 质量审查未完全集成**
-   - 质量评分（0-100）未在UI显示
+
+   - 质量评分（0-100）未在 UI 显示
    - 缺少自动优化建议的应用机制
    - 未实现"不合格文章自动重写"流程
 
-4. **缺少SEO技术要素**
+4. **缺少 SEO 技术要素**
+
    - 内部链接策略（文章间互链）
-   - Schema.org结构化数据标记
-   - Canonical URL管理
+   - Schema.org 结构化数据标记
+   - Canonical URL 管理
    - 面包屑导航
-   - Open Graph / Twitter Card元数据
+   - Open Graph / Twitter Card 元数据
 
 5. **排名追踪不完整**
    - 有 `/api/article-rankings/get` 但未看到定时任务
-   - 缺少Vercel Cron Jobs配置
+   - 缺少 Vercel Cron Jobs 配置
    - 未实现排名变化告警
 
 #### 💡 优势
 
-1. **多搜索引擎优化** - 同时优化Google和AI搜索引擎（Perplexity/ChatGPT）
-2. **竞品分析深度** - Top 10 SERP分析 + 内容缺口识别
-3. **GEO/AIO优化** - 地域化和AI引擎优化（领先的策略）
-4. **数据驱动** - DataForSEO集成提供真实的搜索量和难度数据
+1. **多搜索引擎优化** - 同时优化 Google 和 AI 搜索引擎（Perplexity/ChatGPT）
+2. **竞品分析深度** - Top 10 SERP 分析 + 内容缺口识别
+3. **GEO/AIO 优化** - 地域化和 AI 引擎优化（领先的策略）
+4. **数据驱动** - DataForSEO 集成提供真实的搜索量和难度数据
 
 ### 2.2 从产品经理角度
 
 #### 🚨 用户体验痛点
 
 1. **工作流断裂**
+
    ```
    Phase 1: 关键词挖掘 (独立界面)
          ↓ 断点：需要手动复制关键词
@@ -184,61 +203,68 @@ website_data (website_id, metrics, keywords, competitors, last_updated)
    ```
 
 2. **缺少"项目视图"**
-   - 当前有 `projects` 表，但UI未充分利用
+
+   - 当前有 `projects` 表，但 UI 未充分利用
    - 用户无法看到：
      - 一个项目有多少关键词？
      - 哪些关键词已生成内容？
      - 哪些文章已发布？
      - 整体进度如何？
-   - 建议：Kanban风格的项目管理界面
+   - 建议：Kanban 风格的项目管理界面
 
 3. **内容编辑功能弱**
+
    - `ArticlePreview.tsx` 只能预览，不能编辑
    - 用户无法直接修改生成的内容
    - 缺少富文本编辑器
    - 缺少版本历史和恢复功能
 
 4. **缺少"一键发布"**
+
    - 有"Publish"标签页但是占位符
    - 缺少平台选择器（WordPress / Medium / Ghost / 自建站）
-   - 缺少发布前检查清单（SEO元素完整性）
+   - 缺少发布前检查清单（SEO 元素完整性）
 
 5. **图片管理不够灵活**
-   - 只能生成1-2张AI图 + 1张截图
+   - 只能生成 1-2 张 AI 图 + 1 张截图
    - 用户无法：
      - 重新生成特定图片
      - 上传自己的图片
      - 调整图片顺序
-     - 编辑alt text和caption
+     - 编辑 alt text 和 caption
 
 #### 💡 优势
 
-1. **实时反馈优秀** - SSE流式更新 + 进度条 + Agent活动Feed
+1. **实时反馈优秀** - SSE 流式更新 + 进度条 + Agent 活动 Feed
 2. **视觉设计精良** - `ArticleGeneratorLayout.tsx` 组件化设计清晰
 3. **多语言支持** - 自动语言检测 + 10+目标市场
-4. **网站数据看板** - `WebsiteDataDashboard.tsx` 提供全面的SEO分析
+4. **网站数据看板** - `WebsiteDataDashboard.tsx` 提供全面的 SEO 分析
 
 ### 2.3 从普通用户体验角度
 
 #### 🚨 使用障碍
 
 1. **学习曲线陡峭**
-   - 12,679行的 `App.tsx` 说明功能复杂
+
+   - 12,679 行的 `App.tsx` 说明功能复杂
    - 多个模式切换（Keyword Mining / Batch Translation / Deep Dive / Article Generator）
    - 用户不清楚何时使用哪个功能
 
 2. **配置项过多**
+
    - `ArticleInputConfig.tsx` 要求用户输入：
      - keyword, tone, targetAudience, visualStyle, targetMarket
    - 普通用户可能不理解"tone"和"targetAudience"的区别
    - 建议：提供"智能推荐"或"快速模式"
 
 3. **错误处理不友好**
+
    - 代码中有错误处理，但未看到用户友好的错误提示
-   - 如果API失败，用户不知道如何重试
+   - 如果 API 失败，用户不知道如何重试
    - 建议：添加"重试"按钮和详细错误说明
 
 4. **缺少教程和引导**
+
    - 未看到 onboarding 流程
    - 没有示例或模板
    - 建议：添加"示例项目"和分步引导
@@ -250,8 +276,8 @@ website_data (website_id, metrics, keywords, competitors, last_updated)
 #### 💡 优势
 
 1. **自动化程度高** - 从关键词到完整文章几乎全自动
-2. **结果可视化** - 文章预览、图片展示、SERP结果展示
-3. **参考资料支持** - 可以上传文档或提供URL作为参考
+2. **结果可视化** - 文章预览、图片展示、SERP 结果展示
+3. **参考资料支持** - 可以上传文档或提供 URL 作为参考
 
 ---
 
@@ -283,21 +309,24 @@ website_data (website_id, metrics, keywords, competitors, last_updated)
 ```
 
 **核心功能：**
+
 1. **可视化项目进度** - 一目了然的完成度
 2. **批量操作** - 选择多个关键词批量生成/发布
 3. **状态管理** - Queue → Generating → Draft → Approved → Published
 4. **过滤和排序** - 按状态、搜索量、难度过滤
 
 **实现关键点：**
+
 - 修改 `App.tsx` 添加新的 `step: "project-dashboard"`
 - 利用现有的 `projects` 和 `keywords` 表
 - 新增状态字段：`keywords.generation_status`（enum: queue, generating, draft, approved, published）
 
 ### 3.2 批量文章生成系统
 
-**新增API：** `/api/batch-article-generation.ts`
+**新增 API：** `/api/batch-article-generation.ts`
 
 **工作流：**
+
 ```typescript
 // 用户选择100个关键词 → 批量生成
 interface BatchGenerationRequest {
@@ -324,6 +353,7 @@ interface BatchGenerationResponse {
 **实现策略：**
 
 1. **队列管理** - 使用 Redis 或数据库队列
+
    ```sql
    CREATE TABLE batch_generation_jobs (
      id UUID PRIMARY KEY,
@@ -338,27 +368,32 @@ interface BatchGenerationResponse {
    ```
 
 2. **并发控制** - 使用 `p-limit` 库
+
    ```typescript
-   import pLimit from 'p-limit';
+   import pLimit from "p-limit";
    const limit = pLimit(3); // 最多3个并发请求
 
-   const promises = keywordIds.map(id =>
+   const promises = keywordIds.map((id) =>
      limit(() => generateArticleForKeyword(id))
    );
    await Promise.all(promises);
    ```
 
 3. **进度追踪** - WebSocket 或 SSE 实时更新
+
    ```typescript
    // 客户端订阅批量任务进度
    const eventSource = new EventSource(`/api/batch-progress/${batchId}`);
    eventSource.onmessage = (event) => {
-     const { progress, currentKeyword, completed, failed } = JSON.parse(event.data);
+     const { progress, currentKeyword, completed, failed } = JSON.parse(
+       event.data
+     );
      updateUI(progress, currentKeyword);
    };
    ```
 
 4. **错误恢复** - 失败的关键词可以单独重试
+
    ```typescript
    // 标记失败的关键词
    UPDATE keywords SET generation_status = 'failed', error_message = '...'
@@ -388,23 +423,23 @@ templates/
 interface ProductReviewTemplate {
   structure: {
     sections: [
-      { type: 'intro', variables: ['keyword', 'product_category'] },
-      { type: 'features', variables: ['key_features[]'] },
-      { type: 'pros_cons', variables: ['pros[]', 'cons[]'] },
-      { type: 'pricing', variables: ['price', 'value_rating'] },
-      { type: 'verdict', variables: ['overall_score', 'recommendation'] }
+      { type: "intro"; variables: ["keyword", "product_category"] },
+      { type: "features"; variables: ["key_features[]"] },
+      { type: "pros_cons"; variables: ["pros[]", "cons[]"] },
+      { type: "pricing"; variables: ["price", "value_rating"] },
+      { type: "verdict"; variables: ["overall_score", "recommendation"] }
     ];
   };
   seoRules: {
-    keywordDensity: [1.5, 2.0], // 1.5%-2.0%
-    h2Count: [5, 7],
-    minWords: 1500,
-    maxWords: 2500
+    keywordDensity: [1.5, 2.0]; // 1.5%-2.0%
+    h2Count: [5, 7];
+    minWords: 1500;
+    maxWords: 2500;
   };
   imageRequirements: {
-    minImages: 3,
-    maxImages: 6,
-    types: ['hero', 'product_shot', 'feature_highlight', 'comparison_chart']
+    minImages: 3;
+    maxImages: 6;
+    types: ["hero", "product_shot", "feature_highlight", "comparison_chart"];
   };
 }
 
@@ -415,11 +450,11 @@ function generatePromptFromTemplate(
 ): string {
   let prompt = `Generate a comprehensive product review article.\n\n`;
 
-  template.structure.sections.forEach(section => {
+  template.structure.sections.forEach((section) => {
     prompt += `## ${section.type}\n`;
-    prompt += `Variables: ${section.variables.join(', ')}\n`;
+    prompt += `Variables: ${section.variables.join(", ")}\n`;
     // 注入变量值
-    section.variables.forEach(varName => {
+    section.variables.forEach((varName) => {
       if (variables[varName]) {
         prompt += `${varName}: ${variables[varName]}\n`;
       }
@@ -435,6 +470,7 @@ function generatePromptFromTemplate(
 ```
 
 **集成到 Agent 3：**
+
 ```typescript
 // agent-3-content-writer.ts
 export async function generateArticleWithTemplate(
@@ -448,12 +484,13 @@ export async function generateArticleWithTemplate(
 
   return await callGeminiAPI({
     prompt: enhancedPrompt,
-    temperature: 0.7
+    temperature: 0.7,
   });
 }
 ```
 
 **用户界面改进：**
+
 ```tsx
 // ArticleInputConfig.tsx 添加模板选择
 <Select label="内容模板">
@@ -470,7 +507,7 @@ export async function generateArticleWithTemplate(
 
 ## 四、保存与发布功能实现方案
 
-### 4.1 阶段一：平台API集成（短期）
+### 4.1 阶段一：平台 API 集成（短期）
 
 #### 4.1.1 Medium 集成
 
@@ -479,10 +516,10 @@ export async function generateArticleWithTemplate(
 ```typescript
 interface MediumPublishConfig {
   integrationToken: string; // 用户的Medium API Token
-  publicationId?: string;   // 可选：发布到Publication
+  publicationId?: string; // 可选：发布到Publication
   tags: string[];
   canonicalUrl?: string;
-  publishStatus: 'public' | 'draft' | 'unlisted';
+  publishStatus: "public" | "draft" | "unlisted";
 }
 
 export async function publishToMedium(
@@ -495,16 +532,19 @@ export async function publishToMedium(
   // 2. 转换格式
   const mediumPost = {
     title: article.title,
-    contentFormat: 'html', // Medium支持HTML
+    contentFormat: "html", // Medium支持HTML
     content: article.content,
     tags: config.tags,
     canonicalUrl: config.canonicalUrl,
-    publishStatus: config.publishStatus
+    publishStatus: config.publishStatus,
   };
 
   // 3. 上传图片到Medium
   for (const image of article.images) {
-    const mediumImageUrl = await uploadImageToMedium(image.url, config.integrationToken);
+    const mediumImageUrl = await uploadImageToMedium(
+      image.url,
+      config.integrationToken
+    );
     mediumPost.content = mediumPost.content.replace(image.url, mediumImageUrl);
   }
 
@@ -514,12 +554,12 @@ export async function publishToMedium(
     : `https://api.medium.com/v1/users/${authorId}/posts`;
 
   const response = await fetch(endpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${config.integrationToken}`,
-      'Content-Type': 'application/json'
+      Authorization: `Bearer ${config.integrationToken}`,
+      "Content-Type": "application/json",
     },
-    body: JSON.stringify(mediumPost)
+    body: JSON.stringify(mediumPost),
   });
 
   const result = await response.json();
@@ -527,33 +567,35 @@ export async function publishToMedium(
   // 5. 保存发布记录
   await savePublicationRecord({
     content_draft_id: article.draftId,
-    platform: 'medium',
+    platform: "medium",
     platform_post_id: result.data.id,
     post_url: result.data.url,
-    status: 'published',
-    published_at: new Date()
+    status: "published",
+    published_at: new Date(),
   });
 
   return {
     success: true,
     postId: result.data.id,
-    url: result.data.url
+    url: result.data.url,
   };
 }
 ```
 
 **Medium API 限制与解决方案：**
-- 限制：每天最多25个请求
+
+- 限制：每天最多 25 个请求
 - 解决：实现请求队列 + 速率限制
   ```typescript
-  import Bottleneck from 'bottleneck';
+  import Bottleneck from "bottleneck";
   const limiter = new Bottleneck({
     maxConcurrent: 1,
-    minTime: 3600000 / 25 // 每小时最多25个请求
+    minTime: 3600000 / 25, // 每小时最多25个请求
   });
   ```
 
 **用户配置界面：**
+
 ```tsx
 // components/PublishConfigModal.tsx
 <Modal title="配置 Medium 发布">
@@ -581,10 +623,10 @@ export async function publishToMedium(
 
 ```typescript
 interface WordPressPublishConfig {
-  siteUrl: string;           // 用户的WordPress站点URL
+  siteUrl: string; // 用户的WordPress站点URL
   username: string;
   applicationPassword: string; // WordPress 应用程序密码
-  status: 'publish' | 'draft' | 'pending' | 'private';
+  status: "publish" | "draft" | "pending" | "private";
   categories: number[];
   tags: number[];
   featuredImageId?: number;
@@ -594,7 +636,11 @@ export async function publishToWordPress(
   article: Article,
   config: WordPressPublishConfig
 ): Promise<WordPressPublishResult> {
-  const wpClient = new WordPressClient(config.siteUrl, config.username, config.applicationPassword);
+  const wpClient = new WordPressClient(
+    config.siteUrl,
+    config.username,
+    config.applicationPassword
+  );
 
   // 1. 上传图片到WordPress Media Library
   const uploadedImages = [];
@@ -602,7 +648,7 @@ export async function publishToWordPress(
     const mediaId = await wpClient.uploadMedia({
       file: await downloadImageAsBlob(image.url),
       title: image.altText,
-      alt_text: image.altText
+      alt_text: image.altText,
     });
     uploadedImages.push({ originalUrl: image.url, mediaId });
   }
@@ -624,8 +670,8 @@ export async function publishToWordPress(
     excerpt: article.metaDescription,
     meta: {
       _yoast_wpseo_metadesc: article.metaDescription, // Yoast SEO插件
-      _yoast_wpseo_focuskw: article.keyword
-    }
+      _yoast_wpseo_focuskw: article.keyword,
+    },
   };
 
   // 4. 设置特色图片（第一张图片）
@@ -638,18 +684,18 @@ export async function publishToWordPress(
   // 5. 保存发布记录
   await savePublicationRecord({
     content_draft_id: article.draftId,
-    platform: 'wordpress',
+    platform: "wordpress",
     platform_post_id: post.id.toString(),
     post_url: post.link,
-    status: config.status === 'publish' ? 'published' : 'draft',
-    published_at: config.status === 'publish' ? new Date() : null
+    status: config.status === "publish" ? "published" : "draft",
+    published_at: config.status === "publish" ? new Date() : null,
   });
 
   return {
     success: true,
     postId: post.id,
     url: post.link,
-    editUrl: `${config.siteUrl}/wp-admin/post.php?post=${post.id}&action=edit`
+    editUrl: `${config.siteUrl}/wp-admin/post.php?post=${post.id}&action=edit`,
   };
 }
 
@@ -662,34 +708,40 @@ class WordPressClient {
   ) {}
 
   private getAuthHeader(): string {
-    const credentials = Buffer.from(`${this.username}:${this.password}`).toString('base64');
+    const credentials = Buffer.from(
+      `${this.username}:${this.password}`
+    ).toString("base64");
     return `Basic ${credentials}`;
   }
 
   async createPost(data: any): Promise<any> {
     const response = await fetch(`${this.siteUrl}/wp-json/wp/v2/posts`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': this.getAuthHeader(),
-        'Content-Type': 'application/json'
+        Authorization: this.getAuthHeader(),
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(data),
     });
     return await response.json();
   }
 
-  async uploadMedia(data: { file: Blob; title: string; alt_text: string }): Promise<number> {
+  async uploadMedia(data: {
+    file: Blob;
+    title: string;
+    alt_text: string;
+  }): Promise<number> {
     const formData = new FormData();
-    formData.append('file', data.file);
-    formData.append('title', data.title);
-    formData.append('alt_text', data.alt_text);
+    formData.append("file", data.file);
+    formData.append("title", data.title);
+    formData.append("alt_text", data.alt_text);
 
     const response = await fetch(`${this.siteUrl}/wp-json/wp/v2/media`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': this.getAuthHeader()
+        Authorization: this.getAuthHeader(),
       },
-      body: formData
+      body: formData,
     });
 
     const media = await response.json();
@@ -697,23 +749,24 @@ class WordPressClient {
   }
 
   async getMediaUrl(mediaId: number): Promise<string> {
-    const response = await fetch(`${this.siteUrl}/wp-json/wp/v2/media/${mediaId}`, {
-      headers: { 'Authorization': this.getAuthHeader() }
-    });
+    const response = await fetch(
+      `${this.siteUrl}/wp-json/wp/v2/media/${mediaId}`,
+      {
+        headers: { Authorization: this.getAuthHeader() },
+      }
+    );
     const media = await response.json();
     return media.source_url;
   }
 }
 ```
 
-**WordPress配置界面：**
+**WordPress 配置界面：**
+
 ```tsx
 // components/WordPressConfigModal.tsx
 <Modal title="配置 WordPress 发布">
-  <Input
-    label="WordPress 站点 URL"
-    placeholder="https://example.com"
-  />
+  <Input label="WordPress 站点 URL" placeholder="https://example.com" />
   <Input label="用户名" />
   <Input
     label="应用程序密码"
@@ -736,31 +789,65 @@ class WordPressClient {
 </Modal>
 ```
 
-#### 4.1.3 数据追踪实现
+#### 4.1.3 Reddit 集成
 
-**新增API：** `/api/tracking/sync.ts`
+**新增文件：** `api/_shared/publishers/reddit.ts`
+
+```typescript
+interface RedditPublishConfig {
+  subreddit: string;
+  kind: "link" | "self" | "image";
+  resubmit: boolean;
+}
+
+export async function publishToReddit(
+  article: Article,
+  config: RedditPublishConfig
+): Promise<RedditPublishResult> {
+  // 逻辑：如果是 link 类型，提交主站 URL 以建立外部引用 (Backlink)
+  // 如果是 self 类型，提交 Markdown 格式的正文进行内容营销
+  return {
+    success: true,
+    url: `https://reddit.com/r/${config.subreddit}/comments/...`,
+    id: "t3_...",
+  };
+}
+```
+
+#### 4.1.4 自动化同步链路架构 (Content Syndication Loop)
+
+1. **内容中枢 (Airtable/DB):** 所有生成的 `content_drafts` 审核通过后进入分发队列。
+2. **多平台适配器 (Adapters):**
+   - **WP Adapter:** 处理 HTML 转换 + 媒体上传 + Yoast SEO 元数据注入。
+   - **Medium Adapter:** 自动注入 `Canonical URL` 属性，确保主站权重。
+   - **Reddit Adapter:** 处理 Markdown 转换，通过“引流模式”提高主站点击率。
+3. **分发控制:** 使用 Make.com 或内部 `SyndicationService` 实现一键全平台同步。
+
+#### 4.1.5 数据追踪实现
+
+**新增 API：** `/api/tracking/sync.ts`
 
 ```typescript
 // 使用Vercel Cron Jobs定时执行
 export const config = {
   // 每天早上8点执行
-  schedule: '0 8 * * *'
+  schedule: "0 8 * * *",
 };
 
 interface TrackingResult {
   postId: string;
-  platform: 'medium' | 'wordpress';
+  platform: "medium" | "wordpress";
   metrics: {
     views: number;
     reads: number;
-    claps?: number;      // Medium特有
-    comments?: number;   // WordPress特有
+    claps?: number; // Medium特有
+    comments?: number; // WordPress特有
     shares?: number;
   };
   keywords: {
     keyword: string;
-    position: number;    // Google排名
-    change: number;      // 排名变化
+    position: number; // Google排名
+    change: number; // 排名变化
   }[];
 }
 
@@ -777,21 +864,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const article of publishedArticles.rows) {
     try {
       // 2. Medium 数据追踪
-      if (article.platform === 'medium') {
-        const stats = await fetchMediumStats(article.platform_post_id, article.user_id);
+      if (article.platform === "medium") {
+        const stats = await fetchMediumStats(
+          article.platform_post_id,
+          article.user_id
+        );
         trackingResults.push({
           postId: article.id,
-          platform: 'medium',
+          platform: "medium",
           metrics: {
             views: stats.views,
             reads: stats.reads,
-            claps: stats.claps
-          }
+            claps: stats.claps,
+          },
         });
       }
 
       // 3. WordPress 数据追踪（需要安装Google Analytics或WP Statistics插件）
-      if (article.platform === 'wordpress') {
+      if (article.platform === "wordpress") {
         const wpConfig = await getWordPressConfig(article.user_id);
         const stats = await fetchWordPressStats(
           wpConfig.siteUrl,
@@ -801,11 +891,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         );
         trackingResults.push({
           postId: article.id,
-          platform: 'wordpress',
+          platform: "wordpress",
           metrics: {
             views: stats.views,
-            comments: stats.comments
-          }
+            comments: stats.comments,
+          },
         });
       }
 
@@ -821,9 +911,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         article_id: article.id,
         metrics: trackingResults[trackingResults.length - 1].metrics,
         keyword_rankings: keywordRankings,
-        tracked_at: new Date()
+        tracked_at: new Date(),
       });
-
     } catch (error) {
       console.error(`Failed to track article ${article.id}:`, error);
     }
@@ -832,16 +921,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   return res.json({
     success: true,
     tracked: trackingResults.length,
-    results: trackingResults
+    results: trackingResults,
   });
 }
 
 // Medium Stats API
 async function fetchMediumStats(postId: string, userId: number): Promise<any> {
   const userConfig = await getMediumConfig(userId);
-  const response = await fetch(`https://api.medium.com/v1/posts/${postId}/stats`, {
-    headers: { 'Authorization': `Bearer ${userConfig.integrationToken}` }
-  });
+  const response = await fetch(
+    `https://api.medium.com/v1/posts/${postId}/stats`,
+    {
+      headers: { Authorization: `Bearer ${userConfig.integrationToken}` },
+    }
+  );
   return await response.json();
 }
 
@@ -852,12 +944,14 @@ async function fetchWordPressStats(
   username: string,
   password: string
 ): Promise<any> {
-  const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
+  const authHeader = `Basic ${Buffer.from(`${username}:${password}`).toString(
+    "base64"
+  )}`;
 
   // WP Statistics插件提供REST API端点
   const response = await fetch(
     `${siteUrl}/wp-json/wp-statistics/v1/posts/${postId}/stats`,
-    { headers: { 'Authorization': authHeader } }
+    { headers: { Authorization: authHeader } }
   );
 
   return await response.json();
@@ -873,7 +967,7 @@ async function trackKeywordRankings(
   const serpData = await callDataForSEOSerpAPI({
     keyword,
     location_code: getLocationCode(market),
-    language_code: getLanguageCode(market)
+    language_code: getLanguageCode(market),
   });
 
   // 查找目标URL的排名
@@ -884,7 +978,7 @@ async function trackKeywordRankings(
         keyword,
         position: index + 1,
         url: item.url,
-        title: item.title
+        title: item.title,
       });
     }
   });
@@ -894,6 +988,7 @@ async function trackKeywordRankings(
 ```
 
 **追踪数据表结构：**
+
 ```sql
 CREATE TABLE article_tracking (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -921,6 +1016,7 @@ CREATE INDEX idx_article_tracking_tracked_at ON article_tracking(tracked_at);
 ```
 
 **追踪数据可视化：**
+
 ```tsx
 // components/ArticleAnalytics.tsx
 interface ArticleAnalyticsProps {
@@ -932,7 +1028,7 @@ export function ArticleAnalytics({ articleId }: ArticleAnalyticsProps) {
 
   useEffect(() => {
     fetch(`/api/tracking/get?articleId=${articleId}`)
-      .then(res => res.json())
+      .then((res) => res.json())
       .then(setData);
   }, [articleId]);
 
@@ -940,7 +1036,9 @@ export function ArticleAnalytics({ articleId }: ArticleAnalyticsProps) {
     <div className="analytics-dashboard">
       {/* 流量趋势图 */}
       <Card title="流量趋势（过去30天）">
-        <LineChart data={data.map(d => ({ date: d.tracked_at, views: d.views }))} />
+        <LineChart
+          data={data.map((d) => ({ date: d.tracked_at, views: d.views }))}
+        />
       </Card>
 
       {/* 关键词排名 */}
@@ -955,12 +1053,12 @@ export function ArticleAnalytics({ articleId }: ArticleAnalyticsProps) {
             </tr>
           </thead>
           <tbody>
-            {data[0]?.keyword_rankings.map(kw => (
+            {data[0]?.keyword_rankings.map((kw) => (
               <tr key={kw.keyword}>
                 <td>{kw.keyword}</td>
                 <td>#{kw.position}</td>
-                <td className={kw.change > 0 ? 'positive' : 'negative'}>
-                  {kw.change > 0 ? '↑' : '↓'} {Math.abs(kw.change)}
+                <td className={kw.change > 0 ? "positive" : "negative"}>
+                  {kw.change > 0 ? "↑" : "↓"} {Math.abs(kw.change)}
                 </td>
                 <td>{estimateTraffic(kw.position, kw.volume)}</td>
               </tr>
@@ -972,11 +1070,18 @@ export function ArticleAnalytics({ articleId }: ArticleAnalyticsProps) {
       {/* 互动数据 */}
       <Card title="互动数据">
         <div className="metrics-grid">
-          <Metric label="总浏览量" value={sum(data, 'views')} />
-          <Metric label="总阅读量" value={sum(data, 'reads')} />
-          <Metric label="平均阅读率" value={`${(sum(data, 'reads') / sum(data, 'views') * 100).toFixed(1)}%`} />
+          <Metric label="总浏览量" value={sum(data, "views")} />
+          <Metric label="总阅读量" value={sum(data, "reads")} />
+          <Metric
+            label="平均阅读率"
+            value={`${((sum(data, "reads") / sum(data, "views")) * 100).toFixed(
+              1
+            )}%`}
+          />
           {data[0]?.claps && <Metric label="鼓掌数" value={data[0].claps} />}
-          {data[0]?.comments && <Metric label="评论数" value={data[0].comments} />}
+          {data[0]?.comments && (
+            <Metric label="评论数" value={data[0].comments} />
+          )}
         </div>
       </Card>
     </div>
@@ -984,60 +1089,58 @@ export function ArticleAnalytics({ articleId }: ArticleAnalyticsProps) {
 }
 ```
 
-### 4.2 阶段二：Next.js模板快速建站（中期）
+### 4.2 阶段二：Next.js 模板 pSEO 自动上站 (中期)
 
-#### 4.2.1 模板架构设计
+#### 4.2.1 pSEO 架构设计与模板注入
 
-**新增目录：** `templates/nextjs-seo-blog/`
+**核心逻辑：**
 
+- **模板系统：** 使用 Next.js 14+ App Router，利用 `generateStaticParams` 实现海量页面的 SSG 生成。
+- **数据注入：** 通过 `src/lib/articles.ts` 从数据库直接拉取 `content_drafts` 和 `images` 数据，注入到 `[slug]/page.tsx`。
+- **动态组件：** 模板内置 SEO 友好组件（Breadcrumbs, Schema.org JSON-LD, FAQ Accordion）。
+
+#### 4.2.2 域名与站群策略 (Domain Strategy)
+
+1. **子目录策略 (Recommended):** `domain.com/p/keyword`。
+   - 优点：主域权重共享，收录极快。
+   - 实现：Next.js 动态路由。
+2. **通配符子域名 (Wildcard Subdomains):** `keyword.domain.com`。
+   - 优点：极强的品牌感，适合地理位置相关的 SEO (GEO-SEO)。
+   - 实现：Vercel Wildcard Domain + Cloudflare `*` 解析 + `middleware.ts` 动态分发。
+3. **多域名站群:** 自动化购买过期域名 (Expired Domains) 并通过 API 绑定到 Vercel 部署。
+
+#### 4.2.3 自动集成 GSC 和 GA4 追踪 (API 驱动)
+
+**新增 API：** `/api/seo/auto-setup.ts`
+
+```typescript
+export async function autoSetupSEO(projectId: string, domain: string) {
+  // 1. Google Search Console 自动验证
+  // 使用 GSC API 添加网站并提交 Sitemap
+  await gsc.sites.add({ siteUrl: `https://${domain}` });
+
+  // 2. Google Analytics 4 自动创建资源
+  // 使用 GA Admin API 创建 Property 和 Data Stream
+  const property = await gaAdmin.properties.create({ ... });
+  const dataStream = await gaAdmin.properties.dataStreams.create({ ... });
+
+  // 3. 环境变量注入
+  // 将 GA_MEASUREMENT_ID 自动注入 Vercel 部署环境变量
+  await vercel.projects.patch({
+    projectId,
+    env: [{ key: 'NEXT_PUBLIC_GA_ID', value: dataStream.measurementId }]
+  });
+}
 ```
-templates/nextjs-seo-blog/
-├── package.json
-├── next.config.js
-├── tailwind.config.js
-├── tsconfig.json
-├── public/
-│   └── robots.txt
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx          # 全局布局
-│   │   ├── page.tsx            # 首页
-│   │   ├── [slug]/
-│   │   │   └── page.tsx        # 动态文章页
-│   │   ├── category/
-│   │   │   └── [category]/
-│   │   │       └── page.tsx    # 分类页
-│   │   └── sitemap.xml/
-│   │       └── route.ts        # 动态Sitemap
-│   ├── components/
-│   │   ├── Header.tsx
-│   │   ├── Footer.tsx
-│   │   ├── ArticleCard.tsx
-│   │   └── SEOHead.tsx
-│   ├── lib/
-│   │   ├── articles.ts         # 文章数据获取
-│   │   └── seo.ts              # SEO工具函数
-│   └── styles/
-│       └── globals.css
-└── scripts/
-    └── sync-articles.ts        # 从数据库同步文章
-```
 
-**核心特性：**
-1. **静态生成（SSG）** - 使用 Next.js 14+ App Router
-2. **自动SEO优化** - Schema.org、Open Graph、Twitter Cards
-3. **图片优化** - Next.js Image组件自动优化
-4. **性能优化** - 自动代码分割、预加载
-5. **响应式设计** - Tailwind CSS
-
-#### 4.2.2 文章数据同步脚本
+#### 4.2.4 文章数据同步脚本
 
 **文件：** `templates/nextjs-seo-blog/scripts/sync-articles.ts`
 
 ```typescript
-import { Pool } from 'pg';
-import fs from 'fs/promises';
-import path from 'path';
+import { Pool } from "pg";
+import fs from "fs/promises";
+import path from "path";
 
 interface Article {
   id: string;
@@ -1058,7 +1161,7 @@ interface Article {
 async function syncArticles() {
   // 1. 连接到PostgreSQL数据库
   const pool = new Pool({
-    connectionString: process.env.POSTGRES_URL
+    connectionString: process.env.POSTGRES_URL,
   });
 
   // 2. 获取所有已发布的文章
@@ -1081,23 +1184,19 @@ async function syncArticles() {
   const articles: Article[] = result.rows;
 
   // 3. 为每篇文章创建MDX文件
-  const articlesDir = path.join(process.cwd(), 'content', 'articles');
+  const articlesDir = path.join(process.cwd(), "content", "articles");
   await fs.mkdir(articlesDir, { recursive: true });
 
   for (const article of articles) {
     const mdxContent = generateMDX(article);
     const filename = `${article.url_slug}.mdx`;
-    await fs.writeFile(
-      path.join(articlesDir, filename),
-      mdxContent,
-      'utf-8'
-    );
+    await fs.writeFile(path.join(articlesDir, filename), mdxContent, "utf-8");
 
     console.log(`✅ Synced: ${article.title}`);
   }
 
   // 4. 生成articles.json（用于列表页）
-  const articlesJson = articles.map(a => ({
+  const articlesJson = articles.map((a) => ({
     id: a.id,
     title: a.title,
     description: a.meta_description,
@@ -1105,11 +1204,11 @@ async function syncArticles() {
     keyword: a.keyword,
     featuredImage: a.images[0]?.url,
     createdAt: a.created_at,
-    updatedAt: a.updated_at
+    updatedAt: a.updated_at,
   }));
 
   await fs.writeFile(
-    path.join(process.cwd(), 'public', 'articles.json'),
+    path.join(process.cwd(), "public", "articles.json"),
     JSON.stringify(articlesJson, null, 2)
   );
 
@@ -1125,9 +1224,11 @@ description: "${article.meta_description.replace(/"/g, '\\"')}"
 keyword: "${article.keyword}"
 publishedAt: "${article.created_at.toISOString()}"
 updatedAt: "${article.updated_at.toISOString()}"
-featuredImage: "${article.images[0]?.url || ''}"
+featuredImage: "${article.images[0]?.url || ""}"
 images:
-${article.images.map(img => `  - url: "${img.url}"\n    alt: "${img.alt_text}"`).join('\n')}
+${article.images
+  .map((img) => `  - url: "${img.url}"\n    alt: "${img.alt_text}"`)
+  .join("\n")}
 ---
 
 ${article.content}
@@ -1138,6 +1239,7 @@ syncArticles().catch(console.error);
 ```
 
 **使用方式：**
+
 ```bash
 # 在Next.js项目中运行
 npm run sync-articles
@@ -1154,11 +1256,11 @@ npm run sync-articles
 **文件：** `templates/nextjs-seo-blog/src/app/[slug]/page.tsx`
 
 ```tsx
-import { Metadata } from 'next';
-import { notFound } from 'next/navigation';
-import Image from 'next/image';
-import { getArticleBySlug, getAllArticleSlugs } from '@/lib/articles';
-import { generateArticleSchema } from '@/lib/seo';
+import { Metadata } from "next";
+import { notFound } from "next/navigation";
+import Image from "next/image";
+import { getArticleBySlug, getAllArticleSlugs } from "@/lib/articles";
+import { generateArticleSchema } from "@/lib/seo";
 
 interface ArticlePageProps {
   params: { slug: string };
@@ -1167,11 +1269,13 @@ interface ArticlePageProps {
 // 静态生成所有文章路径
 export async function generateStaticParams() {
   const slugs = await getAllArticleSlugs();
-  return slugs.map(slug => ({ slug }));
+  return slugs.map((slug) => ({ slug }));
 }
 
 // 动态生成SEO metadata
-export async function generateMetadata({ params }: ArticlePageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: ArticlePageProps): Promise<Metadata> {
   const article = await getArticleBySlug(params.slug);
 
   if (!article) {
@@ -1185,28 +1289,28 @@ export async function generateMetadata({ params }: ArticlePageProps): Promise<Me
     openGraph: {
       title: article.title,
       description: article.description,
-      type: 'article',
+      type: "article",
       publishedTime: article.publishedAt,
       modifiedTime: article.updatedAt,
-      authors: ['Your Site Name'],
+      authors: ["Your Site Name"],
       images: [
         {
           url: article.featuredImage,
           width: 1200,
           height: 630,
-          alt: article.title
-        }
-      ]
+          alt: article.title,
+        },
+      ],
     },
     twitter: {
-      card: 'summary_large_image',
+      card: "summary_large_image",
       title: article.title,
       description: article.description,
-      images: [article.featuredImage]
+      images: [article.featuredImage],
     },
     alternates: {
-      canonical: `https://yoursite.com/${params.slug}`
-    }
+      canonical: `https://yoursite.com/${params.slug}`,
+    },
   };
 }
 
@@ -1238,7 +1342,9 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
               {new Date(article.publishedAt).toLocaleDateString()}
             </time>
             {article.updatedAt !== article.publishedAt && (
-              <span>Updated: {new Date(article.updatedAt).toLocaleDateString()}</span>
+              <span>
+                Updated: {new Date(article.updatedAt).toLocaleDateString()}
+              </span>
             )}
           </div>
 
@@ -1264,7 +1370,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
         {/* 文章底部 */}
         <footer className="mt-12 pt-8 border-t">
           <div className="flex flex-wrap gap-2">
-            {article.tags.map(tag => (
+            {article.tags.map((tag) => (
               <a
                 key={tag}
                 href={`/tag/${tag}`}
@@ -1281,7 +1387,7 @@ export default async function ArticlePage({ params }: ArticlePageProps) {
 }
 ```
 
-#### 4.2.4 SEO工具函数
+#### 4.2.4 SEO 工具函数
 
 **文件：** `templates/nextjs-seo-blog/src/lib/seo.ts`
 
@@ -1298,63 +1404,65 @@ interface Article {
 
 export function generateArticleSchema(article: Article) {
   return {
-    '@context': 'https://schema.org',
-    '@type': 'Article',
+    "@context": "https://schema.org",
+    "@type": "Article",
     headline: article.title,
     description: article.description,
     image: article.featuredImage,
     datePublished: article.publishedAt,
     dateModified: article.updatedAt,
     author: {
-      '@type': 'Person',
-      name: 'Your Name'
+      "@type": "Person",
+      name: "Your Name",
     },
     publisher: {
-      '@type': 'Organization',
-      name: 'Your Site Name',
+      "@type": "Organization",
+      name: "Your Site Name",
       logo: {
-        '@type': 'ImageObject',
-        url: 'https://yoursite.com/logo.png'
-      }
+        "@type": "ImageObject",
+        url: "https://yoursite.com/logo.png",
+      },
     },
     mainEntityOfPage: {
-      '@type': 'WebPage',
-      '@id': `https://yoursite.com/${article.slug}`
-    }
+      "@type": "WebPage",
+      "@id": `https://yoursite.com/${article.slug}`,
+    },
   };
 }
 
-export function generateBreadcrumbSchema(items: Array<{ name: string; url: string }>) {
+export function generateBreadcrumbSchema(
+  items: Array<{ name: string; url: string }>
+) {
   return {
-    '@context': 'https://schema.org',
-    '@type': 'BreadcrumbList',
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
     itemListElement: items.map((item, index) => ({
-      '@type': 'ListItem',
+      "@type": "ListItem",
       position: index + 1,
       name: item.name,
-      item: item.url
-    }))
+      item: item.url,
+    })),
   };
 }
 
 export function generateWebsiteSchema() {
   return {
-    '@context': 'https://schema.org',
-    '@type': 'WebSite',
-    name: 'Your Site Name',
-    url: 'https://yoursite.com',
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Your Site Name",
+    url: "https://yoursite.com",
     potentialAction: {
-      '@type': 'SearchAction',
-      target: 'https://yoursite.com/search?q={search_term_string}',
-      'query-input': 'required name=search_term_string'
-    }
+      "@type": "SearchAction",
+      target: "https://yoursite.com/search?q={search_term_string}",
+      "query-input": "required name=search_term_string",
+    },
   };
 }
 ```
 
 #### 4.2.5 一键部署功能
 
-**新增API：** `/api/deploy-site.ts`
+**新增 API：** `/api/deploy-site.ts`
 
 ```typescript
 interface DeploySiteRequest {
@@ -1392,14 +1500,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const vercelClient = new VercelClient(process.env.VERCEL_TOKEN);
     const deployment = await vercelClient.createProject({
       name: siteName,
-      framework: 'nextjs',
+      framework: "nextjs",
       gitRepository: {
-        type: 'github',
-        repo: repoUrl
+        type: "github",
+        repo: repoUrl,
       },
       environmentVariables: [
-        { key: 'POSTGRES_URL', value: process.env.POSTGRES_URL }
-      ]
+        { key: "POSTGRES_URL", value: process.env.POSTGRES_URL },
+      ],
     });
 
     // 6. 配置自定义域名（如果提供）
@@ -1408,20 +1516,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 7. 保存部署记录
-    await db.query(`
+    await db.query(
+      `
       INSERT INTO site_deployments (user_id, project_id, vercel_project_id, deployment_url, domain)
       VALUES ($1, $2, $3, $4, $5)
-    `, [userId, projectId, deployment.projectId, deployment.url, domain]);
+    `,
+      [userId, projectId, deployment.projectId, deployment.url, domain]
+    );
 
     return res.json({
       success: true,
       deploymentUrl: deployment.url,
       vercelProjectId: deployment.projectId,
-      buildLogs: deployment.buildLogs
+      buildLogs: deployment.buildLogs,
     });
-
   } catch (error) {
-    return sendErrorResponse(res, error, 'Failed to deploy site');
+    return sendErrorResponse(res, error, "Failed to deploy site");
   }
 }
 
@@ -1430,45 +1540,51 @@ class VercelClient {
   constructor(private token: string) {}
 
   async createProject(config: any) {
-    const response = await fetch('https://api.vercel.com/v9/projects', {
-      method: 'POST',
+    const response = await fetch("https://api.vercel.com/v9/projects", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${this.token}`,
+        "Content-Type": "application/json",
       },
-      body: JSON.stringify(config)
+      body: JSON.stringify(config),
     });
     return await response.json();
   }
 
   async addDomain(projectId: string, domain: string) {
-    const response = await fetch(`https://api.vercel.com/v9/projects/${projectId}/domains`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ name: domain })
-    });
+    const response = await fetch(
+      `https://api.vercel.com/v9/projects/${projectId}/domains`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: domain }),
+      }
+    );
     return await response.json();
   }
 }
 
 // GitHub仓库创建
-async function createGitHubRepo(userId: number, repoName: string): Promise<string> {
+async function createGitHubRepo(
+  userId: number,
+  repoName: string
+): Promise<string> {
   const userConfig = await getGitHubConfig(userId);
 
-  const response = await fetch('https://api.github.com/user/repos', {
-    method: 'POST',
+  const response = await fetch("https://api.github.com/user/repos", {
+    method: "POST",
     headers: {
-      'Authorization': `token ${userConfig.accessToken}`,
-      'Content-Type': 'application/json'
+      Authorization: `token ${userConfig.accessToken}`,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       name: repoName,
       private: false,
-      auto_init: true
-    })
+      auto_init: true,
+    }),
   });
 
   const repo = await response.json();
@@ -1477,6 +1593,7 @@ async function createGitHubRepo(userId: number, repoName: string): Promise<strin
 ```
 
 **用户界面：**
+
 ```tsx
 // components/DeployModal.tsx
 <Modal title="部署为独立网站">
@@ -1509,76 +1626,118 @@ async function createGitHubRepo(userId: number, repoName: string): Promise<strin
 </Modal>
 ```
 
+### 4.3 高级 SEO 增强与质量闭环 (新增)
+
+#### 4.3.1 自动化内部链接 Agent (Internal Linking Agent)
+
+**逻辑流程：**
+
+1. **语义索引：** 使用 OpenAI Embeddings 或 pgvector 对已发布的文章 `title` 和 `meta_description` 进行向量化存储。
+2. **关系发现：** 当新文章生成后，提取关键词，在数据库中搜索余弦相似度前 3-5 名的相关文章。
+3. **锚文本注入：** 在正文末尾自动添加 "Related Reading" 模块，或通过 Agent 识别正文中可替换的关键词，注入内链。
+
+#### 4.3.2 Agent 4 质量闭环：自动反馈与重写
+
+**集成逻辑：**
+
+1. **评分触发：** 如果 Agent 4 的 `quality_score` < 80，自动触发重写逻辑。
+2. **反馈循环：** 将 Agent 4 的具体扣分项（如：关键词密度过高、可读性差）作为 `criticism` 反馈给 Agent 3。
+3. **迭代生成：** Agent 3 根据反馈进行 Version 2 的生成，直到评分通过（>85）。
+
+#### 4.3.3 高级 Schema.org 自动化模板
+
+在 Next.js 模板中，根据内容分类自动注入：
+
+- **FAQ Schema:** 自动识别文章中的 Q&A 模块并生成 JSON-LD。
+- **Product Review Schema:** 如果是评测类，自动注入星级评分、优缺点字段。
+- **How-to Schema:** 针对步骤类文章，注入每一步的文字与图片元数据。
+
+#### 4.3.4 安全与频率控制 (Security & Rate Limiting)
+
+为了保护 API 密钥并防止被平台封禁：
+
+- **密钥管理：** 使用 Vercel Environment Variables 存储 API Token，生产环境禁用前端直接调用发布接口。
+- **速率限制：** 使用 `Bottleneck` 库对 Medium (25 次/天) 和 Reddit API 进行精确控制。
+- **重试机制：** 针对 GSC/GA4 API 的网络波动，实现指数级退避重试 (Exponential Backoff)。
+
 ---
 
 ## 五、实现优先级与路线图
 
-### Phase 1: 核心工作流优化 (2-3周)
+### Phase 1: 核心工作流优化 (2-3 周)
 
-**优先级1：项目管理界面**
+**优先级 1：项目管理界面**
+
 - 文件：`components/ProjectDashboard.tsx`
 - 功能：统一的项目视图、关键词状态管理、批量操作
 - 影响：解决工作流断裂问题
 
-**优先级2：Agent 4 完整集成**
+**优先级 2：Agent 4 完整集成**
+
 - 文件：`api/agents/agent-4-quality-reviewer.ts`
-- 功能：质量评分UI显示、自动优化建议、不合格文章重写
+- 功能：质量评分 UI 显示、自动优化建议、不合格文章重写
 - 影响：提升内容质量
 
-**优先级3：内容编辑功能**
+**优先级 3：内容编辑功能**
+
 - 文件：`components/RichTextEditor.tsx`
 - 功能：富文本编辑器、版本历史、图片管理
 - 影响：改善用户体验
 
-### Phase 2: 批量生产能力 (3-4周)
+### Phase 2: 批量生产能力 (3-4 周)
 
-**优先级1：批量文章生成**
+**优先级 1：批量文章生成**
+
 - 文件：`api/batch-article-generation.ts`
 - 功能：队列管理、并发控制、进度追踪、错误恢复
 - 影响：实现规模化生产
 
-**优先级2：内容模板系统**
+**优先级 2：内容模板系统**
+
 - 文件：`api/_shared/templates/`
-- 功能：5种预设模板（商品评测、How-to、对比、列表、自定义）
+- 功能：5 种预设模板（商品评测、How-to、对比、列表、自定义）
 - 影响：提高内容一致性
 
-**优先级3：SEO技术增强**
+**优先级 3：SEO 技术增强**
+
 - 功能：内部链接、Schema.org、Canonical URL
-- 影响：提升SEO效果
+- 影响：提升 SEO 效果
 
-### Phase 3: 发布与追踪 (4-5周)
+### Phase 3: 发布与同步链路 (4-5 周)
 
-**优先级1：Medium集成**
-- 文件：`api/_shared/publishers/medium.ts`
-- 功能：一键发布、速率限制、发布记录
-- 影响：快速变现
+**优先级 1：多平台集成 (Medium/WP/Reddit)**
 
-**优先级2：WordPress集成**
-- 文件：`api/_shared/publishers/wordpress.ts`
-- 功能：REST API集成、图片上传、分类标签
-- 影响：主流CMS支持
+- 文件：`api/_shared/publishers/`
+- 功能：一键发布到多平台、速率限制、发布记录
+- 影响：建立全网引流矩阵
 
-**优先级3：数据追踪系统**
+**优先级 2：自动化同步链路 (Syndication Loop)**
+
+- 功能：内容适配器、Webhooks、Canonical URL 自动绑定
+- 影响：内容一次生产，全网分发
+
+**优先级 3：基础数据追踪**
+
 - 文件：`api/tracking/sync.ts`
-- 功能：Vercel Cron、Medium/WP数据、Google排名、可视化
+- 功能：Vercel Cron、各平台互动数据、基础排名追踪
 - 影响：数据驱动优化
 
-### Phase 4: 快速建站 (5-6周)
+### Phase 4: pSEO 自动上站与基础设施 (5-7 周)
 
-**优先级1：Next.js模板开发**
-- 目录：`templates/nextjs-seo-blog/`
-- 功能：SSG、SEO优化、响应式设计
-- 影响：独立站点能力
+**优先级 1：Next.js pSEO 模板与域名策略**
 
-**优先级2：文章同步脚本**
-- 文件：`scripts/sync-articles.ts`
-- 功能：数据库同步、MDX生成、自动构建
-- 影响：内容自动化
+- 功能：SSG 海量生成、通配符子域名 (Wildcard) 支持、GEO/AIO 优化
+- 影响：具备站群规模化能力
 
-**优先级3：一键部署**
-- 文件：`api/deploy-site.ts`
-- 功能：GitHub集成、Vercel部署、域名配置
-- 影响：零代码上线
+**优先级 2：SEO 自动化集成 (GSC/GA4 API)**
+
+- 功能：自动验证 GSC、自动创建 GA4 资源、自动注入追踪 ID
+- 影响：零人工干预的 SEO 基础设施
+
+**优先级 3：一键部署与管理仪表板**
+
+- 功能：Vercel API 集成、GitHub 自动同步、多站点统一管理卡片
+- 影响：真正的 AI 自动化 SEO 闭环
 
 ---
 
@@ -1659,9 +1818,9 @@ components/ContentGenerationView.tsx:
 
 ### 对 PSEO 专家
 
-- ✅ 批量生产100-1000篇文章
+- ✅ 批量生产 100-1000 篇文章
 - ✅ 统一的内容模板和质量标准
-- ✅ 完整的SEO技术要素
+- ✅ 完整的 SEO 技术要素
 - ✅ 自动化排名追踪和优化
 
 ### 对产品经理
@@ -1682,78 +1841,84 @@ components/ContentGenerationView.tsx:
 
 ## 八、成本与性能估算
 
-### AI成本（每篇文章）
+### AI 成本（每篇文章）
 
 - Gemini API: ~$0.001-0.002 (1K tokens)
-- Nano Banana 2: $0.20-0.48 (4-6张图片)
+- Nano Banana 2: $0.20-0.48 (4-6 张图片)
 - **总计：约$0.50-1.00/篇**
 
 ### 批量生产成本
 
-- 100篇文章：$50-100
-- 1000篇文章：$500-1000
+- 100 篇文章：$50-100
+- 1000 篇文章：$500-1000
 
 ### 性能指标
 
-- 单篇文章生成：2-3分钟
-- 批量100篇（并发3）：60-90分钟
-- 批量1000篇（并发5）：10-12小时
+- 单篇文章生成：2-3 分钟
+- 批量 100 篇（并发 3）：60-90 分钟
+- 批量 1000 篇（并发 5）：10-12 小时
 
-### Vercel限制
+### Vercel 限制
 
-- 免费版：100GB带宽/月、100次部署/天
-- Pro版（$20/月）：1TB带宽、6000次部署/天
-- 建议：Pro版可支持中等规模PSEO项目
+- 免费版：100GB 带宽/月、100 次部署/天
+- Pro 版（$20/月）：1TB 带宽、6000 次部署/天
+- 建议：Pro 版可支持中等规模 PSEO 项目
 
 ---
 
 ## 总结
 
-当前的AI图文工厂已经具备完整的多智能体系统和优秀的实时反馈机制。主要不足在于：
+当前的 AI 图文工厂已经具备完整的多智能体系统和优秀的实时反馈机制。主要不足在于：
 
 1. **工作流断裂** - 需要统一的项目管理界面
 2. **缺少批量能力** - 需要队列管理和模板系统
-3. **发布功能缺失** - 需要Medium/WordPress集成
-4. **追踪不完整** - 需要定时任务和可视化
+3. **发布功能缺失** - 需要 Medium/WordPress/Reddit 集成与同步中枢
+4. **追踪不完整** - 需要自动化 GSC/GA4 集成与可视化
+5. **SEO 深度不足** - 需要自动化内链与 Schema.org 结构化数据增强
 
-通过4个阶段的优化（核心工作流 → 批量生产 → 发布追踪 → 快速建站），可以将系统打造成从关键词挖掘到独立站点部署的全流程PSEO平台。
+通过 4 个阶段的优化（核心工作流 → 批量生产 → 发布同步 → 自动化 SEO 站群），可以将系统打造成全球领先的 AI 自动化 PSEO 增长平台。
 
 ---
 
-# Phase 1 实��计划：项目管理界面
+# Phase 1 实 �� 计划：项目管理界面
 
 ## 代码探索发现
 
 ### 现有架构分析
 
 **数据库层（已完整）：**
+
 - `projects` 表：完整定义，包含 id, user_id, name, seed_keyword, target_language
 - `keywords` 表：关联到 projects，有 `is_selected` 字段（未使用）
 - `content_drafts` 表：关联到 projects/keywords，有 `status` 字段（始终为 'draft'）
 - `published_articles` 表：独立系统，活跃使用中
 
 **关键缺口：**
+
 - ❌ 缺少数据库函数：getUserProjects, getProjectById, updateProject, deleteProject
-- ❌ 缺少 API 端点：/api/projects/*
+- ❌ 缺少 API 端点：/api/projects/\*
 - ❌ 缺少前端类型：types.ts 中无 Project 接口
 - ❌ 缺少 UI 组件：无项目管理界面
 - ⚠️ 双内容系统：content_drafts 和 published_articles 未同步
 
 **现有模式（需遵循）：**
+
 - 表格模式：`KeywordTable.tsx`（可展开行，深色主题支持）
 - 指标卡片：`OverviewCards.tsx`（网格布局，骨架加载）
 - API 模式：`/api/articles/*` 端点
 - 状态管理：App.tsx 中的 taskManager
 - 导航：步骤状态机，ContentGenerationView 为默认
 
-## 增量实施计划（6天）
+## 增量实施计划（6 天）
 
 ### Day 1: 数据库基础层
 
 **目标：** 后端 CRUD 就绪，无 UI 变更
 
 **文件修改：**
+
 1. `api/lib/database.ts` - 添加 10 个新函数
+
    - `getUserProjects(userId)` - 获取用户所有项目及统计
    - `getProjectById(projectId, userId)` - 获取单个项目详情
    - `updateProject(projectId, userId, updates)` - 更新项目
@@ -1763,6 +1928,7 @@ components/ContentGenerationView.tsx:
    - `getProjectStats(projectId, userId)` - 获取项目统计数据
 
 2. 数据库迁移脚本 `api/migrations/add-project-status.sql`
+
    ```sql
    ALTER TABLE keywords ADD COLUMN status VARCHAR(50) DEFAULT 'selected';
    CREATE INDEX idx_keywords_project_status ON keywords(project_id, status);
@@ -1782,7 +1948,9 @@ components/ContentGenerationView.tsx:
 **目标：** 可查看项目列表，无高级功能
 
 **文件创建：**
+
 1. `types.ts` - 添加接口
+
    ```typescript
    interface Project { id, user_id, name, seed_keyword, ... }
    interface ProjectWithStats extends Project { keyword_count, draft_count, ... }
@@ -1790,22 +1958,30 @@ components/ContentGenerationView.tsx:
    ```
 
 2. `components/projects/ProjectDashboard.tsx` - 主容器
+
    - 仅列表视图
    - 调用 /api/projects/list
    - 遵循 ContentGenerationView 结构
 
 3. `components/projects/ProjectListTable.tsx` - 表格组件
+
    - 无展开，无操作
    - 遵循 KeywordTable 样式
    - 深色主题支持
 
 4. `components/projects/ProjectMetricsCards.tsx` - 指标卡片
+
    - 总项目数、总关键词、草稿数、已发布数
    - 遵循 OverviewCards 网格布局
 
 5. `components/layout/Sidebar.tsx` - 添加导航项
+
    ```typescript
-   <NavItem icon={Folder} label="Projects" onClick={() => setStep('projects')} />
+   <NavItem
+     icon={Folder}
+     label="Projects"
+     onClick={() => setStep("projects")}
+   />
    ```
 
 6. `App.tsx` - 添加步骤
@@ -1821,12 +1997,15 @@ components/ContentGenerationView.tsx:
 **目标：** 完整项目管理功能
 
 **文件创建：**
+
 1. `components/projects/CreateProjectModal.tsx` - 创建项目弹窗
 2. `components/projects/EditProjectModal.tsx` - 编辑项目弹窗
 3. `components/projects/ProjectActions.tsx` - 批量操作工具栏
 
 **文件修改：**
+
 1. `ProjectListTable.tsx` - 添加操作按钮
+
    - View（查看详情）
    - Edit（编辑）
    - Delete（删除确认）
@@ -1843,7 +2022,9 @@ components/ContentGenerationView.tsx:
 **目标：** 将关键词关联到项目
 
 **文件创建：**
+
 1. `components/projects/ProjectDetailView.tsx` - 项目详情页
+
    - 项目信息展示
    - 关键词列表
    - 统计卡片
@@ -1854,7 +2035,9 @@ components/ContentGenerationView.tsx:
    - 添加"Generate Content"操作
 
 **文件修改：**
+
 1. `App.tsx` - 更新关键词挖掘完成处理
+
    ```typescript
    handleKeywordMiningComplete = async (keywords) => {
      const project = await createProject(...);
@@ -1875,17 +2058,20 @@ components/ContentGenerationView.tsx:
 **目标：** 全工作流集成
 
 **文件修改：**
+
 1. `api/_shared/services/visual-article-service.ts`
+
    - 更新 `ensureProject()` - 检查现有项目
    - 添加状态转换：selected → generating → draft
    - 自动设置项目上下文
 
 2. `ProjectKeywordTable.tsx` - 添加"Generate Content"操作
+
    ```typescript
    onGenerateContent = (keywordId) => {
-     updateKeywordStatus(keywordId, 'generating');
+     updateKeywordStatus(keywordId, "generating");
      navigateToArticleGenerator(keywordId);
-   }
+   };
    ```
 
 3. `App.tsx` - 项目上下文传递
@@ -1899,12 +2085,15 @@ components/ContentGenerationView.tsx:
 **目标：** 生产就绪
 
 **任务：**
+
 1. 数据迁移
+
    - 运行迁移脚本处理现有数据
    - 创建"Legacy Import"项目
    - 关联孤立关键词
 
 2. UI 优化
+
    - 添加加载骨架（遵循 OverviewCards）
    - 添加空状态（无项目、无关键词）
    - 添加搜索/过滤
@@ -1921,6 +2110,7 @@ components/ContentGenerationView.tsx:
 ## 关键文件清单
 
 ### 后端（数据库 & API）
+
 - ✏️ `api/lib/database.ts` - 添加所有 CRUD 函数
 - ➕ `api/projects/list.ts` - 主 API 端点
 - ➕ `api/projects/get.ts`
@@ -1930,6 +2120,7 @@ components/ContentGenerationView.tsx:
 - ✏️ `api/_shared/services/visual-article-service.ts` - 更新项目创建逻辑
 
 ### 前端（类型 & 组件）
+
 - ✏️ `types.ts` - 添加 Project, ProjectWithStats 接口
 - ➕ `components/projects/ProjectDashboard.tsx` - 主容器
 - ➕ `components/projects/ProjectListTable.tsx` - 表格组件
@@ -1941,6 +2132,7 @@ components/ContentGenerationView.tsx:
 - ➕ `components/projects/ProjectActions.tsx` - 批量操作
 
 ### 集成点
+
 - ✏️ `App.tsx` - 添加 'projects' 步骤，集成关键词挖掘
 - ✏️ `components/layout/Sidebar.tsx` - 添加 Projects 导航项
 

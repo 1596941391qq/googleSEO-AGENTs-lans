@@ -43,6 +43,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
             <th className="px-4 py-4 w-10"></th>
             <th className="px-4 py-4">{t.colKw}</th>
             <th className="px-4 py-4">{t.colTrans}</th>
+            <th className="px-4 py-4">{t.blueOceanScore || (uiLanguage === 'zh' ? '蓝海分' : 'Blue Ocean')}</th>
+            <th className="px-4 py-4">{t.drComparison || (uiLanguage === 'zh' ? 'DR对比' : 'DR Comp')}</th>
             <th className="px-4 py-4">{t.colVol}</th>
             <th className="px-4 py-4">{t.colType}</th>
             <th className="px-4 py-4 text-center">{t.colProb}</th>
@@ -63,6 +65,41 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                   </td>
                   <td className={`px-4 py-4 ${isDarkTheme ? "text-slate-400" : "text-gray-600"}`}>
                     {item.translation}
+                  </td>
+                  <td className={`px-4 py-4 font-bold ${isDarkTheme ? "text-white" : "text-gray-900"}`}>
+                    {item.blueOceanScore !== undefined ? (
+                      <div className="flex flex-col">
+                        <span className={cn(
+                          item.blueOceanScore >= 70 ? "text-emerald-400" :
+                          item.blueOceanScore >= 40 ? "text-yellow-400" : "text-red-400"
+                        )}>
+                          {Math.round(item.blueOceanScore)}
+                        </span>
+                        <div className="w-12 h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
+                          <div 
+                            className={cn(
+                              "h-full rounded-full",
+                              item.blueOceanScore >= 70 ? "bg-emerald-500" :
+                              item.blueOceanScore >= 40 ? "bg-yellow-500" : "bg-red-500"
+                            )}
+                            style={{ width: `${item.blueOceanScore}%` }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-slate-500">-</span>
+                    )}
+                  </td>
+                  <td className={`px-4 py-4 ${isDarkTheme ? "text-white/80" : "text-gray-700"}`}>
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold">{item.websiteDR !== undefined ? Math.round(item.websiteDR) : "-"}</span>
+                      <span className="text-[10px] text-slate-500 text-nowrap">vs</span>
+                      <span className="font-medium text-amber-400/80">
+                        {item.competitorDRs && item.competitorDRs.length > 0 
+                          ? Math.round(item.competitorDRs.reduce((a: number, b: number) => a + b, 0) / item.competitorDRs.length)
+                          : "-"}
+                      </span>
+                    </div>
                   </td>
                   <td className={`px-4 py-4 font-mono ${isDarkTheme ? "text-white" : "text-gray-900"}`}>
                     {item.volume.toLocaleString()}
@@ -99,7 +136,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                 </tr>
                 {isExpanded && (
                   <tr className={`animate-fade-in border-b ${isDarkTheme ? "bg-black border-emerald-500/20" : "bg-gray-50 border-gray-200"}`}>
-                    <td colSpan={7} className="px-4 py-6">
+                    <td colSpan={9} className="px-4 py-6">
                       <div className="flex flex-col md:flex-row gap-6">
                         <div className="flex-1 space-y-4">
                           {(item.searchIntent || item.intentAnalysis) && (() => {
@@ -170,11 +207,13 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                             <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/30" : "bg-white border-slate-200")}>
                               <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-500" /><span className={cn(isDarkTheme ? "text-white" : "text-slate-900")}>{t.keywordResearchTool || (uiLanguage === "zh" ? "SEO词研究工具 (DataForSEO)" : "Keyword Research Tool (DataForSEO)")}</span></CardTitle></CardHeader>
                               <CardContent className="space-y-4">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                                   <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-slate-50 border-slate-200")}><CardContent className="p-4"><div className={cn("text-xs font-medium mb-1.5", isDarkTheme ? "text-white/70" : "text-slate-600")}>{t.searchVolume || (uiLanguage === "zh" ? "搜索量" : "SEARCH VOLUME")}</div><div className={cn("text-xl font-bold", isDarkTheme ? "text-emerald-400" : "text-emerald-600")}>{item.serankingData.volume?.toLocaleString() || "N/A"}</div><div className={cn("text-xs mt-1", isDarkTheme ? "text-white/60" : "text-slate-500")}>{uiLanguage === "zh" ? "月搜索量" : "monthly searches"}</div></CardContent></Card>
                                   <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-medium mb-1.5", isDarkTheme ? "text-white/70" : "text-emerald-700")}>{t.keywordDifficulty || (uiLanguage === "zh" ? "关键词难度" : "KEYWORD DIFFICULTY")}</div><div className={cn("text-xl font-bold",(item.serankingData.difficulty || 0) <= 40 ? (isDarkTheme ? "text-emerald-400" : "text-emerald-600") : (item.serankingData.difficulty || 0) <= 60 ? (isDarkTheme ? "text-yellow-400" : "text-yellow-600") : (isDarkTheme ? "text-red-400" : "text-red-600"))}>{item.serankingData.difficulty || "N/A"}</div><div className={cn("text-xs mt-1", isDarkTheme ? "text-white/60" : "text-emerald-600/70")}>{(item.serankingData.difficulty || 0) <= 40 ? (uiLanguage === "zh" ? "低竞争" : "Low competition") : (item.serankingData.difficulty || 0) <= 60 ? (uiLanguage === "zh" ? "中等竞争" : "Medium competition") : (uiLanguage === "zh" ? "高竞争" : "High competition")}</div></CardContent></Card>
-                                  <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-medium mb-1.5", isDarkTheme ? "text-white/70" : "text-emerald-700")}>CPC</div><div className={cn("text-xl font-bold", isDarkTheme ? "text-emerald-400" : "text-emerald-600")}>${item.serankingData.cpc?.toFixed(2) || "N/A"}</div><div className={cn("text-xs mt-1", isDarkTheme ? "text-white/60" : "text-emerald-600/70")}>{uiLanguage === "zh" ? "每次点击成本" : "cost per click"}</div></CardContent></Card>
-                                  <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-medium mb-1.5", isDarkTheme ? "text-white/70" : "text-emerald-700")}>{t.competition || (uiLanguage === "zh" ? "竞争度" : "COMPETITION")}</div><div className={cn("text-xl font-bold", isDarkTheme ? "text-emerald-400" : "text-emerald-600")}>{item.serankingData.competition ? (typeof item.serankingData.competition === "number" ? (item.serankingData.competition * 100).toFixed(1) + "%" : item.serankingData.competition) : "N/A"}</div><div className={cn("text-xs mt-1", isDarkTheme ? "text-white/60" : "text-emerald-600/70")}>{uiLanguage === "zh" ? "广告竞争度" : "advertiser competition"}</div></CardContent></Card>
+                                  <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-medium mb-1.5", isDarkTheme ? "text-white/70" : "text-emerald-700")}>CPC</div><div className={cn("text-xl font-bold", isDarkTheme ? "text-emerald-400" : "text-emerald-600")}>${item.serankingData.cpc?.toFixed(2) || "N/A"}</div><div className={cn("text-xs mt-1", isDarkTheme ? "text-white/60" : "text-emerald-600/70")}>{uiLanguage === "zh" ? "点击成本" : "cost per click"}</div></CardContent></Card>
+                                  <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-medium mb-1.5", isDarkTheme ? "text-white/70" : "text-emerald-700")}>{t.blueOceanScore || (uiLanguage === "zh" ? "蓝海分" : "BLUE OCEAN")}</div><div className={cn("text-xl font-bold", item.blueOceanScore && item.blueOceanScore >= 70 ? "text-emerald-400" : item.blueOceanScore && item.blueOceanScore >= 40 ? "text-yellow-400" : "text-red-400")}>{item.blueOceanScore !== undefined ? Math.round(item.blueOceanScore) : "N/A"}</div><div className={cn("text-xs mt-1", isDarkTheme ? "text-white/60" : "text-emerald-600/70")}>{uiLanguage === "zh" ? "挖掘潜力" : "Mining potential"}</div></CardContent></Card>
+                                  <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-medium mb-1.5", isDarkTheme ? "text-white/70" : "text-emerald-700")}>DR (YOU vs AVG)</div><div className={cn("text-xl font-bold", isDarkTheme ? "text-white" : "text-slate-900")}>{item.websiteDR !== undefined ? Math.round(item.websiteDR) : "-"}<span className="text-xs font-normal text-slate-500 mx-1">/</span>{item.competitorDRs && item.competitorDRs.length > 0 ? Math.round(item.competitorDRs.reduce((a: number, b: number) => a + b, 0) / item.competitorDRs.length) : "-"}</div><div className={cn("text-xs mt-1", isDarkTheme ? "text-white/60" : "text-emerald-600/70")}>{uiLanguage === "zh" ? "域名权重对比" : "Domain authority"}</div></CardContent></Card>
+                                  <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-medium mb-1.5", isDarkTheme ? "text-white/70" : "text-emerald-700")}>{uiLanguage === "zh" ? "上首页概率" : "TOP 10 PROB"}</div><div className={cn("text-xl font-bold", item.top10Probability === ProbabilityLevel.HIGH ? "text-emerald-400" : item.top10Probability === ProbabilityLevel.MEDIUM ? "text-yellow-400" : "text-red-400")}>{item.top10Probability || "N/A"}</div><div className={cn("text-xs mt-1", isDarkTheme ? "text-white/60" : "text-emerald-600/70")}>{uiLanguage === "zh" ? "基于DR估算" : "Based on DR"}</div></CardContent></Card>
                                 </div>
                                 {item.serankingData.history_trend && Object.keys(item.serankingData.history_trend).length > 0 && (
                                   <Card className={cn(isDarkTheme ? "bg-black border-emerald-500/20" : "bg-emerald-50 border-emerald-200")}><CardContent className="p-4"><div className={cn("text-xs font-semibold mb-3 flex items-center gap-2", isDarkTheme ? "text-white/70" : "text-emerald-700")}><TrendingUp className={cn("w-4 h-4", isDarkTheme ? "text-emerald-400" : "text-emerald-600")} />{t.searchVolumeTrend || (uiLanguage === "zh" ? "搜索量趋势（过去12个月）" : "SEARCH VOLUME TREND (Last 12 Months)")}</div><div className="grid grid-cols-4 md:grid-cols-6 gap-2">{Object.entries(item.serankingData.history_trend).sort(([dateA], [dateB]) => dateA.localeCompare(dateB)).map(([date, volume]) => (<Card key={date} className={cn("text-center", isDarkTheme ? "bg-black border-emerald-500/20" : "bg-white border-emerald-200")}><CardContent className="p-2"><div className={cn("text-xs font-medium mb-1", isDarkTheme ? "text-white/60" : "text-emerald-600/80")}>{new Date(date).toLocaleDateString(uiLanguage === "zh" ? "zh-CN" : "en-US", { month: "short", year: "2-digit" })}</div><div className={cn("text-sm font-bold", isDarkTheme ? "text-white" : "text-emerald-600")}>{typeof volume === "number" ? volume.toLocaleString() : volume}</div></CardContent></Card>))}</div></CardContent></Card>

@@ -65,32 +65,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     // ==========================================
-    // Step 2: 获取用户网站列表
+    // Step 2: 获取用户网站列表 (带最新数据)
     // ==========================================
     const websitesResult = await sql`
+      WITH latest_data AS (
+        SELECT DISTINCT ON (website_id)
+          website_id,
+          organic_traffic,
+          total_keywords,
+          avg_position,
+          top10_count,
+          traffic_cost
+        FROM domain_overview_cache
+        ORDER BY website_id, data_date DESC
+      )
       SELECT
-        id,
-        website_url,
-        website_domain,
-        website_title,
-        website_description,
-        website_screenshot,
-        industry,
-        monthly_visits,
-        monthly_revenue,
-        marketing_tools,
-        is_default,
-        last_accessed_at,
-        bound_at,
-        is_active,
-        created_at,
-        updated_at
-      FROM user_websites
-      WHERE user_id = ${userId} AND is_active = true
+        w.id,
+        w.website_url,
+        w.website_domain,
+        w.website_title,
+        w.website_description,
+        w.website_screenshot,
+        w.industry,
+        COALESCE(ld.organic_traffic, w.monthly_visits) as organic_traffic,
+        w.monthly_revenue,
+        w.marketing_tools,
+        w.is_default,
+        w.last_accessed_at,
+        w.bound_at,
+        w.is_active,
+        w.created_at,
+        w.updated_at,
+        ld.total_keywords,
+        ld.avg_position,
+        ld.top10_count,
+        ld.traffic_cost
+      FROM user_websites w
+      LEFT JOIN latest_data ld ON w.id = ld.website_id
+      WHERE w.user_id = ${userId} AND w.is_active = true
       ORDER BY
-        is_default DESC,
-        last_accessed_at DESC NULLS LAST,
-        created_at DESC
+        w.is_default DESC,
+        w.last_accessed_at DESC NULLS LAST,
+        w.created_at DESC
     `;
 
     const websites = websitesResult.rows.map(row => ({
@@ -101,7 +117,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       description: row.website_description,
       screenshot: row.website_screenshot,
       industry: row.industry,
-      monthlyVisits: row.monthly_visits,
+      monthlyVisits: row.organic_traffic,
       monthlyRevenue: row.monthly_revenue,
       marketingTools: row.marketing_tools || [],
       isDefault: row.is_default,
@@ -109,7 +125,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       boundAt: row.bound_at,
       isActive: row.is_active,
       createdAt: row.created_at,
-      updatedAt: row.updated_at
+      updatedAt: row.updated_at,
+      keywordsCount: row.total_keywords,
+      healthScore: row.avg_position ? Math.max(0, Math.min(100, Math.round(100 - row.avg_position))) : null,
+      top10Count: row.top10_count,
+      trafficCost: row.traffic_cost
     }));
 
     // ==========================================

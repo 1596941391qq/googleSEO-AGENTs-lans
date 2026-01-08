@@ -386,6 +386,7 @@ export interface AppState {
   step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'test-agents' | 'article-generator' | 'content-generation';
   seedKeyword: string;
   targetLanguage: TargetLanguage;
+  targetSearchEngine: 'google' | 'baidu' | 'bing' | 'yandex';
   keywords: KeywordData[];
   error: string | null;
 
@@ -473,7 +474,7 @@ export interface AppState {
 
   // Content Generation
   contentGeneration: {
-    activeTab: 'my-website' | 'website-data' | 'article-rankings' | 'publish';
+    activeTab: 'my-website' | 'website-data' | 'projects' | 'publish';
     website: any | null;
     onboardingStep: number;
     websiteData: any | null;
@@ -485,6 +486,47 @@ export interface AppState {
   // UI State
   isSidebarCollapsed: boolean;
 }
+
+// === Project Management System ===
+
+export interface Project {
+  id: string;
+  user_id: number;
+  name: string;
+  seed_keyword: string | null;
+  target_language: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectWithStats extends Project {
+  keyword_count: number;
+  draft_count: number;
+  published_count: number;
+}
+
+export interface KeywordWithStatus {
+  id: string;
+  project_id: string;
+  keyword: string;
+  translation: string | null;
+  intent: string | null;
+  volume: number | null;
+  probability: string | null;
+  is_selected: boolean;
+  status: 'selected' | 'generating' | 'completed' | 'failed';
+  content_status?: string;
+  created_at: string;
+}
+
+export interface ProjectStats {
+  total: number;
+  selected: number;
+  generating: number;
+  completed: number;
+  failed: number;
+}
+
 
 export interface ArticleGeneratorState {
   keyword: string;

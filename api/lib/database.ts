@@ -1597,12 +1597,14 @@ export async function initKeywordsTable() {
           volume INTEGER,
           probability VARCHAR(20),
           is_selected BOOLEAN DEFAULT false,
+          status VARCHAR(50) DEFAULT 'selected',
           created_at TIMESTAMP DEFAULT NOW()
         )
       `;
 
       await sql`CREATE INDEX IF NOT EXISTS idx_keywords_project ON keywords(project_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_keywords_selected ON keywords(is_selected)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_keywords_project_status ON keywords(project_id, status)`;
 
       keywordsTableInitialized = true;
     } catch (error) {
@@ -2024,6 +2026,165 @@ export async function createPublication(
     return result.rows[0];
   } catch (error) {
     console.error('Error creating publication:', error);
+    throw error;
+  }
+}
+
+/**
+ * 获取用户所有项目及其统计信息
+ */
+export async function getUserProjects(userId: number): Promise<any[]> {
+  try {
+    await initContentManagementTables();
+
+    const result = await sql`
+      SELECT 
+        p.*,
+        COUNT(DISTINCT k.id) as keyword_count,
+        COUNT(DISTINCT cd.id) as draft_count,
+        COUNT(DISTINCT pub.id) FILTER (WHERE pub.status = 'published') as published_count
+      FROM projects p
+      LEFT JOIN keywords k ON p.id = k.project_id
+      LEFT JOIN content_drafts cd ON p.id = cd.project_id
+      LEFT JOIN publications pub ON cd.id = pub.content_draft_id
+      WHERE p.user_id = ${userId}
+      GROUP BY p.id
+      ORDER BY p.updated_at DESC
+    `;
+
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting user projects:', error);
+    throw error;
+  }
+}
+
+/**
+ * 根据 ID 获取项目详情
+ */
+export async function getProjectById(projectId: string, userId: number): Promise<Project | null> {
+  try {
+    await initProjectsTable();
+    const result = await sql<Project>`
+      SELECT * FROM projects WHERE id = ${projectId} AND user_id = ${userId}
+    `;
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error getting project by id:', error);
+    throw error;
+  }
+}
+
+/**
+ * 更新项目信息
+ */
+export async function updateProject(
+  projectId: string, 
+  userId: number, 
+  updates: { name?: string; seed_keyword?: string; target_language?: string }
+): Promise<Project | null> {
+  try {
+    const setParts: string[] = [];
+    const values: any[] = [];
+    let i = 1;
+
+    if (updates.name) {
+      setParts.push(`name = $${i++}`);
+      values.push(updates.name);
+    }
+    if (updates.seed_keyword) {
+      setParts.push(`seed_keyword = $${i++}`);
+      values.push(updates.seed_keyword);
+    }
+    if (updates.target_language) {
+      setParts.push(`target_language = $${i++}`);
+      values.push(updates.target_language);
+    }
+
+    if (setParts.length === 0) return null;
+
+    values.push(projectId, userId);
+    const result = await sql(
+      raw(`UPDATE projects SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id = $${i++} RETURNING *`),
+      ...values
+    );
+
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error updating project:', error);
+    throw error;
+  }
+}
+
+/**
+ * 删除项目
+ */
+export async function deleteProject(projectId: string, userId: number): Promise<boolean> {
+  try {
+    const result = await sql`
+      DELETE FROM projects WHERE id = ${projectId} AND user_id = ${userId} RETURNING id
+    `;
+    return result.rows.length > 0;
+  } catch (error) {
+    console.error('Error deleting project:', error);
+    throw error;
+  }
+}
+
+/**
+ * 获取项目关键词
+ */
+export async function getProjectKeywords(projectId: string): Promise<Keyword[]> {
+  try {
+    await initContentManagementTables();
+    const result = await sql<Keyword>`
+      SELECT k.*, 
+        (SELECT status FROM content_drafts WHERE keyword_id = k.id ORDER BY updated_at DESC LIMIT 1) as content_status
+      FROM keywords k
+      WHERE k.project_id = ${projectId}
+      ORDER BY k.created_at DESC
+    `;
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting project keywords:', error);
+    throw error;
+  }
+}
+
+/**
+ * 更新关键词状态
+ */
+export async function updateKeywordStatus(keywordId: string, status: string): Promise<boolean> {
+  try {
+    const result = await sql`
+      UPDATE keywords SET status = ${status} WHERE id = ${keywordId} RETURNING id
+    `;
+    return result.rows.length > 0;
+  } catch (error) {
+    console.error('Error updating keyword status:', error);
+    throw error;
+  }
+}
+
+/**
+ * 获取项目统计数据
+ */
+export async function getProjectStats(projectId: string, userId: number): Promise<any> {
+  try {
+    await initContentManagementTables();
+    const result = await sql`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'selected') as selected,
+        COUNT(*) FILTER (WHERE status = 'generating') as generating,
+        COUNT(*) FILTER (WHERE status = 'completed') as completed,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed
+      FROM keywords
+      WHERE project_id = ${projectId}
+    `;
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error getting project stats:', error);
     throw error;
   }
 }

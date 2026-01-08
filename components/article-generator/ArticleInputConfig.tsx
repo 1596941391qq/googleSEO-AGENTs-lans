@@ -112,6 +112,11 @@ interface ArticleInputConfigProps {
   onStart: (config: ArticleConfig) => void;
   isDarkTheme?: boolean;
   uiLanguage?: "en" | "zh";
+  initialKeyword?: string;
+  initialTone?: string;
+  initialVisualStyle?: string;
+  initialAudience?: "beginner" | "expert";
+  initialTargetMarket?: string;
 }
 
 export interface ArticleConfig {
@@ -138,13 +143,43 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   onStart,
   isDarkTheme,
   uiLanguage = "en",
+  initialKeyword = "",
+  initialTone = "professional",
+  initialVisualStyle = "realistic",
+  initialAudience = "beginner",
+  initialTargetMarket = "global",
 }) => {
-  const [keyword, setKeyword] = useState("");
-  const [tone, setTone] = useState("professional");
-  const [visualStyle, setVisualStyle] = useState("realistic");
-  const [audience, setAudience] = useState<"beginner" | "expert">("beginner");
-  const [targetMarket, setTargetMarket] = useState("global");
+  const [keyword, setKeyword] = useState(initialKeyword);
+  const [tone, setTone] = useState(initialTone);
+  const [visualStyle, setVisualStyle] = useState(initialVisualStyle);
+  const [audience, setAudience] = useState<"beginner" | "expert">(
+    initialAudience
+  );
+  const [targetMarket, setTargetMarket] = useState(initialTargetMarket);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Update local state when initial props change
+  React.useEffect(() => {
+    if (initialKeyword) {
+      setKeyword(initialKeyword);
+    }
+  }, [initialKeyword]);
+
+  React.useEffect(() => {
+    if (initialTone) setTone(initialTone);
+  }, [initialTone]);
+
+  React.useEffect(() => {
+    if (initialVisualStyle) setVisualStyle(initialVisualStyle);
+  }, [initialVisualStyle]);
+
+  React.useEffect(() => {
+    if (initialAudience) setAudience(initialAudience);
+  }, [initialAudience]);
+
+  React.useEffect(() => {
+    if (initialTargetMarket) setTargetMarket(initialTargetMarket);
+  }, [initialTargetMarket]);
 
   // Reference state
   const [referenceType, setReferenceType] = useState<"document" | "url" | null>(
