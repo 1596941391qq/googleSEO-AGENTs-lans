@@ -3158,6 +3158,7 @@ export default function App() {
 
   // Auth and Credits
   const { user, authenticated, loading: authLoading, logout } = useAuth();
+  const token = localStorage.getItem("auth_token");
   const [credits, setCredits] = useState<{
     total: number;
     used: number;

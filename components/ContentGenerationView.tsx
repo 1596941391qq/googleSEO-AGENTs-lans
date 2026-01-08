@@ -2022,7 +2022,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
     // Consolidated My Website View
     if (state.website) {
       return (
-        <div className="max-w-7xl mx-auto space-y-12 pb-20">
+        <div className="max-w-7xl mx-auto space-y-6 pb-20">
           {/* Welcome & Guide Section */}
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div className="space-y-2">
@@ -3449,7 +3449,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
   // Main render return for ContentGenerationView
   return (
-    <div className="max-w-7xl mx-auto mt-16">
+    <div className="max-w-7xl mx-auto mt-6">
       {/* Tab Content - No top tabs needed, they're in sidebar */}
       {state.activeTab === "my-website" && renderMyWebsite()}
       {state.activeTab === "website-data" && (

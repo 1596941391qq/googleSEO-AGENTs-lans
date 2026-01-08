@@ -172,7 +172,14 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
       });
 
       if (response.ok) {
-        // Reload list
+        // Immediately remove from local state for instant UI update
+        if (data) {
+          setData({
+            ...data,
+            websites: data.websites.filter((w) => w.id !== websiteId),
+          });
+        }
+        // Then reload list to sync with server
         await loadWebsites();
       } else {
         const errorText = await response.text();
