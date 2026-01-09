@@ -337,6 +337,11 @@ export async function getBatchDomainOverview(
 
   return domainMap;
 }
+
+/**
+ * 带重试机制的 fetch 函数
+ */
+async function fetchWithRetry(
   url: string,
   options: RequestInit,
   maxRetries: number = 3,

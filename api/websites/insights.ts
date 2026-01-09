@@ -107,7 +107,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let lines = text.split('\n')
       .map(line => line.trim())
-      .filter(line => line.startsWith('>'))
+      .filter(line => typeof line === 'string' && line.startsWith('>'))
       .slice(0, 6);
 
     if (lines.length === 0) {

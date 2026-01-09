@@ -104,7 +104,7 @@ export async function scrapeWebsite(url: string, includeScreenshot: boolean = fa
     console.log(`[Firecrawl] Successfully scraped ${markdown.length} characters of markdown${screenshot ? ' + screenshot' : ''}`);
 
     // If screenshot is a URL, convert it to Base64 to make it permanent
-    if (screenshot && screenshot.startsWith('http')) {
+    if (screenshot && typeof screenshot === 'string' && screenshot.startsWith('http')) {
       try {
         console.log(`[Firecrawl] Converting screenshot URL to Base64: ${screenshot.substring(0, 50)}...`);
         const imgResponse = await fetch(screenshot);

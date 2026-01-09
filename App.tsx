@@ -5321,7 +5321,7 @@ export default function App() {
     }));
 
     // 保存网站信息到任务状态
-    const websiteId = websiteToUse.id?.startsWith("manual-")
+    const websiteId = (typeof websiteToUse.id === 'string' && websiteToUse.id.startsWith("manual-"))
       ? `temp-${Date.now()}`
       : websiteToUse.id;
     const websiteDomain =
