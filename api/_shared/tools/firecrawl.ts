@@ -5,8 +5,8 @@
  * 特点：纯数据获取，无AI逻辑
  */
 
-const FIRECRAWL_BASE_URL = process.env.FIRECRAWL_BASE_URL || 'https://api.302.ai';
-const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
+const FIRECRAWL_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
+const FIRECRAWL_API_KEY = process.env.GEMINI_API_KEY;
 
 if (!FIRECRAWL_API_KEY || FIRECRAWL_API_KEY.trim() === '') {
   console.warn('FIRECRAWL_API_KEY is not configured');
