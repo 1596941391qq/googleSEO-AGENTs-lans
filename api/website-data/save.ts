@@ -33,12 +33,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       additionalInfo,
     } = parseRequestBody(req);
 
-    if (!userId || !websiteUrl) {
-      return sendErrorResponse(res, null, 'userId and websiteUrl are required', 400);
+    if (!userId || !websiteUrl || typeof websiteUrl !== 'string') {
+      return sendErrorResponse(res, null, 'userId and a valid websiteUrl are required', 400);
     }
 
     // Extract domain from URL
-    const domain = new URL(websiteUrl).hostname.replace('www.', '');
+    let domain = '';
+    try {
+      domain = new URL(websiteUrl).hostname.replace('www.', '');
+    } catch (urlError) {
+      // Fallback if URL parsing fails
+      domain = websiteUrl.replace(/^https?:\/\//, '').split('/')[0].replace('www.', '');
+    }
 
     // Use UPSERT to handle insert or update atomically
     // This prevents race conditions when multiple requests try to save the same website

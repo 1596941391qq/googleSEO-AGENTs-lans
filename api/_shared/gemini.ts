@@ -138,7 +138,7 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
         // 如果启用了 Google 搜索且要求 JSON 格式，清理响应中的搜索引用标记和 Markdown 格式
         if (config?.enableGoogleSearch && config?.responseMimeType === 'application/json') {
           content = cleanJSONFromSearchReferences(content);
-          
+
           // 移除可能的 Markdown 格式标记（当启用 Google 搜索时，AI 可能返回 Markdown）
           // 移除开头的 Markdown 格式（如 "**Refining...", "* text" 等）
           if (content && typeof content === 'string') {

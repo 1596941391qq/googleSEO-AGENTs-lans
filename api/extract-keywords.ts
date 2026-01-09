@@ -166,8 +166,7 @@ Please return only the JSON, nothing else.`;
             websiteSummary: { type: 'string' }
           },
           required: ['keywords']
-        },
-        enableGoogleSearch: true  // 启用联网搜索以获取最新关键词趋势
+        }
       });
 
       // Parse the response

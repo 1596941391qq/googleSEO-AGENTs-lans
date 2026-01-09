@@ -123,15 +123,14 @@ Return only JSON, nothing else.`;
           }
         },
         required: ['opportunities']
-      },
-      enableGoogleSearch: true  // 启用联网搜索以获取最新SEO趋势和排名机会
+      }
     });
-    
+
     // Extract JSON (with fallback for compatibility)
     let jsonText = aiResult.text.trim();
     jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
     const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
-    
+
     if (!jsonMatch) {
       throw new Error('Failed to parse AI response');
     }

@@ -104,21 +104,21 @@ export async function scrapeWebsite(url: string, includeScreenshot: boolean = fa
     console.log(`[Firecrawl] Successfully scraped ${markdown.length} characters of markdown${screenshot ? ' + screenshot' : ''}`);
 
     // If screenshot is a URL, convert it to Base64 to make it permanent
-    if (screenshot && typeof screenshot === 'string' && screenshot.startsWith('http')) {
+    if (screenshot && typeof screenshot === 'string' && screenshot.trim().toLowerCase().startsWith('http')) {
       try {
         console.log(`[Firecrawl] Converting screenshot URL to Base64: ${screenshot.substring(0, 50)}...`);
         const imgResponse = await fetch(screenshot);
-        if (imgResponse.ok) {
+        if (imgResponse && imgResponse.ok) {
           const buffer = await imgResponse.arrayBuffer();
           const base64 = Buffer.from(buffer).toString('base64');
           const contentType = imgResponse.headers.get('content-type') || 'image/png';
           screenshot = `data:${contentType};base64,${base64}`;
           console.log(`[Firecrawl] Successfully converted screenshot to Base64 (${screenshot.length} chars)`);
         } else {
-          console.warn(`[Firecrawl] Failed to fetch screenshot for Base64 conversion: ${imgResponse.status}`);
+          console.warn(`[Firecrawl] Failed to fetch screenshot for Base64 conversion: ${imgResponse?.status || 'no response'}`);
         }
       } catch (error: any) {
-        console.warn(`[Firecrawl] Error converting screenshot to Base64: ${error.message}`);
+        console.warn(`[Firecrawl] Error converting screenshot to Base64: ${error?.message || String(error)}`);
         // Keep the original URL as fallback
       }
     }

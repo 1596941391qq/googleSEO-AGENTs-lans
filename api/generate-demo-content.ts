@@ -331,9 +331,8 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
           },
           required: ['userQuestion', 'aiAnswer', 'comparisonTable']
         },
-        enableGoogleSearch: true  // 启用联网搜索以获取最新内容趋势
       });
-      
+
       // Extract JSON (with fallback for compatibility)
       let jsonText = chatGPTResult.text.trim();
       jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
@@ -373,9 +372,8 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
           },
           required: ['article']
         },
-        enableGoogleSearch: true  // 启用联网搜索以获取最新内容趋势
       });
-      
+
       // Extract JSON (with fallback for compatibility)
       let jsonText = articleResult.text.trim();
       jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();

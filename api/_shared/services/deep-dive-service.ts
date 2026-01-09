@@ -273,9 +273,7 @@ Return ONLY valid JSON without markdown formatting:
   "analysis": "detailed ranking probability explanation"
 }`;
 
-  const probabilityResponse = await callGeminiAPI(intentAndProbabilityPrompt, undefined, {
-    enableGoogleSearch: true  // 启用联网搜索以获取最新搜索意图和排名趋势
-  });
+  const probabilityResponse = await callGeminiAPI(intentAndProbabilityPrompt, undefined);
   let jsonText = probabilityResponse.text;
   const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
@@ -347,7 +345,7 @@ export async function generateImagesForDeepDive(
   let imagePrompts: ImagePromptResult[] = [];
   if (visualThemes.themes && visualThemes.themes.length > 0) {
     imagePrompts = await generateImagePrompts(
-      visualThemes.themes, 
+      visualThemes.themes,
       uiLanguage,
       keyword,
       title
@@ -708,7 +706,7 @@ export async function executeDeepDive(
     }
 
     console.log(`[Deep Dive Service] Completed successfully`);
-    
+
     // Add draftId and projectId to result if saved
     const finalResult: any = { ...result };
     if (savedDraft) {
@@ -723,7 +721,7 @@ export async function executeDeepDive(
         finalResult.projectId = project.id;
       }
     }
-    
+
     return finalResult as DeepDiveResult;
   } catch (error: any) {
     console.error(`[Deep Dive Service] Error:`, error);
