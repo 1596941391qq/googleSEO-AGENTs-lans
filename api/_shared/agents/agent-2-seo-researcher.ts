@@ -1019,11 +1019,15 @@ export const analyzeRankingProbability = async (
     const maxSerpResults = 5; // 只使用前5个结果
     const maxSerpSnippetLength = 150; // 限制snippet长度（用于SERP上下文）
     const serpContext = serpResults.length > 0
-      ? `\n\nTOP ${engineName} SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\nNote: These are the TOP ranking results provided to you for competition analysis, NOT all search results.\n\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
+      ? `\n\nTOP ${engineName} SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\n⚠️ CRITICAL: These are ONLY the TOP ${maxSerpResults} ranking results provided to you for competition analysis. This is a SAMPLE, NOT the total number of competing pages.\n\n⚠️ DO NOT infer total competition from this sample size. Google typically has thousands or millions of results for any keyword. Focus on QUALITY of competition (authority, relevance, optimization) rather than quantity.\n\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
         const snippet = r.snippet ? (r.snippet.length > maxSerpSnippetLength ? r.snippet.substring(0, maxSerpSnippetLength) + '...' : r.snippet) : '';
         const drInfo = competitorDRs[i] !== undefined ? ` (Domain Authority: ${competitorDRs[i]})` : '';
         return `${i + 1}. Title: ${r.title}\n   URL: ${r.url}${drInfo}\n   Snippet: ${snippet}`;
-      }).join('\n\n')}\n\nEstimated Total Results on ${engineName}: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: Use these top results to assess the QUALITY of competition you need to beat.${siteDR !== undefined ? `\n\nYOUR WEBSITE AUTHORITY: ${siteDR}. Compare this with competitors to judge if you can outrank them.` : ''}`
+      }).join('\n\n')}\n\nEstimated Total Results on ${engineName}: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: 
+- Use these top results to assess the QUALITY of competition you need to beat
+- Evaluate if results match the EXPECTED industry context (especially for brand keywords)
+- NEVER state "only X results exist" or "competition is extremely low with only X results" based on this sample
+- Focus on relevance, authority, and industry context match${siteDR !== undefined ? `\n\nYOUR WEBSITE AUTHORITY: ${siteDR}. Compare this with competitors to judge if you can outrank them.` : ''}`
       : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
 
     // Add DataForSEO data context if available (use dataForSEOData or serankingData for backward compatibility)
@@ -1088,19 +1092,40 @@ ${searchEngine === 'baidu' ? '- Baidu prioritizes Chinese-language content, mobi
 ${searchEngine === 'bing' ? '- Bing values exact match keywords, social signals, and multimedia content. It also features AI-driven Web Answers.' : ''}
 ${searchEngine === 'yandex' ? '- Yandex is dominant in Russian markets, emphasizing regional targeting (GEO), user behavior signals, and Yandex Zen integration.' : ''}
 
-**STEP 1: PREDICT SEARCH INTENT**
+**STEP 1: PREDICT SEARCH INTENT & INDUSTRY CONTEXT**
 First, predict what the user's search intent is when they type this keyword. Consider:
 - What problem are they trying to solve?
 - What information are they seeking?
 - Are they looking to buy, learn, compare, or find a specific resource?
 - What stage of the buyer's journey are they in?
 
+**CRITICAL: Intent Recognition & Industry Context**
+1. **Brand vs Generic Keyword Identification**:
+   - Is this a BRAND keyword (e.g., "nanobanana", "Apple iPhone") or a GENERIC keyword (e.g., "banana", "smartphone")?
+   - For brand keywords, identify the EXPECTED industry/business context (e.g., "nanobanana" = tech/product brand, NOT botanical)
+   - For generic keywords, consider broader interpretations but still prioritize commercial intent
+
+2. **Industry Context Matching**:
+   - Evaluate if SERP results match the EXPECTED industry context
+   - Brand keywords MUST match the brand's actual business context - reject irrelevant results (e.g., botanical content for tech brands)
+   - Low industry relevance = HIGH opportunity (strong blue ocean signal)
+   - Example: "nanobanana" showing banana plant content = industry mismatch = opportunity
+
+3. **Intent Classification**:
+   - **Informational**: User wants to learn (How-to, What is, Guide)
+   - **Transactional**: User wants to buy/purchase (Buy, Price, Best)
+   - **Commercial**: User wants to compare/evaluate (vs, alternative, review)
+   - **Local**: User wants location-specific results (near me, local)
+   - **Brand**: User is searching for a specific brand/product
+   - Ensure SERP results match the identified intent
+
 **STEP 2: ANALYZE SERP COMPETITION**
 Based on the REAL SERP results provided above (if available), analyze:
-1. How many competing pages exist for this keyword (use the actual count if provided, otherwise estimate)
+1. **CRITICAL: DO NOT infer total competition from sample size** - The SERP results provided are ONLY a sample (top 5-10) for analysis. Google typically has thousands or millions of results. NEVER state "only X results exist" or "competition is extremely low with only X results" based on the provided sample.
 2. What type of sites are ranking (Big Brand, Niche Site, Forum/Social, Weak Page, Gov/Edu) - analyze the actual URLs and domains
-3. **CRITICAL: Evaluate RELEVANCE of each result** - Does the page content match the keyword topic?
-4. The probability of ranking on page 1 (High, Medium, Low) - based on BOTH competition quality AND relevance
+3. **CRITICAL: Evaluate RELEVANCE of each result** - Does the page content match the keyword topic AND expected industry context?
+4. **CRITICAL: Evaluate INDUSTRY CONTEXT MATCH** - Do results match the expected industry/business context? (e.g., brand keywords should match brand's industry, not generic dictionary definitions)
+5. The probability of ranking on page 1 (High, Medium, Low) - based on BOTH competition quality AND relevance AND industry context match
 
 STRICT SCORING CRITERIA (Be conservative and strict):
 
@@ -1138,10 +1163,13 @@ STRICT SCORING CRITERIA (Be conservative and strict):
 
 IMPORTANT ANALYSIS RULES:
 - **Prioritize RELEVANCE over AUTHORITY** - A highly relevant blog beats an irrelevant Wikipedia page
-- If authoritative sites are present but OFF-TOPIC, treat it as a blue ocean opportunity
-- Analyze the actual quality and relevance of top results, not just domain names
+- **Prioritize INDUSTRY CONTEXT MATCH** - Ensure results match expected industry/business context (especially for brand keywords)
+- **NEVER infer total competition from sample size** - The provided SERP results are a sample, not total competition. Focus on quality, not quantity.
+- If authoritative sites are present but OFF-TOPIC or INDUSTRY-MISMATCHED, treat it as a blue ocean opportunity
+- Analyze the actual quality, relevance, and industry context match of top results, not just domain names
 - Use the REAL SERP results provided above for your analysis
 - **CRITICAL**: For non-English target languages (${targetLanguage}), DataForSEO "no data" is often due to limited database coverage, NOT a blue ocean signal. Do NOT treat it as positive. Always verify with SERP results first.
+- **CRITICAL**: Brand keywords require strict industry matching - reject results that don't match the brand's actual business context
 - Output all text fields (reasoning, searchIntent, intentAnalysis, topSerpSnippets titles/snippets) in ${uiLangName}
 - The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}
 - For topSerpSnippets, use the ACTUAL results from the SERP data above (first 3 results)
@@ -1579,15 +1607,23 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
   };
 
   const results: KeywordData[] = [];
-  const BATCH_SIZE = 2; // 降低批处理大小，减少并发压力，防止代理超时或 Socket 关闭
-  const BATCH_DELAY = 1000; // 增加批次间的延迟
+  // 优化批处理参数以提升效率：
+  // - BATCH_SIZE: 从 2 提升到 6，充分利用 Gemini API 并发能力
+  // - BATCH_DELAY: 从 1000ms 降低到 300ms，减少不必要的等待时间
+  // 预期性能提升：20个关键词从 159-309秒 降低到 60-120秒（约2-2.5倍提升）
+  const BATCH_SIZE = 6; // 提升批处理大小，充分利用 API 并发能力
+  const BATCH_DELAY = 300; // 减少批次间延迟，避免过度等待
   const startTime = Date.now();
-  const MAX_EXECUTION_TIME = 280000; // 调低至 280 秒，确保在前端 300 秒超时前返回
+  const MAX_EXECUTION_TIME = 280000; // 保持 280 秒超时限制，确保在前端 300 秒超时前返回
 
     for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
       const elapsed = Date.now() - startTime;
       if (elapsed > MAX_EXECUTION_TIME) {
-        // ...
+        console.warn(`[Agent 2] Timeout reached after ${elapsed}ms. Processed ${results.length}/${keywords.length} keywords.`);
+        onProgress?.(uiLanguage === 'zh'
+          ? `⏱️ 执行超时，已处理 ${results.length}/${keywords.length} 个关键词`
+          : `⏱️ Timeout reached. Processed ${results.length}/${keywords.length} keywords`);
+        break;
       }
 
       const batch = keywords.slice(i, i + BATCH_SIZE);
@@ -1598,6 +1634,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         ? `📦 正在处理第 ${currentBatchNum}/${totalBatches} 批关键词 (${batch.length}个)...`
         : `📦 Processing batch ${currentBatchNum}/${totalBatches} (${batch.length} keywords)...`);
 
+      // 并行处理批次内的所有关键词
       const batchResults = await Promise.allSettled(
         batch.map(k => analyzeSingleKeyword(k))
       );
@@ -1619,6 +1656,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
 
     results.push(...processedResults);
 
+    // 批次间短暂延迟，避免 API 限流（仅在还有更多批次时延迟）
     if (i + BATCH_SIZE < keywords.length) {
       await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
     }

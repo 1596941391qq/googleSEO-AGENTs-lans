@@ -1733,20 +1733,27 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
       );
 
       if (data.success && data.data) {
-        // Store scraped data in state (don't set website yet - only after full onboarding)
+        const urlDomain = new URL(processedUrl).hostname;
+        const urlBrand =
+          urlDomain.split(".")[0].charAt(0).toUpperCase() +
+          urlDomain.split(".")[0].slice(1);
+
+        // Store scraped data in state
         setState({
           websiteData: {
             rawContent: data.data.markdown,
-            extractedKeywords: [], // Will extract now
+            extractedKeywords: [], // Will extract in background
             rankingOpportunities: [], // Will analyze later
           },
-          onboardingStep: 1, // Stay on loading while extracting keywords
+          onboardingStep: 1, // Stay on loading while generating demo
         });
 
-        // Now extract keywords
+        // Step 2: Generate demo content FIRST (without waiting for keywords)
         try {
-          console.log("[Content Generation] Step 2: Extracting keywords...");
-          const extractResponse = await fetch("/api/extract-keywords", {
+          console.log(
+            "[Content Generation] Step 2: Generating demo content..."
+          );
+          const demoResponse = await fetch("/api/generate-demo-content", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1757,135 +1764,100 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             body: JSON.stringify({
               content: data.data.markdown,
               url: processedUrl,
-              targetLanguage: uiLanguage === "zh" ? "zh" : "en",
+              keywords: [], // Empty keywords for now, will update later
+              targetLanguage: uiLanguage,
               uiLanguage: uiLanguage,
+              websiteTitle: data.data.title || "",
             }),
           });
 
-          if (!extractResponse.ok) {
-            const errorData = await extractResponse.json();
-            console.error("[Content Generation] Extract failed:", errorData);
-            throw new Error(errorData.error || "Failed to extract keywords");
+          if (!demoResponse.ok) {
+            throw new Error("Failed to generate demo content");
           }
 
-          const extractData = await extractResponse.json();
-          console.log(
-            "[Content Generation] Extract success, keywords:",
-            extractData.data?.keywords?.length || 0
-          );
-
-          if (extractData.success && extractData.data) {
-            const urlDomain = new URL(processedUrl).hostname;
-            const urlBrand =
-              urlDomain.split(".")[0].charAt(0).toUpperCase() +
-              urlDomain.split(".")[0].slice(1);
-
-            setState({
-              websiteData: {
-                rawContent: data.data.markdown,
-                extractedKeywords: extractData.data.keywords || [],
-                rankingOpportunities: [],
-              },
+          const demoData = await demoResponse.json();
+          if (demoData.success && demoData.data) {
+            // Show demo content immediately
+            setState((prev) => ({
+              ...prev,
               demoContent: {
-                chatGPTDemo: null, // Initial null state
-                articleDemo: null,
-                domain: urlDomain,
-                brandName: urlBrand,
+                ...demoData.data,
                 screenshot: data.data.screenshot,
               },
-            });
+              onboardingStep: 2, // Move to step 2 to show demo content
+            }));
 
-            // Now generate demo content - WAIT for it to avoid hardcoded demo display
-            try {
-              console.log(
-                "[Content Generation] Step 3: Generating demo content..."
-              );
-              const demoResponse = await fetch("/api/generate-demo-content", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${
-                    localStorage.getItem("auth_token") || ""
-                  }`,
-                },
-                body: JSON.stringify({
-                  content: data.data.markdown,
-                  url: processedUrl,
-                  keywords: extractData.data.keywords || [],
-                  targetLanguage: uiLanguage,
-                  uiLanguage: uiLanguage,
-                  websiteTitle: data.data.title || "",
-                }),
-              });
-
-              if (!demoResponse.ok) {
-                throw new Error("Failed to generate demo content");
-              }
-
-              const demoData = await demoResponse.json();
-              if (demoData.success && demoData.data) {
-                setState((prev) => ({
-                  ...prev,
-                  demoContent: {
-                    ...demoData.data,
-                    screenshot: data.data.screenshot,
-                  },
-                  onboardingStep: 2, // Move to step 2 ONLY after demo content is ready
-                }));
-              } else {
-                throw new Error("Invalid demo content format");
-              }
-            } catch (demoError) {
-              console.error(
-                "[Content Generation] Demo generation failed:",
-                demoError
-              );
-              // Fallback to step 2 anyway so the user isn't stuck
-              setState((prev) => ({ ...prev, onboardingStep: 2 }));
-            }
-          } else {
-            throw new Error("Invalid extract response format");
-          }
-        } catch (extractError: any) {
-          console.error(
-            "[Content Generation] Error extracting keywords:",
-            extractError
-          );
-
-          // 处理网络错误
-          if (
-            extractError?.message?.includes("Failed to fetch") ||
-            extractError?.name === "TypeError"
-          ) {
-            console.warn(
-              "[Content Generation] Network error during keyword extraction"
+            // Step 3: Extract keywords in background (async, non-blocking)
+            console.log(
+              "[Content Generation] Step 3: Extracting keywords in background..."
             );
-          }
+            (async () => {
+              try {
+                const extractResponse = await fetch("/api/extract-keywords", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${
+                      localStorage.getItem("auth_token") || ""
+                    }`,
+                  },
+                  body: JSON.stringify({
+                    content: data.data.markdown,
+                    url: processedUrl,
+                    targetLanguage: uiLanguage === "zh" ? "zh" : "en",
+                    uiLanguage: uiLanguage,
+                  }),
+                });
 
-          // Still move to next step, just without keywords
-          console.log("[Content Generation] Moving to step 2 without keywords");
-          const urlDomain2 = new URL(processedUrl).hostname;
-          const urlBrand2 =
-            urlDomain2.split(".")[0].charAt(0).toUpperCase() +
-            urlDomain2.split(".")[0].slice(1);
-          setState({
+                if (extractResponse.ok) {
+                  const extractData = await extractResponse.json();
+                  if (extractData.success && extractData.data?.keywords) {
+                    console.log(
+                      "[Content Generation] Keywords extracted:",
+                      extractData.data.keywords.length
+                    );
+                    // Update state with keywords (non-blocking)
+                    setState((prev) => ({
+                      ...prev,
+                      websiteData: {
+                        ...prev.websiteData,
+                        extractedKeywords: extractData.data.keywords || [],
+                      },
+                    }));
+                  }
+                } else {
+                  console.warn(
+                    "[Content Generation] Keyword extraction failed, continuing without keywords"
+                  );
+                }
+              } catch (extractError: any) {
+                console.warn(
+                  "[Content Generation] Error extracting keywords (non-blocking):",
+                  extractError
+                );
+                // Don't block the UI, just log the error
+              }
+            })();
+          } else {
+            throw new Error("Invalid demo content format");
+          }
+        } catch (demoError) {
+          console.error(
+            "[Content Generation] Demo generation failed:",
+            demoError
+          );
+          // Fallback: show basic info even if demo generation fails
+          setState((prev) => ({
+            ...prev,
             demoContent: {
               chatGPTDemo: null,
               articleDemo: null,
-              domain: urlDomain2,
-              brandName: urlBrand2,
+              domain: urlDomain,
+              brandName: urlBrand,
               screenshot: data.data.screenshot,
             },
-            onboardingStep: 1, // Stay on loading step
-          });
-
-          // After a short delay, move to step 2 (GPT demo)
-          setTimeout(() => {
-            setState((prev) => ({
-              ...prev,
-              onboardingStep: 2, // Move to GPT demo
-            }));
-          }, 1000);
+            onboardingStep: 2,
+          }));
         }
       } else {
         throw new Error("No data returned from scrape");
