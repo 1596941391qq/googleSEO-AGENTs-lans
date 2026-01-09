@@ -47,7 +47,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let userId = body.userId;
-    if (!userId) userId = 1;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: userId is required' });
+    }
 
     // 初始化数据库表
     await initWebsiteDataTables();

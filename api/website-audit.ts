@@ -122,6 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       wordsPerRound = 10,
       miningStrategy = 'horizontal',
       additionalSuggestions,
+      searchEngine = 'google',
       skipCreditsCheck = false
     } = body;
 
@@ -174,6 +175,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         wordsPerRound,
         miningStrategy,
         additionalSuggestions,
+        searchEngine,
         onEvent: (event) => {
           sendEvent({ type: 'event', data: event });
         }

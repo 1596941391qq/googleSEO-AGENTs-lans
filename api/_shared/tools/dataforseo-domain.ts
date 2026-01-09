@@ -250,7 +250,21 @@ export async function getBatchDomainOverview(
   if (domains.length === 0) return domainMap;
 
   // 去重并清洗域名
-  const uniqueDomains = Array.from(new Set(domains.map(d => d.replace(/^https?:\/\//, '').split('/')[0])));
+  const uniqueDomains = Array.from(new Set(
+    domains
+      .filter(d => typeof d === 'string' && d.trim().length > 0)
+      .map(d => {
+        let cleaned = d.trim().toLowerCase();
+        // 移除协议
+        cleaned = cleaned.replace(/^(https?:)?\/\//, '');
+        // 移除路径和查询参数
+        cleaned = cleaned.split('/')[0].split('?')[0].split('#')[0];
+        // 移除可能的端口号
+        cleaned = cleaned.split(':')[0];
+        return cleaned;
+      })
+      .filter(d => d.length > 0 && d.includes('.')) // 确保是有效的域名格式
+  ));
   
   // DataForSEO API 通常限制一次 100 个任务
   const BATCH_SIZE = 50;
@@ -348,8 +362,16 @@ async function fetchWithRetry(
   retryDelay: number = 1000
 ): Promise<Response> {
   for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // 为每个尝试添加 60s 超时
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
 
       // 如果是 429 错误且还有重试次数，进行重试
       if (response.status === 429 && attempt < maxRetries - 1) {
@@ -362,6 +384,15 @@ async function fetchWithRetry(
       // 其他状态码或最后一次尝试，直接返回
       return response;
     } catch (error: any) {
+      clearTimeout(timeoutId);
+      
+      if (error.name === 'AbortError') {
+        console.warn(`[DataForSEO Domain] API timeout (60s) for ${url}. Attempt ${attempt + 1}/${maxRetries}`);
+        if (attempt < maxRetries - 1) {
+          continue;
+        }
+      }
+
       // 如果是最后一次尝试，抛出错误
       if (attempt === maxRetries - 1) {
         throw error;
@@ -610,20 +641,17 @@ export async function getDomainOverview(
 
       // 检查响应结构：tasks[0].result[0].items[]
       if (!data.tasks || !data.tasks[0]) {
-        console.warn('[DataForSEO Domain] No tasks in response');
-        console.warn('[DataForSEO Domain] Full response:', JSON.stringify(data, null, 2).substring(0, 2000));
+        console.log(`[DataForSEO Domain] No tasks found for ${cleanDomain}`);
         return null;
       }
 
       if (!data.tasks[0].result) {
-        console.warn('[DataForSEO Domain] No result in tasks[0]');
-        console.warn('[DataForSEO Domain] Tasks[0]:', JSON.stringify(data.tasks[0], null, 2).substring(0, 1000));
+        console.log(`[DataForSEO Domain] No result in tasks for ${cleanDomain}`);
         return null;
       }
 
       if (!data.tasks[0].result[0]) {
-        console.warn('[DataForSEO Domain] No result[0] in tasks[0].result');
-        console.warn('[DataForSEO Domain] Result array:', JSON.stringify(data.tasks[0].result, null, 2).substring(0, 1000));
+        console.log(`[DataForSEO Domain] No result item in tasks for ${cleanDomain}`);
         return null;
       }
 
@@ -632,18 +660,14 @@ export async function getDomainOverview(
       // 检查是否有 items 数组
       // items 可能为 null、undefined、空数组，或不是数组
       if (!resultData.items || !Array.isArray(resultData.items) || resultData.items.length === 0) {
-        console.warn(`[DataForSEO Domain] ⚠️ No items in response result for domain: ${cleanDomain}`);
-        console.warn(`[DataForSEO Domain] Items value:`, resultData.items);
-        console.warn(`[DataForSEO Domain] Items count:`, resultData.items_count);
-        console.warn(`[DataForSEO Domain] This usually means the domain is not in DataForSEO's Domain Analytics database.`);
-        console.warn(`[DataForSEO Domain] The domain may be too new, have no SEO data, or not be tracked by DataForSEO.`);
-        console.warn(`[DataForSEO Domain] Trying fallback to DataForSEO Labs Domain Metrics API...`);
+        console.log(`[DataForSEO Domain] ℹ️ Domain ${cleanDomain} not found in database. This is common for new or untracked sites.`);
         
         // 尝试使用 DataForSEO Labs Domain Metrics API 作为回退
         try {
+          console.log(`[DataForSEO Domain] 🔄 Trying Labs Domain Metrics API for ${cleanDomain}...`);
           return await getDomainOverviewFromLabs(cleanDomain, locationCode);
         } catch (labsError: any) {
-          console.error(`[DataForSEO Domain] Labs API fallback also failed:`, labsError.message);
+          // Fallback also failed, but don't log as error to avoid noise
           return null;
         }
       }

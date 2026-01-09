@@ -165,10 +165,15 @@ export async function generateKeywords(
   userSuggestion: string = '',
   uiLanguage: 'en' | 'zh' = 'en',
   industry?: string,
-  additionalSuggestions?: string
+  additionalSuggestions?: string,
+  onProgress?: (message: string) => void
 ): Promise<{ keywords: KeywordData[]; rawResponse: string; searchResults?: any }> {
   const targetLangName = getLanguageName(targetLanguage);
   const translationLang = uiLanguage === 'zh' ? 'Chinese' : 'English';
+
+  onProgress?.(uiLanguage === 'zh' 
+    ? `🧠 正在构思关键词挖掘策略 (${miningStrategy === 'horizontal' ? '横向' : '纵向'})...` 
+    : `🧠 Planning keyword mining strategy (${miningStrategy})...`);
 
   // Build strategy-specific guidance
   let strategyGuidance = '';
@@ -322,8 +327,17 @@ Return a JSON array with objects containing:
   }
 
   try {
+    onProgress?.(uiLanguage === 'zh' 
+      ? `🤖 正在调用 AI 进行关键词启发式挖掘...` 
+      : `🤖 Calling AI for heuristic keyword mining...`);
+
     const response = await callGeminiAPI(promptContext, systemInstruction, {
-      responseMimeType: "application/json"
+      responseMimeType: "application/json",
+      onRetry: (attempt, error, delay) => {
+        onProgress?.(uiLanguage === 'zh'
+          ? `⚠️ 关键词生成连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+          : `⚠️ Keyword generation connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+      }
     });
 
     let text = response.text || "[]";

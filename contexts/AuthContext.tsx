@@ -33,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const initAuth = async () => {
     const mainAppUrl = import.meta.env.VITE_MAIN_APP_URL || 'https://niche-mining-web.vercel.app';
+    const isDev = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_AUTO_LOGIN === 'true';
 
     try {
       // 1. 检查 URL 中是否有 Transfer Token (支持 tt 或 token 参数)
@@ -63,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           // 保存用户信息（转换为统一格式）
           const user = {
-            userId: data.user.id,
+            userId: data.user.userId || data.user.id,
             email: data.user.email,
             name: data.user.name,
             picture: data.user.picture,
@@ -80,7 +81,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // 2. 检查本地是否已有 JWT Token
+      // 2. 开发模式下的自动登录 (如果没有 token)
+      if (isDev && !localStorage.getItem('auth_token')) {
+        console.log('[AuthContext] Development mode: attempting auto-login...');
+        try {
+          const response = await fetch('/api/auth/verify-transfer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transferToken: 'dev-token' }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('[AuthContext] Dev auto-login successful:', data.user?.email);
+            localStorage.setItem('auth_token', data.token);
+            const devUser = {
+              userId: data.user.userId || data.user.id,
+              email: data.user.email,
+              name: data.user.name,
+              picture: data.user.picture,
+            };
+            localStorage.setItem('user', JSON.stringify(devUser));
+            setUser(devUser);
+            setLoading(false);
+            return;
+          }
+        } catch (devError) {
+          console.warn('[AuthContext] Dev auto-login failed:', devError);
+        }
+      }
+
+      // 3. 检查本地是否已有 JWT Token
       const storedToken = localStorage.getItem('auth_token');
       if (storedToken) {
         // 优先从 localStorage 加载用户信息

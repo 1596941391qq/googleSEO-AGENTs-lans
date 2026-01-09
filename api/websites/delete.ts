@@ -12,10 +12,10 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initUserWebsitesTable, initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 interface DeleteWebsiteRequestBody {
   websiteId: string;
-  userId: number;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -34,16 +34,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId;
+
     const body = req.body as DeleteWebsiteRequestBody;
 
     if (!body.websiteId) {
       return res.status(400).json({ error: 'websiteId is required' });
     }
-
-    // 获取 user_id
-    let userId = body.userId;
-    // TODO: 从 session 获取
-    if (!userId) userId = 1;
 
     // 初始化数据库表
     await initWebsiteDataTables();
@@ -57,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `;
 
     if (websiteCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'Website not found' });
+      return res.status(404).json({ error: 'Website not found or access denied' });
     }
 
     const wasDefault = websiteCheck.rows[0].is_default;

@@ -178,6 +178,9 @@ async function fetchBatchWithRetry(
         }
       ];
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
@@ -185,7 +188,9 @@ async function fetchBatchWithRetry(
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
 
       // 处理速率限制错误 (429)
       if (response.status === 429) {
@@ -246,7 +251,15 @@ async function fetchBatchWithRetry(
 
       return results;
     } catch (error: any) {
+      clearTimeout(timeoutId);
       lastError = error;
+
+      if (error.name === 'AbortError') {
+        console.warn(`[DataForSEO] API timeout (60s) for batch. Retry ${attempt}/${maxRetries}`);
+        if (attempt < maxRetries) {
+          continue;
+        }
+      }
 
       // 如果是速率限制错误且还有重试机会，继续重试
       if (error.message?.includes('429') || error.message?.includes('rate limit')) {
@@ -301,6 +314,9 @@ export async function fetchKeywordDifficulty(
       }
     ];
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -308,7 +324,9 @@ export async function fetchKeywordDifficulty(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();

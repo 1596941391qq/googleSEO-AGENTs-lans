@@ -20,6 +20,7 @@ import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
+import { fetchWithAuth, postWithAuth } from "../lib/api-client";
 
 export interface Website {
   id: string;
@@ -69,7 +70,7 @@ interface WebsiteManagerProps {
 }
 
 export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
-  userId = 1,
+  userId,
   isDarkTheme,
   uiLanguage,
   onWebsiteSelect,
@@ -95,7 +96,9 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
     setError(null);
 
     try {
-      const response = await fetch(`/api/websites/list?user_id=${userId}`);
+      const response = await fetchWithAuth(
+        `/api/websites/list?user_id=${userId}`
+      );
 
       if (response.ok) {
         const result = await response.json();
@@ -124,13 +127,9 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
     setSettingDefaultId(websiteId);
 
     try {
-      const response = await fetch("/api/websites/set-default", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          userId,
-        }),
+      const response = await postWithAuth("/api/websites/set-default", {
+        websiteId,
+        userId,
       });
 
       if (response.ok) {
@@ -162,9 +161,11 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
     setDeletingWebsiteId(websiteId);
 
     try {
-      const response = await fetch("/api/websites/delete", {
+      const response = await fetchWithAuth("/api/websites/delete", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           websiteId,
           userId,
@@ -220,10 +221,8 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
 
     try {
       // Step 1: Scrape website
-      const scrapeResponse = await fetch("/api/scrape-website", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: processedUrl }),
+      const scrapeResponse = await postWithAuth("/api/scrape-website", {
+        url: processedUrl,
       });
 
       if (!scrapeResponse.ok) {
@@ -236,17 +235,13 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
       }
 
       // Step 2: Save website
-      const saveResponse = await fetch("/api/website-data/save", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          websiteUrl: processedUrl,
-          websiteTitle: scrapeData.data.title || null,
-          websiteDescription: scrapeData.data.description || null,
-          websiteScreenshot: scrapeData.data.screenshot || null,
-          rawContent: scrapeData.data.content || null,
-        }),
+      const saveResponse = await postWithAuth("/api/website-data/save", {
+        userId,
+        websiteUrl: processedUrl,
+        websiteTitle: scrapeData.data.title || null,
+        websiteDescription: scrapeData.data.description || null,
+        websiteScreenshot: scrapeData.data.screenshot || null,
+        rawContent: scrapeData.data.content || null,
       });
 
       if (!saveResponse.ok) {
@@ -259,13 +254,9 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
       }
 
       // Step 3: Trigger metrics update in background (don't await)
-      fetch("/api/website-data/update-metrics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId: saveData.data.websiteId,
-          userId,
-        }),
+      postWithAuth("/api/website-data/update-metrics", {
+        websiteId: saveData.data.websiteId,
+        userId,
       }).catch((err) =>
         console.warn("[WebsiteManager] Failed to trigger initial metrics:", err)
       );
@@ -431,7 +422,7 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
           <div className="flex items-center gap-3">
             <h1
               className={cn(
-                "text-4xl font-black tracking-tighter italic uppercase",
+                "text-4xl lg:text-5xl font-black tracking-tighter italic uppercase",
                 isDarkTheme ? "text-white" : "text-gray-900"
               )}
             >
@@ -443,7 +434,7 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
           </div>
           <p
             className={cn(
-              "text-sm font-medium opacity-60",
+              "text-sm lg:text-base font-medium opacity-60",
               isDarkTheme ? "text-zinc-400" : "text-gray-600"
             )}
           >
@@ -639,10 +630,10 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
 
         {/* Top 10 Rankings Overlay */}
         <div className="absolute top-4 right-4 z-20 flex flex-col items-center justify-center min-w-[56px] h-14 px-2 rounded-xl bg-black/40 backdrop-blur-md border border-white/10">
-          <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter">
+          <span className="text-[8px] lg:text-[10px] font-black text-emerald-500 uppercase tracking-tighter">
             TOP 10
           </span>
-          <span className="text-xl font-black text-white leading-none">
+          <span className="text-xl lg:text-2xl font-black text-white leading-none">
             {formatNumber(top10Count)}
           </span>
         </div>
@@ -652,7 +643,7 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
           {statusBadges.map((badge, idx) => (
             <div
               key={idx}
-              className="px-2 py-1 rounded-md bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-[9px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1"
+              className="px-2 py-1 rounded-md bg-emerald-500/10 backdrop-blur-md border border-emerald-500/20 text-[9px] lg:text-[11px] font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1"
             >
               <Zap size={8} />
               {badge}
@@ -666,17 +657,17 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
         <div className="space-y-1">
           <h3
             className={cn(
-              "text-xl font-black tracking-tight truncate",
+              "text-xl lg:text-2xl font-black tracking-tight truncate",
               isDarkTheme ? "text-white" : "text-gray-900"
             )}
           >
             {website.title || website.domain}
           </h3>
           <div className="flex items-center gap-1 opacity-40 hover:opacity-100 transition-opacity">
-            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500">
+            <span className="text-[10px] lg:text-xs font-black uppercase tracking-widest text-emerald-500">
               HTTPS://
             </span>
-            <span className="text-[10px] font-black uppercase tracking-widest truncate max-w-[150px]">
+            <span className="text-[10px] lg:text-xs font-black uppercase tracking-widest truncate max-w-[150px]">
               {website.domain}
             </span>
             <ExternalLink size={10} className="text-zinc-500" />
@@ -701,16 +692,18 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
         {/* Stats Grid */}
         <div className="grid grid-cols-2 gap-4">
           <div className="p-4 rounded-2xl bg-zinc-900/50 border border-white/5 space-y-1">
-            <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block">
+            <span className="text-[8px] lg:text-[10px] font-black text-zinc-500 uppercase tracking-widest block">
               EST. TRAFFIC
             </span>
-            <span className="text-lg font-black text-white">{estTraffic}</span>
+            <span className="text-lg lg:text-xl font-black text-white">
+              {estTraffic}
+            </span>
           </div>
           <div className="p-4 rounded-2xl bg-zinc-900/50 border border-white/5 space-y-1">
-            <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block">
+            <span className="text-[8px] lg:text-[10px] font-black text-zinc-500 uppercase tracking-widest block">
               KEYWORDS
             </span>
-            <span className="text-lg font-black text-white">
+            <span className="text-lg lg:text-xl font-black text-white">
               {keywordsCount.toLocaleString()}
             </span>
           </div>
@@ -721,7 +714,7 @@ const WebsiteCard: React.FC<WebsiteCardProps> = ({
           <Button
             onClick={() => (onBind ? onBind() : onSelect())}
             className={cn(
-              "flex-1 h-12 rounded-xl font-black text-xs uppercase tracking-widest transition-all",
+              "flex-1 h-12 rounded-xl font-black text-xs lg:text-sm uppercase tracking-widest transition-all",
               isCurrent
                 ? "bg-emerald-500 text-white hover:bg-emerald-600"
                 : "bg-white text-black hover:bg-zinc-200"

@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (isDevelopment) {
       // 生成 JWT 给假用户
       const fakeUser = {
-        userId: 'dev-user-123',
+        userId: '12345',
         email: 'dev@example.com',
         name: 'Development User',
         picture: 'https://via.placeholder.com/150'

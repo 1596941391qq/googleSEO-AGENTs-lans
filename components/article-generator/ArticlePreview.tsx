@@ -17,6 +17,8 @@ import { MarkdownContent } from "../ui/MarkdownContent";
 import { ImageRevealAnimation } from "./ImageRevealAnimation";
 import { ImageLightbox } from "./ImageLightbox";
 import { QualityScoreCard } from "./QualityScoreCard";
+import { useAuth } from "../../contexts/AuthContext";
+import { getUserId } from "../website-data/utils";
 // We'll use a markdown library or just simple HTML rendering
 // For simplicity, we assume 'content' is marked up HTML string for now
 // In a real app, use react-markdown
@@ -51,6 +53,8 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
   uiLanguage = "en",
   isDarkTheme = true,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [isQualityReviewExpanded, setIsQualityReviewExpanded] = useState(false);
@@ -80,15 +84,13 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const userId = 1; // TODO: Get from session/auth
-
       const response = await fetch("/api/articles/save", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userId,
+          userId: currentUserId,
           title: finalArticle.title,
           content: finalArticle.content,
           images: finalArticle.images || [],

@@ -3,6 +3,8 @@ import { MapPin, TrendingUp, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../contexts/AuthContext';
+import { getUserId } from '../website-data/utils';
 
 interface GeoRanking {
   id: string;
@@ -54,6 +56,8 @@ export const GeoRankingsView: React.FC<GeoRankingsViewProps> = ({
   isDarkTheme,
   uiLanguage,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [data, setData] = useState<GeoRankingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +80,7 @@ export const GeoRankingsView: React.FC<GeoRankingsViewProps> = ({
           websiteId,
           keywordId,
           countryCode: selectedCountry,
-          userId: 1,
+          userId: currentUserId,
         }),
       });
 

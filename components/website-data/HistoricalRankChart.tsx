@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
+import { useAuth } from "../../contexts/AuthContext";
+import { getUserId } from "./utils";
 
 interface HistoricalRankOverview {
   date: string;
@@ -30,6 +32,8 @@ export const HistoricalRankChart: React.FC<HistoricalRankChartProps> = ({
   uiLanguage,
   days = 30,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [history, setHistory] = useState<HistoricalRankOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +55,7 @@ export const HistoricalRankChart: React.FC<HistoricalRankChartProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           websiteId,
-          userId: 1,
+          userId: currentUserId,
           days: selectedDays,
         }),
       });

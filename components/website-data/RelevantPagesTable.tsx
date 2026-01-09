@@ -27,6 +27,7 @@ interface RelevantPagesTableProps {
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
   limit?: number;
+  region?: string;
 }
 
 export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
@@ -35,6 +36,7 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
   isDarkTheme,
   uiLanguage,
   limit = 20,
+  region = "us",
 }) => {
   const { user } = useAuth();
   const [pages, setPages] = useState<RelevantPage[]>([]);
@@ -42,7 +44,7 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   // localStorage 缓存
-  const getCacheKey = () => `relevant_pages_${websiteId}`;
+  const getCacheKey = () => `relevant_pages_${websiteId}_${region}`;
   const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时
 
   const getCachedData = (): RelevantPage[] | null => {
@@ -96,6 +98,7 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
           websiteId,
           userId: getUserId(user),
           limit,
+          region,
         }),
       });
 

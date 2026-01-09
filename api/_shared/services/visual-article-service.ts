@@ -51,11 +51,28 @@ export interface VisualArticleOptions {
       title?: string;
     };
   };
+  promotedWebsites?: string[];
+  promotionIntensity?: "natural" | "strong";
   onEvent: (event: AgentStreamEvent) => void;
 }
 
 export async function generateVisualArticle(options: VisualArticleOptions) {
-  const { keyword, tone, visualStyle, targetAudience, targetMarket, uiLanguage, targetLanguage, userId, projectId, projectName, reference, onEvent } = options;
+  const { 
+    keyword, 
+    tone, 
+    visualStyle, 
+    targetAudience, 
+    targetMarket, 
+    uiLanguage, 
+    targetLanguage, 
+    userId, 
+    projectId, 
+    projectName, 
+    reference, 
+    promotedWebsites,
+    promotionIntensity,
+    onEvent 
+  } = options;
 
   const emit = (agentId: AgentStreamEvent['agentId'], type: AgentStreamEvent['type'], message?: string, cardType?: AgentStreamEvent['cardType'], data?: any) => {
     onEvent({
@@ -111,7 +128,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         if (searchResults && searchResults.length > 0) {
           emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
         }
-      });
+      }, (msg) => emit('researcher', 'log', msg));
     } catch (searchPrefsError: any) {
       console.error('[VisualArticle] Failed to analyze search preferences:', searchPrefsError);
       searchPrefs = undefined;
@@ -130,12 +147,12 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
 
     let competitorAnalysis;
     try {
-      competitorAnalysis = await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, (searchResults) => {
+      competitorAnalysis = await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, 'google', (searchResults) => {
         // Emit Google search results if available
         if (searchResults && searchResults.length > 0) {
           emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
         }
-      });
+      }, (msg) => emit('researcher', 'log', msg));
     } catch (competitorError: any) {
       console.error('[VisualArticle] Failed to analyze competitors:', competitorError);
       competitorAnalysis = undefined;
@@ -206,7 +223,8 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         searchPrefs,
         competitorAnalysis,
         targetMarket,
-        reference
+        reference,
+        (msg) => emit('strategist', 'log', msg)
       );
     } catch (strategyError: any) {
       console.error('[VisualArticle] Failed to generate strategy report:', strategyError);
@@ -247,7 +265,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       .join("\n");
     const contentForThemes = pageTitle + (structureText ? "\n" + structureText : "");
 
-    const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage);
+    const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage, (msg) => emit('artist', 'log', msg));
 
     let generatedImages: any[] = [];
     if (visualThemes.themes && visualThemes.themes.length > 0) {
@@ -367,12 +385,15 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         targetMarket,
         targetLanguage,
         reference,
+        promotedWebsites,
+        promotionIntensity,
         (searchResults) => {
           // Emit Google search results if available
           if (searchResults && searchResults.length > 0) {
             emit('writer', 'card', undefined, 'google-search-results', { results: searchResults });
           }
-        }
+        },
+        (msg) => emit('writer', 'log', msg)
       );
     } catch (contentError: any) {
       console.error('[VisualArticle] Failed to generate content:', contentError);

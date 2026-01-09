@@ -28,6 +28,10 @@ export interface KeywordMiningOptions {
   additionalSuggestions?: string;
   analyzeRanking?: boolean;
   analyzePrompt?: string;
+  websiteUrl?: string;
+  websiteDR?: number;
+  searchEngine?: 'google' | 'baidu' | 'bing' | 'yandex';
+  onProgress?: (message: string) => void;
 }
 
 /**
@@ -61,7 +65,8 @@ export async function generateKeywordsForMining(
   userSuggestion: string = '',
   uiLanguage: 'zh' | 'en' = 'en',
   industry?: string,
-  additionalSuggestions?: string
+  additionalSuggestions?: string,
+  onProgress?: (message: string) => void
 ): Promise<{ keywords: KeywordData[]; rawResponse: string }> {
   return await generateKeywords(
     seedKeyword,
@@ -74,7 +79,8 @@ export async function generateKeywordsForMining(
     userSuggestion,
     uiLanguage,
     industry,
-    additionalSuggestions
+    additionalSuggestions,
+    onProgress
   );
 }
 
@@ -83,10 +89,14 @@ export async function generateKeywordsForMining(
  * 可单独测试
  */
 export async function enrichKeywordsWithDataForSEOForMining(
-  keywords: KeywordData[]
+  keywords: KeywordData[],
+  onProgress?: (message: string) => void,
+  uiLanguage: 'zh' | 'en' = 'en'
 ): Promise<KeywordData[]> {
   try {
     const keywordStrings = keywords.map(k => k.keyword);
+    onProgress?.(uiLanguage === 'zh' ? `📊 正在从 DataForSEO 获取 ${keywords.length} 个关键词的搜索量和难度数据...` : `📊 Fetching volume and difficulty for ${keywords.length} keywords from DataForSEO...`);
+    
     const dataForSEOResults = await fetchKeywordData(keywordStrings, 2840, 'en');
 
     // 创建 DataForSEO 数据映射
@@ -124,13 +134,21 @@ export async function analyzeKeywordsRanking(
   keywords: KeywordData[],
   analyzePrompt: string,
   uiLanguage: 'zh' | 'en',
-  targetLanguage: TargetLanguage
+  targetLanguage: TargetLanguage,
+  websiteUrl?: string,
+  websiteDR?: number,
+  searchEngine: 'google' | 'baidu' | 'bing' | 'yandex' = 'google',
+  onProgress?: (message: string) => void
 ): Promise<KeywordData[]> {
   return await analyzeRankingProbability(
     keywords,
     analyzePrompt,
     uiLanguage,
-    targetLanguage
+    targetLanguage,
+    websiteUrl,
+    websiteDR,
+    searchEngine,
+    onProgress
   );
 }
 
@@ -160,14 +178,18 @@ export async function executeKeywordMining(
     industry,
     additionalSuggestions,
     analyzeRanking = true,
-    analyzePrompt
+    analyzePrompt,
+    websiteUrl,
+    websiteDR,
+    searchEngine = 'google',
+    onProgress
   } = options;
 
   try {
     console.log(`[Keyword Mining Service] Starting keyword mining for: "${seedKeyword}" (${targetLanguage})`);
 
     // Step 1: 调用 Agent 1 生成关键词
-    console.log(`[Keyword Mining Service] Step 1: Generating keywords using Agent 1...`);
+    onProgress?.(uiLanguage === 'zh' ? `🚀 步骤 1: 正在生成关键词...` : `🚀 Step 1: Generating keywords...`);
     const { keywords: generatedKeywords, rawResponse } = await generateKeywordsForMining(
       seedKeyword,
       targetLanguage,
@@ -179,15 +201,16 @@ export async function executeKeywordMining(
       userSuggestion,
       uiLanguage,
       industry,
-      additionalSuggestions
+      additionalSuggestions,
+      onProgress
     );
 
     console.log(`[Keyword Mining Service] Generated ${generatedKeywords.length} keywords`);
 
     // Step 2: 调用 DataForSEO 工具获取数据
-    console.log(`[Keyword Mining Service] Step 2: Fetching DataForSEO data...`);
-    const keywordsWithDataForSEO = await enrichKeywordsWithDataForSEOForMining(generatedKeywords);
-    console.log(`[Keyword Mining Service] Fetched DataForSEO data for ${keywordsWithDataForSEO.length} keywords`);
+    onProgress?.(uiLanguage === 'zh' ? `📊 步骤 2: 获取基础 SEO 数据...` : `📊 Step 2: Fetching base SEO data...`);
+    const keywordsWithDataForSEO = await enrichKeywordsWithDataForSEOForMining(generatedKeywords, onProgress, uiLanguage);
+    onProgress?.(uiLanguage === 'zh' ? `✅ 基础数据获取完成` : `✅ Base data fetched`);
 
     // Step 3: 使用快速排名分析工具做快速筛选（如果启用）
     let finalKeywords = keywordsWithDataForSEO;
@@ -199,7 +222,10 @@ export async function executeKeywordMining(
           keywordsWithDataForSEO,
           analysisPromptToUse,
           uiLanguage,
-          targetLanguage
+          targetLanguage,
+          websiteUrl,
+          websiteDR,
+          searchEngine
         );
         console.log(`[Keyword Mining Service] Completed ranking analysis for ${finalKeywords.length} keywords`);
       } catch (analysisError: any) {

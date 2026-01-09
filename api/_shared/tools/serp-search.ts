@@ -116,15 +116,21 @@ function parseSerpResponse(data: any): {
 /**
  * ThorData SERP API调用
  */
-async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): Promise<SerpData> {
+async function fetchThorDataSerp(query: string, targetLanguage: string = 'en', engine: string = 'google'): Promise<SerpData> {
   const formData = new URLSearchParams();
-  formData.append('engine', 'google');
+  formData.append('engine', engine);
   formData.append('q', query);
   formData.append('json', '1');
 
-  // // 添加本地化参数
-  // const countryCode = LANGUAGE_TO_COUNTRY_CODE[targetLanguage] || 'US';
-  // formData.append('gl', countryCode);
+  // 添加本地化参数
+  const countryCode = LANGUAGE_TO_COUNTRY_CODE[targetLanguage] || 'us';
+  if (engine === 'google') {
+    formData.append('gl', countryCode);
+  }
+
+  // 添加超时控制 (60秒)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
 
   try {
     const response = await fetch(THORDATA_API_URL, {
@@ -134,7 +140,9 @@ async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): 
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -172,6 +180,11 @@ async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): 
       })),
     };
   } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.error(`ThorData API 请求超时 (60s): ${query}`);
+      throw new Error(`ThorData API 请求超时 (60s)`);
+    }
     console.error('调用 ThorData API 失败:', error);
     throw error;
   }
@@ -182,16 +195,18 @@ async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): 
  * 
  * @param keyword - 关键词
  * @param language - 语言，默认 'en'
+ * @param engine - 搜索引擎，默认 'google'
  * @param location - 搜索地区，默认 'us'（暂未使用）
  * @returns SERP数据
  */
 export async function fetchSerpResults(
   keyword: string,
   language: string = 'en',
+  engine: string = 'google',
   location: string = 'us'
 ): Promise<SerpData> {
   try {
-    return await fetchThorDataSerp(keyword, language);
+    return await fetchThorDataSerp(keyword, language, engine);
   } catch (error: any) {
     console.error(`Failed to fetch SERP from ThorData:`, error);
     return {

@@ -46,203 +46,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('[Extract Keywords] Final target language:', finalTargetLanguage);
 
     // Step 1: Try to get keywords from DataForSEO Domain API (most accurate)
+    // 注意：演示过程中默认不再进行同步的大规模关键词提取
+    // 详细数据会在后台由 update-metrics 异步更新并存入缓存
     let dataForSEOKeywords: any[] = [];
+    
     try {
       const domain = url.replace(/^https?:\/\//, '').split('/')[0];
-
-      // 将语言代码转换为 DataForSEO 的 location_code
       const { getDataForSEOLocationAndLanguage } = await import('./_shared/tools/dataforseo.js');
       const { locationCode } = getDataForSEOLocationAndLanguage(finalTargetLanguage);
 
-      console.log('[Extract Keywords] Fetching keywords from DataForSEO Domain API...');
-      const domainKeywords = await getDomainKeywords(domain, locationCode, 50); // Get top 50 keywords
+      console.log(`[Extract Keywords] Checking DataForSEO cache for ${domain}...`);
+      // 这里可以尝试获取已有的关键词（如果缓存中已经有了）
+      const domainKeywords = await getDomainKeywords(domain, locationCode, 20); 
 
       if (domainKeywords && domainKeywords.length > 0) {
         dataForSEOKeywords = domainKeywords.map(kw => ({
           keyword: kw.keyword,
-          translation: finalTargetLanguage === 'zh' ? kw.keyword : kw.keyword, // Can be enhanced with translation
-          intent: 'Informational', // Default, can be analyzed later
           estimatedVolume: kw.searchVolume || 0,
-          currentPosition: kw.currentPosition,
-          difficulty: kw.difficulty || 0,
-          cpc: kw.cpc || 0,
-          competition: kw.competition || 0,
-          source: 'dataforseo' // Mark as from DataForSEO
+          source: 'dataforseo'
         }));
-        console.log(`[Extract Keywords] Got ${dataForSEOKeywords.length} keywords from DataForSEO`);
+        console.log(`[Extract Keywords] Found ${dataForSEOKeywords.length} keywords in cache/API`);
       }
-    } catch (dataForSEOError: any) {
-      console.warn('[Extract Keywords] DataForSEO API failed:', dataForSEOError.message);
-      // Continue with AI extraction as fallback
+    } catch (e: any) {
+      console.log('[Extract Keywords] No pre-existing keywords found');
     }
 
-    // Step 2: If we have DataForSEO keywords, use them as primary source
-    // Otherwise, or in addition, use AI to extract keywords from content
-    let aiKeywords: any[] = [];
+    // Step 2: AI extraction (REMOVED per user request to speed up onboarding)
+    const aiKeywords: any[] = [];
+    
+    // Step 3: Combine keywords
+    const finalKeywords = dataForSEOKeywords.slice(0, 20);
 
-    // Only use AI extraction if:
-    // 1. We have no DataForSEO keywords, OR
-    // 2. We want to supplement with content-based keywords
-    if (dataForSEOKeywords.length === 0) {
-      console.log('[Extract Keywords] Using AI to extract keywords from content...');
-
-      // Prepare prompt for keyword extraction
-      const prompt = finalTargetLanguage === 'zh'
-        ? `你是一个SEO关键词提取专家。请分析以下网站内容，提取出最重要的关键词。
-
-网站URL: ${url}
-
-网站内容:
-${content.substring(0, 15000)}
-
-请提供以下信息（以JSON格式回复）:
-1. 提取10-20个最重要的关键词（既包含长尾关键词也包含短关键词）
-2. 每个关键词应该：
-   - 是潜在的SEO目标关键词
-   - 与网站内容高度相关
-   - 有搜索价值
-
-JSON格式:
-{
-  "keywords": [
-    {
-      "keyword": "关键词（目标语言）",
-      "translation": "关键词含义（中文解释）",
-      "intent": "Informational | Transactional | Commercial | Local",
-      "estimatedVolume": "估计搜索量（数字）"
-    }
-  ],
-  "websiteSummary": "网站内容简短总结（2-3句话）"
-}
-
-请只返回JSON，不要其他内容。`
-        : `You are an SEO keyword extraction expert. Please analyze the following website content and extract the most important keywords.
-
-Website URL: ${url}
-
-Website Content:
-${content.substring(0, 15000)}
-
-Please provide the following information (in JSON format):
-1. Extract 10-20 of the most important keywords (include both long-tail and short keywords)
-2. Each keyword should:
-   - Be a potential SEO target keyword
-   - Be highly relevant to the website content
-   - Have search value
-
-JSON format:
-{
-  "keywords": [
-    {
-      "keyword": "keyword (in target language)",
-      "translation": "keyword meaning (explanation)",
-      "intent": "Informational | Transactional | Commercial | Local",
-      "estimatedVolume": "estimated search volume (number)"
-    }
-  ],
-  "websiteSummary": "brief summary of website content (2-3 sentences)"
-}
-
-Please return only the JSON, nothing else.`;
-
-      // Call Gemini API
-      const result = await callGeminiAPI(prompt, 'extract-keywords', {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          properties: {
-            keywords: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  keyword: { type: 'string' },
-                  intent: { type: 'string' },
-                  estimatedVolume: { type: 'number' }
-                },
-                required: ['keyword']
-              }
-            },
-            websiteSummary: { type: 'string' }
-          },
-          required: ['keywords']
-        }
-      });
-
-      // Parse the response
-      try {
-        // Try to extract JSON from markdown code blocks (fallback)
-        let jsonStr = result.text;
-        jsonStr = jsonStr.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-
-        // Try to find JSON object
-        const objectMatch = jsonStr.match(/\{[\s\S]*\}/);
-        if (objectMatch) {
-          jsonStr = objectMatch[0];
-        }
-
-        const parsedData = JSON.parse(jsonStr);
-
-        // Validate parsed data
-        if (parsedData.keywords && Array.isArray(parsedData.keywords)) {
-          aiKeywords = parsedData.keywords.map((kw: any) => ({
-            ...kw,
-            source: 'ai' // Mark as from AI
-          }));
-          console.log(`[Extract Keywords] Got ${aiKeywords.length} keywords from AI`);
-        }
-      } catch (error) {
-        console.error('[Extract Keywords] Failed to parse AI response:', error);
-        console.error('[Extract Keywords] Response was:', result.text?.substring(0, 500) || 'No text content');
-      }
-    }
-
-    // Step 3: Combine keywords (prioritize DataForSEO, supplement with AI)
-    // Remove duplicates and merge data
-    const keywordMap = new Map<string, any>();
-
-    // First add DataForSEO keywords (higher priority)
-    dataForSEOKeywords.forEach(kw => {
-      keywordMap.set(kw.keyword.toLowerCase(), kw);
-    });
-
-    // Then add AI keywords (fill gaps)
-    aiKeywords.forEach(kw => {
-      const key = kw.keyword.toLowerCase();
-      if (!keywordMap.has(key)) {
-        keywordMap.set(key, kw);
-      } else {
-        // Merge: keep DataForSEO data but add AI insights if available
-        const existing = keywordMap.get(key);
-        keywordMap.set(key, {
-          ...existing,
-          translation: existing.translation || kw.translation,
-          intent: existing.intent || kw.intent,
-        });
-      }
-    });
-
-    const combinedKeywords = Array.from(keywordMap.values());
-
-    // Sort by volume/importance (DataForSEO keywords first, then by volume)
-    combinedKeywords.sort((a, b) => {
-      if (a.source === 'dataforseo' && b.source !== 'dataforseo') return -1;
-      if (a.source !== 'dataforseo' && b.source === 'dataforseo') return 1;
-      return (b.estimatedVolume || b.searchVolume || 0) - (a.estimatedVolume || a.searchVolume || 0);
-    });
-
-    // Limit to top 20 keywords
-    const finalKeywords = combinedKeywords.slice(0, 20);
-
-    console.log(`[Extract Keywords] Final result: ${finalKeywords.length} keywords (${dataForSEOKeywords.length} from DataForSEO, ${aiKeywords.length} from AI)`);
+    console.log(`[Extract Keywords] Final result: ${finalKeywords.length} keywords`);
 
     // Return success response
     return res.json({
       success: true,
       data: {
         keywords: finalKeywords,
-        websiteSummary: `Extracted ${finalKeywords.length} keywords from ${dataForSEOKeywords.length > 0 ? 'DataForSEO API and ' : ''}content analysis`,
-        source: dataForSEOKeywords.length > 0 ? 'dataforseo+ai' : 'ai',
+        websiteSummary: `Found ${finalKeywords.length} keywords`,
+        source: finalKeywords.length > 0 ? 'dataforseo' : 'none',
         detectedLanguage: finalTargetLanguage,
       },
     });

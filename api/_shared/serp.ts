@@ -44,6 +44,9 @@ async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): 
   // const countryCode = LANGUAGE_TO_COUNTRY_CODE[targetLanguage] || 'US';
   // formData.append('gl', countryCode);
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 60000);
+
   try {
     const response = await fetch(THORDATA_API_URL, {
       method: 'POST',
@@ -52,7 +55,9 @@ async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): 
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: formData,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -88,6 +93,11 @@ async function fetchThorDataSerp(query: string, targetLanguage: string = 'en'): 
       })),
     };
   } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.error(`ThorData API 请求超时 (60s): ${query}`);
+      throw new Error(`ThorData API 请求超时 (60s)`);
+    }
     console.error('调用 ThorData API 失败:', error);
     throw error;
   }

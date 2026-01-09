@@ -78,7 +78,10 @@ export async function generateContent(
       title?: string;
     };
   },
-  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void
+  promotedWebsites?: string[],
+  promotionIntensity?: "natural" | "strong",
+  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
+  onProgress?: (message: string) => void
 ): Promise<ContentGenerationResult> {
   try {
     // 获取 Content Writer prompt - 使用 targetLanguage 来确定生成内容的语言
@@ -261,7 +264,9 @@ IMPORTANT: While the user provided this reference URL, the core theme of the art
       searchPreferencesContext,
       competitorContext,
       referenceContext,
-      wordCountHint
+      wordCountHint,
+      promotedWebsites,
+      promotionIntensity
     });
 
     // 验证 prompt
@@ -278,8 +283,18 @@ IMPORTANT: While the user provided this reference URL, the core theme of the art
     // 调用 Gemini API - 不要求 JSON 格式，直接返回 Markdown
     let response;
     try {
+      onProgress?.(contentLanguage === 'zh' ? `✍️ AI 专家正在撰写深度内容，请稍候（这通常需要 30-60 秒）...` : `✍️ AI expert is drafting deep content, please wait (this usually takes 30-60 seconds)...`);
+      
       console.log('[Content Writer] Calling Gemini API with prompt length:', prompt.length);
-      response = await callGeminiAPI(prompt, systemInstruction, {});
+      response = await callGeminiAPI(prompt, systemInstruction, {
+        onRetry: (attempt, error, delay) => {
+          onProgress?.(contentLanguage === 'zh'
+            ? `⚠️ 内容撰写连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+            : `⚠️ Content drafting connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+        }
+      });
+      
+      onProgress?.(contentLanguage === 'zh' ? `✅ 内容初稿撰写完成` : `✅ Content draft completed`);
       console.log('[Content Writer] API response received, text length:', response.text?.length || 0);
     } catch (apiError: any) {
       console.error('[Content Writer] API call failed:', apiError.message);

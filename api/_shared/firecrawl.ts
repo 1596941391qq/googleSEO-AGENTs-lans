@@ -14,6 +14,49 @@ export interface ScrapeResult {
 }
 
 /**
+ * 清理抓取到的 Markdown 内容，移除脏数据并减少 token 消耗
+ */
+export function cleanMarkdown(markdown: string, maxLength: number = 12000): string {
+  if (!markdown) return '';
+
+  let cleaned = markdown;
+
+  // 1. 移除脚本和样式块
+  cleaned = cleaned.replace(/<script[\s\S]*?<\/script>/gi, '');
+  cleaned = cleaned.replace(/<style[\s\S]*?<\/style>/gi, '');
+
+  // 2. 移除常见的导航、页脚、侧边栏关键词所在的行
+  const boilerplatePatterns = [
+    /nav/i, /footer/i, /sidebar/i, /menu/i, /social/i, /login/i, /signin/i, /signup/i,
+    /privacy policy/i, /terms of service/i, /copyright/i, /all rights reserved/i,
+    /cookie/i, /newsletter/i, /subscribe/i, /follow us/i, /contact us/i, /about us/i
+  ];
+
+  const lines = cleaned.split('\n');
+  const filteredLines = lines.filter(line => {
+    const trimmed = line.trim();
+    if (trimmed.length < 5 && !trimmed.startsWith('#')) return false;
+    const linkCount = (trimmed.match(/\[.*?\]\(.*?\)/g) || []).length;
+    if (linkCount > 3 && trimmed.length < 100) return false;
+    if (trimmed.length < 100 && boilerplatePatterns.some(p => p.test(trimmed))) return false;
+    return true;
+  });
+
+  cleaned = filteredLines.join('\n');
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  cleaned = cleaned.replace(/!\[.*?\]\(.*?\)/g, '[Image]');
+
+  if (cleaned.length > maxLength) {
+    cleaned = cleaned.substring(0, maxLength);
+    const lastNewline = cleaned.lastIndexOf('\n');
+    if (lastNewline > maxLength * 0.8) cleaned = cleaned.substring(0, lastNewline);
+    cleaned += '\n\n[... Content truncated for length ...]';
+  }
+
+  return cleaned.trim();
+}
+
+/**
  * Scrape a website and return its content in markdown format
  * @param url - The URL to scrape
  * @param includeScreenshot - Whether to capture a screenshot (default: false)

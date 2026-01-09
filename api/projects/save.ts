@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
-import { updateProject } from '../lib/database.js';
+import { createOrGetProject } from '../lib/database.js';
 import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -25,16 +25,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const finalUserId = isNaN(numericUserId) ? userId : numericUserId;
 
     const body = parseRequestBody(req);
-    const { projectId, updates } = body;
+    const { name, seedKeyword, targetLanguage } = body;
 
-    if (!projectId || !updates) {
-      return sendErrorResponse(res, null, 'projectId and updates are required', 400);
+    if (!name) {
+      return sendErrorResponse(res, null, 'Project name is required', 400);
     }
 
-    const project = await updateProject(projectId, finalUserId, updates);
-    if (!project) {
-      return sendErrorResponse(res, null, 'Project not found or no changes made', 404);
-    }
+    const project = await createOrGetProject(
+      finalUserId,
+      name,
+      seedKeyword,
+      targetLanguage
+    );
 
     return res.json({
       success: true,
@@ -43,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
   } catch (error: any) {
-    console.error('[Update Project] Error:', error);
-    return sendErrorResponse(res, error, 'Failed to update project', 500);
+    console.error('[Create/Save Project] Error:', error);
+    return sendErrorResponse(res, error, 'Failed to save project', 500);
   }
 }

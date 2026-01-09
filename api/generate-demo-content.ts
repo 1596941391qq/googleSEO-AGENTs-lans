@@ -39,14 +39,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return sendErrorResponse(res, null, 'URL is required', 400);
     }
 
-    if (!keywords || !Array.isArray(keywords)) {
-      return sendErrorResponse(res, null, 'Keywords are required', 400);
-    }
+    const safeKeywords = Array.isArray(keywords) ? keywords : [];
 
     // Extract website domain for personalization
     const domain = new URL(url).hostname.replace('www.', '');
     const domainParts = domain.split('.');
     const brandName = domainParts[0].charAt(0).toUpperCase() + domainParts[0].slice(1);
+
+    // Pre-process content to remove excessive noise and focus on key info
+    const cleanContent = content
+      .replace(/!\[.*?\]\(.*?\)/g, '') // Remove images
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1') // Keep link text but remove URLs
+      .replace(/\n{3,}/g, '\n\n') // Remove excessive newlines
+      .trim();
+
+    const shortContent = cleanContent.substring(0, 4000);
+
+    const keywordPromptPart = safeKeywords.length > 0 
+      ? `- 提取的关键词：${safeKeywords.slice(0, 8).map(k => k.keyword).join(', ')}`
+      : '- 关键词：(请从网站内容中分析提取)';
+
+    const keywordPromptPartEn = safeKeywords.length > 0 
+      ? `- Top Keywords: ${safeKeywords.slice(0, 8).map(k => k.keyword).join(', ')}`
+      : '- Keywords: (Please analyze and identify from the content provided)';
 
     console.log('[Generate Demo Content] Generating demos for:', domain);
 
@@ -59,8 +74,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 - 网站域名：${domain}
 - 网站标题：${websiteTitle || '未提供'}
 - 品牌名称：${brandName}
-- 网站内容摘要：${content.substring(0, 3000)}
-- 提取的关键词：${keywords.slice(0, 8).map(k => k.keyword).join(', ')}
+- 网站内容摘要：${shortContent}
+${keywordPromptPart}
 
 **任务：**
 1. 生成一个真实、具体的用户问题（关于网站提供的产品/服务/解决方案）
@@ -131,8 +146,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 **Website Information:**
 - Domain: ${domain}
 - Brand Name: ${brandName}
-- Content Summary: ${content.substring(0, 3000)}
-- Top Keywords: ${keywords.slice(0, 8).map(k => k.keyword).join(', ')}
+- Content Summary: ${shortContent}
+${keywordPromptPartEn}
 
 **Task:**
 1. Generate a realistic, specific user question about the product/service/solution this website offers
@@ -207,8 +222,8 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and p
 - 网站域名：${domain}
 - 网站标题：${websiteTitle || '未提供'}
 - 品牌名称：${brandName}
-- 网站内容摘要：${content.substring(0, 3000)}
-- 提取的关键词：${keywords.slice(0, 8).map(k => k.keyword).join(', ')}
+- 网站内容摘要：${shortContent}
+${keywordPromptPart}
 
 **任务：**
 写一篇Medium文章，展示使用 ${brandName} 后的真实体验。文章要以"评测"或"十大"角度切入，让读者觉得这是客观的第三方评测。
@@ -256,8 +271,8 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and p
 **Website Information:**
 - Domain: ${domain}
 - Brand Name: ${brandName}
-- Content Summary: ${content.substring(0, 3000)}
-- Top Keywords: ${keywords.slice(0, 8).map(k => k.keyword).join(', ')}
+- Content Summary: ${shortContent}
+${keywordPromptPartEn}
 
 **Task:**
 Write a Medium article showcasing an amazing success story after using ${brandName}. Write from a "review" or "top 10 list" perspective to make it feel like an objective third-party review.
@@ -301,93 +316,92 @@ Write a Medium article showcasing an amazing success story after using ${brandNa
 
 Return only the JSON, nothing else. Ensure content is realistic, detailed, and compelling, like written by a real person.`;
 
-    // Call Gemini API for ChatGPT demo
-    let chatGPTData;
-    try {
-      const chatGPTResult = await callGeminiAPI(chatGPTPrompt, 'generate-chatgpt-demo', {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          properties: {
-            userQuestion: { type: 'string' },
-            aiAnswer: {
+    // Parallelize generation of both demos to save time
+    const [chatGPTData, articleData] = await Promise.all([
+      // Task 1: ChatGPT Demo
+      (async () => {
+        try {
+          const chatGPTResult = await callGeminiAPI(chatGPTPrompt, 'generate-chatgpt-demo', {
+            responseMimeType: 'application/json',
+            responseSchema: {
               type: 'object',
               properties: {
-                introduction: { type: 'string' },
-                keyPoints: { type: 'array', items: { type: 'string' } },
-                recommendation: { type: 'string' },
-                ctaText: { type: 'string' }
+                userQuestion: { type: 'string' },
+                aiAnswer: {
+                  type: 'object',
+                  properties: {
+                    introduction: { type: 'string' },
+                    keyPoints: { type: 'array', items: { type: 'string' } },
+                    recommendation: { type: 'string' },
+                    ctaText: { type: 'string' }
+                  },
+                  required: ['introduction', 'keyPoints', 'recommendation']
+                },
+                comparisonTable: {
+                  type: 'object',
+                  properties: {
+                    columns: { type: 'array', items: { type: 'string' } },
+                    rows: { type: 'array', items: { type: 'object' } }
+                  },
+                  required: ['columns', 'rows']
+                }
               },
-              required: ['introduction', 'keyPoints', 'recommendation']
+              required: ['userQuestion', 'aiAnswer', 'comparisonTable']
             },
-            comparisonTable: {
+          });
+
+          let jsonText = chatGPTResult.text.trim();
+          jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+          const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+          }
+          throw new Error('No JSON found in ChatGPT demo response');
+        } catch (error) {
+          console.error('[Generate Demo] ChatGPT demo generation failed:', error);
+          return null;
+        }
+      })(),
+
+      // Task 2: Article Demo
+      (async () => {
+        try {
+          const articleResult = await callGeminiAPI(articlePrompt, 'generate-article-demo', {
+            responseMimeType: 'application/json',
+            responseSchema: {
               type: 'object',
               properties: {
-                columns: { type: 'array', items: { type: 'string' } },
-                rows: { type: 'array', items: { type: 'object' } }
+                article: {
+                  type: 'object',
+                  properties: {
+                    authorName: { type: 'string' },
+                    authorTitle: { type: 'string' },
+                    publishedDate: { type: 'string' },
+                    title: { type: 'string' },
+                    preview: { type: 'string' },
+                    screenshotAlt: { type: 'string' },
+                    screenshotPosition: { type: 'string' }
+                  },
+                  required: ['authorName', 'authorTitle', 'title', 'preview']
+                }
               },
-              required: ['columns', 'rows']
-            }
-          },
-          required: ['userQuestion', 'aiAnswer', 'comparisonTable']
-        },
-      });
+              required: ['article']
+            },
+          });
 
-      // Extract JSON (with fallback for compatibility)
-      let jsonText = chatGPTResult.text.trim();
-      jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        chatGPTData = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No JSON found in ChatGPT demo response');
-      }
-    } catch (error) {
-      console.error('[Generate Demo] ChatGPT demo generation failed:', error);
-      // Fallback to default
-      chatGPTData = null;
-    }
-
-    // Call Gemini API for Article demo
-    let articleData;
-    try {
-      const articleResult = await callGeminiAPI(articlePrompt, 'generate-article-demo', {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: 'object',
-          properties: {
-            article: {
-              type: 'object',
-              properties: {
-                authorName: { type: 'string' },
-                authorTitle: { type: 'string' },
-                publishedDate: { type: 'string' },
-                title: { type: 'string' },
-                preview: { type: 'string' },
-                screenshotAlt: { type: 'string' },
-                screenshotPosition: { type: 'string' }
-              },
-              required: ['authorName', 'authorTitle', 'title', 'preview']
-            }
-          },
-          required: ['article']
-        },
-      });
-
-      // Extract JSON (with fallback for compatibility)
-      let jsonText = articleResult.text.trim();
-      jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
-      const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        articleData = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No JSON found in Article demo response');
-      }
-    } catch (error) {
-      console.error('[Generate Demo] Article demo generation failed:', error);
-      // Fallback to default
-      articleData = null;
-    }
+          let jsonText = articleResult.text.trim();
+          jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+          const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            return JSON.parse(jsonMatch[0]);
+          }
+          throw new Error('No JSON found in Article demo response');
+        } catch (error) {
+          console.error('[Generate Demo] Article demo generation failed:', error);
+          return null;
+        }
+      })()
+    ]);
 
     // Return success response
     // Note: Sidebar content is hardcoded in frontend, not included in API response

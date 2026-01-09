@@ -46,7 +46,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let userId = body.userId;
-    if (!userId) userId = 1;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: userId is required' });
+    }
 
     const limit = body.limit || 100;
     const includeSerpFeatures = body.includeSerpFeatures !== false; // 默认 true
@@ -121,6 +123,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         difficulty
       FROM ranked_keywords_cache
       WHERE website_id = ${body.websiteId}
+        AND location_code = ${locationCode}
         AND cache_expires_at > NOW()
       ${raw(orderByClause)}
       LIMIT ${limit}
@@ -142,6 +145,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             apiKeywords.map(kw => sql`
               INSERT INTO ranked_keywords_cache (
                 website_id,
+                location_code,
                 keyword,
                 current_position,
                 previous_position,
@@ -156,6 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 cache_expires_at
               ) VALUES (
                 ${body.websiteId},
+                ${locationCode},
                 ${kw.keyword},
                 ${kw.currentPosition},
                 ${kw.previousPosition},
@@ -169,7 +174,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 NOW(),
                 NOW() + INTERVAL '24 hours'
               )
-              ON CONFLICT (website_id, keyword) DO UPDATE SET
+              ON CONFLICT (website_id, keyword, location_code) DO UPDATE SET
                 current_position = EXCLUDED.current_position,
                 previous_position = EXCLUDED.previous_position,
                 search_volume = EXCLUDED.search_volume,

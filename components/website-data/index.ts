@@ -3,7 +3,6 @@ export { RankingDistributionChart } from './RankingDistributionChart';
 export { TopKeywordsTable } from './TopKeywordsTable';
 export { CompetitorsComparison } from './CompetitorsComparison';
 export { WebsiteDataDashboard } from './WebsiteDataDashboard';
-export { KeywordIntelligenceView } from './KeywordIntelligenceView';
 export { RankedKeywordsTable } from './RankedKeywordsTable';
 export { RelevantPagesTable } from './RelevantPagesTable';
 export { DomainIntersectionView } from './DomainIntersectionView';

@@ -766,10 +766,12 @@ export async function initDomainCacheTables() {
 
   domainCacheTablesInitPromise = (async () => {
     try {
+      // 1. 创建基础表 (IF NOT EXISTS)
       await sql`
         CREATE TABLE IF NOT EXISTS domain_overview_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          location_code INTEGER DEFAULT 2840,
           data_date DATE DEFAULT CURRENT_DATE,
           organic_traffic NUMERIC(20,2) DEFAULT 0,
           paid_traffic NUMERIC(20,2) DEFAULT 0,
@@ -789,92 +791,65 @@ export async function initDomainCacheTables() {
           data_updated_at TIMESTAMP,
           cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
           created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(website_id, data_date)
+          UNIQUE(website_id, data_date, location_code)
         )
       `;
 
+      // 2. 确保 domain_overview_cache 中存在 location_code 字段并更新唯一约束
+      try {
+        await sql`
+          DO $$ 
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'domain_overview_cache' AND column_name = 'location_code'
+            ) THEN
+              ALTER TABLE domain_overview_cache ADD COLUMN location_code INTEGER DEFAULT 2840;
+              -- 更新唯一约束
+              ALTER TABLE domain_overview_cache DROP CONSTRAINT IF EXISTS domain_overview_cache_website_id_data_date_key;
+              ALTER TABLE domain_overview_cache ADD CONSTRAINT domain_overview_cache_website_id_data_date_location_key UNIQUE(website_id, data_date, location_code);
+            END IF;
+          END $$;
+        `;
+      } catch (error: any) {
+        console.warn('[Database] Could not migrate domain_overview_cache:', error.message);
+      }
+
+      // 3. 现在可以安全地创建索引了
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_website ON domain_overview_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_location ON domain_overview_cache(location_code)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_date ON domain_overview_cache(data_date)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_overview_expires ON domain_overview_cache(cache_expires_at)`;
 
-      // 迁移现有表：将流量字段从 INTEGER 改为 NUMERIC（如果表已存在）
+      // 4. 其他迁移 (流量精度等)
       try {
-        // 检查表是否存在
-        const tableCheck = await sql`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'domain_overview_cache'
-          )
-        `;
-        
+        const tableCheck = await sql`SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'domain_overview_cache')`;
         if (tableCheck.rows[0].exists) {
-          // 检查列类型，如果是 INTEGER，则改为 NUMERIC
-          const columnCheck = await sql`
-            SELECT data_type 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public'
-            AND table_name = 'domain_overview_cache' 
-            AND column_name = 'organic_traffic'
-          `;
-          
+          const columnCheck = await sql`SELECT data_type FROM information_schema.columns WHERE table_name = 'domain_overview_cache' AND column_name = 'organic_traffic'`;
           if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
-            console.log('[Database] Migrating traffic columns from INTEGER to NUMERIC...');
             await sql`ALTER TABLE domain_overview_cache ALTER COLUMN organic_traffic TYPE NUMERIC(20,2)`;
             await sql`ALTER TABLE domain_overview_cache ALTER COLUMN paid_traffic TYPE NUMERIC(20,2)`;
             await sql`ALTER TABLE domain_overview_cache ALTER COLUMN total_traffic TYPE NUMERIC(20,2)`;
-            console.log('[Database] ✅ Successfully migrated traffic columns to NUMERIC');
           }
-          
-          // 检查并更新 traffic_cost 精度
-          const costCheck = await sql`
-            SELECT numeric_precision, numeric_scale
-            FROM information_schema.columns 
-            WHERE table_schema = 'public'
-            AND table_name = 'domain_overview_cache' 
-            AND column_name = 'traffic_cost'
-          `;
-          
-          if (costCheck.rows.length > 0) {
-            const precision = costCheck.rows[0].numeric_precision;
-            if (precision && precision < 20) {
-              await sql`ALTER TABLE domain_overview_cache ALTER COLUMN traffic_cost TYPE DECIMAL(20,2)`;
-              console.log('[Database] ✅ Updated traffic_cost precision to DECIMAL(20,2)');
-            }
+          const costCheck = await sql`SELECT numeric_precision FROM information_schema.columns WHERE table_name = 'domain_overview_cache' AND column_name = 'traffic_cost'`;
+          if (costCheck.rows.length > 0 && (costCheck.rows[0].numeric_precision || 0) < 20) {
+            await sql`ALTER TABLE domain_overview_cache ALTER COLUMN traffic_cost TYPE DECIMAL(20,2)`;
+          }
+          const backlinksCheck = await sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'domain_overview_cache' AND column_name = 'backlinks_info'`;
+          if (backlinksCheck.rows.length === 0) {
+            await sql`ALTER TABLE domain_overview_cache ADD COLUMN backlinks_info JSONB`;
           }
         }
       } catch (error: any) {
-        console.warn('[Database] Could not migrate traffic columns:', error.message);
+        console.warn('[Database] Could not migrate domain_overview_cache columns:', error.message);
       }
 
-      // 添加 backlinks_info 字段（如果不存在）
-      try {
-        // 检查列是否存在
-        const columnCheck = await sql`
-          SELECT column_name 
-          FROM information_schema.columns 
-          WHERE table_schema = 'public'
-          AND table_name = 'domain_overview_cache' 
-          AND column_name = 'backlinks_info'
-        `;
-        
-        if (columnCheck.rows.length === 0) {
-          await sql`ALTER TABLE domain_overview_cache ADD COLUMN backlinks_info JSONB`;
-          console.log('[Database] Added backlinks_info column to domain_overview_cache');
-        }
-      } catch (error: any) {
-        // 如果错误是"列已存在"，这是正常的，可以忽略
-        if (error.code === '42701' || error.message?.includes('already exists')) {
-          // 静默处理，不输出日志
-        } else {
-          console.warn('[Database] Could not add backlinks_info column:', error.message);
-        }
-      }
-
+      // --- 域名关键词表 ---
       await sql`
         CREATE TABLE IF NOT EXISTS domain_keywords_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          location_code INTEGER DEFAULT 2840,
           keyword VARCHAR(500) NOT NULL,
           current_position INTEGER,
           previous_position INTEGER,
@@ -886,89 +861,42 @@ export async function initDomainCacheTables() {
           traffic_percentage DECIMAL(10,2),
           data_updated_at TIMESTAMP,
           cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
-          created_at TIMESTAMP DEFAULT NOW()
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(website_id, keyword, location_code)
         )
       `;
 
+      // 确保 location_code 存在
+      try {
+        await sql`
+          DO $$ 
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'domain_keywords_cache' AND column_name = 'location_code'
+            ) THEN
+              ALTER TABLE domain_keywords_cache ADD COLUMN location_code INTEGER DEFAULT 2840;
+              ALTER TABLE domain_keywords_cache DROP CONSTRAINT IF EXISTS domain_keywords_cache_website_id_keyword_key;
+              ALTER TABLE domain_keywords_cache ADD CONSTRAINT domain_keywords_cache_website_id_keyword_location_key UNIQUE(website_id, keyword, location_code);
+            END IF;
+          END $$;
+        `;
+      } catch (error: any) {
+        console.warn('[Database] Could not add location_code to domain_keywords_cache:', error.message);
+      }
+
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_website ON domain_keywords_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_location ON domain_keywords_cache(location_code)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_keyword ON domain_keywords_cache(keyword)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_position ON domain_keywords_cache(current_position)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_keywords_expires ON domain_keywords_cache(cache_expires_at)`;
 
-      // 迁移现有表：将 competition 和 traffic_percentage 从 DECIMAL(5,2) 改为 DECIMAL(10,2)
-      try {
-        const tableCheck = await sql`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'domain_keywords_cache'
-          )
-        `;
-        
-        if (tableCheck.rows[0].exists) {
-          // 检查并迁移 competition 字段
-          const competitionCheck = await sql`
-            SELECT numeric_precision, numeric_scale
-            FROM information_schema.columns 
-            WHERE table_schema = 'public'
-            AND table_name = 'domain_keywords_cache' 
-            AND column_name = 'competition'
-          `;
-          
-          if (competitionCheck.rows.length > 0) {
-            const precision = Number(competitionCheck.rows[0].numeric_precision);
-            const scale = Number(competitionCheck.rows[0].numeric_scale);
-            // 如果 precision < 10 或者 scale 不是 2，执行迁移
-            if (precision < 10 || scale !== 2) {
-              await sql`ALTER TABLE domain_keywords_cache ALTER COLUMN competition TYPE DECIMAL(10,2)`;
-              console.log('[Database] ✅ Updated competition precision to DECIMAL(10,2) in domain_keywords_cache');
-            } else {
-              console.log('[Database] ℹ️ competition column already has correct precision');
-            }
-          }
-
-          // 检查并迁移 traffic_percentage 字段
-          const trafficCheck = await sql`
-            SELECT numeric_precision, numeric_scale
-            FROM information_schema.columns 
-            WHERE table_schema = 'public'
-            AND table_name = 'domain_keywords_cache' 
-            AND column_name = 'traffic_percentage'
-          `;
-          
-          if (trafficCheck.rows.length > 0) {
-            const precision = Number(trafficCheck.rows[0].numeric_precision);
-            const scale = Number(trafficCheck.rows[0].numeric_scale);
-            // 如果 precision < 10 或者 scale 不是 2，执行迁移
-            if (precision < 10 || scale !== 2) {
-              await sql`ALTER TABLE domain_keywords_cache ALTER COLUMN traffic_percentage TYPE DECIMAL(10,2)`;
-              console.log('[Database] ✅ Updated traffic_percentage precision to DECIMAL(10,2) in domain_keywords_cache');
-            } else {
-              console.log('[Database] ℹ️ traffic_percentage column already has correct precision');
-            }
-          }
-        }
-      } catch (error: any) {
-        console.error('[Database] ❌ Could not migrate domain_keywords_cache columns:', error.message);
-        // 即使迁移失败，也尝试直接执行 ALTER TABLE（可能表结构已经正确）
-        try {
-          await sql`ALTER TABLE domain_keywords_cache ALTER COLUMN competition TYPE DECIMAL(10,2)`;
-          console.log('[Database] ✅ Force updated competition column');
-        } catch (e: any) {
-          // 忽略错误，可能字段不存在或已经是正确类型
-        }
-        try {
-          await sql`ALTER TABLE domain_keywords_cache ALTER COLUMN traffic_percentage TYPE DECIMAL(10,2)`;
-          console.log('[Database] ✅ Force updated traffic_percentage column');
-        } catch (e: any) {
-          // 忽略错误，可能字段不存在或已经是正确类型
-        }
-      }
-
+      // --- 竞争对手表 ---
       await sql`
         CREATE TABLE IF NOT EXISTS domain_competitors_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          location_code INTEGER DEFAULT 2840,
           competitor_domain VARCHAR(255) NOT NULL,
           competitor_title VARCHAR(500),
           common_keywords INTEGER DEFAULT 0,
@@ -979,44 +907,39 @@ export async function initDomainCacheTables() {
           data_updated_at TIMESTAMP,
           cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '7 days',
           created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(website_id, competitor_domain)
+          UNIQUE(website_id, competitor_domain, location_code)
         )
       `;
 
-      // Ensure domain column exists (for existing tables that might not have it)
-      // This handles the case where the table was created before the domain column was added
+      // 确保 location_code 存在
       try {
-        // Check if column exists by trying to add it (will fail silently if it exists)
         await sql`
-          DO $$
+          DO $$ 
           BEGIN
             IF NOT EXISTS (
               SELECT 1 FROM information_schema.columns 
-              WHERE table_name = 'domain_competitors_cache' AND column_name = 'domain'
+              WHERE table_name = 'domain_competitors_cache' AND column_name = 'location_code'
             ) THEN
-              ALTER TABLE domain_competitors_cache ADD COLUMN domain VARCHAR(255);
-              UPDATE domain_competitors_cache SET domain = '' WHERE domain IS NULL;
-              ALTER TABLE domain_competitors_cache ALTER COLUMN domain SET NOT NULL;
+              ALTER TABLE domain_competitors_cache ADD COLUMN location_code INTEGER DEFAULT 2840;
+              ALTER TABLE domain_competitors_cache DROP CONSTRAINT IF EXISTS domain_competitors_cache_website_id_competitor_domain_key;
+              ALTER TABLE domain_competitors_cache ADD CONSTRAINT domain_competitors_cache_website_id_competitor_location_key UNIQUE(website_id, competitor_domain, location_code);
             END IF;
           END $$;
         `;
       } catch (error: any) {
-        // If the table doesn't exist yet, that's fine - it will be created above
-        // Ignore other errors related to column already existing
-        if (error?.code !== '42P01') {
-          console.warn('[initDomainCacheTables] Warning adding domain column:', error);
-        }
+        console.warn('[Database] Could not add location_code to domain_competitors_cache:', error.message);
       }
 
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_website ON domain_competitors_cache(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_domain ON domain_competitors_cache(competitor_domain)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_competitors_expires ON domain_competitors_cache(cache_expires_at)`;
 
-      // 创建排名关键词缓存表
+      // --- 排名关键词表 ---
       await sql`
         CREATE TABLE IF NOT EXISTS ranked_keywords_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          location_code INTEGER DEFAULT 2840,
           keyword VARCHAR(500) NOT NULL,
           current_position INTEGER,
           previous_position INTEGER,
@@ -1030,60 +953,76 @@ export async function initDomainCacheTables() {
           data_updated_at TIMESTAMP,
           cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
           created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(website_id, keyword)
+          UNIQUE(website_id, keyword, location_code)
         )
       `;
 
-      // 添加 difficulty 字段（如果不存在）
-      await sql`
-        DO $$ 
-        BEGIN
-          IF NOT EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name = 'ranked_keywords_cache' AND column_name = 'difficulty'
-          ) THEN
-            ALTER TABLE ranked_keywords_cache ADD COLUMN difficulty INTEGER;
-          END IF;
-        END $$;
-      `;
+      // 确保 location_code 存在
+      try {
+        await sql`
+          DO $$ 
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'ranked_keywords_cache' AND column_name = 'location_code'
+            ) THEN
+              ALTER TABLE ranked_keywords_cache ADD COLUMN location_code INTEGER DEFAULT 2840;
+              ALTER TABLE ranked_keywords_cache DROP CONSTRAINT IF EXISTS ranked_keywords_cache_website_id_keyword_key;
+              ALTER TABLE ranked_keywords_cache ADD CONSTRAINT ranked_keywords_cache_website_id_keyword_location_key UNIQUE(website_id, keyword, location_code);
+            END IF;
+          END $$;
+        `;
+      } catch (error: any) {
+        console.warn('[Database] Could not add location_code to ranked_keywords_cache:', error.message);
+      }
 
       await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_website ON ranked_keywords_cache(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_keyword ON ranked_keywords_cache(keyword)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_position ON ranked_keywords_cache(current_position)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_ranked_keywords_expires ON ranked_keywords_cache(cache_expires_at)`;
 
-      // 迁移现有表：将 competition 从 DECIMAL(5,2) 改为 DECIMAL(10,2)
+      // --- 相关页面表 ---
+      await sql`
+        CREATE TABLE IF NOT EXISTS relevant_pages_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          location_code INTEGER DEFAULT 2840,
+          page_url TEXT NOT NULL,
+          organic_traffic NUMERIC(20,2),
+          keywords_count INTEGER,
+          avg_position DECIMAL(10,2),
+          top_keywords JSONB,
+          data_updated_at TIMESTAMP,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(website_id, page_url, location_code)
+        )
+      `;
+
+      // 确保 location_code 存在
       try {
-        const tableCheck = await sql`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'ranked_keywords_cache'
-          )
+        await sql`
+          DO $$ 
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'relevant_pages_cache' AND column_name = 'location_code'
+            ) THEN
+              ALTER TABLE relevant_pages_cache ADD COLUMN location_code INTEGER DEFAULT 2840;
+              ALTER TABLE relevant_pages_cache DROP CONSTRAINT IF EXISTS relevant_pages_cache_website_id_page_url_key;
+              ALTER TABLE relevant_pages_cache ADD CONSTRAINT relevant_pages_cache_website_id_page_url_location_key UNIQUE(website_id, page_url, location_code);
+            END IF;
+          END $$;
         `;
-        
-        if (tableCheck.rows[0].exists) {
-          const competitionCheck = await sql`
-            SELECT numeric_precision, numeric_scale
-            FROM information_schema.columns 
-            WHERE table_schema = 'public'
-            AND table_name = 'ranked_keywords_cache' 
-            AND column_name = 'competition'
-          `;
-          
-          if (competitionCheck.rows.length > 0) {
-            const precision = competitionCheck.rows[0].numeric_precision;
-            if (precision && precision < 10) {
-              await sql`ALTER TABLE ranked_keywords_cache ALTER COLUMN competition TYPE DECIMAL(10,2)`;
-              console.log('[Database] ✅ Updated competition precision to DECIMAL(10,2) in ranked_keywords_cache');
-            }
-          }
-        }
       } catch (error: any) {
-        console.warn('[Database] Could not migrate ranked_keywords_cache columns:', error.message);
+        console.warn('[Database] Could not add location_code to relevant_pages_cache:', error.message);
       }
 
-      // 创建历史排名概览缓存表
+      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_website ON relevant_pages_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_url ON relevant_pages_cache(page_url)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_expires ON relevant_pages_cache(cache_expires_at)`;
+
+      // --- 历史排名概览 (无需 location_code) ---
       await sql`
         CREATE TABLE IF NOT EXISTS historical_rank_overview_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1100,12 +1039,10 @@ export async function initDomainCacheTables() {
           UNIQUE(website_id, date)
         )
       `;
-
       await sql`CREATE INDEX IF NOT EXISTS idx_historical_rank_website ON historical_rank_overview_cache(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_historical_rank_date ON historical_rank_overview_cache(date)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_historical_rank_expires ON historical_rank_overview_cache(cache_expires_at)`;
 
-      // 创建域名重合度分析缓存表
+      // --- 域名重合度分析 ---
       await sql`
         CREATE TABLE IF NOT EXISTS domain_intersection_cache (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1121,108 +1058,8 @@ export async function initDomainCacheTables() {
           UNIQUE(website_id, competitor_domain)
         )
       `;
-
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_intersection_website ON domain_intersection_cache(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_intersection_competitor ON domain_intersection_cache(competitor_domain)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_domain_intersection_expires ON domain_intersection_cache(cache_expires_at)`;
-
-      // 创建相关页面缓存表
-      await sql`
-        CREATE TABLE IF NOT EXISTS relevant_pages_cache (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
-          page_url TEXT NOT NULL,
-          organic_traffic NUMERIC(20,2),
-          keywords_count INTEGER,
-          avg_position DECIMAL(10,2),
-          top_keywords JSONB,
-          data_updated_at TIMESTAMP,
-          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '24 hours',
-          created_at TIMESTAMP DEFAULT NOW(),
-          UNIQUE(website_id, page_url)
-        )
-      `;
-
-      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_website ON relevant_pages_cache(website_id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_url ON relevant_pages_cache(page_url)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_relevant_pages_expires ON relevant_pages_cache(cache_expires_at)`;
-
-      // 迁移现有表：将竞争对手表的流量字段从 INTEGER 改为 NUMERIC（如果表已存在）
-      try {
-        const tableCheck = await sql`
-          SELECT EXISTS (
-            SELECT FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-            AND table_name = 'domain_competitors_cache'
-          )
-        `;
-        
-        if (tableCheck.rows[0].exists) {
-          const columnCheck = await sql`
-            SELECT data_type 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public'
-            AND table_name = 'domain_competitors_cache' 
-            AND column_name = 'organic_traffic'
-          `;
-          
-          if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
-            console.log('[Database] Migrating competitor traffic columns from INTEGER to NUMERIC...');
-            await sql`ALTER TABLE domain_competitors_cache ALTER COLUMN organic_traffic TYPE NUMERIC(20,2)`;
-            await sql`ALTER TABLE domain_competitors_cache ALTER COLUMN gap_traffic TYPE NUMERIC(20,2)`;
-            console.log('[Database] ✅ Successfully migrated competitor traffic columns to NUMERIC');
-          }
-          
-          // 检查并修复列名（domain -> competitor_domain, title -> competitor_title）
-          // 先检查是否存在旧的列名，且不存在新列名，才进行重命名
-          const domainColumnCheck = await sql`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public'
-            AND table_name = 'domain_competitors_cache' 
-            AND column_name IN ('domain', 'competitor_domain')
-          `;
-          
-          const hasDomain = domainColumnCheck.rows.some((r: any) => r.column_name === 'domain');
-          const hasCompetitorDomain = domainColumnCheck.rows.some((r: any) => r.column_name === 'competitor_domain');
-          
-          if (hasDomain && !hasCompetitorDomain) {
-            // 如果存在旧的 'domain' 列且不存在 'competitor_domain'，重命名
-            try {
-              await sql`ALTER TABLE domain_competitors_cache RENAME COLUMN domain TO competitor_domain`;
-              console.log('[Database] ✅ Renamed domain column to competitor_domain');
-            } catch (renameError: any) {
-              if (renameError.code !== '42701') { // 忽略"列已存在"错误
-                console.warn('[Database] Could not rename domain column:', renameError.message);
-              }
-            }
-          }
-          
-          const titleColumnCheck = await sql`
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public'
-            AND table_name = 'domain_competitors_cache' 
-            AND column_name IN ('title', 'competitor_title')
-          `;
-          
-          const hasTitle = titleColumnCheck.rows.some((r: any) => r.column_name === 'title');
-          const hasCompetitorTitle = titleColumnCheck.rows.some((r: any) => r.column_name === 'competitor_title');
-          
-          if (hasTitle && !hasCompetitorTitle) {
-            try {
-              await sql`ALTER TABLE domain_competitors_cache RENAME COLUMN title TO competitor_title`;
-              console.log('[Database] ✅ Renamed title column to competitor_title');
-            } catch (renameError: any) {
-              if (renameError.code !== '42701') { // 忽略"列已存在"错误
-                console.warn('[Database] Could not rename title column:', renameError.message);
-              }
-            }
-          }
-        }
-      } catch (error: any) {
-        console.warn('[Database] Could not migrate competitor traffic columns:', error.message);
-      }
 
       domainCacheTablesInitialized = true;
     } catch (error) {
@@ -1404,6 +1241,48 @@ export async function initPublishedArticlesTable() {
   await publishedArticlesTableInitPromise;
 }
 
+// Execution Tasks Table (Agent Execution State)
+let tasksTableInitialized = false;
+let tasksTableInitPromise: Promise<void> | null = null;
+
+export async function initTasksTable() {
+  if (tasksTableInitialized) return;
+  if (tasksTableInitPromise) {
+    await tasksTableInitPromise;
+    return;
+  }
+
+  tasksTableInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS execution_tasks (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id VARCHAR(255) NOT NULL,
+          type VARCHAR(50) NOT NULL, -- mining, batch, article-generator, deep-dive
+          name VARCHAR(255),
+          status VARCHAR(50) DEFAULT 'in_progress', -- in_progress, completed, failed
+          params JSONB DEFAULT '{}'::jsonb,
+          state JSONB DEFAULT '{}'::jsonb,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_user ON execution_tasks(user_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_status ON execution_tasks(status)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_type ON execution_tasks(type)`;
+
+      tasksTableInitialized = true;
+    } catch (error) {
+      console.error('[initTasksTable] Error:', error);
+      tasksTableInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await tasksTableInitPromise;
+}
+
 // Initialize all website data tables
 export async function initWebsiteDataTables() {
   await initUserWebsitesTable();
@@ -1414,6 +1293,7 @@ export async function initWebsiteDataTables() {
   await initDomainCacheTables();
   await initGeoTables();
   await initPublishedArticlesTable();
+  await initTasksTable();
 }
 
 /**
@@ -1824,7 +1704,7 @@ export interface Publication {
  * 创建或获取项目
  */
 export async function createOrGetProject(
-  userId: number,
+  userId: string | number,
   name: string,
   seedKeyword?: string,
   targetLanguage?: string
@@ -1832,10 +1712,16 @@ export async function createOrGetProject(
   try {
     await initProjectsTable();
 
+    // 如果是 NaN，抛出错误
+    if (typeof userId === 'number' && isNaN(userId)) {
+      throw new Error('Invalid userId: NaN');
+    }
+
     // Try to find existing project with same name and user
+    // 使用 ::text 确保兼容性
     const existing = await sql<Project>`
       SELECT * FROM projects
-      WHERE user_id = ${userId} AND name = ${name}
+      WHERE user_id::text = ${userId.toString()} AND name = ${name}
       ORDER BY created_at DESC
       LIMIT 1
     `;
@@ -1845,6 +1731,8 @@ export async function createOrGetProject(
     }
 
     // Create new project
+    // 注意：如果是新创建，INSERT 仍然受限于列类型
+    // 如果列是 INTEGER 但 userId 是 UUID，这里仍然会报错
     const result = await sql<Project>`
       INSERT INTO projects (user_id, name, seed_keyword, target_language, created_at, updated_at)
       VALUES (${userId}, ${name}, ${seedKeyword || null}, ${targetLanguage || null}, NOW(), NOW())
@@ -2033,9 +1921,14 @@ export async function createPublication(
 /**
  * 获取用户所有项目及其统计信息
  */
-export async function getUserProjects(userId: number): Promise<any[]> {
+export async function getUserProjects(userId: string | number): Promise<any[]> {
   try {
     await initContentManagementTables();
+
+    // 如果是 NaN，直接返回空数组
+    if (typeof userId === 'number' && isNaN(userId)) {
+      return [];
+    }
 
     const result = await sql`
       SELECT 
@@ -2047,7 +1940,7 @@ export async function getUserProjects(userId: number): Promise<any[]> {
       LEFT JOIN keywords k ON p.id = k.project_id
       LEFT JOIN content_drafts cd ON p.id = cd.project_id
       LEFT JOIN publications pub ON cd.id = pub.content_draft_id
-      WHERE p.user_id = ${userId}
+      WHERE p.user_id::text = ${userId.toString()}
       GROUP BY p.id
       ORDER BY p.updated_at DESC
     `;
@@ -2062,11 +1955,17 @@ export async function getUserProjects(userId: number): Promise<any[]> {
 /**
  * 根据 ID 获取项目详情
  */
-export async function getProjectById(projectId: string, userId: number): Promise<Project | null> {
+export async function getProjectById(projectId: string, userId: string | number): Promise<Project | null> {
   try {
     await initProjectsTable();
+
+    // 如果是 NaN，抛出错误
+    if (typeof userId === 'number' && isNaN(userId)) {
+      throw new Error('Invalid userId: NaN');
+    }
+
     const result = await sql<Project>`
-      SELECT * FROM projects WHERE id = ${projectId} AND user_id = ${userId}
+      SELECT * FROM projects WHERE id = ${projectId} AND user_id::text = ${userId.toString()}
     `;
     return result.rows[0] || null;
   } catch (error) {
@@ -2080,10 +1979,15 @@ export async function getProjectById(projectId: string, userId: number): Promise
  */
 export async function updateProject(
   projectId: string, 
-  userId: number, 
+  userId: string | number, 
   updates: { name?: string; seed_keyword?: string; target_language?: string }
 ): Promise<Project | null> {
   try {
+    // 如果是 NaN，抛出错误
+    if (typeof userId === 'number' && isNaN(userId)) {
+      throw new Error('Invalid userId: NaN');
+    }
+
     const setParts: string[] = [];
     const values: any[] = [];
     let i = 1;
@@ -2103,9 +2007,9 @@ export async function updateProject(
 
     if (setParts.length === 0) return null;
 
-    values.push(projectId, userId);
+    values.push(projectId, userId.toString());
     const result = await sql(
-      raw(`UPDATE projects SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id = $${i++} RETURNING *`),
+      raw(`UPDATE projects SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id::text = $${i++} RETURNING *`),
       ...values
     );
 
@@ -2119,10 +2023,15 @@ export async function updateProject(
 /**
  * 删除项目
  */
-export async function deleteProject(projectId: string, userId: number): Promise<boolean> {
+export async function deleteProject(projectId: string, userId: string | number): Promise<boolean> {
   try {
+    // 如果是 NaN，抛出错误
+    if (typeof userId === 'number' && isNaN(userId)) {
+      throw new Error('Invalid userId: NaN');
+    }
+
     const result = await sql`
-      DELETE FROM projects WHERE id = ${projectId} AND user_id = ${userId} RETURNING id
+      DELETE FROM projects WHERE id = ${projectId} AND user_id::text = ${userId.toString()} RETURNING id
     `;
     return result.rows.length > 0;
   } catch (error) {
@@ -2169,9 +2078,15 @@ export async function updateKeywordStatus(keywordId: string, status: string): Pr
 /**
  * 获取项目统计数据
  */
-export async function getProjectStats(projectId: string, userId: number): Promise<any> {
+export async function getProjectStats(projectId: string, userId: string | number): Promise<any> {
   try {
     await initContentManagementTables();
+
+    // 如果是 NaN，抛出错误
+    if (typeof userId === 'number' && isNaN(userId)) {
+      throw new Error('Invalid userId: NaN');
+    }
+
     const result = await sql`
       SELECT 
         COUNT(*) as total,
@@ -2185,6 +2100,163 @@ export async function getProjectStats(projectId: string, userId: number): Promis
     return result.rows[0];
   } catch (error) {
     console.error('Error getting project stats:', error);
+    throw error;
+  }
+}
+
+// =============================================
+// Execution Task Operations
+// =============================================
+
+export interface ExecutionTask {
+  id: string;
+  user_id: number;
+  type: string;
+  name: string;
+  status: string;
+  params: any;
+  state: any;
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
+ * 创建执行任务
+ */
+export async function createExecutionTask(
+  userId: string | number,
+  type: string,
+  name: string,
+  params: any = {}
+): Promise<ExecutionTask> {
+  try {
+    await initTasksTable();
+
+    if (typeof userId === 'number' && isNaN(userId)) {
+      throw new Error('Invalid userId: NaN');
+    }
+
+    const result = await sql<ExecutionTask>`
+      INSERT INTO execution_tasks (user_id, type, name, params, status, created_at, updated_at)
+      VALUES (${userId.toString()}, ${type}, ${name}, ${JSON.stringify(params)}::jsonb, 'in_progress', NOW(), NOW())
+      RETURNING *
+    `;
+    return result.rows[0];
+  } catch (error) {
+    console.error('Error creating execution task:', error);
+    throw error;
+  }
+}
+
+/**
+ * 更新执行任务状态或内容
+ */
+export async function updateExecutionTask(
+  taskId: string,
+  userId: string | number,
+  updates: { status?: string; state?: any; name?: string }
+): Promise<ExecutionTask | null> {
+  try {
+    await initTasksTable();
+
+    if (typeof userId === 'number' && isNaN(userId)) {
+      throw new Error('Invalid userId: NaN');
+    }
+
+    const setParts: string[] = [];
+    const values: any[] = [];
+    let i = 1;
+
+    if (updates.status) {
+      setParts.push(`status = $${i++}`);
+      values.push(updates.status);
+    }
+    if (updates.state) {
+      setParts.push(`state = $${i++}`);
+      values.push(JSON.stringify(updates.state));
+    }
+    if (updates.name) {
+      setParts.push(`name = $${i++}`);
+      values.push(updates.name);
+    }
+
+    if (setParts.length === 0) return null;
+
+    values.push(taskId, userId.toString());
+    const result = await sql(
+      raw(`UPDATE execution_tasks SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id::text = $${i++} RETURNING *`),
+      ...values
+    );
+
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error updating execution task:', error);
+    throw error;
+  }
+}
+
+/**
+ * 获取用户的任务列表
+ */
+export async function getUserExecutionTasks(userId: string | number, limit: number = 20): Promise<ExecutionTask[]> {
+  try {
+    await initTasksTable();
+
+    if (typeof userId === 'number' && isNaN(userId)) {
+      return [];
+    }
+
+    const result = await sql<ExecutionTask>`
+      SELECT * FROM execution_tasks 
+      WHERE user_id::text = ${userId.toString()} 
+      ORDER BY updated_at DESC 
+      LIMIT ${limit}
+    `;
+    return result.rows;
+  } catch (error) {
+    console.error('Error getting user execution tasks:', error);
+    throw error;
+  }
+}
+
+/**
+ * 根据 ID 获取任务
+ */
+export async function getExecutionTaskById(taskId: string, userId: string | number): Promise<ExecutionTask | null> {
+  try {
+    await initTasksTable();
+
+    if (typeof userId === 'number' && isNaN(userId)) {
+      return null;
+    }
+
+    const result = await sql<ExecutionTask>`
+      SELECT * FROM execution_tasks WHERE id = ${taskId} AND user_id::text = ${userId.toString()}
+    `;
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error getting execution task by id:', error);
+    throw error;
+  }
+}
+
+/**
+ * 删除任务
+ */
+export async function deleteExecutionTask(taskId: string, userId: string | number): Promise<boolean> {
+  try {
+    await initTasksTable();
+
+    if (typeof userId === 'number' && isNaN(userId)) {
+      return false;
+    }
+
+    const result = await sql`
+      DELETE FROM execution_tasks WHERE id = ${taskId} AND user_id::text = ${userId.toString()} RETURNING id
+    `;
+    return result.rows.length > 0;
+  } catch (error) {
+    console.error('Error deleting execution task:', error);
     throw error;
   }
 }

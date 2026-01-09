@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { createOrGetProject, createOrGetKeyword } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -14,16 +15,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const body = parseRequestBody(req);
-    const { userId, projectName, seedKeyword, targetLanguage, keywords } = body;
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return sendErrorResponse(res, null, 'Unauthorized', 401);
+    }
+    const userId = authResult.userId;
+    const numericUserId = parseInt(userId);
+    const finalUserId = isNaN(numericUserId) ? userId : numericUserId;
 
-    if (!userId || !projectName || !keywords || !Array.isArray(keywords)) {
+    const body = parseRequestBody(req);
+    const { projectName, seedKeyword, targetLanguage, keywords } = body;
+
+    if (!projectName || !keywords || !Array.isArray(keywords)) {
       return sendErrorResponse(res, null, 'Missing required fields', 400);
     }
 
     // 1. Create or get project
     const project = await createOrGetProject(
-      parseInt(userId),
+      finalUserId,
       projectName,
       seedKeyword,
       targetLanguage

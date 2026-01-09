@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
 import { callGeminiAPI } from '../_shared/gemini.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -16,12 +17,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return sendErrorResponse(res, null, 'Unauthorized', 401);
+    }
+    const userId = authResult.userId;
+    const numericUserId = parseInt(userId);
+    const finalUserId = isNaN(numericUserId) ? userId : numericUserId;
+
     await initWebsiteDataTables();
 
     const { websiteId, keywordIds, uiLanguage = 'en' } = parseRequestBody(req);
 
     if (!websiteId) {
       return sendErrorResponse(res, null, 'websiteId is required', 400);
+    }
+
+    // 验证网站归属权
+    const websiteCheck = await sql`
+      SELECT id FROM user_websites 
+      WHERE id = ${websiteId} AND user_id::text = ${finalUserId.toString()}
+    `;
+    if (websiteCheck.rows.length === 0) {
+      return sendErrorResponse(res, null, 'Website not found or access denied', 404);
     }
 
     // Get keywords to analyze

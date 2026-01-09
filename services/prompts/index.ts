@@ -1150,14 +1150,42 @@ export function getContentWriterPrompt(
     competitorContext?: string;
     referenceContext?: string;
     wordCountHint?: string;
+    promotedWebsites?: string[];
+    promotionIntensity?: "natural" | "strong";
   }
 ): string {
   // 如果提供了变量，返回生成文章的 prompt
   if (variables) {
+    const promotionInstructions = variables.promotedWebsites && variables.promotedWebsites.length > 0
+      ? (language === 'zh'
+        ? `
+### 推广目标 (Promoted Websites)
+请在文章中自然地推广以下网站：
+${variables.promotedWebsites.map(url => `- ${url}`).join('\n')}
+
+推广策略：
+1. **意图匹配**：如果本文是评测/对比类（Commercial/Transactional），请将这些网站作为行业领先方案进行深度评测或对比。
+2. **自然引用**：如果本文是科普/解答类（Informational），请在正文中自然地作为“参考来源”、“推荐工具”或“专业案例”提及。
+3. **推广强度**：当前强度为 **${variables.promotionIntensity === 'strong' ? '重点推荐' : '自然融入'}**。${variables.promotionIntensity === 'strong' ? '请在多个关键位置（如 H2、列表、总结）强调这些网站的价值。' : '仅在最相关的内容点位提及即可，避免生硬。'}
+4. **原则**：严禁过度营销，保持百科式的专业中立口吻，通过事实和数据展示网站价值。
+`
+        : `
+### Promotion Targets
+Please naturally promote the following websites in the article:
+${variables.promotedWebsites.map(url => `- ${url}`).join('\n')}
+
+Promotion Strategy:
+1. **Intent Matching**: If the article is a review/comparison type (Commercial/Transactional), treat these sites as industry-leading solutions for in-depth evaluation or comparison.
+2. **Natural Reference**: If the article is informational/Q&A, mention them naturally as "reference sources," "recommended tools," or "professional case studies."
+3. **Intensity**: Current intensity is **${variables.promotionIntensity === 'strong' ? 'Strong' : 'Natural'}**. ${variables.promotionIntensity === 'strong' ? 'Emphasize these sites at multiple key points (H2, lists, summary).' : 'Mention them only at the most relevant points, avoid being pushy.'}
+4. **Principle**: Avoid over-marketing. Maintain a professional, encyclopedic, and neutral tone. Show value through facts and data.
+`)
+      : '';
+
     const template = language === 'zh'
       ? `基于以下SEO研究结果，为 ${variables.marketLabel || '全球'} 市场撰写一篇高质量的文章内容。
 
-${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}
+${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}${promotionInstructions}
 
 要求：
 1. 严格按照推荐的内容结构撰写，特别关注 ${variables.marketLabel || '全球'} 市场的本地化需求
@@ -1173,7 +1201,7 @@ ${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variab
 - **关键要点总结**（在文章末尾）`
       : `Generate a high-quality article based on the following SEO research findings for the ${variables.marketLabel || 'Global'} market.
 
-${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}
+${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}${promotionInstructions}
 
 Requirements:
 1. Follow the recommended content structure strictly, with special attention to localization needs for ${variables.marketLabel || 'Global'} market
@@ -1710,31 +1738,31 @@ Return JSON:
       // Nano Banana 2 使用自然语言提示词，不需要复杂的技术规格
       // 增强：在描述中融入关键词和主题，提升图像与文章的相关性
       let prompt = '';
-      
+
       if (description && description.trim()) {
         prompt = description;
       } else {
         prompt = theme;
       }
-      
+
       // 如果有关键词，将其自然地融入prompt中
       if (keyword && keyword.trim()) {
         // 提取关键词的核心词汇（去除常见停用词）
-        const keywordWords = keyword.split(/\s+/).filter(word => 
+        const keywordWords = keyword.split(/\s+/).filter(word =>
           word.length > 2 && !['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'].includes(word.toLowerCase())
         );
-        
+
         if (keywordWords.length > 0) {
           // 将关键词自然地添加到prompt中
           const coreKeywords = keywordWords.slice(0, 3).join(', ');
           prompt = `${prompt}, featuring ${coreKeywords}, ${keyword}`;
         }
       }
-      
+
       // 如果有文章标题，提取标题中的核心概念
       if (articleTitle && articleTitle.trim()) {
         // 提取标题中的关键实体和概念
-        const titleWords = articleTitle.split(/\s+/).filter(word => 
+        const titleWords = articleTitle.split(/\s+/).filter(word =>
           word.length > 3 && /^[A-Z]/.test(word)
         );
         if (titleWords.length > 0) {
@@ -1742,38 +1770,38 @@ Return JSON:
           prompt = `${prompt}, related to ${titleConcepts}`;
         }
       }
-      
+
       return prompt.trim();
     },
     en: (theme: string, description: string, keyword?: string, articleTitle?: string) => {
       // Nano Banana 2 uses natural language prompts, no need for complex technical specifications
       // Enhanced: Incorporate keyword and article title to improve image relevance
       let prompt = '';
-      
+
       if (description && description.trim()) {
         prompt = description;
       } else {
         prompt = theme;
       }
-      
+
       // If keyword exists, naturally incorporate it into the prompt
       if (keyword && keyword.trim()) {
         // Extract core words from keyword (remove common stop words)
-        const keywordWords = keyword.split(/\s+/).filter(word => 
+        const keywordWords = keyword.split(/\s+/).filter(word =>
           word.length > 2 && !['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'].includes(word.toLowerCase())
         );
-        
+
         if (keywordWords.length > 0) {
           // Naturally add keywords to the prompt
           const coreKeywords = keywordWords.slice(0, 3).join(', ');
           prompt = `${prompt}, featuring ${coreKeywords}, ${keyword}`;
         }
       }
-      
+
       // If article title exists, extract core concepts from title
       if (articleTitle && articleTitle.trim()) {
         // Extract key entities and concepts from title
-        const titleWords = articleTitle.split(/\s+/).filter(word => 
+        const titleWords = articleTitle.split(/\s+/).filter(word =>
           word.length > 3 && /^[A-Z]/.test(word)
         );
         if (titleWords.length > 0) {
@@ -1781,7 +1809,7 @@ Return JSON:
           prompt = `${prompt}, related to ${titleConcepts}`;
         }
       }
-      
+
       return prompt.trim();
     }
   }

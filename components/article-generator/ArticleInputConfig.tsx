@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Sparkles,
   ArrowRight,
@@ -12,6 +12,11 @@ import {
   X,
   Upload,
   Loader2,
+  Rocket,
+  CheckCircle2,
+  ChevronDown,
+  Layout,
+  MousePointer2,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -112,11 +117,14 @@ interface ArticleInputConfigProps {
   onStart: (config: ArticleConfig) => void;
   isDarkTheme?: boolean;
   uiLanguage?: "en" | "zh";
+  userId?: number | string;
   initialKeyword?: string;
   initialTone?: string;
   initialVisualStyle?: string;
   initialAudience?: "beginner" | "expert";
   initialTargetMarket?: string;
+  initialPromotedWebsites?: string[];
+  initialPromotionIntensity?: "natural" | "strong";
 }
 
 export interface ArticleConfig {
@@ -125,6 +133,8 @@ export interface ArticleConfig {
   visualStyle: string;
   targetAudience: "beginner" | "expert";
   targetMarket: string;
+  promotedWebsites?: string[]; // 推广网站 URL 或已绑定网站 ID
+  promotionIntensity?: "natural" | "strong"; // 推广强度
   reference?: {
     type: "document" | "url";
     document?: {
@@ -143,11 +153,14 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   onStart,
   isDarkTheme,
   uiLanguage = "en",
+  userId,
   initialKeyword = "",
   initialTone = "professional",
   initialVisualStyle = "realistic",
   initialAudience = "beginner",
   initialTargetMarket = "global",
+  initialPromotedWebsites = [],
+  initialPromotionIntensity = "natural",
 }) => {
   const [keyword, setKeyword] = useState(initialKeyword);
   const [tone, setTone] = useState(initialTone);
@@ -157,6 +170,55 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   );
   const [targetMarket, setTargetMarket] = useState(initialTargetMarket);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Promotion state
+  const [promotedWebsites, setPromotedWebsites] = useState<string[]>(initialPromotedWebsites);
+  const [newPromoUrl, setNewPromoUrl] = useState("");
+  const [promotionIntensity, setPromotionIntensity] = useState<"natural" | "strong">(initialPromotionIntensity);
+  const [boundWebsites, setBoundWebsites] = useState<Array<{id: string, url: string, domain: string, title?: string}>>([]);
+  const [isLoadingWebsites, setIsLoadingWebsites] = useState(false);
+
+  // Fetch bound websites
+  useEffect(() => {
+    const fetchWebsites = async () => {
+      if (!userId) return;
+      setIsLoadingWebsites(true);
+      try {
+        const response = await fetch(`/api/websites/list?user_id=${userId}`);
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data?.websites) {
+            setBoundWebsites(result.data.websites);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch bound websites:", error);
+      } finally {
+        setIsLoadingWebsites(false);
+      }
+    };
+    fetchWebsites();
+  }, [userId]);
+
+  const handleAddPromoUrl = (e: React.KeyboardEvent | React.MouseEvent) => {
+    if (e.type === 'keydown' && (e as React.KeyboardEvent).key !== 'Enter') return;
+    if (newPromoUrl.trim() && !promotedWebsites.includes(newPromoUrl.trim())) {
+      setPromotedWebsites([...promotedWebsites, newPromoUrl.trim()]);
+      setNewPromoUrl("");
+    }
+  };
+
+  const removePromoUrl = (url: string) => {
+    setPromotedWebsites(promotedWebsites.filter(u => u !== url));
+  };
+
+  const toggleBoundWebsite = (url: string) => {
+    if (promotedWebsites.includes(url)) {
+      setPromotedWebsites(promotedWebsites.filter(u => u !== url));
+    } else {
+      setPromotedWebsites([...promotedWebsites, url]);
+    }
+  };
 
   // Update local state when initial props change
   React.useEffect(() => {
@@ -190,7 +252,17 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   const [documentFilename, setDocumentFilename] = useState<string>("");
   const [referenceUrl, setReferenceUrl] = useState<string>("");
   const [isProcessingDocument, setIsProcessingDocument] = useState(false);
+  const [urlError, setUrlError] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isValidUrl = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      return ["http:", "https:"].includes(parsed.protocol) && parsed.hostname.includes(".");
+    } catch {
+      return false;
+    }
+  };
 
   const toneOptions = getToneOptions(uiLanguage as "en" | "zh");
   const visualStyles = getVisualStyles(uiLanguage as "en" | "zh");
@@ -359,8 +431,16 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
 
   const handleUrlChange = (url: string) => {
     setReferenceUrl(url);
+    setUrlError("");
     if (url.trim()) {
       setReferenceType("url");
+      if (!isValidUrl(url.trim())) {
+        setUrlError(
+          uiLanguage === "zh"
+            ? "请输入有效的 URL (以 http/https 开头)"
+            : "Please enter a valid URL starting with http/https"
+        );
+      }
     } else {
       setReferenceType(null);
     }
@@ -368,6 +448,7 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
 
   const removeUrl = () => {
     setReferenceUrl("");
+    setUrlError("");
     setReferenceType(null);
   };
 
@@ -375,12 +456,46 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
     e.preventDefault();
     if (!keyword.trim()) return;
 
+    // Validate URL if provided
+    if (referenceType === "url" && referenceUrl.trim()) {
+      if (!isValidUrl(referenceUrl.trim())) {
+        setUrlError(
+          uiLanguage === "zh"
+            ? "请先修正无效的 URL"
+            : "Please fix the invalid URL first"
+        );
+        return;
+      }
+    }
+
+    // Validate document if in progress
+    if (isProcessingDocument) {
+      alert(
+        uiLanguage === "zh"
+          ? "请等待文档处理完成"
+          : "Please wait for document processing"
+      );
+      return;
+    }
+
+    // Validate document content if selected
+    if (referenceType === "document" && !documentContent) {
+      alert(
+        uiLanguage === "zh"
+          ? "文档解析失败，请重新上传或更换文档"
+          : "Document extraction failed, please re-upload or choose another file"
+      );
+      return;
+    }
+
     const config: ArticleConfig = {
       keyword,
       tone,
       visualStyle,
       targetAudience: audience,
       targetMarket,
+      promotedWebsites: promotedWebsites.length > 0 ? promotedWebsites : undefined,
+      promotionIntensity,
     };
 
     // Add reference if provided
@@ -405,115 +520,33 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center justify-start pt-24 min-h-screen max-w-2xl mx-auto px-4 animate-in fade-in zoom-in-95 duration-500">
-      {/* Header */}
-      <div className="text-center mb-10 space-y-4">
-        <div className="inline-flex items-center justify-center p-3 bg-emerald-500/10 rounded-2xl mb-4 ring-1 ring-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-          <Wand2 className="text-emerald-500 w-8 h-8" />
+    <div className="flex flex-col items-center justify-start pt-8 pb-12 min-h-screen max-w-[90rem] mx-auto px-6 animate-in fade-in zoom-in-95 duration-500">
+      {/* Header - More Compact */}
+      <div className="text-center mb-8 space-y-2">
+        <div className="inline-flex items-center justify-center p-2 bg-emerald-500/10 rounded-xl mb-2 ring-1 ring-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+          <Wand2 className="text-emerald-500 w-6 h-6" />
         </div>
         <h1 className={cn(
-          "text-4xl font-black tracking-tight mb-2",
+          "text-3xl font-black tracking-tight",
           isDarkTheme ? "text-white" : "text-gray-900"
         )}>
           {uiLanguage === "zh" ? "AI 图文工场" : "AI Visual Article Generator"}
         </h1>
         <p className={cn(
-          "text-lg max-w-md mx-auto",
-          isDarkTheme ? "text-gray-400" : "text-gray-600"
+          "text-sm max-w-xl mx-auto opacity-70",
+          isDarkTheme ? "text-gray-300" : "text-gray-600"
         )}>
           {uiLanguage === "zh"
-            ? "将单个关键词转换为包含 AI 生成配图的丰富结构化文章。"
-            : "Transform a single keyword into a rich, structured article with AI-generated visuals."}
+            ? "将关键词转化为包含 AI 视觉、深度 SEO 策略和品牌推广的高质量文章。"
+            : "Transform keywords into high-quality articles with AI visuals, deep SEO strategy, and brand promotion."}
         </p>
       </div>
 
-      {/* Input Form */}
+      {/* Main Input Form */}
       <form onSubmit={handleSubmit} className="w-full space-y-6">
-        {/* Settings Summary - Display above input */}
-        {(tone !== "professional" ||
-          visualStyle !== "realistic" ||
-          targetMarket !== "global" ||
-          audience !== "beginner") && (
-          <div className={cn(
-            "border rounded-xl p-4 space-y-3 animate-in slide-in-from-top-4 duration-300",
-            isDarkTheme 
-              ? "bg-[#111] border-white/5" 
-              : "bg-gray-50 border-gray-200"
-          )}>
-            <div className="flex items-center justify-between">
-              <span className={cn(
-                "text-xs font-bold uppercase tracking-widest",
-                isDarkTheme ? "text-gray-400" : "text-gray-600"
-              )}>
-                {uiLanguage === "zh" ? "当前设置" : "Current Settings"}
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(true)}
-                className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
-              >
-                {uiLanguage === "zh" ? "编辑" : "Edit"}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {tone !== "professional" && (
-                <div className="px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center space-x-2">
-                  <Type size={12} className="text-emerald-400" />
-                  <span className="text-xs text-emerald-300">
-                    {uiLanguage === "zh" ? "语调" : "Tone"}:{" "}
-                    {toneOptions.find((o) => o.id === tone)?.emoji}{" "}
-                    {toneOptions.find((o) => o.id === tone)?.label}
-                  </span>
-                </div>
-              )}
-              {visualStyle !== "realistic" && (
-                <div className="px-3 py-1.5 bg-purple-500/10 border border-purple-500/30 rounded-lg flex items-center space-x-2">
-                  <ImageIcon size={12} className="text-purple-400" />
-                  <span className="text-xs text-purple-300">
-                    {uiLanguage === "zh" ? "视觉风格" : "Visual"}:{" "}
-                    {visualStyles.find((s) => s.id === visualStyle)?.emoji}{" "}
-                    {visualStyles.find((s) => s.id === visualStyle)?.label}
-                  </span>
-                </div>
-              )}
-              {targetMarket !== "global" && (
-                <div className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center space-x-2">
-                  <Globe size={12} className="text-blue-400" />
-                  <span className="text-xs text-blue-300">
-                    {uiLanguage === "zh" ? "目标市场" : "Market"}:{" "}
-                    {
-                      targetMarketOptions.find((m) => m.id === targetMarket)
-                        ?.emoji
-                    }{" "}
-                    {
-                      targetMarketOptions.find((m) => m.id === targetMarket)
-                        ?.label
-                    }
-                  </span>
-                </div>
-              )}
-              {audience !== "beginner" && (
-                <div className="px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center space-x-2">
-                  <Users size={12} className="text-amber-400" />
-                  <span className="text-xs text-amber-300">
-                    {uiLanguage === "zh" ? "目标受众" : "Audience"}:{" "}
-                    {audience === "expert"
-                      ? uiLanguage === "zh"
-                        ? "专家"
-                        : "Expert"
-                      : uiLanguage === "zh"
-                      ? "初学者"
-                      : "Beginner"}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Main Input */}
-        <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+        {/* Step 1: Core Keyword (More Balanced Size) */}
+        <div className="relative group max-w-4xl mx-auto">
+          <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-blue-500 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
           <div className="relative">
             <input
               type="text"
@@ -521,466 +554,303 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
               onChange={(e) => setKeyword(e.target.value)}
               placeholder={
                 uiLanguage === "zh"
-                  ? "输入您的主题关键词"
-                  : "Enter your topic keyword"
+                  ? "输入您要创作的主题关键词..."
+                  : "Enter the topic keyword you want to create..."
               }
               className={cn(
-                "w-full text-xl p-6 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all shadow-2xl",
+                "w-full text-xl font-bold p-6 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all shadow-2xl",
                 isDarkTheme
-                  ? "bg-[#111] border border-white/10 text-white placeholder:text-gray-600"
-                  : "bg-white border border-gray-300 text-gray-900 placeholder:text-gray-400"
+                  ? "bg-black/40 border border-white/10 text-white placeholder:text-gray-600"
+                  : "bg-white border border-gray-200 text-gray-900 placeholder:text-gray-400"
               )}
               autoFocus
             />
             <button
               type="submit"
               disabled={!keyword.trim()}
-              className="absolute right-3 top-3 bottom-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold px-6 rounded-lg transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105 active:scale-95"
+              className="absolute right-3 top-3 bottom-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black px-6 rounded-xl transition-all flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-[1.02] active:scale-95 shadow-lg"
             >
-              <span>{uiLanguage === "zh" ? "生成" : "Generate"}</span>
-              <ArrowRight size={18} />
+              <span>{uiLanguage === "zh" ? "立即生成" : "Generate"}</span>
+              <ArrowRight size={18} strokeWidth={3} />
             </button>
           </div>
         </div>
 
-        {/* Reference Materials Section - Always Visible */}
-        <div className={cn(
-          "border rounded-xl p-5 space-y-4 animate-in slide-in-from-top-4 duration-300",
-          isDarkTheme 
-            ? "bg-[#111] border-white/5" 
-            : "bg-gray-50 border-gray-200"
-        )}>
-          <div className="flex items-center space-x-2">
-            <div className="p-2 bg-emerald-500/10 rounded-lg">
-              <FileText className="text-emerald-400" size={16} />
+        {/* Step 2: Three-Column Grid Layout ( 平铺展示 ) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Column 1: Website Promotion */}
+          <div className={cn(
+            "p-5 rounded-2xl border transition-all flex flex-col",
+            isDarkTheme ? "bg-black/20 border-white/5" : "bg-white border-gray-100 shadow-sm"
+          )}>
+            <div className="flex items-center space-x-2 mb-4">
+              <div className="p-1.5 bg-blue-500/10 rounded-lg">
+                <Rocket className="text-blue-400" size={16} />
+              </div>
+              <h3 className={cn("text-xs font-bold uppercase tracking-wider", isDarkTheme ? "text-white" : "text-gray-900")}>
+                {uiLanguage === "zh" ? "网站推广" : "Promotion"}
+              </h3>
             </div>
-            <div>
-              <label className={cn(
-                "text-sm font-bold",
-                isDarkTheme ? "text-white" : "text-gray-900"
-              )}>
-                {uiLanguage === "zh"
-                  ? "参考资料（可选）"
-                  : "Reference Materials (Optional)"}
-              </label>
-              <p className={cn(
-                "text-[10px] mt-0.5",
-                isDarkTheme ? "text-gray-500" : "text-gray-500"
-              )}>
-                {uiLanguage === "zh"
-                  ? "上传文档或输入URL以指导文章生成"
-                  : "Upload document or enter URL to guide article generation"}
-              </p>
-            </div>
-          </div>
 
-          {/* Document Upload */}
-          <div className="space-y-2">
-            {!documentFile ? (
-              <div className="relative">
+            <div className="space-y-4 flex-1">
+              <div className="flex space-x-2">
                 <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,.txt,.md,.docx"
-                  onChange={handleFileInputChange}
-                  className="hidden"
-                  disabled={isProcessingDocument || !!referenceUrl}
+                  type="text"
+                  value={newPromoUrl}
+                  onChange={(e) => setNewPromoUrl(e.target.value)}
+                  onKeyDown={handleAddPromoUrl}
+                  placeholder={uiLanguage === "zh" ? "输入推广 URL" : "URL"}
+                  className={cn(
+                    "flex-1 text-[11px] p-2.5 rounded-lg border focus:outline-none",
+                    isDarkTheme ? "bg-black/40 border-white/5 text-white" : "bg-gray-50 border-gray-200"
+                  )}
                 />
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isProcessingDocument || !!referenceUrl}
-                  className={cn(
-                    "w-full p-4 border-2 border-dashed rounded-lg transition-all flex flex-col items-center justify-center space-y-2 group",
-                    isProcessingDocument || referenceUrl
-                      ? "border-gray-700 bg-gray-900/30 cursor-not-allowed"
-                      : "border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50 hover:bg-emerald-500/10 cursor-pointer"
-                  )}
+                  onClick={handleAddPromoUrl}
+                  className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[11px] font-bold border border-white/5"
                 >
-                  {isProcessingDocument ? (
-                    <>
-                      <Loader2
-                        className="text-emerald-400 animate-spin"
-                        size={20}
-                      />
-                      <span className="text-xs text-emerald-400 font-medium">
-                        {uiLanguage === "zh" ? "处理中..." : "Processing..."}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload
-                        className={cn(
-                          "transition-colors",
-                          referenceUrl
-                            ? "text-gray-600"
-                            : "text-emerald-400 group-hover:text-emerald-300"
-                        )}
-                        size={20}
-                      />
-                      <div className="text-center">
-                        <div
-                          className={cn(
-                            "text-xs font-medium transition-colors",
-                            referenceUrl
-                              ? "text-gray-500"
-                              : "text-emerald-400 group-hover:text-emerald-300"
-                          )}
-                        >
-                          {uiLanguage === "zh"
-                            ? "点击上传文档"
-                            : "Click to upload document"}
-                        </div>
-                        <div className="text-[10px] text-gray-500 mt-1">
-                          {uiLanguage === "zh"
-                            ? "支持 PDF, TXT, MD, DOCX (最大 2MB)"
-                            : "PDF, TXT, MD, DOCX (Max 2MB)"}
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </button>
-              </div>
-            ) : (
-              <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg flex items-center justify-between group hover:bg-emerald-500/15 transition-colors">
-                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                  <div className="p-2 bg-emerald-500/20 rounded-lg flex-shrink-0">
-                    <FileText className="text-emerald-400" size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-emerald-300 truncate">
-                      {documentFilename}
-                    </div>
-                    <div className="text-xs text-emerald-400/70 mt-0.5">
-                      {documentContent.length > 0
-                        ? uiLanguage === "zh"
-                          ? `已提取 ${documentContent.length.toLocaleString()} 字`
-                          : `${documentContent.length.toLocaleString()} chars extracted`
-                        : ""}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={removeDocument}
-                  className="p-2 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/20 rounded-lg transition-all flex-shrink-0 ml-2"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center space-x-3">
-            <div className="flex-1 border-t border-white/10"></div>
-            <span className="text-[10px] text-gray-500 uppercase">
-              {uiLanguage === "zh" ? "或" : "OR"}
-            </span>
-            <div className="flex-1 border-t border-white/10"></div>
-          </div>
-
-          {/* URL Input */}
-          <div className="space-y-2">
-            {!referenceUrl ? (
-              <div className="relative">
-                <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                  <LinkIcon className={cn(
-                    isDarkTheme ? "text-gray-500" : "text-gray-500"
-                  )} size={16} />
-                </div>
-                <input
-                  type="url"
-                  value={referenceUrl}
-                  onChange={(e) => handleUrlChange(e.target.value)}
-                  placeholder={
-                    uiLanguage === "zh"
-                      ? "https://example.com"
-                      : "https://example.com"
-                  }
-                  disabled={isProcessingDocument || !!documentFile}
-                  className={cn(
-                    cn(
-                      "w-full pl-10 pr-4 py-3 border rounded-lg text-sm focus:outline-none focus:ring-2 transition-all",
-                      isDarkTheme
-                        ? "bg-black/40 text-white placeholder:text-gray-600"
-                        : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400"
-                    ),
-                    isProcessingDocument || documentFile
-                      ? "border-gray-700 cursor-not-allowed"
-                      : "border-blue-500/30 focus:border-blue-500/50 focus:ring-blue-500/20"
-                  )}
-                />
-                {referenceUrl && (
-                  <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/20 rounded text-[10px] text-blue-400/80">
-                    📸{" "}
-                    {uiLanguage === "zh"
-                      ? "页面截图将作为文章配图之一"
-                      : "Page screenshot will be used as one of the article images"}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center justify-between group hover:bg-blue-500/15 transition-colors">
-                <div className="flex items-center space-x-3 flex-1 min-w-0">
-                  <div className="p-2 bg-blue-500/20 rounded-lg flex-shrink-0">
-                    <LinkIcon className="text-blue-400" size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-blue-300 truncate">
-                      {referenceUrl}
-                    </div>
-                    <div className="text-xs text-blue-400/70 mt-0.5 flex items-center space-x-1">
-                      <span>📸</span>
-                      <span>
-                        {uiLanguage === "zh"
-                          ? "将生成截图"
-                          : "Screenshot will be generated"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={removeUrl}
-                  className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 rounded-lg transition-all flex-shrink-0 ml-2"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* More Options Button */}
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={() => setIsModalOpen(true)}
-            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg text-xs font-medium text-gray-400 hover:text-white transition-all flex items-center space-x-2"
-          >
-            <Sparkles size={14} />
-            <span>{uiLanguage === "zh" ? "更多选项" : "More Options"}</span>
-          </button>
-        </div>
-
-        {/* More Options Modal */}
-        {isModalOpen && (
-          <div
-            className={cn(
-              "fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200",
-              isDarkTheme ? "bg-black/80" : "bg-black/50"
-            )}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setIsModalOpen(false);
-              }
-            }}
-          >
-            <div
-              className="bg-[#111] border border-white/10 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Modal Header */}
-              <div className={cn(
-                "sticky top-0 border-b p-6 flex items-center justify-between z-10",
-                isDarkTheme 
-                  ? "bg-[#111] border-white/10" 
-                  : "bg-white border-gray-200"
-              )}>
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-emerald-500/10 rounded-lg">
-                    <Sparkles className="text-emerald-400" size={20} />
-                  </div>
-                  <h2 className="text-xl font-bold text-white">
-                    {uiLanguage === "zh" ? "更多选项" : "More Options"}
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className={cn(
-                    "p-2 rounded-lg transition-colors",
-                    isDarkTheme
-                      ? "hover:bg-white/5 text-gray-400 hover:text-white"
-                      : "hover:bg-gray-100 text-gray-500 hover:text-gray-900"
-                  )}
-                >
-                  <X size={20} />
+                  {uiLanguage === "zh" ? "添加" : "Add"}
                 </button>
               </div>
 
-              {/* Modal Content */}
-              <div className="p-6 space-y-6">
-                {/* Grid Layout */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Tone */}
-                  <div className="space-y-3">
-                    <label className={cn(
-                      "text-xs font-bold uppercase tracking-widest flex items-center",
-                      isDarkTheme ? "text-gray-500" : "text-gray-600"
-                    )}>
-                      <Type size={12} className="mr-2" />{" "}
-                      {uiLanguage === "zh" ? "语调" : "Tone"}
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {toneOptions.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setTone(opt.id)}
-                          className={cn(
-                            "p-2 rounded border text-xs font-medium transition-all text-left flex items-center space-x-2",
-                            tone === opt.id
-                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
-                              : isDarkTheme
-                                ? "bg-black/20 border-white/5 text-gray-400 hover:bg-white/5"
-                                : "bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100"
-                          )}
-                        >
-                          <span>{opt.emoji}</span>
-                          <span>{opt.label}</span>
-                        </button>
-                      ))}
+              {promotedWebsites.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {promotedWebsites.map(url => (
+                    <div key={url} className="flex items-center space-x-1 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md text-[9px] text-blue-300">
+                      <span className="truncate max-w-[80px]">{url}</span>
+                      <button onClick={() => removePromoUrl(url)} className="hover:text-white">
+                        <X size={10} />
+                      </button>
                     </div>
-                  </div>
-
-                  {/* Visual Style */}
-                  <div className="space-y-3">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center">
-                      <ImageIcon size={12} className="mr-2" />{" "}
-                      {uiLanguage === "zh" ? "视觉风格" : "Visual Style"}
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {visualStyles.map((style) => (
-                        <button
-                          key={style.id}
-                          type="button"
-                          onClick={() => setVisualStyle(style.id)}
-                          className={cn(
-                            "p-2 rounded border text-xs font-medium transition-all text-left flex items-center space-x-2",
-                            visualStyle === style.id
-                              ? "bg-purple-500/20 border-purple-500/50 text-purple-400"
-                              : "bg-black/20 border-white/5 text-gray-400 hover:bg-white/5"
-                          )}
-                        >
-                          <span>{style.emoji}</span>
-                          <span>{style.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  ))}
                 </div>
+              )}
 
-                {/* Target Market */}
-                <div className="space-y-3 pt-2 border-t border-white/5">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-widest flex items-center">
-                    <Globe size={12} className="mr-2" />{" "}
-                    {uiLanguage === "zh" ? "目标市场" : "Target Market"}
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {targetMarketOptions.map((market) => (
+              {boundWebsites.length > 0 && (
+                <div className="pt-3 border-t border-white/5">
+                  <div className="grid grid-cols-1 gap-1.5 max-h-[100px] overflow-y-auto pr-1 custom-scrollbar">
+                    {boundWebsites.map(site => (
                       <button
-                        key={market.id}
+                        key={site.id}
                         type="button"
-                        onClick={() => setTargetMarket(market.id)}
+                        onClick={() => toggleBoundWebsite(site.url)}
                         className={cn(
-                          "p-2 rounded border text-xs font-medium transition-all text-center flex flex-col items-center space-y-1",
-                          targetMarket === market.id
-                            ? "bg-blue-500/20 border-blue-500/50 text-blue-400"
-                            : isDarkTheme
-                              ? "bg-black/20 border-white/5 text-gray-400 hover:bg-white/5"
-                              : "bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100"
+                          "flex items-center justify-between p-2 rounded-lg border text-left transition-all",
+                          promotedWebsites.includes(site.url)
+                            ? "bg-blue-500/10 border-blue-500/40 text-blue-300"
+                            : "bg-black/20 border-white/5 text-gray-400 hover:border-white/20"
                         )}
                       >
-                        <span className="text-base">{market.emoji}</span>
-                        <span>{market.label}</span>
+                        <span className="text-[10px] font-medium truncate">{site.domain}</span>
+                        {promotedWebsites.includes(site.url) && <CheckCircle2 size={10} />}
                       </button>
                     ))}
                   </div>
                 </div>
+              )}
 
-                {/* Audience Slider (Simple Toggle for now) */}
-                <div className={cn(
-                  "space-y-3 pt-2 border-t",
-                  isDarkTheme ? "border-white/5" : "border-gray-200"
-                )}>
-                  <label className={cn(
-                    "text-xs font-bold uppercase tracking-widest flex items-center",
-                    isDarkTheme ? "text-gray-500" : "text-gray-600"
-                  )}>
-                    <Users size={12} className="mr-2" />{" "}
-                    {uiLanguage === "zh" ? "目标受众" : "Target Audience"}
-                  </label>
-                  <div className={cn(
-                    "flex p-1 rounded-lg w-full max-w-md mx-auto border",
-                    isDarkTheme
-                      ? "bg-black/40 border-white/5"
-                      : "bg-gray-100 border-gray-300"
-                  )}>
+              <div className="pt-3 border-t border-white/5 mt-auto">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "推广强度" : "Intensity"}</span>
+                  <div className="flex p-0.5 bg-black/40 rounded-lg border border-white/5">
                     <button
                       type="button"
-                      onClick={() => setAudience("beginner")}
-                      className={cn(
-                        "flex-1 py-1.5 text-xs font-bold rounded transition-all",
-                        audience === "beginner"
-                          ? "bg-white/10 text-white shadow"
-                          : "text-gray-500 hover:text-gray-300"
-                      )}
+                      onClick={() => setPromotionIntensity("natural")}
+                      className={cn("px-2 py-1 text-[9px] font-bold rounded-md transition-all", promotionIntensity === "natural" ? "bg-white/10 text-white" : "text-gray-500")}
                     >
-                      {uiLanguage === "zh" ? "初学者" : "Beginner"}
+                      {uiLanguage === "zh" ? "自然" : "Natural"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAudience("expert")}
-                      className={cn(
-                        "flex-1 py-1.5 text-xs font-bold rounded transition-all",
-                        audience === "expert"
-                          ? isDarkTheme
-                            ? "bg-white/10 text-white shadow"
-                            : "bg-emerald-100 text-emerald-700 shadow"
-                          : isDarkTheme
-                            ? "text-gray-500 hover:text-gray-300"
-                            : "text-gray-600 hover:text-gray-900"
-                      )}
+                      onClick={() => setPromotionIntensity("strong")}
+                      className={cn("px-2 py-1 text-[9px] font-bold rounded-md transition-all", promotionIntensity === "strong" ? "bg-blue-500/20 text-blue-400" : "text-gray-500")}
                     >
-                      {uiLanguage === "zh" ? "专家" : "Expert"}
+                      {uiLanguage === "zh" ? "重点" : "Strong"}
                     </button>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* Modal Footer */}
-              <div className={cn(
-                "sticky bottom-0 border-t p-6 flex justify-end space-x-3",
-                isDarkTheme 
-                  ? "bg-[#111] border-white/10" 
-                  : "bg-white border-gray-200"
-              )}>
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className={cn(
-                    "px-4 py-2 border rounded-lg text-sm font-medium transition-all",
-                    isDarkTheme
-                      ? "bg-white/5 hover:bg-white/10 border-white/10 text-gray-400 hover:text-white"
-                      : "bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-700 hover:text-gray-900"
-                  )}
-                >
-                  {uiLanguage === "zh" ? "取消" : "Cancel"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-lg text-sm transition-all"
-                >
-                  {uiLanguage === "zh" ? "确认" : "Confirm"}
-                </button>
+          {/* Column 2: Reference & Market */}
+          <div className={cn(
+            "p-5 rounded-2xl border transition-all flex flex-col",
+            isDarkTheme ? "bg-black/20 border-white/5" : "bg-white border-gray-100 shadow-sm"
+          )}>
+            <div className="flex items-center space-x-2 mb-4">
+              <div className="p-1.5 bg-emerald-500/10 rounded-lg">
+                <FileText className="text-emerald-400" size={16} />
+              </div>
+              <h3 className={cn("text-xs font-bold uppercase tracking-wider", isDarkTheme ? "text-white" : "text-gray-900")}>
+                {uiLanguage === "zh" ? "参考系与市场" : "Reference & Market"}
+              </h3>
+            </div>
+
+            <div className="space-y-5 flex-1">
+              <div className="space-y-3">
+                {!documentFile && !referenceUrl ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-3 border border-dashed border-white/10 bg-black/20 rounded-xl hover:border-emerald-500/50 transition-all flex flex-col items-center space-y-1"
+                    >
+                      <Upload size={14} className="text-emerald-400/50" />
+                      <span className="text-[9px] font-bold text-gray-500 uppercase">{uiLanguage === "zh" ? "文档" : "File"}</span>
+                    </button>
+                    <div className="relative">
+                      <input
+                        type="url"
+                        value={referenceUrl}
+                        onChange={(e) => handleUrlChange(e.target.value)}
+                        placeholder="URL..."
+                        className="w-full p-3 pl-8 border border-dashed border-white/10 bg-black/20 rounded-xl text-[10px] text-white focus:outline-none"
+                      />
+                      <LinkIcon size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {documentFile && (
+                      <div className="flex items-center justify-between p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                        <span className="text-[10px] text-emerald-300 truncate max-w-[150px]">{documentFilename}</span>
+                        <button onClick={removeDocument}><X size={12} className="text-emerald-400" /></button>
+                      </div>
+                    )}
+                    {referenceUrl && (
+                      <div className="flex items-center justify-between p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                        <span className="text-[10px] text-blue-300 truncate max-w-[150px]">{referenceUrl}</span>
+                        <button onClick={removeUrl}><X size={12} className="text-blue-400" /></button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-white/5 space-y-4 mt-auto">
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "目标市场" : "Target Market"}</label>
+                  <div className="relative">
+                    <select
+                      value={targetMarket}
+                      onChange={(e) => setTargetMarket(e.target.value)}
+                      className="w-full appearance-none bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-[11px] font-bold text-gray-300 focus:outline-none"
+                    >
+                      {targetMarketOptions.map(m => (
+                        <option key={m.id} value={m.id}>{m.emoji} {m.label}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "内容深度" : "Content Depth"}</label>
+                  <div className="flex p-0.5 bg-black/40 rounded-lg border border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => setAudience("beginner")}
+                      className={cn("flex-1 py-1.5 text-[9px] font-bold rounded-md transition-all", audience === "beginner" ? "bg-white/10 text-white" : "text-gray-500")}
+                    >
+                      {uiLanguage === "zh" ? "初学者" : "Junior"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAudience("expert")}
+                      className={cn("flex-1 py-1.5 text-[9px] font-bold rounded-md transition-all", audience === "expert" ? "bg-emerald-500/20 text-emerald-400" : "text-gray-500")}
+                    >
+                      {uiLanguage === "zh" ? "专业" : "Expert"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 3: Narrative & Style */}
+          <div className={cn(
+            "p-5 rounded-2xl border transition-all flex flex-col",
+            isDarkTheme ? "bg-black/20 border-white/5" : "bg-white border-gray-100 shadow-sm"
+          )}>
+            <div className="flex items-center space-x-2 mb-4">
+              <div className="p-1.5 bg-purple-500/10 rounded-lg">
+                <Layout className="text-purple-400" size={16} />
+              </div>
+              <h3 className={cn("text-xs font-bold uppercase tracking-wider", isDarkTheme ? "text-white" : "text-gray-900")}>
+                {uiLanguage === "zh" ? "风格偏好" : "Style Preferences"}
+              </h3>
+            </div>
+
+            <div className="space-y-4 flex-1">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "叙事语调" : "Tone"}</label>
+                  <span className="text-[9px] text-emerald-400 font-bold">{toneOptions.find(o => o.id === tone)?.label}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {toneOptions.map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setTone(opt.id)}
+                      className={cn(
+                        "flex items-center space-x-2 p-2 rounded-lg border transition-all text-left",
+                        tone === opt.id ? "bg-emerald-500/10 border-emerald-500/40" : "bg-black/20 border-white/5"
+                      )}
+                    >
+                      <span className="text-sm">{opt.emoji}</span>
+                      <span className={cn("text-[10px] font-bold", tone === opt.id ? "text-emerald-300" : "text-gray-500")}>{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-3 border-t border-white/5 mt-auto">
+                <div className="flex items-center justify-between">
+                  <label className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "配图风格" : "Visuals"}</label>
+                  <span className="text-[9px] text-purple-400 font-bold">{visualStyles.find(s => s.id === visualStyle)?.label}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {visualStyles.map(style => (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => setVisualStyle(style.id)}
+                      className={cn(
+                        "flex items-center space-x-2 p-2 rounded-lg border transition-all text-left",
+                        visualStyle === style.id ? "bg-purple-500/10 border-purple-500/40" : "bg-black/20 border-white/5"
+                      )}
+                    >
+                      <span className="text-sm">{style.emoji}</span>
+                      <span className={cn("text-[10px] font-bold", visualStyle === style.id ? "text-purple-300" : "text-gray-500")}>{style.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Floating Quick Settings Info (Only show when modified) */}
+        {(tone !== "professional" || visualStyle !== "realistic" || targetMarket !== "global" || promotedWebsites.length > 0) && (
+          <div className="flex justify-center pt-2">
+            <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-full flex items-center space-x-3">
+              <MousePointer2 size={10} className="text-emerald-400" />
+              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+                {uiLanguage === "zh" ? "自定义配置已激活" : "Custom Config Active"}
+              </span>
+              <div className="flex -space-x-1.5">
+                {promotedWebsites.length > 0 && <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">P</div>}
+                {tone !== "professional" && <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">T</div>}
+                {visualStyle !== "realistic" && <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">V</div>}
               </div>
             </div>
           </div>
         )}
       </form>
+      <input ref={fileInputRef} type="file" accept=".pdf,.txt,.md,.docx" onChange={handleFileInputChange} className="hidden" />
     </div>
   );
 };

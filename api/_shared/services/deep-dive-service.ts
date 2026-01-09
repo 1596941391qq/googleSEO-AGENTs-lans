@@ -12,7 +12,7 @@ import { reviewQuality, QualityReviewResult } from '../agents/agent-4-quality-re
 import { extractVisualThemes, generateImagePrompts, generateImages, VisualThemesResult, ImagePromptResult } from '../agents/agent-5-image-creative.js';
 import { generateDeepDiveStrategy, extractCoreKeywords } from '../agents/agent-2-seo-researcher.js';
 import { fetchSerpResults } from '../tools/serp-search.js';
-import { fetchKeywordData, getDataForSEOLocationAndLanguage } from '../tools/dataforseo.js';
+import { fetchKeywordData, getDataForSEOLocationAndLanguage, type SearchEngine } from '../tools/dataforseo.js';
 import { KeywordData, SEOStrategyReport, TargetLanguage, ProbabilityLevel } from '../types.js';
 import {
   initContentManagementTables,
@@ -111,9 +111,11 @@ export interface IntentAndProbabilityResult {
 export async function analyzeSearchEnginePreferences(
   keyword: string,
   uiLanguage: 'zh' | 'en',
-  targetLanguage: TargetLanguage
+  targetLanguage: TargetLanguage,
+  targetMarket: string = 'global',
+  onProgress?: (message: string) => void
 ): Promise<SearchPreferencesResult> {
-  return await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage);
+  return await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket, undefined, onProgress);
 }
 
 /**
@@ -123,10 +125,13 @@ export async function analyzeSearchEnginePreferences(
 export async function analyzeCompetitorsForDeepDive(
   keyword: string,
   uiLanguage: 'zh' | 'en',
-  targetLanguage: TargetLanguage
+  targetLanguage: TargetLanguage,
+  targetMarket: string = 'global',
+  searchEngine: SearchEngine = 'google',
+  onProgress?: (message: string) => void
 ): Promise<CompetitorAnalysisResult> {
-  const serpData = await fetchSerpResults(keyword, targetLanguage);
-  return await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage);
+  const serpData = await fetchSerpResults(keyword, targetLanguage, searchEngine);
+  return await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, searchEngine, undefined, onProgress);
 }
 
 /**
@@ -139,7 +144,8 @@ export async function generateSEOStrategyReport(
   targetLanguage: TargetLanguage,
   strategyPrompt?: string,
   searchPreferences?: SearchPreferencesResult,
-  competitorAnalysis?: CompetitorAnalysisResult
+  competitorAnalysis?: CompetitorAnalysisResult,
+  onProgress?: (message: string) => void
 ): Promise<SEOStrategyReport> {
   return await generateDeepDiveStrategy(
     keyword,
@@ -147,7 +153,10 @@ export async function generateSEOStrategyReport(
     targetLanguage,
     strategyPrompt,
     searchPreferences,
-    competitorAnalysis
+    competitorAnalysis,
+    'global',
+    undefined,
+    onProgress
   );
 }
 
@@ -170,7 +179,8 @@ export async function extractCoreKeywordsFromReport(
 export async function fetchSERankingAndSERPData(
   coreKeywords: string[],
   targetLanguage: TargetLanguage,
-  maxKeywords: number = 5
+  maxKeywords: number = 5,
+  searchEngine: SearchEngine = 'google'
 ): Promise<{
   serankingDataMap: Map<string, any>;
   serpCompetitionData: SerpCompetitionData[];
@@ -180,7 +190,7 @@ export async function fetchSERankingAndSERPData(
   // 获取 DataForSEO 数据
   try {
     const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
-    const dataForSEOResults = await fetchKeywordData(coreKeywords, locationCode, languageCode);
+    const dataForSEOResults = await fetchKeywordData(coreKeywords, locationCode, languageCode, searchEngine);
     dataForSEOResults.forEach(data => {
       if (data.keyword) {
         serankingDataMap.set(data.keyword.toLowerCase(), data);
@@ -195,7 +205,7 @@ export async function fetchSERankingAndSERPData(
   const serpCompetitionData: SerpCompetitionData[] = [];
   for (const coreKeyword of coreKeywords.slice(0, maxKeywords)) {
     try {
-      const serpData = await fetchSerpResults(coreKeyword, targetLanguage);
+      const serpData = await fetchSerpResults(coreKeyword, targetLanguage, searchEngine);
       const serpResults = serpData.results.map(r => ({
         title: r.title,
         url: r.url,
@@ -518,7 +528,9 @@ export async function executeDeepDive(
       result.searchPreferences = await analyzeSearchEnginePreferences(
         keyword.keyword,
         uiLanguage,
-        targetLanguage
+        targetLanguage,
+        'global',
+        (msg) => onProgress?.(1, msg)
       );
     } catch (error: any) {
       console.warn(`[Deep Dive Service] Search preferences analysis failed: ${error.message}`);
@@ -530,7 +542,10 @@ export async function executeDeepDive(
       result.competitorAnalysis = await analyzeCompetitorsForDeepDive(
         keyword.keyword,
         uiLanguage,
-        targetLanguage
+        targetLanguage,
+        'global',
+        'google',
+        (msg) => onProgress?.(2, msg)
       );
     } catch (error: any) {
       console.warn(`[Deep Dive Service] Competitor analysis failed: ${error.message}`);
@@ -544,7 +559,8 @@ export async function executeDeepDive(
       targetLanguage,
       strategyPrompt,
       result.searchPreferences,
-      result.competitorAnalysis
+      result.competitorAnalysis,
+      (msg) => onProgress?.(3, msg)
     );
 
     // Step 4: 提取核心关键词

@@ -12,6 +12,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initUserWebsitesTable, initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -29,19 +30,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // 获取 user_id（从 session 或 query 参数）
-    let userId: number;
-
-    // TODO: 从 session 获取 user_id
-    // const session = await getSession(req);
-    // userId = session.user.id;
-
-    // 临时：从 query 获取或使用默认值
-    userId = req.query.user_id ? parseInt(req.query.user_id as string) : 1;
-
-    if (!userId || isNaN(userId)) {
-      return res.status(400).json({ error: 'Invalid user_id' });
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
     }
+    const userId = authResult.userId;
+    const numericUserId = parseInt(userId);
+    const finalUserId = isNaN(numericUserId) ? userId : numericUserId;
 
     // 初始化数据库表
     await initWebsiteDataTables();
@@ -55,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         last_selected_website_id,
         ui_settings
       FROM user_preferences
-      WHERE user_id = ${userId}
+      WHERE user_id::text = ${finalUserId.toString()}
     `;
 
     const preferences = preferencesResult.rows[0] || {
@@ -102,7 +98,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ld.traffic_cost
       FROM user_websites w
       LEFT JOIN latest_data ld ON w.id = ld.website_id
-      WHERE w.user_id = ${userId} AND w.is_active = true
+      WHERE w.user_id::text = ${finalUserId.toString()} AND w.is_active = true
       ORDER BY
         w.is_default DESC,
         w.last_accessed_at DESC NULLS LAST,

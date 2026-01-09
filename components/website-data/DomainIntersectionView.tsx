@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
+import { useAuth } from "../../contexts/AuthContext";
+import { getUserId } from "./utils";
 
 interface DomainIntersection {
   targetDomain: string;
@@ -50,6 +52,8 @@ export const DomainIntersectionView: React.FC<DomainIntersectionViewProps> = ({
   isDarkTheme,
   uiLanguage,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [intersection, setIntersection] = useState<DomainIntersection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +75,7 @@ export const DomainIntersectionView: React.FC<DomainIntersectionViewProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           websiteId,
-          userId: 1,
+          userId: currentUserId,
           competitorDomain,
         }),
       });

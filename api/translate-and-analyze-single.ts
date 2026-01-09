@@ -25,18 +25,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       uiLanguage,
       targetSearchEngine = 'google',
       websiteUrl,
-      websiteDR
+      websiteDR,
+      skipTranslation = false
     } = body;
 
     if (!keyword || typeof keyword !== 'string' || !targetLanguage) {
       return res.status(400).json({ error: 'Missing required fields: keyword, targetLanguage' });
     }
 
-    console.log(`Processing single keyword: ${keyword} -> ${targetLanguage}`);
+    console.log(`Processing single keyword: ${keyword} -> ${targetLanguage} (skipTranslation: ${skipTranslation})`);
 
-    // Step 1: Translate keyword
-    const translationResult = await translateKeywordToTarget(keyword, targetLanguage);
-    console.log(`Translated "${keyword}" to "${translationResult.translated}"`);
+    // Step 1: Translate keyword (or skip if requested)
+    let translationResult;
+    if (skipTranslation) {
+      translationResult = {
+        original: keyword,
+        translated: keyword,
+        translationBack: keyword
+      };
+      console.log(`Skipped translation for "${keyword}"`);
+    } else {
+      translationResult = await translateKeywordToTarget(keyword, targetLanguage);
+      console.log(`Translated "${keyword}" to "${translationResult.translated}"`);
+    }
 
     // Step 2: Convert to KeywordData format
     const keywordData: KeywordData = {
@@ -79,14 +90,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (dataForSEOData.volume) {
           keywordData.volume = dataForSEOData.volume;
         }
-
-        // Check if difficulty > 40, skip SERP analysis
-        if (dataForSEOData.difficulty && dataForSEOData.difficulty > 40) {
-          console.log(`[DataForSEO] Keyword "${keywordData.keyword}" has KD ${dataForSEOData.difficulty} > 40, marking as LOW and skipping`);
-          keywordData.probability = ProbabilityLevel.LOW;
-          keywordData.reasoning = `Keyword Difficulty (${dataForSEOData.difficulty}) is too high (>40). This indicates strong competition. Skipped detailed SERP analysis.`;
-          shouldSkip = true;
-        }
       } else {
         console.log(`[DataForSEO] No data found for "${keywordData.keyword}"`);
       }
@@ -94,25 +97,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.warn(`[DataForSEO] API call failed: ${dataForSEOError.message}. Proceeding with SERP analysis.`);
     }
 
-    let result: KeywordData;
+    // Step 3: Analyze with SERP search (includes SE Ranking data in analysis)
+    const analyzed = await analyzeRankingProbability(
+      [keywordData],
+      systemInstruction || 'You are an SEO expert analyzing keyword ranking opportunities.',
+      uiLanguage || 'en',
+      targetLanguage,
+      websiteUrl,
+      websiteDR,
+      targetSearchEngine
+    );
 
-    if (shouldSkip) {
-      // Skip SERP analysis, use keyword with LOW probability
-      result = keywordData;
-    } else {
-      // Step 3: Analyze with SERP search (includes SE Ranking data in analysis)
-      const analyzed = await analyzeRankingProbability(
-        [keywordData],
-        systemInstruction || 'You are an SEO expert analyzing keyword ranking opportunities.',
-        uiLanguage || 'en',
-        targetLanguage,
-        websiteUrl,
-        websiteDR,
-        targetSearchEngine
-      );
-
-      result = analyzed[0];
-    }
+    const result = analyzed[0];
 
     return res.json({
       success: true,

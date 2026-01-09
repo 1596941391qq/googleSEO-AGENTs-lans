@@ -212,12 +212,15 @@ interface ArticleGeneratorLayoutProps {
   uiLanguage?: "en" | "zh";
   isDarkTheme?: boolean;
   token?: string | null;
+  userId?: number | string;
   articleGeneratorState?: {
     keyword: string;
     tone: string;
     targetAudience: string;
     visualStyle: string;
     targetMarket?: string;
+    promotedWebsites?: string[];
+    promotionIntensity?: "natural" | "strong";
     isGenerating: boolean;
     progress: number;
     currentStage:
@@ -240,6 +243,9 @@ interface ArticleGeneratorLayoutProps {
       tone: string;
       targetAudience: string;
       visualStyle: string;
+      targetMarket: string;
+      promotedWebsites: string[];
+      promotionIntensity: "natural" | "strong";
       isGenerating: boolean;
       progress: number;
       currentStage:
@@ -269,6 +275,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
   uiLanguage = "en",
   isDarkTheme = true,
   token,
+  userId,
   articleGeneratorState,
   onStateChange,
 }) => {
@@ -505,6 +512,10 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
       targetAudience: config.targetAudience,
       visualStyle: config.visualStyle,
       targetMarket: config.targetMarket,
+      promotedWebsites: config.promotedWebsites,
+      promotionIntensity: config.promotionIntensity,
+      // @ts-ignore - Ensure reference is preserved in state
+      reference: config.reference,
     });
 
     // Track events locally for this generation session
@@ -940,22 +951,28 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
       {/* Content Container (Center Stage) */}
       <div
         className={cn(
-          "relative z-10 w-full h-full flex flex-col max-w-5xl mx-auto backdrop-blur-sm shadow-2xl",
+          "relative z-10 w-full h-full flex flex-col max-w-[95rem] mx-auto backdrop-blur-sm shadow-2xl",
           isDarkTheme ? "bg-[#050505]/50" : "bg-white/80"
         )}
       >
         {/* Stage Content */}
-        <div className="flex-1 overflow-hidden relative">
+        <div className={cn(
+          "flex-1 relative",
+          stage === "input" ? "overflow-y-auto" : "overflow-hidden"
+        )}>
           {stage === "input" && (
             <ArticleInputConfig
               onStart={startGeneration}
               uiLanguage={uiLanguage}
               isDarkTheme={isDarkTheme}
+              userId={userId}
               initialKeyword={state.keyword}
               initialTone={state.tone}
               initialAudience={state.targetAudience as "beginner" | "expert"}
               initialVisualStyle={state.visualStyle}
               initialTargetMarket={state.targetMarket}
+              initialPromotedWebsites={state.promotedWebsites}
+              initialPromotionIntensity={state.promotionIntensity}
             />
           )}
 

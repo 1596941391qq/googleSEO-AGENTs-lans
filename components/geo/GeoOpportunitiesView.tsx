@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
+import { useAuth } from '../../contexts/AuthContext';
+import { getUserId } from '../website-data/utils';
 
 interface GeoOpportunity {
   id: string;
@@ -65,6 +67,8 @@ export const GeoOpportunitiesView: React.FC<GeoOpportunitiesViewProps> = ({
   isDarkTheme,
   uiLanguage,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [data, setData] = useState<GeoOpportunitiesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +92,7 @@ export const GeoOpportunitiesView: React.FC<GeoOpportunitiesViewProps> = ({
           minPositionGap,
           status: filterStatus,
           limit: 100,
-          userId: 1,
+          userId: currentUserId,
         }),
       });
 

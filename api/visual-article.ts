@@ -2,7 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateVisualArticle } from './_shared/services/visual-article-service.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
-import { scrapeWebsite } from './_shared/tools/firecrawl.js';
+import { scrapeWebsite, cleanMarkdown } from './_shared/tools/firecrawl.js';
 
 // Main app URL for credits API
 const MAIN_APP_URL = process.env.MAIN_APP_URL || process.env.VITE_MAIN_APP_URL || 'https://niche-mining-web.vercel.app';
@@ -123,6 +123,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       uiLanguage, 
       targetLanguage, 
       reference, 
+      promotedWebsites,
+      promotionIntensity,
       userId, 
       projectId, 
       projectName,
@@ -237,12 +239,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             type: 'url',
             url: {
               url: urlToScrape,
-              content: scrapeResult.markdown || '',
+              content: cleanMarkdown(scrapeResult.markdown || '', 20000), // 为文章生成保留更多内容
               screenshot: scrapeResult.screenshot || undefined,
               title: scrapeResult.title || undefined,
             },
           };
-          console.log('[visual-article] URL scraped successfully, content length:', scrapeResult.markdown?.length || 0);
+          console.log('[visual-article] URL scraped and cleaned successfully, content length:', processedReference.url.content.length);
         }
       } catch (error: any) {
         console.error('[visual-article] Failed to scrape reference URL:', error);
@@ -278,6 +280,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         projectId: (projectId && typeof projectId === 'string') ? projectId : undefined,
         projectName: (projectName && typeof projectName === 'string') ? projectName : undefined,
         reference: processedReference,
+        promotedWebsites: (Array.isArray(promotedWebsites)) ? promotedWebsites : undefined,
+        promotionIntensity: (promotionIntensity === 'strong' ? 'strong' : 'natural') as 'natural' | 'strong',
         onEvent: (event) => {
           sendEvent({ type: 'event', data: event });
         }

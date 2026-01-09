@@ -282,6 +282,9 @@ async function handleKeywordMining(
     uiLanguage = 'en',
     // Optional: analyze ranking probability
     analyzeRanking = true,
+    websiteUrl,
+    websiteDR,
+    searchEngine = 'google',
     skipCreditsCheck = false,
     industry,
     additionalSuggestions
@@ -368,7 +371,10 @@ async function handleKeywordMining(
       industry,
       additionalSuggestions,
       analyzeRanking,
-      analyzePrompt
+      analyzePrompt,
+      websiteUrl,
+      websiteDR,
+      searchEngine
     });
 
     const analyzedKeywords = result.keywords;
@@ -437,7 +443,10 @@ async function handleBatchTranslation(
     workflowConfigId,
     workflowConfig,
     uiLanguage = 'en',
-    skipCreditsCheck = false
+    skipCreditsCheck = false,
+    websiteUrl,
+    websiteDR,
+    searchEngine = 'google'
   } = body;
 
   // Validate required fields
@@ -588,7 +597,10 @@ async function handleBatchTranslation(
         keywordsToAnalyze,
         analyzePrompt,
         uiLanguage,
-        targetLanguage
+        targetLanguage,
+        websiteUrl,
+        websiteDR,
+        searchEngine
       );
     }
 
@@ -656,6 +668,7 @@ async function handleDeepDive(
     strategyPrompt,
     workflowConfigId,
     workflowConfig,
+    searchEngine = 'google',
     skipCreditsCheck = false
   } = body;
 
@@ -750,7 +763,7 @@ async function handleDeepDive(
     let serankingDataMap = new Map();
     try {
       const { locationCode, languageCode } = await import('./_shared/tools/dataforseo.js').then(m => m.getDataForSEOLocationAndLanguage(targetLanguage));
-      const dataForSEOResults = await fetchKeywordData(coreKeywords, locationCode, languageCode);
+      const dataForSEOResults = await fetchKeywordData(coreKeywords, locationCode, languageCode, searchEngine);
       dataForSEOResults.forEach(data => {
         if (data.keyword) {
           serankingDataMap.set(data.keyword.toLowerCase(), data);
@@ -778,7 +791,10 @@ async function handleDeepDive(
           coreKeywordsData,
           'Analyze SEO ranking opportunities for these keywords.',
           uiLanguage,
-          targetLanguage
+          targetLanguage,
+          undefined,
+          undefined,
+          searchEngine
         );
       } catch (analysisError) {
         console.warn('Core keywords analysis failed:', analysisError);

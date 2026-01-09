@@ -92,12 +92,12 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                   </td>
                   <td className={`px-4 py-4 ${isDarkTheme ? "text-white/80" : "text-gray-700"}`}>
                     <div className="flex items-center gap-1">
-                      <span className="font-bold">{item.websiteDR !== undefined ? Math.round(item.websiteDR) : "-"}</span>
+                      <span className="font-bold">{item.websiteDR !== undefined ? Math.round(item.websiteDR) : "???"}</span>
                       <span className="text-[10px] text-slate-500 text-nowrap">vs</span>
                       <span className="font-medium text-amber-400/80">
                         {item.competitorDRs && item.competitorDRs.length > 0 
                           ? Math.round(item.competitorDRs.reduce((a: number, b: number) => a + b, 0) / item.competitorDRs.length)
-                          : "-"}
+                          : "???"}
                       </span>
                     </div>
                   </td>

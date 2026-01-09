@@ -7,18 +7,37 @@ import {
   ExternalLink,
   TrendingUp,
   Sparkles,
+  Globe,
 } from "lucide-react";
 import { OverviewCards } from "./OverviewCards";
 import { TopKeywordsTable } from "./TopKeywordsTable";
-import { KeywordIntelligenceView } from "./KeywordIntelligenceView";
 import { RankedKeywordsTable } from "./RankedKeywordsTable";
 import { RelevantPagesTable } from "./RelevantPagesTable";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../contexts/AuthContext";
 import { KeywordData } from "../../types";
 import { getUserId } from "./utils";
+
+// 地区选项
+const REGIONS = [
+  { value: "us", label: "Global / US", labelZh: "全球 / 美国" },
+  { value: "uk", label: "United Kingdom", labelZh: "英国" },
+  { value: "ca", label: "Canada", labelZh: "加拿大" },
+  { value: "au", label: "Australia", labelZh: "澳大利亚" },
+  { value: "de", label: "Germany", labelZh: "德国" },
+  { value: "fr", label: "France", labelZh: "法国" },
+  { value: "jp", label: "Japan", labelZh: "日本" },
+  { value: "cn", label: "China", labelZh: "中国" },
+];
 
 interface WebsiteOverview {
   organicTraffic: number;
@@ -67,7 +86,7 @@ interface WebsiteDataDashboardProps {
   onGenerateArticle?: (keyword: any) => void;
 }
 
-type ViewMode = "overview" | "keyword-intelligence" | "ranked-keywords" | "relevant-pages" | "domain-intersection";
+type ViewMode = "overview" | "ranked-keywords" | "relevant-pages" | "domain-intersection";
 
 export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   websiteId,
@@ -78,6 +97,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 }) => {
   const { user } = useAuth();
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
+  const [selectedRegion, setSelectedRegion] = useState<string>("us");
   const [data, setData] = useState<WebsiteData | null>(null);
   const [loading, setLoading] = useState(true); // 初始为 true，显示加载状态
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +108,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   const [websiteDomain, setWebsiteDomain] = useState<string | null>(null);
 
   // localStorage 缓存工具函数
-  const getCacheKey = (key: string) => `website_data_${websiteId}_${key}`;
+  const getCacheKey = (key: string) => `website_data_${websiteId}_${selectedRegion}_${key}`;
   const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时
 
   const getCachedData = <T,>(key: string): T | null => {
@@ -150,10 +170,11 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     const baseRequest = {
       websiteId,
       userId: getUserId(user),
+      region: selectedRegion,
     };
 
     // 使用sessionStorage防止重复调用
-    const apiFetchKey = `api_fetch_${websiteId}`;
+    const apiFetchKey = `api_fetch_${websiteId}_${selectedRegion}`;
     const lastFetchTime = sessionStorage.getItem(apiFetchKey);
     const now = Date.now();
     const FIVE_MINUTES = 5 * 60 * 1000; // 5分钟内不重复调用API
@@ -324,16 +345,16 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
   // 刷新数据：清除缓存记录，强制重新获取最新数据
   const handleRefresh = async () => {
-    console.log("[Dashboard] 🔄 Manual refresh triggered");
+    console.log("[Dashboard] 🔄 Manual refresh triggered for region:", selectedRegion);
     
     // 清除 sessionStorage 中的 API 调用记录
-    const apiFetchKey = `api_fetch_${websiteId}`;
+    const apiFetchKey = `api_fetch_${websiteId}_${selectedRegion}`;
     sessionStorage.removeItem(apiFetchKey);
     
     // 清除 localStorage 缓存
     try {
       Object.keys(localStorage).forEach(key => {
-        if (key.startsWith(`website_data_${websiteId}_`)) {
+        if (key.startsWith(`website_data_${websiteId}_${selectedRegion}_`)) {
           localStorage.removeItem(key);
         }
       });
@@ -342,19 +363,24 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     }
     
     // 强制重新加载数据
-    await loadDataParallel(true);
+    await loadDataParallel();
   };
 
   // 从 overview API 获取网站信息（如果需要的话，可以从其他API获取）
   // 暂时从 overview 数据中获取，如果没有则留空
 
-  // 首次加载数据（只在websiteId变化时）
+  // 监听地区变化，重新加载数据
   useEffect(() => {
     if (websiteId) {
-      // 先尝试从缓存加载
+      // 切换地区时，重置状态并加载新地区数据
+      setData(null);
+      setError(null);
+      setLoading(true);
+      setLoadingParts({ overview: true, keywords: true });
+      
       const cachedData = getCachedData<WebsiteData>('overview');
       if (cachedData) {
-        console.log('[Dashboard] 📦 Loading from localStorage cache');
+        console.log(`[Dashboard] 📦 Loading from localStorage cache for region: ${selectedRegion}`);
         setData(cachedData);
         setLoading(false);
         setLoadingParts({ overview: false, keywords: false });
@@ -362,18 +388,15 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           setWebsiteDomain(cachedData.websiteDomain);
         }
       } else {
-        // 没有缓存时才调用API（只在overview视图时）
-        if (viewMode === "overview") {
-          loadData();
-        }
+        loadData();
       }
-    } else {
-      // 如果没有 websiteId，重置状态
-      setData(null);
-      setLoading(false);
-      setError(uiLanguage === "zh" ? "缺少网站ID" : "Missing website ID");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRegion, websiteId]);
+
+  // 首次加载数据（只在websiteId变化时）
+  useEffect(() => {
+    // 这个 useEffect 已经被上面的 selectedRegion 监听覆盖了
+    // 除非我们需要特定的初始化逻辑，否则可以保持空或者合并
   }, [websiteId]); // 只在websiteId变化时加载
 
   // 当切换到overview视图时，如果没有数据则加载
@@ -537,8 +560,34 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
         </div>
 
         {/* 右侧：切换控件 - 图2风格 */}
-        <div className="flex items-center">
-          {/* 总览 */}
+        <div className="flex items-center gap-4">
+          {/* 地区选择器 */}
+          <div className="flex items-center gap-2">
+            <Select
+              value={selectedRegion}
+              onValueChange={setSelectedRegion}
+            >
+              <SelectTrigger className={cn(
+                "w-[160px] h-10 border-none transition-all",
+                isDarkTheme 
+                  ? "bg-zinc-800/50 text-white hover:bg-zinc-800" 
+                  : "bg-gray-100 text-gray-900 hover:bg-gray-200"
+              )}>
+                <Globe className="w-4 h-4 text-emerald-500" />
+                <SelectValue placeholder="Select Region" />
+              </SelectTrigger>
+              <SelectContent className={isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white border-gray-200"}>
+                {REGIONS.map((region) => (
+                  <SelectItem key={region.value} value={region.value}>
+                    {uiLanguage === "zh" ? region.labelZh : region.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center">
+            {/* 总览 */}
           <button
             onClick={() => setViewMode("overview")}
             className={cn(
@@ -566,37 +615,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
             />
             <span className="text-sm font-medium">
               {uiLanguage === "zh" ? "全局透视" : "Global Perspective"}
-            </span>
-          </button>
-
-          {/* 关键词情报 */}
-          <button
-            onClick={() => setViewMode("keyword-intelligence")}
-            className={cn(
-              "relative flex items-center gap-2 px-5 py-3 transition-all border-r",
-              viewMode === "keyword-intelligence"
-                ? isDarkTheme
-                  ? "bg-white text-gray-900 border-white/20"
-                  : "bg-white text-gray-900 shadow-sm border-gray-200"
-                : isDarkTheme
-                ? "bg-zinc-800/50 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300 border-zinc-700/50"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 border-gray-300"
-            )}
-          >
-            <Sparkles
-              className={cn(
-                "w-4 h-4 transition-colors",
-                viewMode === "keyword-intelligence"
-                  ? isDarkTheme
-                    ? "text-emerald-600"
-                    : "text-emerald-500"
-                  : isDarkTheme
-                  ? "text-zinc-500"
-                  : "text-gray-500"
-              )}
-            />
-            <span className="text-sm font-medium">
-              {uiLanguage === "zh" ? "关键词情报" : "Keyword Intelligence"}
             </span>
           </button>
 
@@ -663,8 +681,9 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           </button>
         </div>
       </div>
+    </div>
 
-      {/* Content based on view mode */}
+    {/* Content based on view mode */}
       {viewMode === "overview" ? (
         <>
       {/* Overview Cards - 始终显示，加载时显示骨架屏 */}
@@ -736,19 +755,13 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
             </div>
           )}
         </>
-      ) : viewMode === "keyword-intelligence" ? (
-        <KeywordIntelligenceView
-          websiteId={websiteId}
-          isDarkTheme={isDarkTheme}
-          uiLanguage={uiLanguage}
-          onGenerateArticle={onGenerateArticle}
-        />
       ) : viewMode === "ranked-keywords" ? (
         <RankedKeywordsTable
           websiteId={websiteId}
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
           limit={1000}
+          region={selectedRegion}
         />
       ) : viewMode === "relevant-pages" ? (
         <RelevantPagesTable
@@ -756,6 +769,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
           limit={20}
+          region={selectedRegion}
         />
       ) : viewMode === "domain-intersection" ? (
         <div className="space-y-4">

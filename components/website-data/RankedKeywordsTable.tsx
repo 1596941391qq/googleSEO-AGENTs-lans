@@ -37,6 +37,7 @@ interface RankedKeywordsTableProps {
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
   limit?: number;
+  region?: string;
 }
 
 export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
@@ -45,7 +46,10 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
   isDarkTheme,
   uiLanguage,
   limit = 100,
+  region = "us",
 }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [keywords, setKeywords] = useState<RankedKeyword[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +57,7 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc'); // 默认降序（搜索量最高的在前）
 
   // localStorage 缓存
-  const getCacheKey = () => `keywords_only_${websiteId}_${sortBy}_${sortOrder}`;
+  const getCacheKey = () => `keywords_only_${websiteId}_${region}_${sortBy}_${sortOrder}`;
   const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时
 
   const getCachedData = (): RankedKeyword[] | null => {
@@ -105,10 +109,11 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           websiteId,
-          userId: 1,
+          userId: currentUserId,
           limit,
           sortBy,
           sortOrder,
+          region,
         }),
       });
 

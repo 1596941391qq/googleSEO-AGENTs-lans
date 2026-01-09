@@ -73,6 +73,7 @@ import { MarkdownContent } from "./components/ui/MarkdownContent";
 import { TestAgentPanel } from "./components/TestAgentPanel";
 import { ContentGenerationView } from "./components/ContentGenerationView";
 import { WebsiteSelector } from "./components/WebsiteSelector";
+import { getUserId } from "./components/website-data/utils";
 import { GoogleSearchResults } from "./components/article-generator/GoogleSearchResults";
 import { AgentStreamEvent } from "./types";
 import { StreamEventDetails } from "./components/article-generator/AgentStreamFeed";
@@ -80,6 +81,7 @@ import {
   KeywordMiningGuide,
   MiningConfig,
 } from "./components/workflow/KeywordMiningGuide";
+import { fetchWithAuth, postWithAuth } from "./lib/api-client";
 import {
   AppState,
   KeywordData,
@@ -3542,53 +3544,147 @@ export default function App() {
   // Load tasks from localStorage on mount
   useEffect(() => {
     loadTasksFromLocalStorage();
-  }, []);
+    if (authenticated) {
+      loadTasksFromBackend();
+    }
+  }, [authenticated]);
 
-  // Auto-save tasks to localStorage (debounced only)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (
-        state.taskManager.tasks.length > 0 &&
-        state.taskManager.activeTaskId
-      ) {
-        // Before saving, sync current task state
+  const loadTasksFromBackend = async () => {
+    try {
+      const response = await fetchWithAuth("/api/tasks/list");
+      const result = await response.json();
+      if (result.success && result.data.tasks) {
+        const backendTasks: TaskState[] = result.data.tasks.map((t: any) => ({
+          ...t.state,
+          id: t.id,
+          name: t.name,
+          type: t.type,
+          createdAt: new Date(t.created_at).getTime(),
+          updatedAt: new Date(t.updated_at).getTime(),
+          isActive: false,
+        }));
+
         setState((prev) => {
-          const activeTask = prev.taskManager.tasks.find(
-            (t) => t.id === prev.taskManager.activeTaskId
-          );
-          if (!activeTask) return prev;
+          const localTasks = prev.taskManager.tasks;
+          const mergedTasks = [...localTasks];
 
-          const updatedTask = snapshotCurrentTask(prev, activeTask);
-          const updatedTasks = prev.taskManager.tasks.map((t) =>
-            t.id === prev.taskManager.activeTaskId ? updatedTask : t
-          );
-
-          // Save to localStorage
-          try {
-            localStorage.setItem(
-              STORAGE_KEYS.TASKS,
-              JSON.stringify(updatedTasks)
-            );
-          } catch (e) {
-            console.error("Failed to save tasks", e);
-          }
+          backendTasks.forEach((bt) => {
+            const index = mergedTasks.findIndex((lt) => lt.id === bt.id);
+            if (index >= 0) {
+              mergedTasks[index] = { ...mergedTasks[index], ...bt };
+            } else {
+              mergedTasks.push(bt);
+            }
+          });
 
           return {
             ...prev,
             taskManager: {
               ...prev.taskManager,
-              tasks: updatedTasks,
+              tasks: mergedTasks,
             },
           };
         });
       }
-    }, 1000); // Debounce 1 second
+    } catch (err) {
+      console.error("Failed to load tasks from backend:", err);
+    }
+  };
+
+  const syncTaskToBackend = async (task: TaskState) => {
+    if (!authenticated) return;
+    // Don't sync temporary local tasks that haven't been saved to backend yet
+    if (task.id.startsWith("task-")) return;
+
+    try {
+      const { id, name } = task;
+      await postWithAuth("/api/tasks/update", {
+        id,
+        name,
+        status:
+          task.miningState?.miningSuccess ||
+          (task.batchState?.batchKeywords && task.batchState.batchKeywords.length > 0)
+            ? "completed"
+            : "in_progress",
+        state: task,
+      });
+    } catch (err) {
+      console.error("Failed to sync task to backend:", err);
+    }
+  };
+
+  const saveNewTaskToBackend = async (task: TaskState) => {
+    if (!authenticated) return;
+    try {
+      const response = await postWithAuth("/api/tasks/save", {
+        type: task.type,
+        name: task.name,
+        params: {
+          seedKeyword: task.miningState?.seedKeyword,
+          batchInput: task.batchState?.batchInputKeywords,
+        },
+      });
+      const result = await response.json();
+      return result.success ? result.data.task.id : null;
+    } catch (err) {
+      console.error("Failed to save new task to backend:", err);
+      return null;
+    }
+  };
+
+  const deleteTaskFromBackend = async (taskId: string) => {
+    if (!authenticated) return;
+    try {
+      await postWithAuth("/api/tasks/delete", { id: taskId });
+    } catch (err) {
+      console.error("Failed to delete task from backend:", err);
+    }
+  };
+
+  // Auto-save tasks to localStorage and backend
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (state.taskManager.tasks.length > 0 && state.taskManager.activeTaskId) {
+        const activeTask = state.taskManager.tasks.find(
+          (t) => t.id === state.taskManager.activeTaskId
+        );
+        if (!activeTask) return;
+
+        const updatedTask = snapshotCurrentTask(state, activeTask);
+
+        // Update local state
+        setState((prev) => ({
+          ...prev,
+          taskManager: {
+            ...prev.taskManager,
+            tasks: prev.taskManager.tasks.map((t) =>
+              t.id === prev.taskManager.activeTaskId ? updatedTask : t
+            ),
+          },
+        }));
+
+        // Sync to localStorage
+        try {
+          const updatedTasks = state.taskManager.tasks.map((t) =>
+            t.id === state.taskManager.activeTaskId ? updatedTask : t
+          );
+          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(updatedTasks));
+        } catch (e) {
+          console.error("Failed to save tasks to local storage", e);
+        }
+
+        // Sync to backend
+        if (authenticated) {
+          syncTaskToBackend(updatedTask);
+        }
+      }
+    }, 2000);
 
     return () => clearTimeout(timer);
   }, [
-    state.keywords,
-    state.batchKeywords,
-    state.currentStrategyReport,
+    state.taskManager.activeTaskId,
+    state.keywords.length,
+    state.batchKeywords.length,
     state.miningRound,
     state.agentThoughts.length,
     state.batchThoughts.length,
@@ -3601,7 +3697,7 @@ export default function App() {
     state.articleGeneratorState.isGenerating,
     state.articleGeneratorState.streamEvents.length,
     state.articleGeneratorState.finalArticle,
-    state.articleGeneratorState.currentStage,
+    authenticated,
   ]);
 
   // Sync activeTab with current task type when switching tasks
@@ -4453,6 +4549,26 @@ export default function App() {
 
     const newTask = createTask(params);
 
+    if (authenticated) {
+      saveNewTaskToBackend(newTask).then((backendId) => {
+        if (backendId) {
+          setState((prev) => ({
+            ...prev,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: prev.taskManager.tasks.map((t) =>
+                t.id === newTask.id ? { ...t, id: backendId } : t
+              ),
+              activeTaskId:
+                prev.taskManager.activeTaskId === newTask.id
+                  ? backendId
+                  : prev.taskManager.activeTaskId,
+            },
+          }));
+        }
+      });
+    }
+
     setState((prev) => {
       // Save current task state before switching
       const updatedTasks = prev.taskManager.activeTaskId
@@ -4737,6 +4853,10 @@ export default function App() {
             : "Cannot delete a running task. Please stop it first.",
       }));
       return;
+    }
+
+    if (authenticated) {
+      deleteTaskFromBackend(taskId);
     }
 
     setState((prev) => {
@@ -7569,12 +7689,72 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
   // Batch translate and analyze handler
   const handleBatchAnalyze = async () => {
-    if (!batchInput.trim()) return;
-
     // Check authentication
     if (!authenticated) {
       setState((prev) => ({ ...prev, error: "请先登录才能使用批量分析功能" }));
       return;
+    }
+
+    let keywordList: string[] = [];
+    let effectiveBatchInput = batchInput;
+
+    // Handle Workflow 4: Existing Website Audit + Cross-Market
+    if (miningMode === "existing-website-audit") {
+      if (!batchSelectedWebsite) {
+        setState((prev) => ({ ...prev, error: "请先选择一个网站" }));
+        return;
+      }
+
+      try {
+        addLog(
+          state.uiLanguage === "zh"
+            ? `正在从网站 ${batchSelectedWebsite.domain} 获取关键词...`
+            : `Fetching keywords from website ${batchSelectedWebsite.domain}...`,
+          "info"
+        );
+        const currentUserId = getUserId(user);
+        const response = await fetch("/api/website-data/keywords-only", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            websiteId: batchSelectedWebsite.id,
+            userId: currentUserId,
+            limit: 20,
+          }),
+        });
+
+        const result = await response.json();
+        if (result.success && result.data) {
+          keywordList = result.data.map((kw: any) => kw.keyword);
+          effectiveBatchInput = keywordList.join(", ");
+          addLog(
+            state.uiLanguage === "zh"
+              ? `成功获取 ${keywordList.length} 个网站关键词。`
+              : `Successfully fetched ${keywordList.length} website keywords.`,
+            "success"
+          );
+        } else {
+          throw new Error(result.error || "Failed to fetch keywords");
+        }
+      } catch (err: any) {
+        console.error("Failed to fetch website keywords:", err);
+        setState((prev) => ({
+          ...prev,
+          error:
+            state.uiLanguage === "zh"
+              ? `获取网站关键词失败: ${err.message}`
+              : `Failed to fetch website keywords: ${err.message}`,
+        }));
+        return;
+      }
+    } else {
+      // Default: Workflow 2 (Blue Ocean + Batch)
+      if (!batchInput.trim()) return;
+
+      keywordList = batchInput
+        .split(",")
+        .map((k) => k.trim())
+        .filter((k) => k.length > 0);
     }
 
     // Check credits balance before starting
@@ -7604,19 +7784,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       return;
     }
 
-    // Parse keywords for confirmation count
-    const keywordList = batchInput
-      .split(",")
-      .map((k) => k.trim())
-      .filter((k) => k.length > 0);
-
-    if (keywordList.length === 0) {
-      setState((prev) => ({
-        ...prev,
-        error: "No valid keywords provided",
-      }));
-      return;
-    }
+    // keywordList is already defined and validated above
 
     // Consume credits before starting (skip in local dev)
     if (isLocalDev) {
@@ -7671,7 +7839,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     if (!state.taskManager.activeTaskId) {
       addTask({
         type: "batch",
-        inputKeywords: batchInput,
+        inputKeywords: effectiveBatchInput,
         targetLanguage: state.targetLanguage,
       });
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -7691,7 +7859,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       batchThoughts: [],
       batchCurrentIndex: 0,
       batchTotalCount: keywordList.length,
-      batchInputKeywords: batchInput, // Store original input
+      batchInputKeywords: effectiveBatchInput, // Store original input
       logs: [],
       error: null,
     }));
@@ -7798,7 +7966,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             state.uiLanguage,
             state.targetSearchEngine,
             batchSelectedWebsite?.domain || undefined,
-            batchWebsiteDR
+            batchWebsiteDR,
+            miningMode === "existing-website-audit"
           );
 
           if (!singleResult.success) {
@@ -8199,9 +8368,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         onTaskSwitch={switchTask}
         onTaskAdd={() => setShowTaskMenu(true)}
         onTaskDelete={deleteTask}
-        onWorkflowConfig={() =>
-          setState((prev) => ({ ...prev, step: "workflow-config" }))
-        }
         onLanguageToggle={() => {
           setState((prev) => {
             const newLanguage = prev.uiLanguage === "en" ? "zh" : "en";
@@ -8242,9 +8408,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           }))
         }
         contentGenerationTab={state.contentGeneration.activeTab}
-        onTestAgents={() =>
-          setState((prev) => ({ ...prev, step: "test-agents" }))
-        }
         onDeepDive={() =>
           setState((prev) => ({ ...prev, step: "article-generator" }))
         }
@@ -8361,15 +8524,15 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             </div>
 
             {/* Right: Credits + User Info */}
-            <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-6 shrink-0">
               {/* Credits */}
               {(authenticated || (import.meta.env.DEV && credits)) && (
-                <div className="flex items-center space-x-3 bg-emerald-500/5 border border-emerald-500/10 px-4 py-2 rounded">
+                <div className="flex items-center space-x-3 bg-emerald-500/5 border border-emerald-500/10 px-4 py-2 rounded shrink-0">
                   {creditsLoading ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
                       <span
-                        className={`text-[9px] font-black uppercase tracking-widest ${
+                        className={`text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
                           isDarkTheme ? "text-neutral-400" : "text-gray-600"
                         }`}
                       >
@@ -8378,28 +8541,28 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     </>
                   ) : credits !== null ? (
                     <>
-                      <div className="p-1 bg-emerald-500/10 rounded">
+                      <div className="p-1 bg-emerald-500/10 rounded shrink-0">
                         <CreditCard size={14} className="text-emerald-500" />
                       </div>
-                      <div className="flex flex-col">
+                      <div className="flex flex-col min-w-0">
                         <span
-                          className={`text-xs font-black mono leading-none tracking-tight ${
+                          className={`text-xs font-black mono leading-none tracking-tight whitespace-nowrap ${
                             isDarkTheme ? "text-white" : "text-gray-900"
                           }`}
                         >
                           {credits.remaining.toLocaleString()}
                         </span>
-                        <span className="text-[8px] font-black text-emerald-500 uppercase tracking-tighter mt-0.5">
+                        <span className="text-[8px] lg:text-[10px] font-black text-emerald-500 uppercase tracking-tighter mt-0.5 whitespace-nowrap">
                           {state.uiLanguage === "zh" ? "可用点数" : "Credits"}
                         </span>
                       </div>
                       <div
-                        className={`w-[1px] h-6 mx-2 ${
+                        className={`w-[1px] h-6 mx-2 shrink-0 ${
                           isDarkTheme ? "bg-white/10" : "bg-gray-300"
                         }`}
                       />
                       <button
-                        className={`text-[9px] font-black uppercase tracking-widest transition-colors ${
+                        className={`text-[9px] lg:text-xs font-black uppercase tracking-widest transition-colors shrink-0 whitespace-nowrap ${
                           isDarkTheme
                             ? "text-neutral-400 hover:text-white"
                             : "text-gray-600 hover:text-gray-900"
@@ -8412,7 +8575,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   ) : (
                     <>
                       <div
-                        className={`p-1 rounded ${
+                        className={`p-1 rounded shrink-0 ${
                           isDarkTheme ? "bg-white/5" : "bg-gray-100"
                         }`}
                       >
@@ -8424,7 +8587,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         />
                       </div>
                       <span
-                        className={`text-xs font-bold ${
+                        className={`text-xs font-bold whitespace-nowrap ${
                           isDarkTheme ? "text-neutral-600" : "text-gray-500"
                         }`}
                       >
@@ -8437,10 +8600,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
               {/* User Profile */}
               {authLoading ? (
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-2 shrink-0">
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
                   <span
-                    className={`text-xs font-bold ${
+                    className={`text-xs font-bold whitespace-nowrap ${
                       isDarkTheme ? "text-neutral-400" : "text-gray-600"
                     }`}
                   >
@@ -8449,26 +8612,26 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 </div>
               ) : authenticated ? (
                 <div
-                  className={`flex items-center space-x-4 border-l pl-6 ${
+                  className={`flex items-center space-x-4 border-l pl-6 shrink-0 ${
                     isDarkTheme ? "border-white/5" : "border-gray-200"
                   }`}
                 >
-                  <div className="text-right">
+                  <div className="text-right shrink-0">
                     <p
-                      className={`text-xs font-bold leading-none ${
+                      className={`text-xs font-bold leading-none whitespace-nowrap ${
                         isDarkTheme ? "text-white" : "text-gray-900"
                       }`}
                     >
                       {user?.name || user?.email}
                     </p>
-                    <p className="text-[9px] font-bold text-emerald-500/60 uppercase tracking-widest mt-1">
+                    <p className="text-[9px] lg:text-xs font-bold text-emerald-500/60 uppercase tracking-widest mt-1 whitespace-nowrap">
                       {state.uiLanguage === "zh" ? "已登录" : "Logged In"}
                     </p>
                   </div>
                   {user?.picture && (
                     <img
                       src={user.picture}
-                      className={`w-8 h-8 rounded border ${
+                      className={`w-8 h-8 rounded border shrink-0 ${
                         isDarkTheme ? "border-white/10" : "border-gray-200"
                       }`}
                       alt="avatar"
@@ -8476,7 +8639,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   )}
                   <button
                     onClick={logout}
-                    className={`p-2 transition-colors ${
+                    className={`p-2 transition-colors shrink-0 ${
                       isDarkTheme
                         ? "text-neutral-500 hover:text-white"
                         : "text-gray-500 hover:text-gray-900"
@@ -8487,14 +8650,14 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center space-x-3 shrink-0">
                   <User
-                    className={`w-4 h-4 ${
+                    className={`w-4 h-4 shrink-0 ${
                       isDarkTheme ? "text-neutral-500" : "text-gray-500"
                     }`}
                   />
                   <span
-                    className={`text-xs font-bold ${
+                    className={`text-xs font-bold whitespace-nowrap ${
                       isDarkTheme ? "text-neutral-400" : "text-gray-600"
                     }`}
                   >
@@ -8502,7 +8665,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   </span>
                   <a
                     href={MAIN_APP_URL}
-                    className="text-emerald-500 hover:text-emerald-400 text-xs font-bold uppercase tracking-widest transition-colors"
+                    className="text-emerald-500 hover:text-emerald-400 text-xs font-bold uppercase tracking-widest transition-colors shrink-0 whitespace-nowrap"
                     target="_blank"
                     rel="noopener noreferrer"
                   >
@@ -8555,12 +8718,15 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               uiLanguage={state.uiLanguage}
               isDarkTheme={isDarkTheme}
               token={token}
+              userId={user?.id || 1}
               articleGeneratorState={{
                 keyword: state.articleGeneratorState.keyword,
                 tone: state.articleGeneratorState.tone,
                 targetAudience: state.articleGeneratorState.targetAudience,
                 visualStyle: state.articleGeneratorState.visualStyle,
                 targetMarket: state.articleGeneratorState.targetMarket,
+                promotedWebsites: state.articleGeneratorState.promotedWebsites,
+                promotionIntensity: state.articleGeneratorState.promotionIntensity,
                 isGenerating: state.articleGeneratorState.isGenerating,
                 progress: state.articleGeneratorState.progress,
                 currentStage: state.articleGeneratorState.currentStage,
@@ -11110,7 +11276,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
           {/* STEP 2: MINING */}
           {state.step === "mining" && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
+            <div className="flex-1 flex flex-col h-[calc(100vh-140px)] min-h-[600px] relative">
               {/* SUCCESS OVERLAY */}
               {state.miningSuccess && state.showSuccessPrompt && (
                 <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm rounded-xl flex items-start justify-center p-4 pt-8 animate-fade-in overflow-y-auto">
@@ -11166,21 +11332,21 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 </div>
               )}
 
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-3">
                 <div className="flex items-center gap-3">
                   <Loader2
-                    className={`w-6 h-6 text-emerald-400 ${
+                    className={`w-5 h-5 text-emerald-400 ${
                       !state.miningSuccess && "animate-spin"
                     }`}
                   />
                   <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       {t.generating}
-                      <span className="text-sm font-normal bg-emerald-500/20 px-2 py-0.5 rounded-full text-emerald-400">
+                      <span className="text-[10px] font-normal bg-emerald-500/20 px-1.5 py-0.5 rounded-full text-emerald-400">
                         Round {state.miningRound}
                       </span>
                     </h3>
-                    <p className="text-sm text-slate-400">{t.analyzing}</p>
+                    <p className="text-xs text-slate-400">{t.analyzing}</p>
                   </div>
                 </div>
                 {state.miningSuccess && !state.showSuccessPrompt && (
@@ -11188,26 +11354,26 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     onClick={() =>
                       setState((prev) => ({ ...prev, showSuccessPrompt: true }))
                     }
-                    className={`flex items-center gap-2 px-4 py-2 border rounded-md transition-colors text-sm font-medium shadow-sm ${
+                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${
                       isDarkTheme
                         ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30"
                         : "bg-emerald-100 border-emerald-300 text-emerald-700 hover:bg-emerald-200"
                     }`}
                   >
-                    <CheckCircle className="w-4 h-4" />
+                    <CheckCircle className="w-3.5 h-3.5" />
                     {state.uiLanguage === "zh" ? "完成查看" : "Complete"}
                   </button>
                 )}
                 {!state.miningSuccess && (
                   <button
                     onClick={handleStop}
-                    className={`flex items-center gap-2 px-4 py-2 border rounded-md transition-colors text-sm font-medium shadow-sm ${
+                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${
                       isDarkTheme
                         ? "bg-black/60 border-red-500/30 text-red-400 hover:bg-red-500/10"
                         : "bg-white border-red-300 text-red-600 hover:bg-red-50"
                     }`}
                   >
-                    <Square className="w-4 h-4 fill-current" />
+                    <Square className="w-3.5 h-3.5 fill-current" />
                     {t.btnStop}
                   </button>
                 )}
@@ -11216,151 +11382,135 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               {/* Mining Control Panel */}
               {!state.miningSuccess && (
                 <div
-                  className={`mb-4 backdrop-blur-sm rounded-xl shadow-sm border p-4 ${
+                  className={`mb-3 backdrop-blur-sm rounded-xl shadow-sm border px-4 py-2 ${
                     isDarkTheme
                       ? "bg-black/40 border-emerald-500/20"
                       : "bg-white border-emerald-200"
                   }`}
                 >
-                  <div className="flex items-center gap-2 mb-3">
-                    <Settings className="w-4 h-4 text-emerald-400" />
-                    <h4
-                      className={`text-sm font-bold ${
-                        isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
-                    >
-                      {t.miningSettings}
-                    </h4>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Words Per Round */}
-                    <div>
-                      <label
-                        className={`block text-xs font-medium mb-2 ${
-                          isDarkTheme ? "text-slate-400" : "text-gray-600"
+                  <div className="flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="flex items-center gap-2 min-w-fit">
+                      <Settings className="w-3.5 h-3.5 text-emerald-400" />
+                      <h4
+                        className={`text-xs font-bold uppercase tracking-wider ${
+                          isDarkTheme ? "text-slate-300" : "text-gray-900"
                         }`}
                       >
-                        {t.wordsPerRound}
-                      </label>
-                      <input
-                        type="number"
-                        min="5"
-                        max="20"
-                        value={state.wordsPerRound}
-                        onChange={(e) =>
-                          setState((prev) => ({
-                            ...prev,
-                            wordsPerRound: Math.max(
-                              5,
-                              Math.min(20, parseInt(e.target.value) || 10)
-                            ),
-                          }))
-                        }
-                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
-                          isDarkTheme
-                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
-                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
-                        }`}
-                      />
-                      <p
-                        className={`text-xs mt-1 ${
-                          isDarkTheme ? "text-slate-500" : "text-gray-500"
-                        }`}
-                      >
-                        {t.applyNextRound}
-                      </p>
+                        {t.miningSettings}
+                      </h4>
                     </div>
 
-                    {/* Mining Strategy */}
-                    <div>
-                      <label
-                        className={`block text-xs font-medium mb-2 ${
-                          isDarkTheme ? "text-slate-400" : "text-gray-600"
-                        }`}
-                      >
-                        {t.miningStrategy}
-                      </label>
-                      <select
-                        value={state.miningStrategy}
-                        onChange={(e) =>
-                          setState((prev) => ({
-                            ...prev,
-                            miningStrategy: e.target.value as
-                              | "horizontal"
-                              | "vertical",
-                          }))
-                        }
-                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
-                          isDarkTheme
-                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
-                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
-                        }`}
-                      >
-                        <option
-                          value="horizontal"
-                          className={isDarkTheme ? "bg-black" : "bg-white"}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                      {/* Words Per Round */}
+                      <div className="flex items-center gap-2">
+                        <label
+                          className={`shrink-0 text-[11px] font-medium ${
+                            isDarkTheme ? "text-slate-400" : "text-gray-600"
+                          }`}
                         >
-                          {t.horizontal}
-                        </option>
-                        <option
-                          value="vertical"
-                          className={isDarkTheme ? "bg-black" : "bg-white"}
-                        >
-                          {t.vertical}
-                        </option>
-                      </select>
-                      <p
-                        className={`text-xs mt-1 ${
-                          isDarkTheme ? "text-slate-500" : "text-gray-500"
-                        }`}
-                      >
-                        {t.applyNextRound}
-                      </p>
-                    </div>
+                          {t.wordsPerRound}
+                        </label>
+                        <input
+                          type="number"
+                          min="5"
+                          max="20"
+                          value={state.wordsPerRound}
+                          onChange={(e) =>
+                            setState((prev) => ({
+                              ...prev,
+                              wordsPerRound: Math.max(
+                                5,
+                                Math.min(20, parseInt(e.target.value) || 10)
+                              ),
+                            }))
+                          }
+                          className={`flex-1 max-w-[60px] px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${
+                            isDarkTheme
+                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
+                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
+                          }`}
+                        />
+                        <span className="text-[10px] text-slate-500 shrink-0 hidden md:block">
+                          {t.applyNextRound}
+                        </span>
+                      </div>
 
-                    {/* User Suggestion */}
-                    <div className="md:col-span-1">
-                      <label
-                        className={`block text-xs font-medium mb-2 ${
-                          isDarkTheme ? "text-slate-400" : "text-gray-600"
-                        }`}
-                      >
-                        {t.userSuggestion}
-                      </label>
-                      <input
-                        type="text"
-                        value={state.userSuggestion}
-                        onChange={(e) =>
-                          setState((prev) => ({
-                            ...prev,
-                            userSuggestion: e.target.value,
-                          }))
-                        }
-                        placeholder={t.suggestionPlaceholder}
-                        className={`w-full px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 ${
-                          isDarkTheme
-                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                        }`}
-                      />
-                      <p
-                        className={`text-xs mt-1 ${
-                          isDarkTheme ? "text-slate-500" : "text-gray-500"
-                        }`}
-                      >
-                        {t.applyNextRound}
-                      </p>
+                      {/* Mining Strategy */}
+                      <div className="flex items-center gap-2">
+                        <label
+                          className={`shrink-0 text-[11px] font-medium ${
+                            isDarkTheme ? "text-slate-400" : "text-gray-600"
+                          }`}
+                        >
+                          {t.miningStrategy}
+                        </label>
+                        <select
+                          value={state.miningStrategy}
+                          onChange={(e) =>
+                            setState((prev) => ({
+                              ...prev,
+                              miningStrategy: e.target.value as
+                                | "horizontal"
+                                | "vertical",
+                            }))
+                          }
+                          className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${
+                            isDarkTheme
+                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
+                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
+                          }`}
+                        >
+                          <option
+                            value="horizontal"
+                            className={isDarkTheme ? "bg-black" : "bg-white"}
+                          >
+                            {t.horizontal}
+                          </option>
+                          <option
+                            value="vertical"
+                            className={isDarkTheme ? "bg-black" : "bg-white"}
+                          >
+                            {t.vertical}
+                          </option>
+                        </select>
+                      </div>
+
+                      {/* User Suggestion */}
+                      <div className="flex items-center gap-2">
+                        <label
+                          className={`shrink-0 text-[11px] font-medium ${
+                            isDarkTheme ? "text-slate-400" : "text-gray-600"
+                          }`}
+                        >
+                          {t.userSuggestion}
+                        </label>
+                        <input
+                          type="text"
+                          value={state.userSuggestion}
+                          onChange={(e) =>
+                            setState((prev) => ({
+                              ...prev,
+                              userSuggestion: e.target.value,
+                            }))
+                          }
+                          placeholder={t.suggestionPlaceholder}
+                          className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${
+                            isDarkTheme
+                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
+                          }`}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
 
               <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-                <div className="w-full md:w-1/3 h-full">
+                <div className="w-full md:w-[30%] h-full">
                   <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
                 </div>
-                <div className="w-full md:w-2/3 h-full">
+                <div className="w-full md:w-[70%] h-full">
                   <AgentStream
                     thoughts={state.agentThoughts}
                     t={t}
@@ -11373,36 +11523,36 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
           {/* BATCH ANALYZING PAGE */}
           {state.step === "batch-analyzing" && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
-              <div className="flex justify-between items-center mb-4">
+            <div className="flex-1 flex flex-col h-[calc(100vh-140px)] min-h-[600px] relative">
+              <div className="flex justify-between items-center mb-3">
                 <div className="flex items-center gap-3">
-                  <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                  <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
                   <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       {t.batchAnalyzing}
-                      <span className="text-sm font-normal bg-emerald-500/20 px-2 py-0.5 rounded-full text-emerald-400">
+                      <span className="text-[10px] font-normal bg-emerald-500/20 px-1.5 py-0.5 rounded-full text-emerald-400">
                         {state.batchCurrentIndex} / {state.batchTotalCount}
                       </span>
                     </h3>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-xs text-slate-400">
                       Translating and analyzing keywords...
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={stopBatchAnalysis}
-                  className="flex items-center gap-2 px-4 py-2 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-sm font-medium shadow-sm"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-xs font-medium shadow-sm"
                 >
-                  <Square className="w-4 h-4 fill-current" />
+                  <Square className="w-3.5 h-3.5 fill-current" />
                   {t.btnStop}
                 </button>
               </div>
 
               <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-                <div className="w-full md:w-1/3 h-full">
+                <div className="w-full md:w-[30%] h-full">
                   <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
                 </div>
-                <div className="w-full md:w-2/3 h-full">
+                <div className="w-full md:w-[70%] h-full">
                   <BatchAnalysisStream
                     thoughts={state.batchThoughts}
                     t={t}
@@ -12448,15 +12598,15 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
           {/* DEEP DIVE ANALYZING PAGE */}
           {state.step === "deep-dive-analyzing" && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-200px)] min-h-[500px] relative">
-              <div className="flex justify-between items-center mb-4">
+            <div className="flex-1 flex flex-col h-[calc(100vh-140px)] min-h-[600px] relative">
+              <div className="flex justify-between items-center mb-3">
                 <div className="flex items-center gap-3">
-                  <Loader2 className="w-6 h-6 text-emerald-400 animate-spin" />
+                  <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
                   <div>
-                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
                       {t.deepDiveAnalyzing || "Deep Dive Analysis"}
                     </h3>
-                    <p className="text-sm text-slate-400">
+                    <p className="text-xs text-slate-400">
                       {state.deepDiveKeyword?.keyword || "Analyzing keyword..."}
                     </p>
                   </div>
@@ -12469,27 +12619,27 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       isDeepDiving: false,
                     }));
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-sm font-medium shadow-sm"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-xs font-medium shadow-sm"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                   Cancel
                 </button>
               </div>
 
               {/* Progress Bar */}
-              <div className="mb-6 bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-emerald-500/20 p-6">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="text-sm font-bold text-white">
+              <div className="mb-4 bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-emerald-500/20 px-4 py-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs font-bold text-white">
                     {state.deepDiveCurrentStep ||
                       (state.uiLanguage === "zh"
                         ? "初始化..."
                         : "Initializing...")}
                   </div>
-                  <div className="text-sm font-bold text-emerald-400">
+                  <div className="text-xs font-bold text-emerald-400">
                     {Math.round(state.deepDiveProgress)}%
                   </div>
                 </div>
-                <div className="w-full bg-black/60 rounded-full h-3 overflow-hidden">
+                <div className="w-full bg-black/60 rounded-full h-2 overflow-hidden border border-emerald-500/10">
                   <div
                     className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
                     style={{ width: `${state.deepDiveProgress}%` }}
@@ -12500,10 +12650,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               </div>
 
               <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-                <div className="w-full md:w-1/3 h-full">
+                <div className="w-full md:w-[30%] h-full">
                   <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
                 </div>
-                <div className="w-full md:w-2/3 h-full">
+                <div className="w-full md:w-[70%] h-full">
                   <DeepDiveAnalysisStream
                     thoughts={state.deepDiveThoughts}
                     t={t}
@@ -13177,45 +13327,24 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={async () => {
-                      try {
-                        const response = await fetch('/api/projects/save-keywords', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            userId: 1, // TODO: Get real userId
-                            projectName: state.seedKeyword,
-                            seedKeyword: state.seedKeyword,
-                            targetLanguage: state.targetLanguage,
-                            keywords: state.keywords
-                          })
-                        });
-                        const result = await response.json();
-                        if (result.success) {
-                          alert(state.uiLanguage === 'zh' ? '已保存到项目管理' : 'Saved to Projects');
-                          setState(prev => ({
-                            ...prev,
-                            step: 'content-generation',
-                            contentGeneration: {
-                              ...prev.contentGeneration,
-                              activeTab: 'projects'
-                            }
-                          }));
-                        } else {
-                          throw new Error(result.error || 'Failed to save');
+                    onClick={() => {
+                      setState(prev => ({
+                        ...prev,
+                        step: 'content-generation',
+                        contentGeneration: {
+                          ...prev.contentGeneration,
+                          activeTab: 'projects'
                         }
-                      } catch (err: any) {
-                        alert(err.message);
-                      }
+                      }));
                     }}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 text-sm font-bold active:scale-95"
                   >
-                    <Save className="w-4 h-4" />
-                    {state.uiLanguage === 'zh' ? '保存到项目' : 'Save to Project'}
+                    <TrendingUp className="w-4 h-4" />
+                    {state.uiLanguage === 'zh' ? '前往项目看板' : 'Go to Kanban'}
                   </button>
                   <button
                     onClick={() => startMining(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded-md hover:bg-emerald-600 transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white border border-white/10 rounded-md hover:bg-white/20 transition-colors text-sm font-medium"
                   >
                     <Plus className="w-4 h-4" />
                     {t.btnExpand}

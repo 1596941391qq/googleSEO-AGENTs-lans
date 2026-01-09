@@ -18,6 +18,8 @@ import {
 import { Badge } from "./ui/badge";
 import { cn } from "../lib/utils";
 import type { Website, WebsitesListData } from "./WebsiteManager";
+import { useAuth } from "../contexts/AuthContext";
+import { getUserId } from "./website-data/utils";
 
 interface WebsiteSelectorProps {
   userId?: number;
@@ -30,7 +32,7 @@ interface WebsiteSelectorProps {
 }
 
 export const WebsiteSelector: React.FC<WebsiteSelectorProps> = ({
-  userId = 1,
+  userId,
   isDarkTheme,
   uiLanguage,
   selectedWebsiteId,
@@ -38,6 +40,8 @@ export const WebsiteSelector: React.FC<WebsiteSelectorProps> = ({
   showAddButton = false,
   onAddWebsite,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = userId || getUserId(user);
   const [data, setData] = useState<WebsitesListData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +52,11 @@ export const WebsiteSelector: React.FC<WebsiteSelectorProps> = ({
     setError(null);
 
     try {
-      const response = await fetch(`/api/websites/list?user_id=${userId}`);
+      const response = await fetch(`/api/websites/list?user_id=${currentUserId}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
+      });
 
       if (response.ok) {
         const result = await response.json();

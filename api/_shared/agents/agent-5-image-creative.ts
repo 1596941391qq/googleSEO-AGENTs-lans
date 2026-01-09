@@ -65,11 +65,14 @@ function extractJSON(text: string): string {
  */
 export async function extractVisualThemes(
   content: ContentGenerationResult | string,
-  language: 'zh' | 'en' = 'en'
+  language: 'zh' | 'en' = 'en',
+  onProgress?: (message: string) => void
 ): Promise<VisualThemesResult> {
   try {
     // 获取 Image Creative prompt
     const systemInstruction = getImageCreativePrompt('extractThemes', language);
+
+    onProgress?.(language === 'zh' ? `🎨 正在分析文章深度语义，挖掘最匹配的视觉主题...` : `🎨 Analyzing content semantics for best visual themes...`);
 
     // 提取内容文本
     const contentText = typeof content === 'string'
@@ -139,8 +142,15 @@ Ensure themes are highly relevant to article content and SEO-friendly.`;
           }
         },
         required: ['themes']
+      },
+      onRetry: (attempt, error, delay) => {
+        onProgress?.(language === 'zh'
+          ? `⚠️ 视觉主题提取连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+          : `⚠️ Visual theme extraction connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
       }
     });
+
+    onProgress?.(language === 'zh' ? `✅ 视觉主题提取完成` : `✅ Visual themes extracted`);
 
     let text = response.text || '{}';
     text = extractJSON(text);
@@ -192,8 +202,8 @@ export async function generateImagePrompts(
 
       // 生成 Nano Banana 2 prompt，增强主题相关性
       const nanoBananaPrompt = getNanoBananaPrompt(
-        themeTitle, 
-        themeDescription, 
+        themeTitle,
+        themeDescription,
         language,
         keyword,
         articleTitle

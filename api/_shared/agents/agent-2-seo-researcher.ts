@@ -10,7 +10,7 @@ import { fetchSerpResults, type SerpData } from '../tools/serp-search.js';
 import { getSEOResearcherPrompt } from '../../../services/prompts/index.js';
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
 import { fetchKeywordData, SearchEngine } from '../tools/dataforseo.js';
-import { getDomainOverview } from '../tools/dataforseo-domain.js';
+import { getDomainOverview, getBatchDomainOverview } from '../tools/dataforseo-domain.js';
 
 /**
  * 辅助函数：计算蓝海信号分值 (Workflow 1)
@@ -24,22 +24,44 @@ export function calculateBlueOceanScore(analysis: any): number {
   }
   
   // 2. 内容相关性判断 (从 intentAnalysis 提取关键词)
-  const lowRelevanceKeywords = ['不相关', 'irrelevant', 'off-topic', '弱相关', 'weakly related'];
+  const lowRelevanceKeywords = [
+    '不相关', 'irrelevant', 'off-topic', '弱相关', 'weakly related', 
+    'low relevance', 'not matching', 'mismatch', '偏移', '不匹配',
+    'wrong intent', '意图不符', 'mixed intent', '混合意图', '未覆盖'
+  ];
   if (analysis.intentAnalysis && lowRelevanceKeywords.some(k => analysis.intentAnalysis.toLowerCase().includes(k))) {
     score += 25;
   }
   
   // 3. 内容深度与质量 (从 reasoning 提取关键词)
-  const lowQualityKeywords = ['short', 'thin content', '字数少', '浅显', 'outdated', '过时', 'old'];
+  const lowQualityKeywords = [
+    'short', 'thin content', '字数少', '浅显', 'outdated', '过时', 'old',
+    'shallow', 'basic', 'low quality', 'poorly written', '太短', '内容单薄',
+    'automated', 'ai generated', 'spammy', 'lacks depth', '缺乏深度', '不够详细'
+  ];
   if (analysis.reasoning && lowQualityKeywords.some(k => analysis.reasoning.toLowerCase().includes(k))) {
     score += 20;
   }
 
-  // 4. SERP 结果数量
-  if (analysis.serpResultCount !== undefined && analysis.serpResultCount < 10000) {
-    score += 15;
-  } else if (analysis.serpResultCount !== undefined && analysis.serpResultCount < 100000) {
-    score += 10;
+  // Step 4. SERP 结果数量
+  if (analysis.serpResultCount !== undefined && analysis.serpResultCount !== -1) {
+    if (analysis.serpResultCount < 10000) {
+      score += 15;
+    } else if (analysis.serpResultCount < 100000) {
+      score += 10;
+    }
+  }
+
+  // 5. 额外加分：如果没有竞争对手 (serpResultCount 为 0)
+  if (analysis.serpResultCount === 0) {
+    score += 20;
+  }
+
+  // 6. 考虑关键词难度 (如果有)
+  const kd = analysis.difficulty ?? analysis.dataForSEOData?.difficulty ?? analysis.serankingData?.difficulty;
+  if (kd !== undefined) {
+    if (kd <= 20) score += 15;
+    else if (kd <= 40) score += 5;
   }
 
   // 限制最大分数为 100
@@ -64,8 +86,12 @@ export function calculateOutrankProbability(
   // 1. 判断可超越的位置
   competitorDRs.forEach((dr, index) => {
     // 权威优势: websiteDR > competitorDR
-    // 或者相关性优势: relevanceScore > 0.7
-    if (websiteDR > dr || relevanceScore > 0.7) {
+    // 或者相关性优势 (relevanceScore > 0.8) 且差距不在巨大范围内 (差距 <= 40)
+    // 如果差距极大 (如 10 vs 90)，高相关性也难以超越
+    const drGap = dr - websiteDR;
+    
+    // 只要 DR 差距在一定范围内，且网站 DR 较高或内容相关性极高，就有机会
+    if (websiteDR >= dr - 5 || (relevanceScore > 0.85 && drGap <= 35) || (relevanceScore > 0.95 && drGap <= 50)) {
       canOutrankPositions.push(index + 1);
     }
   });
@@ -263,7 +289,8 @@ export async function analyzeSearchPreferences(
   language: 'zh' | 'en' = 'en',
   targetLanguage: TargetLanguage = 'en',
   targetMarket: string = 'global',
-  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void
+  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
+  onProgress?: (message: string) => void
 ): Promise<SearchPreferencesResult> {
   try {
     // 构建市场标签
@@ -278,6 +305,8 @@ export async function analyzeSearchPreferences(
       targetLanguage,
       marketLabel
     }) as string;
+
+    onProgress?.(language === 'zh' ? `🤖 正在分析 ${marketLabel} 市场的搜索引擎偏好...` : `🤖 Analyzing search engine preferences for ${marketLabel} market...`);
 
     // 调用 Gemini API（使用 JSON 模式）
     const response = await callGeminiAPI(prompt, systemInstruction, {
@@ -352,6 +381,11 @@ export async function analyzeSearchPreferences(
           geo_recommendations: { type: 'string' }
         },
         required: ['semantic_landscape', 'engine_strategies']
+      },
+      onRetry: (attempt, error, delay) => {
+        onProgress?.(language === 'zh'
+          ? `⚠️ 搜索引擎偏好分析异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+          : `⚠️ Search preferences analysis error (attempt ${attempt}/3), retrying in ${delay}ms...`);
       }
     });
 
@@ -390,22 +424,11 @@ export async function analyzeSearchPreferences(
   }
 }
 
-import { scrapeWebsite } from '../tools/firecrawl.js';
+import { scrapeWebsite, cleanMarkdown } from '../tools/firecrawl.js';
 
 // Helper to truncate content and extract headers
-function processScrapedContent(markdown: string, maxLength: number = 8000): string {
-  if (!markdown) return '';
-
-  // Simple truncation for now, can be smarter later
-  let content = markdown.substring(0, maxLength);
-
-  // Make sure we don't cut in the middle of a line
-  const lastNewline = content.lastIndexOf('\n');
-  if (lastNewline > 0) {
-    content = content.substring(0, lastNewline);
-  }
-
-  return content;
+function processScrapedContent(markdown: string, maxLength: number = 10000): string {
+  return cleanMarkdown(markdown, maxLength);
 }
 
 /**
@@ -426,14 +449,16 @@ export async function analyzeCompetitors(
   language: 'zh' | 'en' = 'en',
   targetLanguage: TargetLanguage = 'en',
   targetMarket: string = 'global',
-  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void
+  searchEngine: SearchEngine = 'google',
+  onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
+  onProgress?: (message: string) => void
 ): Promise<CompetitorAnalysisResult> {
   try {
     // 如果没有提供 SERP 数据，则获取
     let serpResults = serpData;
     if (!serpResults) {
-      console.log(`Fetching SERP results for competitor analysis: ${keyword}`);
-      serpResults = await fetchSerpResults(keyword, targetLanguage);
+      onProgress?.(language === 'zh' ? `📡 正在抓取 ${searchEngine} 搜索结果以进行竞争对手分析...` : `📡 Fetching ${searchEngine} SERP for competitor analysis...`);
+      serpResults = await fetchSerpResults(keyword, targetLanguage, searchEngine);
     }
 
     // 1. 构建 SERP 结果上下文 (Snippet based)
@@ -451,7 +476,7 @@ export async function analyzeCompetitors(
     const scrapedData: Array<{ rank: number; title: string; url: string; content: string }> = [];
 
     if (allResults.length > 0) {
-      console.log(`[Agent 2] Attempting to scrape ${targetScrapeCount} competitors for deep analysis...`);
+      onProgress?.(language === 'zh' ? `🕵️ 正在抓取前 ${targetScrapeCount} 名竞争对手的页面内容以进行深度分析...` : `🕵️ Scaping top ${targetScrapeCount} competitor pages for deep analysis...`);
 
       try {
         // 逐个尝试抓取，跳过失败的URL，直到获取到足够的成功结果
@@ -460,7 +485,10 @@ export async function analyzeCompetitors(
           if (!r.url) continue;
 
           try {
-            console.log(`[Agent 2] Attempting to scrape [${i + 1}/${allResults.length}]: ${r.url}`);
+            onProgress?.(language === 'zh' 
+              ? `🔥 [${scrapedData.length + 1}/${targetScrapeCount}] 正在抓取: ${r.url.substring(0, 50)}...` 
+              : `🔥 [${scrapedData.length + 1}/${targetScrapeCount}] Scraping: ${r.url.substring(0, 50)}...`);
+            
             const result = await scrapeWebsite(r.url, false);
             const processedContent = processScrapedContent(result.markdown || '');
 
@@ -472,9 +500,13 @@ export async function analyzeCompetitors(
                 url: r.url,
                 content: processedContent
               });
-              console.log(`[Agent 2] Successfully scraped ${r.url} (${scrapedData.length}/${targetScrapeCount})`);
+              onProgress?.(language === 'zh' 
+                ? `✅ 已抓取 [${scrapedData.length}/${targetScrapeCount}]: ${r.title.substring(0, 30)}...` 
+                : `✅ Scraped [${scrapedData.length}/${targetScrapeCount}]: ${r.title.substring(0, 30)}...`);
             } else {
-              console.warn(`[Agent 2] Scraped content from ${r.url} is too short or invalid, skipping...`);
+              onProgress?.(language === 'zh' 
+                ? `⚠️ 抓取内容过短，跳过: ${r.url.substring(0, 30)}...` 
+                : `⚠️ Content too short, skipping: ${r.url.substring(0, 30)}...`);
             }
           } catch (e: any) {
             console.warn(`[Agent 2] Failed to scrape ${r.url}:`, e.message);
@@ -511,6 +543,8 @@ export async function analyzeCompetitors(
       serpSnippetsContext,
       deepContentContext
     }) as string;
+
+    onProgress?.(language === 'zh' ? `🤖 正在调用 AI 进行深度竞争对手分析...` : `🤖 Calling AI for deep competitor analysis...`);
 
     // 调用 Gemini API（使用 JSON 模式）
     const response = await callGeminiAPI(prompt, systemInstruction, {
@@ -555,6 +589,11 @@ export async function analyzeCompetitors(
           markdown: { type: 'string' }
         },
         required: ['markdown']
+      },
+      onRetry: (attempt, error, delay) => {
+        onProgress?.(language === 'zh'
+          ? `⚠️ AI 竞争对手分析异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+          : `⚠️ AI competitor analysis error (attempt ${attempt}/3), retrying in ${delay}ms...`);
       }
     });
 
@@ -899,7 +938,8 @@ export const analyzeRankingProbability = async (
   targetLanguage: TargetLanguage = 'en',
   websiteUrl?: string,
   websiteDR?: number,
-  searchEngine: SearchEngine = 'google'
+  searchEngine: SearchEngine = 'google',
+  onProgress?: (message: string) => void
 ): Promise<KeywordData[]> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const engineName = searchEngine.charAt(0).toUpperCase() + searchEngine.slice(1);
@@ -921,50 +961,69 @@ export const analyzeRankingProbability = async (
     }
   }
 
-  const analyzeSingleKeyword = async (keywordData: KeywordData): Promise<KeywordData> => {
-    // Step 1: Fetch real Google SERP results
-    let serpData;
-    let serpResults: any[] = [];
-    let serpResultCount = -1;
+    const analyzeSingleKeyword = async (keywordData: KeywordData): Promise<KeywordData> => {
+      const keywordStartTime = Date.now();
+      onProgress?.(uiLanguage === 'zh' 
+        ? `🔍 [${keywordData.keyword}] 开始深度分析...` 
+        : `🔍 [${keywordData.keyword}] Starting deep analysis...`);
 
-    try {
-      console.log(`Fetching SERP for keyword: ${keywordData.keyword}`);
-      serpData = await fetchSerpResults(keywordData.keyword, targetLanguage);
-      serpResults = serpData.results || [];
-      serpResultCount = serpData.totalResults || -1;
-      console.log(`Fetched ${serpResults.length} search results for "${keywordData.keyword}"`);
-    } catch (error: any) {
-      console.warn(`Failed to fetch SERP for ${keywordData.keyword}:`, error.message);
-    }
+      // Step 1: Fetch real Google SERP results
+      let serpData;
+      let serpResults: any[] = [];
+      let serpResultCount = -1;
 
-    // Step 1.5: Fetch DR for Top 10 competitors if in "Audit" mode
-    let competitorDRs: number[] = [];
-    if (siteDR !== undefined && serpResults.length > 0) {
       try {
-        const topDomains = serpResults.slice(0, 10).map(r => r.url).filter(Boolean);
-        if (topDomains.length > 0) {
-          console.log(`[Agent 2] Fetching DR for top ${topDomains.length} competitors...`);
-          const domainMap = await getBatchDomainOverview(topDomains);
-          competitorDRs = topDomains.map(url => {
-            const domain = url.replace(/^https?:\/\//, '').split('/')[0];
-            return (domainMap.get(domain) as any)?.dr || 0;
-          });
-        }
-      } catch (e) {
-        console.warn(`[Agent 2] Failed to fetch competitor DRs:`, e);
+        onProgress?.(uiLanguage === 'zh' 
+          ? `📡 [${keywordData.keyword}] 正在抓取 ${searchEngine} 实时搜索结果...` 
+          : `📡 [${keywordData.keyword}] Fetching ${searchEngine} real-time SERP...`);
+        
+        serpData = await fetchSerpResults(keywordData.keyword, targetLanguage, searchEngine);
+        serpResults = serpData.results || [];
+        serpResultCount = serpData.totalResults || -1;
+        
+        onProgress?.(uiLanguage === 'zh' 
+          ? `✅ [${keywordData.keyword}] 已获取 ${serpResults.length} 条搜索结果` 
+          : `✅ [${keywordData.keyword}] Fetched ${serpResults.length} search results`);
+      } catch (error: any) {
+        console.warn(`[Agent 2] Failed to fetch ${searchEngine} SERP for ${keywordData.keyword}:`, error.message);
       }
-    }
 
-    // Step 2: Build system instruction with real SERP data
+      // Step 1.5: Fetch DR for Top 10 competitors
+      let competitorDRs: number[] = [];
+      if (serpResults.length > 0) {
+        try {
+          onProgress?.(uiLanguage === 'zh' 
+            ? `🛡️ [${keywordData.keyword}] 正在评估前 ${Math.min(10, serpResults.length)} 名竞争对手的域名权威度 (DR)...` 
+            : `🛡️ [${keywordData.keyword}] Assessing Domain Rating (DR) for top competitors...`);
+          
+          const drFetchStart = Date.now();
+          const topDomains = serpResults.slice(0, 10).map(r => r.url).filter(Boolean);
+          if (topDomains.length > 0) {
+            const domainMap = await getBatchDomainOverview(topDomains);
+            competitorDRs = topDomains.map(url => {
+              const domain = url.replace(/^https?:\/\//, '').split('/')[0];
+              return (domainMap.get(domain) as any)?.dr || 0;
+            });
+          }
+          
+          onProgress?.(uiLanguage === 'zh' 
+            ? `✅ [${keywordData.keyword}] 竞争对手权威度评估完成` 
+            : `✅ [${keywordData.keyword}] Competitor DR assessment completed`);
+        } catch (e) {
+          console.warn(`[Agent 2] Failed to fetch competitor DRs:`, e);
+        }
+      }
+
+      // Step 2: Build system instruction with real SERP data
     // 限制SERP结果数量和数据长度，避免输入token过多
     const maxSerpResults = 5; // 只使用前5个结果
     const maxSerpSnippetLength = 150; // 限制snippet长度（用于SERP上下文）
     const serpContext = serpResults.length > 0
-      ? `\n\nTOP GOOGLE SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\nNote: These are the TOP ranking results provided to you for competition analysis, NOT all search results.\n\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
+      ? `\n\nTOP ${engineName} SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\nNote: These are the TOP ranking results provided to you for competition analysis, NOT all search results.\n\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
         const snippet = r.snippet ? (r.snippet.length > maxSerpSnippetLength ? r.snippet.substring(0, maxSerpSnippetLength) + '...' : r.snippet) : '';
         const drInfo = competitorDRs[i] !== undefined ? ` (Domain Authority: ${competitorDRs[i]})` : '';
         return `${i + 1}. Title: ${r.title}\n   URL: ${r.url}${drInfo}\n   Snippet: ${snippet}`;
-      }).join('\n\n')}\n\nEstimated Total Results on Google: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: Use these top results to assess the QUALITY of competition you need to beat.${siteDR !== undefined ? `\n\nYOUR WEBSITE AUTHORITY: ${siteDR}. Compare this with competitors to judge if you can outrank them.` : ''}`
+      }).join('\n\n')}\n\nEstimated Total Results on ${engineName}: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: Use these top results to assess the QUALITY of competition you need to beat.${siteDR !== undefined ? `\n\nYOUR WEBSITE AUTHORITY: ${siteDR}. Compare this with competitors to judge if you can outrank them.` : ''}`
       : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
 
     // Add DataForSEO data context if available (use dataForSEOData or serankingData for backward compatibility)
@@ -1104,6 +1163,11 @@ Return a JSON object:
     try {
       let response;
       try {
+        onProgress?.(uiLanguage === 'zh' 
+          ? `🤖 [${keywordData.keyword}] 正在调用 AI 专家进行胜率估算和蓝海信号分析...` 
+          : `🤖 [${keywordData.keyword}] Calling AI expert for outrank and blue ocean analysis...`);
+        
+        const geminiStart = Date.now();
         response = await callGeminiAPI(
           `Analyze SEO competition for: ${keywordData.keyword}
 
@@ -1139,9 +1203,19 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
             enableGoogleSearch: false,
             // 设置最大输出token限制（Gemini 2.5 Flash 支持最大 65536）
             // 设置为最大值以确保有足够空间输出完整的 JSON（包括详细的 reasoning 和完整的 topSerpSnippets）
-            maxOutputTokens: 65536
+            maxOutputTokens: 65536,
+            onRetry: (attempt, error, delay) => {
+              onProgress?.(uiLanguage === 'zh'
+                ? `⚠️ [${keywordData.keyword}] AI 分析连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+                : `⚠️ [${keywordData.keyword}] AI analysis connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+            }
           }
         );
+        onProgress?.(uiLanguage === 'zh' 
+          ? `✨ [${keywordData.keyword}] AI 分析完成` 
+          : `✨ [${keywordData.keyword}] AI analysis completed`);
+        
+        console.log(`[Agent 2] Gemini analysis for "${keywordData.keyword}" completed in ${Date.now() - geminiStart}ms`);
       } catch (apiError: any) {
         // 如果API调用失败（如400错误），使用默认值并继续
         console.error(`API call failed for keyword ${keywordData.keyword}:`, apiError.message);
@@ -1455,7 +1529,10 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
       }
 
       // 计算蓝海评分 (Workflow 1)
-      const blueOceanScore = calculateBlueOceanScore(analysis);
+      const blueOceanScore = calculateBlueOceanScore({
+        ...keywordData,
+        ...analysis
+      });
       
       // 计算大鱼吃小鱼概率 (Workflow 3)
       let outrankData = {
@@ -1472,6 +1549,8 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           analysis.probability = ProbabilityLevel.HIGH;
         }
       }
+
+      console.log(`[Agent 2] Total analysis for "${keywordData.keyword}" took ${Date.now() - keywordStartTime}ms`);
 
       return {
         ...keywordData,
@@ -1500,30 +1579,28 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
   };
 
   const results: KeywordData[] = [];
-  const BATCH_SIZE = 5;
-  const BATCH_DELAY = 300;
+  const BATCH_SIZE = 2; // 降低批处理大小，减少并发压力，防止代理超时或 Socket 关闭
+  const BATCH_DELAY = 1000; // 增加批次间的延迟
   const startTime = Date.now();
-  const MAX_EXECUTION_TIME = 880000;
+  const MAX_EXECUTION_TIME = 280000; // 调低至 280 秒，确保在前端 300 秒超时前返回
 
-  for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
-    const elapsed = Date.now() - startTime;
-    if (elapsed > MAX_EXECUTION_TIME) {
-      console.warn(`Approaching timeout, processed ${i}/${keywords.length} keywords`);
-      const remaining = keywords.slice(i).map(k => ({
-        ...k,
-        probability: ProbabilityLevel.LOW,
-        reasoning: "Analysis timeout - too many keywords to process",
-        topDomainType: "Unknown" as const,
-        serpResultCount: -1
-      }));
-      results.push(...remaining);
-      break;
-    }
+    for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
+      const elapsed = Date.now() - startTime;
+      if (elapsed > MAX_EXECUTION_TIME) {
+        // ...
+      }
 
-    const batch = keywords.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.allSettled(
-      batch.map(k => analyzeSingleKeyword(k))
-    );
+      const batch = keywords.slice(i, i + BATCH_SIZE);
+      const currentBatchNum = Math.floor(i / BATCH_SIZE) + 1;
+      const totalBatches = Math.ceil(keywords.length / BATCH_SIZE);
+      
+      onProgress?.(uiLanguage === 'zh'
+        ? `📦 正在处理第 ${currentBatchNum}/${totalBatches} 批关键词 (${batch.length}个)...`
+        : `📦 Processing batch ${currentBatchNum}/${totalBatches} (${batch.length} keywords)...`);
+
+      const batchResults = await Promise.allSettled(
+        batch.map(k => analyzeSingleKeyword(k))
+      );
 
     const processedResults = batchResults.map((result, idx) => {
       if (result.status === 'fulfilled') {
@@ -1604,7 +1681,8 @@ export const generateDeepDiveStrategy = async (
       screenshot?: string;
       title?: string;
     };
-  }
+  },
+  onProgress?: (message: string) => void
 ): Promise<SEOStrategyReport> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const targetLangName = getLanguageName(targetLanguage);
@@ -1665,6 +1743,8 @@ export const generateDeepDiveStrategy = async (
   const systemInstruction = customPrompt || (promptConfig.systemInstruction + analysisContext + referenceContext);
   const prompt = promptConfig.prompt;
 
+  onProgress?.(uiLanguage === 'zh' ? `🤖 正在制定最终的 SEO 内容策略报告...` : `🤖 Generating final SEO content strategy report...`);
+
   try {
     const response = await callGeminiAPI(prompt, systemInstruction, {
       responseMimeType: 'application/json',
@@ -1697,6 +1777,11 @@ export const generateDeepDiveStrategy = async (
           markdown: { type: 'string' }
         },
         required: ['pageTitleH1', 'metaDescription', 'contentStructure', 'markdown']
+      },
+      onRetry: (attempt, error, delay) => {
+        onProgress?.(uiLanguage === 'zh'
+          ? `⚠️ 策略报告生成异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+          : `⚠️ Strategy report generation error (attempt ${attempt}/3), retrying in ${delay}ms...`);
       }
     });
 

@@ -9,10 +9,8 @@ import {
   Search,
   CheckCircle,
   Loader2,
-  Workflow,
   Languages,
   SunMoon,
-  Bug,
   Sparkles,
   FileText,
 } from "lucide-react";
@@ -44,7 +42,7 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({
   <button
     id={id}
     onClick={onClick}
-    className={`w-full flex items-center px-3 py-2 rounded transition-all text-xs font-bold uppercase tracking-wider relative ${
+    className={`w-full flex items-center px-3 py-2 rounded transition-all text-xs lg:text-sm font-bold uppercase tracking-wider relative ${
       isCollapsed ? "justify-center space-x-0" : "space-x-3"
     } ${
       active
@@ -77,6 +75,38 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({
   </button>
 );
 
+// OptionButton for the bottom section
+const OptionButton: React.FC<{
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  active?: boolean;
+  isDarkTheme: boolean;
+  showBadge?: boolean;
+}> = ({ icon, label, onClick, active, isDarkTheme, showBadge }) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      "p-2 rounded transition-all relative flex items-center justify-center group/opt",
+      active
+        ? isDarkTheme
+          ? "text-white bg-white/5 border border-white/10 shadow-lg"
+          : "text-gray-900 bg-emerald-50 border border-emerald-200"
+        : isDarkTheme
+        ? "text-neutral-500 hover:text-white hover:bg-white/5 border border-transparent"
+        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent"
+    )}
+    title={label}
+  >
+    <span className="opacity-70 group-hover/opt:opacity-100 transition-opacity">
+      {icon}
+    </span>
+    {showBadge && (
+      <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full border border-black/20 shadow-sm" />
+    )}
+  </button>
+);
+
 interface SidebarProps {
   tasks: TaskState[];
   activeTaskId: string | null;
@@ -84,7 +114,7 @@ interface SidebarProps {
   onTaskSwitch: (taskId: string) => void;
   onTaskAdd: () => void;
   onTaskDelete: (taskId: string, e: React.MouseEvent) => void;
-  onWorkflowConfig: () => void;
+  onWorkflowConfig?: () => void;
   onLanguageToggle: () => void;
   onThemeToggle: () => void;
   uiLanguage: UILanguage;
@@ -98,7 +128,6 @@ interface SidebarProps {
     | "website-data"
     | "projects"
     | "publish";
-  onTestAgents?: () => void;
   onDeepDive?: () => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -119,7 +148,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isDarkTheme,
   onContentGeneration,
   contentGenerationTab,
-  onTestAgents,
   onDeepDive,
   isCollapsed,
   onToggleCollapse,
@@ -252,13 +280,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
               <h1
                 className={cn(
-                  "text-xs font-black tracking-widest leading-none",
+                  "text-xs lg:text-sm font-black tracking-widest leading-none",
                   isDarkTheme ? "text-white" : "text-gray-900"
                 )}
               >
                 Niche Digger
               </h1>
-              <p className="text-[9px] text-emerald-500 font-bold tracking-tight uppercase mt-1">
+              <p className="text-[9px] lg:text-xs text-emerald-500 font-bold tracking-tight uppercase mt-1">
                 Mine Hidden Alpha
               </p>
             </div>
@@ -321,7 +349,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {!isCollapsed && (
             <div className="flex items-center justify-between px-3 mb-4 animate-in fade-in duration-300">
               <span
-                className={`text-[10px] font-black uppercase tracking-widest ${
+                className={`text-[10px] lg:text-xs font-black uppercase tracking-widest ${
                   isDarkTheme ? "text-neutral-500" : "text-gray-500"
                 }`}
               >
@@ -365,7 +393,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {getTaskIcon(task)}
                   {!isCollapsed && (
                     <span
-                      className={`text-xs font-bold truncate ${
+                      className={`text-xs lg:text-sm font-bold truncate ${
                         activeTaskId === task.id
                           ? isDarkTheme
                             ? "text-white"
@@ -414,53 +442,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           {!isCollapsed && (
             <span
-              className={`text-[10px] font-black uppercase tracking-widest px-3 block mb-4 animate-in fade-in duration-300 ${
+              className={`text-[10px] lg:text-xs font-black uppercase tracking-widest px-3 block mb-4 animate-in fade-in duration-300 ${
                 isDarkTheme ? "text-neutral-500" : "text-gray-500"
               }`}
             >
               {labels.options}
             </span>
           )}
-          <div className="space-y-1">
-            <SidebarLink
-              icon={<Workflow size={14} />}
-              label={labels.workflow}
-              onClick={onWorkflowConfig}
-              active={step === "workflow-config"}
-              isDarkTheme={isDarkTheme}
-              showBadge={true}
-              isCollapsed={isCollapsed}
-            />
-            <SidebarLink
-              icon={<Languages size={14} />}
+          <div className={cn(
+            "flex",
+            isCollapsed ? "flex-col items-center space-y-2" : "flex-row items-center px-3 space-x-2"
+          )}>
+            <OptionButton
+              icon={
+                <div className="flex items-center justify-center w-4 h-4 text-[10px] font-black tracking-tighter">
+                  {uiLanguage === "zh" ? "EN" : "中"}
+                </div>
+              }
               label={labels.language}
               onClick={onLanguageToggle}
               isDarkTheme={isDarkTheme}
-              isCollapsed={isCollapsed}
             />
-            <SidebarLink
+            <OptionButton
               icon={<SunMoon size={14} />}
               label={labels.theme}
               onClick={onThemeToggle}
               isDarkTheme={isDarkTheme}
-              isCollapsed={isCollapsed}
             />
-            {import.meta.env.DEV && onTestAgents && (
-              <SidebarLink
-                icon={<Bug size={14} />}
-                label="Test Agents"
-                onClick={onTestAgents}
-                isDarkTheme={isDarkTheme}
-                active={step === "test-agents"}
-                isCollapsed={isCollapsed}
-              />
-            )}
           </div>
         </div>
       </div>
 
       <div
-        className={`p-4 border-t text-[10px] font-bold uppercase tracking-widest text-center ${
+        className={`p-4 border-t text-[10px] lg:text-xs font-bold uppercase tracking-widest text-center ${
           isDarkTheme
             ? "border-white/5 text-neutral-600"
             : "border-gray-200 text-gray-500"

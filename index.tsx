@@ -34,6 +34,27 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// 全局 Fetch 拦截器，自动注入 Authorization Token
+const originalFetch = window.fetch;
+window.fetch = async (resource, config) => {
+  const token = localStorage.getItem('auth_token');
+  
+  // 只对本站 API 请求注入 Token
+  const isApiRequest = typeof resource === 'string' && 
+    (resource.startsWith('/api/') || resource.startsWith(window.location.origin + '/api/'));
+
+  if (token && isApiRequest) {
+    config = config || {};
+    const headers = new Headers(config.headers || {});
+    if (!headers.has('Authorization')) {
+      headers.set('Authorization', `Bearer ${token}`);
+    }
+    config.headers = headers;
+  }
+  
+  return originalFetch(resource, config);
+};
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");

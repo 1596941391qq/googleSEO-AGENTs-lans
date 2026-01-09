@@ -503,6 +503,9 @@ export interface ProjectWithStats extends Project {
   keyword_count: number;
   draft_count: number;
   published_count: number;
+  type?: 'project' | 'task';
+  status?: string;
+  task_type?: string;
 }
 
 export interface KeywordWithStatus {
@@ -534,6 +537,8 @@ export interface ArticleGeneratorState {
   targetAudience: string;
   visualStyle: string;
   targetMarket: string;
+  promotedWebsites?: string[];
+  promotionIntensity?: "natural" | "strong";
 
   isGenerating: boolean;
   progress: number; // 0-100

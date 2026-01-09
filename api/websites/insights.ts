@@ -13,6 +13,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { sql } from '../lib/database.js';
 import { callGeminiAPI } from '../_shared/gemini.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -29,21 +30,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { websiteId, url, uiLanguage = 'zh' } = req.body;
-
-  if (!websiteId && !url) {
-    return res.status(400).json({ error: 'Missing websiteId or url' });
-  }
-
   try {
-    // 1. 获取网站基础数据
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId;
+
+    const { websiteId, url, uiLanguage = 'zh' } = req.body;
+
+    if (!websiteId && !url) {
+      return res.status(400).json({ error: 'Missing websiteId or url' });
+    }
+
+    // 1. 获取网站基础数据并验证权限
     let websiteData;
     if (websiteId) {
-      const result = await sql`SELECT * FROM user_websites WHERE id = ${websiteId}`;
+      const result = await sql`SELECT * FROM user_websites WHERE id = ${websiteId} AND user_id = ${userId}`;
       websiteData = result.rows[0];
     } else {
-      const result = await sql`SELECT * FROM user_websites WHERE website_url = ${url}`;
+      const result = await sql`SELECT * FROM user_websites WHERE website_url = ${url} AND user_id = ${userId}`;
       websiteData = result.rows[0];
+    }
+
+    if (!websiteData) {
+      return res.status(404).json({ error: 'Website not found or access denied' });
     }
 
     const targetId = websiteData?.id || websiteId;
@@ -78,11 +90,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       You are an elite SEO Growth Hacker. Analyze the strictly provided SEO data for website "${url || websiteData?.website_url}" and provide 5-6 high-impact "terminal-style" insights.
       
       CRITICAL CONSTRAINTS:
-      1. LANGUAGE: You MUST respond entirely in ${isChinese ? 'Simplified Chinese' : 'English'}.
-      2. ACCURACY: DO NOT hallucinate. Use ONLY the data provided below. If data is 0 or N/A, acknowledge it honestly.
+      1. LANGUAGE: You MUST respond ENTIRELY in ${isChinese ? 'Simplified Chinese' : 'English'}. DO NOT mix languages.
+      2. ACCURACY: DO NOT hallucinate. Use ONLY the data provided below.
       3. STRUCTURE: Each insight must follow this exact format:
          > [TAG] Professional/Aggressive/Technical Statement. (Simplified/Actionable/Human explanation).
-      4. STYLE: The first part should be "cool" (装逼) using SEO terms like LSI, SERP, E-E-A-T, etc. The second part (in parentheses) must be "human-speak" (说人话), explaining what to actually do in simple terms.
+      4. STYLE: The first part should be "cool" using SEO terms like LSI, SERP, E-E-A-T, etc. The second part (in parentheses) must be "human-speak", explaining what to actually do in simple terms.
       
       DATA:
       - Organic Traffic: ${overview.organic_traffic || '0'}
@@ -93,8 +105,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       ${isChinese ? `
       示例 (Chinese):
-      > [威胁] 竞对 ${competitors[0]?.competitor_domain || '某站点'} 正在通过 LSI 关键词渗透你的核心 SERP。 (人家在用你没想到的词抢你生意，赶紧多写点相关的文章)。
-      > [机会] 发现语义饱和度缺口，尤其在 "${keywords[0]?.keyword || '核心词'}" 领域。 (这个词大家都搜，但没人写透，你现在去写肯定能火)。
+      > [威胁] 竞对 ${competitors[0]?.competitor_domain || '某站点'} 正在通过 LSI 关键词渗透你的核心 SERP。 (对手正在通过你没注意到的关键词群抢夺流量，建议针对这些词进行内容覆盖)。
+      > [机会] 发现语义饱和度缺口，尤其在 "${keywords[0]?.keyword || '核心领域'}" 聚类中。 (用户对该主题仍有未满足的需求，建议深入创作该主题的长文以占领市场)。
       ` : `
       Example (English):
       > [THREAT] Competitor ${competitors[0]?.competitor_domain || 'Site X'} is infiltrating your core SERP via LSI clusters. (They are stealing your traffic with keywords you missed, start writing content around these topics).

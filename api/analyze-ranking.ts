@@ -86,22 +86,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (dataForSEOData.volume) {
             keyword.volume = dataForSEOData.volume;
           }
-
-          // Check if difficulty > 40, skip SERP analysis
-          if (dataForSEOData.difficulty && dataForSEOData.difficulty > 40) {
-            console.log(`[DataForSEO] Keyword "${keyword.keyword}" has KD ${dataForSEOData.difficulty} > 40, marking as LOW and skipping`);
-            keyword.probability = ProbabilityLevel.LOW;
-            keyword.reasoning = `Keyword Difficulty (${dataForSEOData.difficulty}) is too high (>40). This indicates strong competition. Skipped detailed SERP analysis.`;
-            skippedKeywords.push(keyword);
-            continue;
-          }
         }
 
         // Add to keywords that need SERP analysis
         keywordsToAnalyze.push(keyword);
       }
 
-      console.log(`[DataForSEO] ${keywordsToAnalyze.length} keywords will proceed to SERP analysis, ${skippedKeywords.length} keywords skipped due to high KD`);
+      console.log(`[DataForSEO] ${keywordsToAnalyze.length} keywords will proceed to SERP analysis`);
 
     } catch (dataForSEOError) {
       console.warn(`[DataForSEO] API call failed: ${dataForSEOError.message}. Proceeding with SERP analysis for all keywords.`);

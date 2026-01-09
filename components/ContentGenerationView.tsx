@@ -72,6 +72,8 @@ import {
 } from "recharts";
 import { WebsiteManager } from "./WebsiteManager";
 import { WebsiteDataDashboard } from "./website-data";
+import { useAuth } from "../contexts/AuthContext";
+import { getUserId } from "./website-data/utils";
 
 // Opportunity Insight Terminal Component
 const OpportunityTerminal: React.FC<{
@@ -92,7 +94,10 @@ const OpportunityTerminal: React.FC<{
       try {
         const response = await fetch("/api/websites/insights", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+          },
           body: JSON.stringify({ websiteId, url, uiLanguage }),
         });
         const result = await response.json();
@@ -144,7 +149,7 @@ const OpportunityTerminal: React.FC<{
   return (
     <Card
       className={cn(
-        "h-[420px] border-none rounded-[32px] overflow-hidden font-mono text-[10px] relative group",
+        "h-[420px] border-none rounded-[32px] overflow-hidden font-mono text-[10px] lg:text-xs relative group",
         isDarkTheme
           ? "bg-black text-emerald-500"
           : "bg-zinc-900 text-emerald-400"
@@ -162,11 +167,11 @@ const OpportunityTerminal: React.FC<{
             !loading && "animate-pulse"
           )}
         />
-        <span className="text-[8px] font-black uppercase tracking-widest opacity-40">
+        <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest opacity-40">
           {loading ? "SCANNING..." : "LIVE TERMINAL"}
         </span>
       </div>
-      <CardContent className="p-8 pt-14 space-y-2">
+      <CardContent className="p-8 pt-16 space-y-2 h-full overflow-y-auto visible-scrollbar">
         {lines.map((line, idx) => (
           <div key={idx} className="opacity-80 leading-relaxed">
             {line}
@@ -299,6 +304,8 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
   isDarkTheme,
   uiLanguage,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [rankingsData, setRankingsData] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -322,10 +329,13 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
     try {
       const response = await fetch("/api/article-rankings/get", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
         body: JSON.stringify({
           websiteUrl: website.url,
-          userId: 1, // TODO: Get from session
+          userId: currentUserId,
         }),
       });
 
@@ -467,7 +477,7 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
           <CardContent className="pt-6">
             <div
               className={cn(
-                "text-xs mb-1",
+                "text-xs lg:text-sm mb-1",
                 isDarkTheme ? "text-zinc-500" : "text-gray-500"
               )}
             >
@@ -475,7 +485,7 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
             </div>
             <div
               className={cn(
-                "text-2xl font-bold",
+                "text-2xl lg:text-3xl font-bold",
                 isDarkTheme ? "text-white" : "text-gray-900"
               )}
             >
@@ -494,13 +504,15 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
           <CardContent className="pt-6">
             <div
               className={cn(
-                "text-xs mb-1",
+                "text-xs lg:text-sm mb-1",
                 isDarkTheme ? "text-zinc-500" : "text-gray-500"
               )}
             >
               {uiLanguage === "zh" ? "前10名" : "Top 10"}
             </div>
-            <div className={cn("text-2xl font-bold text-emerald-500")}>
+            <div
+              className={cn("text-2xl lg:text-3xl font-bold text-emerald-500")}
+            >
               {rankingsData.overview.top10Keywords}
             </div>
           </CardContent>
@@ -516,7 +528,7 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
           <CardContent className="pt-6">
             <div
               className={cn(
-                "text-xs mb-1",
+                "text-xs lg:text-sm mb-1",
                 isDarkTheme ? "text-zinc-500" : "text-gray-500"
               )}
             >
@@ -524,7 +536,7 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
             </div>
             <div
               className={cn(
-                "text-2xl font-bold",
+                "text-2xl lg:text-3xl font-bold",
                 isDarkTheme ? "text-white" : "text-gray-900"
               )}
             >
@@ -545,13 +557,15 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
           <CardContent className="pt-6">
             <div
               className={cn(
-                "text-xs mb-1",
+                "text-xs lg:text-sm mb-1",
                 isDarkTheme ? "text-zinc-500" : "text-gray-500"
               )}
             >
               {uiLanguage === "zh" ? "排名提升" : "Improved"}
             </div>
-            <div className={cn("text-2xl font-bold text-emerald-500")}>
+            <div
+              className={cn("text-2xl lg:text-3xl font-bold text-emerald-500")}
+            >
               {rankingsData.overview.improved}
             </div>
           </CardContent>
@@ -872,6 +886,8 @@ interface PublishTabProps {
 }
 
 const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [articles, setArticles] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [updatingStatus, setUpdatingStatus] = React.useState<string | null>(
@@ -881,7 +897,14 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const loadArticles = React.useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/articles/list?userId=1`);
+      const response = await fetch(
+        `/api/articles/list?userId=${currentUserId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+          },
+        }
+      );
       if (response.ok) {
         const result = await response.json();
         setArticles(result.data?.articles || []);
@@ -901,11 +924,12 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
           },
           body: JSON.stringify({
             articleId,
             status: newStatus,
-            userId: 1, // TODO: Get from session/auth
+            userId: currentUserId,
           }),
         });
 
@@ -1138,6 +1162,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
   uiLanguage,
   onGenerateArticle,
 }) => {
+  const { user } = useAuth();
+  const currentUserId = getUserId(user);
   const [urlInput, setUrlInput] = useState("");
   const [tempUrl, setTempUrl] = useState(""); // Store URL during onboarding
   const [qa1, setQa1] = useState("");
@@ -1152,7 +1178,16 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
       setIsCheckingWebsite(true); // Start checking
       try {
         // Try loading from database first
-        const response = await fetch(`/api/websites/list?user_id=1`);
+        const response = await fetch(
+          `/api/websites/list?user_id=${currentUserId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${
+                localStorage.getItem("auth_token") || ""
+              }`,
+            },
+          }
+        );
 
         if (response.ok) {
           const result = await response.json();
@@ -1441,6 +1476,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
         },
         body: JSON.stringify({ url: processedUrl }),
       });
@@ -1475,6 +1511,9 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              Authorization: `Bearer ${
+                localStorage.getItem("auth_token") || ""
+              }`,
             },
             body: JSON.stringify({
               content: data.data.markdown,
@@ -1497,16 +1536,27 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           );
 
           if (extractData.success && extractData.data) {
+            const urlDomain = new URL(processedUrl).hostname;
+            const urlBrand =
+              urlDomain.split(".")[0].charAt(0).toUpperCase() +
+              urlDomain.split(".")[0].slice(1);
+
             setState({
               websiteData: {
                 rawContent: data.data.markdown,
                 extractedKeywords: extractData.data.keywords || [],
-                rankingOpportunities: [], // Will analyze later
+                rankingOpportunities: [],
               },
-              onboardingStep: 1, // Stay on loading while generating demo content
+              demoContent: {
+                chatGPTDemo: null, // Initial null state
+                articleDemo: null,
+                domain: urlDomain,
+                brandName: urlBrand,
+                screenshot: data.data.screenshot,
+              },
             });
 
-            // Now generate demo content
+            // Now generate demo content - WAIT for it to avoid hardcoded demo display
             try {
               console.log(
                 "[Content Generation] Step 3: Generating demo content..."
@@ -1515,86 +1565,44 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
+                  Authorization: `Bearer ${
+                    localStorage.getItem("auth_token") || ""
+                  }`,
                 },
                 body: JSON.stringify({
                   content: data.data.markdown,
                   url: processedUrl,
                   keywords: extractData.data.keywords || [],
-                  targetLanguage: uiLanguage, // Use uiLanguage instead of hardcoded "en"
+                  targetLanguage: uiLanguage,
                   uiLanguage: uiLanguage,
-                  websiteTitle: data.data.title || "", // Pass website title to AI
+                  websiteTitle: data.data.title || "",
                 }),
               });
 
               if (!demoResponse.ok) {
-                const errorData = await demoResponse.json();
-                console.error(
-                  "[Content Generation] Demo generation failed:",
-                  errorData
-                );
-                throw new Error(
-                  errorData.error || "Failed to generate demo content"
-                );
+                throw new Error("Failed to generate demo content");
               }
 
               const demoData = await demoResponse.json();
-              console.log("[Content Generation] Demo generation success");
-
               if (demoData.success && demoData.data) {
-                // After generating demo content, stay on step 1 (loading) for a moment
-                // Then move to step 2 (GPT demo) - user will click "Continue" to proceed
-                setState({
+                setState((prev) => ({
+                  ...prev,
                   demoContent: {
                     ...demoData.data,
                     screenshot: data.data.screenshot,
                   },
-                  onboardingStep: 1, // Stay on loading step
-                });
-
-                // After a short delay, move to step 2 (GPT demo)
-                setTimeout(() => {
-                  setState((prev) => ({
-                    ...prev,
-                    onboardingStep: 2, // Move to GPT demo
-                  }));
-                }, 1000);
+                  onboardingStep: 2, // Move to step 2 ONLY after demo content is ready
+                }));
               } else {
-                throw new Error("Invalid demo response format");
+                throw new Error("Invalid demo content format");
               }
-            } catch (demoError: any) {
+            } catch (demoError) {
               console.error(
-                "[Content Generation] Error generating demo content:",
+                "[Content Generation] Demo generation failed:",
                 demoError
               );
-
-              // 处理网络错误
-              if (
-                demoError?.message?.includes("Failed to fetch") ||
-                demoError?.name === "TypeError"
-              ) {
-                console.warn(
-                  "[Content Generation] Network error during demo generation"
-                );
-              }
-
-              // Still move to next step with default content
-              console.log(
-                "[Content Generation] Moving to step 2 with default content"
-              );
-              const urlDomain = new URL(processedUrl).hostname;
-              const urlBrand =
-                urlDomain.split(".")[0].charAt(0).toUpperCase() +
-                urlDomain.split(".")[0].slice(1);
-              setState({
-                demoContent: {
-                  chatGPTDemo: null,
-                  articleDemo: null,
-                  domain: urlDomain,
-                  brandName: urlBrand,
-                  screenshot: data.data.screenshot,
-                },
-                onboardingStep: 2,
-              });
+              // Fallback to step 2 anyway so the user isn't stuck
+              setState((prev) => ({ ...prev, onboardingStep: 2 }));
             }
           } else {
             throw new Error("Invalid extract response format");
@@ -1707,6 +1715,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
         },
         body: JSON.stringify({ url: processedUrl }),
       });
@@ -1741,6 +1750,9 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             method: "POST",
             headers: {
               "Content-Type": "application/json",
+              Authorization: `Bearer ${
+                localStorage.getItem("auth_token") || ""
+              }`,
             },
             body: JSON.stringify({
               content: data.data.markdown,
@@ -1763,16 +1775,27 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           );
 
           if (extractData.success && extractData.data) {
+            const urlDomain = new URL(processedUrl).hostname;
+            const urlBrand =
+              urlDomain.split(".")[0].charAt(0).toUpperCase() +
+              urlDomain.split(".")[0].slice(1);
+
             setState({
               websiteData: {
                 rawContent: data.data.markdown,
                 extractedKeywords: extractData.data.keywords || [],
-                rankingOpportunities: [], // Will analyze later
+                rankingOpportunities: [],
               },
-              onboardingStep: 1, // Stay on loading while generating demo content
+              demoContent: {
+                chatGPTDemo: null, // Initial null state
+                articleDemo: null,
+                domain: urlDomain,
+                brandName: urlBrand,
+                screenshot: data.data.screenshot,
+              },
             });
 
-            // Now generate demo content
+            // Now generate demo content - WAIT for it to avoid hardcoded demo display
             try {
               console.log(
                 "[Content Generation] Step 3: Generating demo content..."
@@ -1781,86 +1804,44 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
+                  Authorization: `Bearer ${
+                    localStorage.getItem("auth_token") || ""
+                  }`,
                 },
                 body: JSON.stringify({
                   content: data.data.markdown,
                   url: processedUrl,
                   keywords: extractData.data.keywords || [],
-                  targetLanguage: uiLanguage, // Use uiLanguage instead of hardcoded "en"
+                  targetLanguage: uiLanguage,
                   uiLanguage: uiLanguage,
-                  websiteTitle: data.data.title || "", // Pass website title to AI
+                  websiteTitle: data.data.title || "",
                 }),
               });
 
               if (!demoResponse.ok) {
-                const errorData = await demoResponse.json();
-                console.error(
-                  "[Content Generation] Demo generation failed:",
-                  errorData
-                );
-                throw new Error(
-                  errorData.error || "Failed to generate demo content"
-                );
+                throw new Error("Failed to generate demo content");
               }
 
               const demoData = await demoResponse.json();
-              console.log("[Content Generation] Demo generation success");
-
               if (demoData.success && demoData.data) {
-                // After generating demo content, stay on step 1 (loading) for a moment
-                // Then move to step 2 (GPT demo) - user will click "Continue" to proceed
-                setState({
+                setState((prev) => ({
+                  ...prev,
                   demoContent: {
                     ...demoData.data,
                     screenshot: data.data.screenshot,
                   },
-                  onboardingStep: 1, // Stay on loading step
-                });
-
-                // After a short delay, move to step 2 (GPT demo)
-                setTimeout(() => {
-                  setState((prev) => ({
-                    ...prev,
-                    onboardingStep: 2, // Move to GPT demo
-                  }));
-                }, 1000);
+                  onboardingStep: 2, // Move to step 2 ONLY after demo content is ready
+                }));
               } else {
-                throw new Error("Invalid demo response format");
+                throw new Error("Invalid demo content format");
               }
-            } catch (demoError: any) {
+            } catch (demoError) {
               console.error(
-                "[Content Generation] Error generating demo content:",
+                "[Content Generation] Demo generation failed:",
                 demoError
               );
-
-              // 处理网络错误
-              if (
-                demoError?.message?.includes("Failed to fetch") ||
-                demoError?.name === "TypeError"
-              ) {
-                console.warn(
-                  "[Content Generation] Network error during demo generation"
-                );
-              }
-
-              // Still move to next step with default content
-              console.log(
-                "[Content Generation] Moving to step 2 with default content"
-              );
-              const urlDomain = new URL(processedUrl).hostname;
-              const urlBrand =
-                urlDomain.split(".")[0].charAt(0).toUpperCase() +
-                urlDomain.split(".")[0].slice(1);
-              setState({
-                demoContent: {
-                  chatGPTDemo: null,
-                  articleDemo: null,
-                  domain: urlDomain,
-                  brandName: urlBrand,
-                  screenshot: data.data.screenshot,
-                },
-                onboardingStep: 2,
-              });
+              // Fallback to step 2 anyway so the user isn't stuck
+              setState((prev) => ({ ...prev, onboardingStep: 2 }));
             }
           } else {
             throw new Error("Invalid extract response format");
@@ -2087,22 +2068,39 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                       </div>
                     )}
                     <div className="absolute bottom-4 left-6 z-20">
-                      <Badge className="bg-emerald-500 text-white border-none font-bold mb-1 scale-75 origin-left">
+                      <Badge className="bg-emerald-500 text-white border-none font-bold mb-1 scale-75 lg:scale-90 origin-left">
                         {uiLanguage === "zh" ? "已绑定" : "Bound"}
                       </Badge>
-                      <h3 className="text-xl font-black text-white truncate max-w-[300px] tracking-tight">
+                      <h3
+                        className={cn(
+                          "text-xl lg:text-2xl font-black truncate max-w-[300px] tracking-tight",
+                          isDarkTheme ? "text-white" : "text-zinc-900"
+                        )}
+                      >
                         {state.website.domain || state.website.url}
                       </h3>
                     </div>
                   </div>
                   <CardContent className="p-6 flex-1 flex flex-col justify-between relative">
                     <div className="space-y-6">
-                      <div className="flex items-center justify-between p-3 rounded-2xl bg-black/40 backdrop-blur-md border border-white/5">
+                      <div
+                        className={cn(
+                          "flex items-center justify-between p-3 rounded-2xl backdrop-blur-md border",
+                          isDarkTheme
+                            ? "bg-black/40 border-white/5"
+                            : "bg-zinc-100/80 border-zinc-200"
+                        )}
+                      >
                         <div className="flex items-center gap-3">
                           <div className="p-2 rounded-xl bg-emerald-500/10">
                             <Globe className="w-4 h-4 text-emerald-500" />
                           </div>
-                          <span className="text-[10px] font-bold truncate max-w-[180px] opacity-60 mono">
+                          <span
+                            className={cn(
+                              "text-[10px] lg:text-xs font-bold truncate max-w-[180px] opacity-60 mono",
+                              isDarkTheme ? "text-white" : "text-zinc-900"
+                            )}
+                          >
                             {state.website.url}
                           </span>
                         </div>
@@ -2119,12 +2117,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                       {/* Real Stats Grid */}
                       <div className="grid grid-cols-2 gap-x-8 gap-y-6">
                         <div className="space-y-1">
-                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                          <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             {uiLanguage === "zh"
                               ? "预估月流量"
                               : "Est. Monthly Traffic"}
                           </span>
-                          <p className="text-2xl font-black tracking-tighter text-white">
+                          <p className="text-2xl lg:text-3xl font-black tracking-tighter text-white">
                             {(() => {
                               const visits = state.website.monthlyVisits || 0;
                               if (visits >= 1000000000)
@@ -2138,12 +2136,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           </p>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                          <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             {uiLanguage === "zh"
                               ? "索引关键词"
                               : "Indexed Keywords"}
                           </span>
-                          <p className="text-2xl font-black tracking-tighter text-white">
+                          <p className="text-2xl lg:text-3xl font-black tracking-tighter text-white">
                             {state.website.keywordsCount ? (
                               state.website.keywordsCount >= 1000000 ? (
                                 (state.website.keywordsCount / 1000000).toFixed(
@@ -2162,10 +2160,10 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           </p>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                          <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             {uiLanguage === "zh" ? "流量价值" : "Traffic Value"}
                           </span>
-                          <p className="text-xs font-black uppercase tracking-tight text-emerald-500">
+                          <p className="text-xs lg:text-sm font-black uppercase tracking-tight text-emerald-500">
                             {state.website.trafficCost
                               ? "$" +
                                 (state.website.trafficCost >= 1000000
@@ -2177,7 +2175,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           </p>
                         </div>
                         <div className="space-y-1">
-                          <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">
+                          <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             {uiLanguage === "zh"
                               ? "前10名关键词"
                               : "Top 10 Rankings"}
@@ -2196,7 +2194,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                                 }}
                               />
                             </div>
-                            <span className="text-xs font-black text-emerald-500">
+                            <span className="text-xs lg:text-sm font-black text-emerald-500">
                               {state.website.top10Count?.toLocaleString() ||
                                 "0"}
                             </span>
@@ -2206,7 +2204,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                     </div>
 
                     {/* Footer Tech Stack */}
-                    <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                    <div
+                      className={cn(
+                        "pt-4 border-t flex items-center justify-between",
+                        isDarkTheme ? "border-white/5" : "border-zinc-200"
+                      )}
+                    >
                       <div className="flex flex-wrap gap-1.5">
                         {(
                           state.website.marketingTools || [
@@ -2217,7 +2220,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                         ).map((tool, i) => (
                           <span
                             key={i}
-                            className="px-2 py-0.5 rounded-md bg-zinc-800/50 text-[7px] font-black uppercase tracking-wider text-zinc-400 border border-white/5"
+                            className={cn(
+                              "px-2 py-0.5 rounded-md text-[7px] lg:text-[9px] font-black uppercase tracking-wider border transition-colors",
+                              isDarkTheme
+                                ? "bg-zinc-800/50 text-zinc-400 border-white/5"
+                                : "bg-zinc-100 text-zinc-500 border-zinc-200"
+                            )}
                           >
                             {tool}
                           </span>
@@ -2247,10 +2255,10 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                     <PlusCircle className="w-8 h-8 text-emerald-500" />
                   </div>
                   <div className="space-y-1">
-                    <p className="font-bold">
+                    <p className="text-base lg:text-lg font-bold">
                       {uiLanguage === "zh" ? "尚未绑定站点" : "No site bound"}
                     </p>
-                    <p className="text-xs opacity-60">
+                    <p className="text-xs lg:text-sm opacity-60">
                       {uiLanguage === "zh"
                         ? "从下方的资产地图中选择一个站点开始"
                         : "Select a site from the asset discovery below to start"}
@@ -2264,7 +2272,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             <div className="lg:col-span-7 space-y-4">
               <div className="flex items-center gap-2 mb-2">
                 <div className="w-1 h-4 bg-emerald-500 rounded-full" />
-                <span className="text-xs font-black uppercase tracking-widest opacity-60">
+                <span className="text-xs lg:text-sm font-black uppercase tracking-widest opacity-60">
                   {uiLanguage === "zh" ? "机会洞察" : "Opportunity Insights"}
                 </span>
               </div>
@@ -2281,7 +2289,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           {/* Section 3: All Websites (Asset Map) */}
           <div className="space-y-6 pt-6 border-t border-white/5">
             <WebsiteManager
-              userId={1} // TODO: Get from session
+              userId={currentUserId}
               isDarkTheme={isDarkTheme}
               uiLanguage={uiLanguage}
               onWebsiteSelect={(website) => {
@@ -2327,10 +2335,15 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 // Update user preferences to set this as current website
                 fetch("/api/websites/set-default", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${
+                      localStorage.getItem("auth_token") || ""
+                    }`,
+                  },
                   body: JSON.stringify({
                     websiteId: website.id,
-                    userId: 1,
+                    userId: currentUserId,
                   }),
                 })
                   .then((response) => {
@@ -2398,7 +2411,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               </div>
               <h2
                 className={cn(
-                  "text-3xl font-bold mb-3",
+                  "text-3xl lg:text-4xl font-bold mb-3",
                   isDarkTheme ? "text-white" : "text-gray-900"
                 )}
               >
@@ -2406,7 +2419,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               </h2>
               <p
                 className={cn(
-                  "text-sm mb-6",
+                  "text-sm lg:text-base mb-6",
                   isDarkTheme ? "text-zinc-400" : "text-gray-600"
                 )}
               >
@@ -2464,7 +2477,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               </div>
               <h2
                 className={cn(
-                  "text-3xl font-bold mb-3",
+                  "text-3xl lg:text-4xl font-bold mb-3",
                   isDarkTheme ? "text-white" : "text-gray-900"
                 )}
               >
@@ -2474,7 +2487,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               </h2>
               <p
                 className={cn(
-                  "text-sm",
+                  "text-sm lg:text-base font-medium",
                   isDarkTheme ? "text-zinc-400" : "text-gray-600"
                 )}
               >
@@ -2489,7 +2502,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 <CheckCircle className="w-5 h-5 text-emerald-500" />
                 <span
                   className={cn(
-                    "text-sm",
+                    "text-sm lg:text-base",
                     isDarkTheme ? "text-zinc-300" : "text-gray-700"
                   )}
                 >
@@ -2500,7 +2513,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />
                 <span
                   className={cn(
-                    "text-sm",
+                    "text-sm lg:text-base",
                     isDarkTheme ? "text-zinc-300" : "text-gray-700"
                   )}
                 >
@@ -2516,7 +2529,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                 />
                 <span
                   className={cn(
-                    "text-sm",
+                    "text-sm lg:text-base",
                     isDarkTheme ? "text-zinc-300" : "text-gray-700"
                   )}
                 >
@@ -2535,7 +2548,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           <div className="max-w-5xl mx-auto">
             <h2
               className={cn(
-                "text-2xl font-bold mb-6 text-center",
+                "text-2xl lg:text-3xl font-bold mb-6 text-center",
                 isDarkTheme ? "text-white" : "text-gray-900"
               )}
             >
@@ -2562,7 +2575,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   <div className="w-3 h-3 rounded-full bg-red-500"></div>
                   <span
                     className={cn(
-                      "ml-4 text-sm font-medium",
+                      "ml-4 text-sm lg:text-base font-medium",
                       isDarkTheme ? "text-zinc-400" : "text-gray-600"
                     )}
                   >
@@ -2608,7 +2621,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   >
                     <p
                       className={cn(
-                        "text-sm mb-4",
+                        "text-sm lg:text-base mb-4",
                         isDarkTheme ? "text-zinc-200" : "text-gray-800"
                       )}
                     >
@@ -3272,9 +3285,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           method: "POST",
                           headers: {
                             "Content-Type": "application/json",
+                            Authorization: `Bearer ${
+                              localStorage.getItem("auth_token") || ""
+                            }`,
                           },
                           body: JSON.stringify({
-                            userId: 1, // TODO: Get from session/auth
+                            userId: currentUserId,
                             websiteUrl: tempUrl,
                             websiteTitle:
                               state.demoContent?.articleDemo?.article?.title ||
@@ -3335,10 +3351,15 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           "/api/websites/set-default",
                           {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: `Bearer ${
+                                localStorage.getItem("auth_token") || ""
+                              }`,
+                            },
                             body: JSON.stringify({
                               websiteId: websiteId,
-                              userId: 1, // TODO: Get from session/auth
+                              userId: currentUserId,
                             }),
                           }
                         );

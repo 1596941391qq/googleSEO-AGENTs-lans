@@ -187,7 +187,8 @@ export const translateAndAnalyzeSingle = async (
   uiLanguage: 'zh' | 'en' = 'en',
   targetSearchEngine: string = 'google',
   websiteUrl?: string,
-  websiteDR?: number
+  websiteDR?: number,
+  skipTranslation: boolean = false
 ): Promise<{
   success: boolean;
   original: string;
@@ -201,7 +202,8 @@ export const translateAndAnalyzeSingle = async (
     uiLanguage,
     targetSearchEngine,
     websiteUrl,
-    websiteDR
+    websiteDR,
+    skipTranslation
   });
   return result;
 };

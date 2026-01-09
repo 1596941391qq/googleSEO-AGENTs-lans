@@ -13,10 +13,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
 import { getDomainKeywords } from '../_shared/tools/index.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 interface GetKeywordsRequestBody {
   websiteId: string;
-  userId?: number;
   offset?: number;
   limit?: number;
 }
@@ -37,15 +37,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId;
+
     const body = req.body as GetKeywordsRequestBody;
 
     if (!body.websiteId) {
       return res.status(400).json({ error: 'websiteId is required' });
     }
-
-    // 获取 user_id
-    let userId = body.userId;
-    if (!userId) userId = 1;
 
     // 初始化数据库表
     await initWebsiteDataTables();
@@ -60,19 +63,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         website_domain,
         user_id
       FROM user_websites
-      WHERE id = ${body.websiteId}
+      WHERE id = ${body.websiteId} AND user_id = ${userId}
     `;
 
     if (websiteResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Website not found' });
+      return res.status(404).json({ error: 'Website not found or access denied' });
     }
 
     const website = websiteResult.rows[0];
-
-    // 验证权限
-    if (website.user_id !== userId) {
-      return res.status(403).json({ error: 'Website does not belong to user' });
-    }
 
     // ==========================================
     // Step 2: 从 DataForSEO Domain API 获取关键词

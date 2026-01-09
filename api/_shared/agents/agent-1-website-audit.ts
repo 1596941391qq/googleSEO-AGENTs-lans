@@ -13,7 +13,7 @@
  */
 
 import { callGeminiAPI } from '../gemini.js';
-import { scrapeWebsite } from '../tools/firecrawl.js';
+import { scrapeWebsite, cleanMarkdown } from '../tools/firecrawl.js';
 import { getDomainKeywords, getDomainCompetitors } from '../tools/dataforseo-domain.js';
 import { getDataForSEOLocationAndLanguage, fetchKeywordData } from '../tools/dataforseo.js';
 import { KeywordData, TargetLanguage } from '../types.js';
@@ -292,6 +292,7 @@ export interface ExistingWebsiteAuditOptions {
   wordsPerRound?: number; // 生成关键词数量
   miningStrategy?: 'horizontal' | 'vertical'; // 挖掘策略
   additionalSuggestions?: string; // 用户额外建议
+  searchEngine?: 'google' | 'baidu' | 'bing' | 'yandex'; // 搜索引擎
   onEvent?: (event: {
     id: string;
     agentId: 'tracker' | 'researcher' | 'strategist' | 'writer' | 'artist';
@@ -336,6 +337,7 @@ export async function auditWebsiteForKeywords(
     wordsPerRound = 10,
     miningStrategy = 'horizontal',
     additionalSuggestions,
+    searchEngine = 'google',
     onEvent,
   } = options;
 
@@ -363,8 +365,8 @@ export async function auditWebsiteForKeywords(
     let websiteContent = '';
     try {
       const scrapeResult = await scrapeWebsite(websiteUrl, false);
-      websiteContent = scrapeResult.markdown || '';
-      console.log(`[Website Audit] Fetched ${websiteContent.length} characters of content`);
+      websiteContent = cleanMarkdown(scrapeResult.markdown || '', 15000); // 增加上限到 1.5w 字符，但经过清理更精简
+      console.log(`[Website Audit] Fetched and cleaned content: ${websiteContent.length} characters`);
 
       // Emit Firecrawl results visualization
       emit('researcher', 'card', undefined, 'firecrawl-result', {
@@ -377,8 +379,8 @@ export async function auditWebsiteForKeywords(
       });
 
       emit('researcher', 'log', uiLanguage === 'zh'
-        ? `✓ 成功抓取 ${websiteContent.length} 字符内容`
-        : `✓ Successfully scraped ${websiteContent.length} characters`);
+        ? `✓ 成功抓取并清理 ${websiteContent.length} 字符内容`
+        : `✓ Successfully scraped and cleaned ${websiteContent.length} characters`);
     } catch (error: any) {
       console.warn(`[Website Audit] Failed to scrape website: ${error.message}`);
       emit('researcher', 'error', uiLanguage === 'zh'
@@ -486,7 +488,11 @@ export async function auditWebsiteForKeywords(
     console.log(`[Website Audit] Step 4: Calling AI for analysis...`);
     emit('strategist', 'log', uiLanguage === 'zh' ? '正在使用 AI 分析关键词机会...' : 'Analyzing keyword opportunities with AI...');
     const aiResponse = await callGeminiAPI(prompt, 'website-audit', {
-      // 不再强制 JSON 格式，返回自然文本分析报告
+      onRetry: (attempt, error, delay) => {
+        emit('strategist', 'log', uiLanguage === 'zh'
+          ? `⚠️ AI 分析连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+          : `⚠️ AI analysis connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+      }
     });
 
     // Emit Google search results if available
@@ -612,7 +618,11 @@ export async function auditWebsiteForKeywords(
           keywords,
           systemInstruction,
           uiLanguage,
-          targetLanguage
+          targetLanguage,
+          undefined,
+          undefined,
+          searchEngine,
+          (msg) => emit('strategist', 'log', msg)
         );
         
         const highProbCount = analyzedKeywords.filter(k => k.probability === 'High').length;

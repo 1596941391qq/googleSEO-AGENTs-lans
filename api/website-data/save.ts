@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -15,11 +16,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return sendErrorResponse(res, null, 'Unauthorized', 401);
+    }
+    const userId = authResult.userId;
+    const numericUserId = parseInt(userId);
+    const finalUserId = isNaN(numericUserId) ? userId : numericUserId;
+
     // Initialize tables
     await initWebsiteDataTables();
 
     const {
-      userId,
       websiteUrl,
       websiteTitle,
       websiteDescription,
@@ -33,8 +42,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       additionalInfo,
     } = parseRequestBody(req);
 
-    if (!userId || !websiteUrl || typeof websiteUrl !== 'string') {
-      return sendErrorResponse(res, null, 'userId and a valid websiteUrl are required', 400);
+    if (!websiteUrl || typeof websiteUrl !== 'string') {
+      return sendErrorResponse(res, null, 'valid websiteUrl is required', 400);
     }
 
     // Extract domain from URL
@@ -57,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         marketing_tools, additional_info
       )
       VALUES (
-        ${userId}, ${websiteUrl}, ${domain},
+        ${finalUserId}, ${websiteUrl}, ${domain},
         ${websiteTitle || null}, ${websiteDescription || null}, ${websiteScreenshot || null},
         ${rawContent || null}, NOW(),
         ${industry || null}, ${monthlyVisits || null}, ${monthlyRevenue || null},
@@ -110,14 +119,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const websiteCountResult = await sql`
       SELECT COUNT(*) as count
       FROM user_websites
-      WHERE user_id = ${userId} AND is_active = true
+      WHERE user_id::text = ${finalUserId.toString()} AND is_active = true
     `;
     const websiteCount = parseInt(websiteCountResult.rows[0].count || '0', 10);
     const isFirstWebsite = websiteCount === 1;
 
     // 检查 user_preferences 是否存在
     const preferencesCheck = await sql`
-      SELECT user_id FROM user_preferences WHERE user_id = ${userId}
+      SELECT user_id FROM user_preferences WHERE user_id::text = ${finalUserId.toString()}
     `;
     const hasPreferences = preferencesCheck.rows.length > 0;
 
@@ -131,7 +140,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       await sql`
         INSERT INTO user_preferences (user_id, default_website_id, last_selected_website_id, updated_at)
-        VALUES (${userId}, ${websiteId}, ${websiteId}, NOW())
+        VALUES (${finalUserId}, ${websiteId}, ${websiteId}, NOW())
         ON CONFLICT (user_id) DO UPDATE SET
           default_website_id = EXCLUDED.default_website_id,
           last_selected_website_id = EXCLUDED.last_selected_website_id,
@@ -141,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 如果不是第一个网站，但 user_preferences 不存在，创建记录（不设为默认）
       await sql`
         INSERT INTO user_preferences (user_id, default_website_id, last_selected_website_id, updated_at)
-        VALUES (${userId}, NULL, NULL, NOW())
+        VALUES (${finalUserId}, NULL, NULL, NOW())
         ON CONFLICT (user_id) DO NOTHING
       `;
     }

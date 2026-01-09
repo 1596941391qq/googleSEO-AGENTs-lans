@@ -42,7 +42,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let userId = body.userId;
-    if (!userId) userId = 1;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: userId is required' });
+    }
 
     const limit = body.limit || 20;
 
@@ -86,6 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         top_keywords
       FROM relevant_pages_cache
       WHERE website_id = ${body.websiteId}
+        AND location_code = ${locationCode}
         AND cache_expires_at > NOW()
       ORDER BY organic_traffic DESC
       LIMIT ${limit}
@@ -107,6 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             apiPages.map(page => sql`
               INSERT INTO relevant_pages_cache (
                 website_id,
+                location_code,
                 page_url,
                 organic_traffic,
                 keywords_count,
@@ -116,6 +120,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 cache_expires_at
               ) VALUES (
                 ${body.websiteId},
+                ${locationCode},
                 ${page.url},
                 ${page.organicTraffic},
                 ${page.keywordsCount},
@@ -124,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 NOW(),
                 NOW() + INTERVAL '24 hours'
               )
-              ON CONFLICT (website_id, page_url) DO UPDATE SET
+              ON CONFLICT (website_id, page_url, location_code) DO UPDATE SET
                 organic_traffic = EXCLUDED.organic_traffic,
                 keywords_count = EXCLUDED.keywords_count,
                 avg_position = EXCLUDED.avg_position,

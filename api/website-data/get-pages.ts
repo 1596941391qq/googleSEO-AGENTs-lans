@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { getWebsiteMap } from '../_shared/tools/firecrawl.js';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -16,6 +17,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return sendErrorResponse(res, null, 'Unauthorized', 401);
+    }
+    const userId = authResult.userId;
+
     await initWebsiteDataTables();
 
     const { websiteId, websiteUrl } = parseRequestBody(req);
@@ -26,12 +34,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Get website URL if only websiteId provided
     let url = websiteUrl;
-    if (!url && websiteId) {
+    if (websiteId) {
       const website = await sql`
-        SELECT website_url FROM user_websites WHERE id = ${websiteId}
+        SELECT website_url FROM user_websites WHERE id = ${websiteId} AND user_id = ${userId}
       `;
       if (website.rows.length === 0) {
-        return sendErrorResponse(res, null, 'Website not found', 404);
+        return sendErrorResponse(res, null, 'Website not found or access denied', 404);
       }
       url = website.rows[0].website_url;
     }

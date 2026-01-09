@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
 import { fetchKeywordData } from '../_shared/tools/dataforseo.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -16,9 +17,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return sendErrorResponse(res, null, 'Unauthorized', 401);
+    }
+    const userId = authResult.userId;
+
     await initWebsiteDataTables();
 
-    const { websiteId, userId, websiteUrl } = parseRequestBody(req);
+    const { websiteId, websiteUrl } = parseRequestBody(req);
 
     if (!websiteId && !websiteUrl) {
       return sendErrorResponse(res, null, 'websiteId or websiteUrl is required', 400);
@@ -27,31 +35,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Get website data
     let website;
     if (websiteId) {
-      const result = userId
-        ? await sql`
+      const result = await sql`
             SELECT * FROM user_websites 
             WHERE id = ${websiteId} AND user_id = ${userId}
-          `
-        : await sql`
-            SELECT * FROM user_websites 
-            WHERE id = ${websiteId}
           `;
       if (result.rows.length === 0) {
-        return sendErrorResponse(res, null, 'Website not found', 404);
+        return sendErrorResponse(res, null, 'Website not found or access denied', 404);
       }
       website = result.rows[0];
     } else if (websiteUrl) {
-      const result = userId
-        ? await sql`
+      const result = await sql`
             SELECT * FROM user_websites 
             WHERE website_url = ${websiteUrl} AND user_id = ${userId}
-          `
-        : await sql`
-            SELECT * FROM user_websites 
-            WHERE website_url = ${websiteUrl}
           `;
       if (result.rows.length === 0) {
-        return sendErrorResponse(res, null, 'Website not found', 404);
+        return sendErrorResponse(res, null, 'Website not found or access denied', 404);
       }
       website = result.rows[0];
     }

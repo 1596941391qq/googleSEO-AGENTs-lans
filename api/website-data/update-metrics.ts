@@ -55,7 +55,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 获取 user_id
     let userId = body.userId;
-    if (!userId) userId = 1;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: userId is required' });
+    }
 
     // 初始化数据库表
     await initWebsiteDataTables();
@@ -152,6 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await sql`
         INSERT INTO domain_overview_cache (
           website_id,
+          location_code,
           organic_traffic,
           paid_traffic,
           total_traffic,
@@ -171,14 +174,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           cache_expires_at
         ) VALUES (
           ${body.websiteId},
+          ${locationCode},
           ${overview.organicTraffic},
           ${overview.paidTraffic},
           ${overview.totalTraffic},
           ${overview.totalKeywords},
           ${overview.newKeywords},
           ${overview.lostKeywords},
-          ${overview.improvedKeywords},
-          ${overview.declinedKeywords},
+          ${overview.improved_keywords || 0},
+          ${overview.declined_keywords || 0},
           ${overview.avgPosition},
           ${overview.trafficCost},
           ${overview.rankingDistribution.top3},
@@ -189,7 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           NOW(),
           NOW() + INTERVAL '24 hours'
         )
-        ON CONFLICT (website_id, data_date) DO UPDATE SET
+        ON CONFLICT (website_id, data_date, location_code) DO UPDATE SET
           organic_traffic = EXCLUDED.organic_traffic,
           paid_traffic = EXCLUDED.paid_traffic,
           total_traffic = EXCLUDED.total_traffic,
@@ -220,6 +224,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         keywordsToCache.map(kw => sql`
           INSERT INTO domain_keywords_cache (
             website_id,
+            location_code,
             keyword,
             current_position,
             previous_position,
@@ -234,6 +239,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             cache_expires_at
           ) VALUES (
             ${body.websiteId},
+            ${locationCode},
             ${kw.keyword},
             ${kw.currentPosition},
             ${kw.previousPosition},
@@ -247,7 +253,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             NOW(),
             NOW() + INTERVAL '24 hours'
           )
-          ON CONFLICT (website_id, keyword) DO UPDATE SET
+          ON CONFLICT (website_id, keyword, location_code) DO UPDATE SET
             current_position = EXCLUDED.current_position,
             previous_position = EXCLUDED.previous_position,
             position_change = EXCLUDED.position_change,
@@ -276,6 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         competitors.map(comp => sql`
           INSERT INTO domain_competitors_cache (
             website_id,
+            location_code,
             domain,
             competitor_domain,
             competitor_title,
@@ -288,6 +295,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             cache_expires_at
           ) VALUES (
             ${body.websiteId},
+            ${locationCode},
             ${website.website_domain},
             ${comp.domain},
             ${comp.title || comp.domain},
@@ -299,7 +307,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             NOW(),
             NOW() + INTERVAL '7 days'
           )
-          ON CONFLICT (website_id, competitor_domain) DO UPDATE SET
+          ON CONFLICT (website_id, competitor_domain, location_code) DO UPDATE SET
             domain = EXCLUDED.domain,
             competitor_title = EXCLUDED.competitor_title,
             common_keywords = EXCLUDED.common_keywords,
@@ -344,6 +352,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           cleanedKeywords.map(kw => sql`
             INSERT INTO ranked_keywords_cache (
               website_id,
+              location_code,
               keyword,
               current_position,
               previous_position,
@@ -358,6 +367,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               cache_expires_at
             ) VALUES (
               ${body.websiteId},
+              ${locationCode},
               ${kw.keyword},
               ${kw.currentPosition},
               ${kw.previousPosition},
@@ -371,7 +381,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               NOW(),
               NOW() + INTERVAL '24 hours'
             )
-            ON CONFLICT (website_id, keyword) DO UPDATE SET
+            ON CONFLICT (website_id, keyword, location_code) DO UPDATE SET
               current_position = EXCLUDED.current_position,
               previous_position = EXCLUDED.previous_position,
               search_volume = EXCLUDED.search_volume,
@@ -399,6 +409,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           relevantPages.map(page => sql`
             INSERT INTO relevant_pages_cache (
               website_id,
+              location_code,
               page_url,
               organic_traffic,
               keywords_count,
@@ -408,6 +419,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               cache_expires_at
             ) VALUES (
               ${body.websiteId},
+              ${locationCode},
               ${page.url},
               ${page.organicTraffic},
               ${page.keywordsCount},
@@ -416,7 +428,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               NOW(),
               NOW() + INTERVAL '24 hours'
             )
-            ON CONFLICT (website_id, page_url) DO UPDATE SET
+            ON CONFLICT (website_id, page_url, location_code) DO UPDATE SET
               organic_traffic = EXCLUDED.organic_traffic,
               keywords_count = EXCLUDED.keywords_count,
               avg_position = EXCLUDED.avg_position,
