@@ -21,6 +21,14 @@ interface GeminiConfig {
    */
   maxOutputTokens?: number;
   /**
+   * 推理模式（思考模式）
+   * - "none": 禁用思考模式，直接输出结果（最快）
+   * - "short": 短思考模式
+   * - "long": 长思考模式
+   * 默认值：对于性能敏感的场景（如关键词分析），使用 "none" 以加快速度
+   */
+  reasoningMode?: 'none' | 'short' | 'long';
+  /**
    * 重试时的回调函数
    */
   onRetry?: (attempt: number, error: string, delay: number) => void;
@@ -107,7 +115,10 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
   const requestBody: any = {
     contents: contents,
     generationConfig: {
-      maxOutputTokens: config?.maxOutputTokens ?? 65536
+      maxOutputTokens: config?.maxOutputTokens ?? 65536,
+      // 禁用思考模式以加快响应速度（默认使用 "none"）
+      // 对于性能敏感的场景（如批量关键词分析），禁用思考模式可以显著提升速度
+      reasoningMode: config?.reasoningMode ?? 'none'
     }
   };
 

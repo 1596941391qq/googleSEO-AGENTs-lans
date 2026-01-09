@@ -1087,7 +1087,7 @@ const renderAgentDataTable = (
                 </div>
               </div>
 
-              {/* Blue Ocean Score Card */}
+              {/* Blue Ocean Score Card with Breakdown */}
               <div
                 className={`p-3 rounded-lg border ${
                   isDarkTheme
@@ -1096,20 +1096,68 @@ const renderAgentDataTable = (
                 }`}
               >
                 <div
-                  className={`text-[10px] font-bold mb-1 ${
+                  className={`text-[10px] font-bold mb-2 ${
                     isDarkTheme ? "text-emerald-400" : "text-emerald-700"
                   }`}
                 >
                   BLUE OCEAN SCORE
                 </div>
                 <div
-                  className={`text-lg font-bold ${
+                  className={`text-lg font-bold mb-2 ${
                     isDarkTheme ? "text-white" : "text-gray-900"
                   }`}
                 >
                   {data.blueOceanScore !== undefined ? Math.round(data.blueOceanScore) : "N/A"}
                   <span className="text-[10px] font-normal text-white/40 ml-1">/ 100</span>
                 </div>
+                {/* 蓝海分数详细分解 */}
+                {data.blueOceanScoreBreakdown && data.blueOceanScoreBreakdown.factors && data.blueOceanScoreBreakdown.factors.length > 0 && (
+                  <div className="space-y-1.5 mt-2 pt-2 border-t border-emerald-500/20">
+                    <div className={`text-[9px] font-semibold mb-1 ${
+                      isDarkTheme ? "text-emerald-400/80" : "text-emerald-700/80"
+                    }`}>
+                      评分维度:
+                    </div>
+                    {data.blueOceanScoreBreakdown.factors.map((factor: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className={`p-1.5 rounded text-[9px] ${
+                          isDarkTheme
+                            ? "bg-emerald-950/30 border border-emerald-500/20"
+                            : "bg-emerald-50 border border-emerald-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className={`font-medium ${
+                            isDarkTheme ? "text-white/90" : "text-gray-900"
+                          }`}>
+                            {factor.name}
+                          </span>
+                          <span className={`font-bold px-1 py-0.5 rounded ${
+                            factor.score >= 20
+                              ? isDarkTheme
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : "bg-emerald-100 text-emerald-700"
+                              : factor.score >= 10
+                              ? isDarkTheme
+                                ? "bg-yellow-500/20 text-yellow-400"
+                                : "bg-yellow-100 text-yellow-700"
+                              : isDarkTheme
+                              ? "bg-slate-500/20 text-slate-400"
+                              : "bg-slate-100 text-slate-700"
+                          }`}>
+                            +{factor.score}
+                          </span>
+                        </div>
+                        <div className={`text-[8px] leading-tight ${
+                          isDarkTheme ? "text-white/70" : "text-gray-600"
+                        }`}>
+                          {factor.reason}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div
@@ -13475,6 +13523,13 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   uiLanguage={state.uiLanguage}
                   t={t}
                   MarkdownContent={MarkdownContent}
+                  miningMode={
+                    state.taskManager.activeTaskId
+                      ? state.taskManager.tasks.find(
+                          (t) => t.id === state.taskManager.activeTaskId
+                        )?.miningState?.miningMode || 'blue-ocean'
+                      : 'blue-ocean'
+                  }
                 />
               </div>
             </div>

@@ -82,6 +82,7 @@ const OpportunityTerminal: React.FC<{
   websiteId?: string;
   url?: string;
 }> = ({ isDarkTheme, uiLanguage, websiteId, url }) => {
+  const { user } = useAuth();
   const [lines, setLines] = useState<string[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
@@ -91,6 +92,44 @@ const OpportunityTerminal: React.FC<{
   useEffect(() => {
     const fetchInsights = async () => {
       setLoading(true);
+
+      // 获取当前用户ID，用于缓存隔离
+      const currentUserId = user?.userId || "anonymous";
+
+      // 构建缓存键（包含用户ID和域名/网站ID，确保用户隔离和域名隔离）
+      const cacheKey = `website_insights_${currentUserId}_${
+        websiteId || url
+      }_${uiLanguage}`;
+      const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时（毫秒）
+
+      // 检查缓存
+      try {
+        const cachedData = localStorage.getItem(cacheKey);
+        if (cachedData) {
+          const parsed = JSON.parse(cachedData);
+          const cacheAge = Date.now() - parsed.timestamp;
+
+          // 如果缓存未过期（24小时内）
+          if (cacheAge < CACHE_DURATION && parsed.insights) {
+            console.log(
+              "[OpportunityTerminal] Using cached insights (age:",
+              Math.round(cacheAge / 1000 / 60),
+              "minutes)"
+            );
+            setFetchedInsights(parsed.insights);
+            setLoading(false);
+            return;
+          } else {
+            console.log(
+              "[OpportunityTerminal] Cache expired, fetching fresh data"
+            );
+          }
+        }
+      } catch (error) {
+        console.warn("[OpportunityTerminal] Failed to read cache:", error);
+      }
+
+      // 缓存不存在或已过期，调用 API
       try {
         const response = await fetch("/api/websites/insights", {
           method: "POST",
@@ -101,8 +140,23 @@ const OpportunityTerminal: React.FC<{
           body: JSON.stringify({ websiteId, url, uiLanguage }),
         });
         const result = await response.json();
-        if (result.success) {
-          setFetchedInsights(result.data.insights);
+        if (result.success && result.data?.insights) {
+          const insights = result.data.insights;
+          setFetchedInsights(insights);
+
+          // 保存到缓存
+          try {
+            localStorage.setItem(
+              cacheKey,
+              JSON.stringify({
+                insights,
+                timestamp: Date.now(),
+              })
+            );
+            console.log("[OpportunityTerminal] Insights cached for 24 hours");
+          } catch (error) {
+            console.warn("[OpportunityTerminal] Failed to save cache:", error);
+          }
         } else {
           throw new Error("Failed to fetch insights");
         }
@@ -129,7 +183,7 @@ const OpportunityTerminal: React.FC<{
     if (websiteId || url) {
       fetchInsights();
     }
-  }, [websiteId, url, uiLanguage]);
+  }, [websiteId, url, uiLanguage, user?.userId]);
 
   useEffect(() => {
     if (!loading && currentLineIndex < fetchedInsights.length) {

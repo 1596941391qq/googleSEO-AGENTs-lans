@@ -6,7 +6,7 @@
  */
 
 import { callGeminiAPI } from '../gemini.js';
-import { fetchSerpResults, type SerpData } from '../tools/serp-search.js';
+import { fetchSerpResults, fetchSerpResultsBatch, type SerpData } from '../tools/serp-search.js';
 import { getSEOResearcherPrompt } from '../../../services/prompts/index.js';
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
 import { fetchKeywordData, SearchEngine } from '../tools/dataforseo.js';
@@ -14,25 +14,48 @@ import { getDomainOverview, getBatchDomainOverview } from '../tools/dataforseo-d
 
 /**
  * 辅助函数：计算蓝海信号分值 (Workflow 1)
+ * 返回详细的分值分解，包括每个维度的得分和原因
  */
-export function calculateBlueOceanScore(analysis: any): number {
-  let score = 0;
-  
+export function calculateBlueOceanScore(analysis: any): {
+  totalScore: number;
+  factors: Array<{
+    name: string;
+    score: number;
+    reason: string;
+  }>;
+} {
+  const factors: Array<{ name: string; score: number; reason: string }> = [];
+  let totalScore = 0;
+
   // 1. 弱竞争者判断 (AI判断结果中包含)
   if (analysis.topDomainType === 'Forum/Social' || analysis.topDomainType === 'Weak Page') {
-    score += 30;
+    const score = 30;
+    totalScore += score;
+    factors.push({
+      name: '弱竞争者类型',
+      score: score,
+      reason: analysis.topDomainType === 'Forum/Social'
+        ? 'Top结果主要是论坛/社交媒体页面，权威性较低'
+        : 'Top结果是弱页面，优化程度不足'
+    });
   }
-  
+
   // 2. 内容相关性判断 (从 intentAnalysis 提取关键词)
   const lowRelevanceKeywords = [
-    '不相关', 'irrelevant', 'off-topic', '弱相关', 'weakly related', 
+    '不相关', 'irrelevant', 'off-topic', '弱相关', 'weakly related',
     'low relevance', 'not matching', 'mismatch', '偏移', '不匹配',
     'wrong intent', '意图不符', 'mixed intent', '混合意图', '未覆盖'
   ];
   if (analysis.intentAnalysis && lowRelevanceKeywords.some(k => analysis.intentAnalysis.toLowerCase().includes(k))) {
-    score += 25;
+    const score = 25;
+    totalScore += score;
+    factors.push({
+      name: '内容相关性低',
+      score: score,
+      reason: 'SERP结果与关键词意图不匹配或相关性较弱，存在内容缺口'
+    });
   }
-  
+
   // 3. 内容深度与质量 (从 reasoning 提取关键词)
   const lowQualityKeywords = [
     'short', 'thin content', '字数少', '浅显', 'outdated', '过时', 'old',
@@ -40,32 +63,76 @@ export function calculateBlueOceanScore(analysis: any): number {
     'automated', 'ai generated', 'spammy', 'lacks depth', '缺乏深度', '不够详细'
   ];
   if (analysis.reasoning && lowQualityKeywords.some(k => analysis.reasoning.toLowerCase().includes(k))) {
-    score += 20;
+    const score = 20;
+    totalScore += score;
+    factors.push({
+      name: '内容质量不足',
+      score: score,
+      reason: 'Top结果内容深度不足、质量较低或已过时，存在优化空间'
+    });
   }
 
-  // Step 4. SERP 结果数量
+  // 4. SERP 结果数量
   if (analysis.serpResultCount !== undefined && analysis.serpResultCount !== -1) {
     if (analysis.serpResultCount < 10000) {
-      score += 15;
+      const score = 15;
+      totalScore += score;
+      factors.push({
+        name: '搜索结果数量较少',
+        score: score,
+        reason: `搜索结果数量较少 (${analysis.serpResultCount.toLocaleString()}个)，竞争相对较小`
+      });
     } else if (analysis.serpResultCount < 100000) {
-      score += 10;
+      const score = 10;
+      totalScore += score;
+      factors.push({
+        name: '搜索结果数量中等',
+        score: score,
+        reason: `搜索结果数量中等 (${analysis.serpResultCount.toLocaleString()}个)，存在一定竞争`
+      });
     }
   }
 
   // 5. 额外加分：如果没有竞争对手 (serpResultCount 为 0)
   if (analysis.serpResultCount === 0) {
-    score += 20;
+    const score = 20;
+    totalScore += score;
+    factors.push({
+      name: '无直接竞争对手',
+      score: score,
+      reason: '搜索中未找到直接竞争对手，这是强蓝海信号'
+    });
   }
 
   // 6. 考虑关键词难度 (如果有)
   const kd = analysis.difficulty ?? analysis.dataForSEOData?.difficulty ?? analysis.serankingData?.difficulty;
   if (kd !== undefined) {
-    if (kd <= 20) score += 15;
-    else if (kd <= 40) score += 5;
+    if (kd <= 20) {
+      const score = 15;
+      totalScore += score;
+      factors.push({
+        name: '关键词难度极低',
+        score: score,
+        reason: `关键词难度 (KD: ${kd}) 极低，竞争非常小`
+      });
+    } else if (kd <= 40) {
+      const score = 5;
+      totalScore += score;
+      factors.push({
+        name: '关键词难度较低',
+        score: score,
+        reason: `关键词难度 (KD: ${kd}) 较低，存在竞争但可接受`
+      });
+    }
   }
 
   // 限制最大分数为 100
-  return Math.min(score, 100);
+  totalScore = Math.min(totalScore, 100);
+
+  return {
+    totalScore,
+    factors
+  };
 }
 
 /**
@@ -82,14 +149,14 @@ export function calculateOutrankProbability(
   finalProbability: ProbabilityLevel;
 } {
   const canOutrankPositions: number[] = [];
-  
+
   // 1. 判断可超越的位置
   competitorDRs.forEach((dr, index) => {
     // 权威优势: websiteDR > competitorDR
     // 或者相关性优势 (relevanceScore > 0.8) 且差距不在巨大范围内 (差距 <= 40)
     // 如果差距极大 (如 10 vs 90)，高相关性也难以超越
     const drGap = dr - websiteDR;
-    
+
     // 只要 DR 差距在一定范围内，且网站 DR 较高或内容相关性极高，就有机会
     if (websiteDR >= dr - 5 || (relevanceScore > 0.85 && drGap <= 35) || (relevanceScore > 0.95 && drGap <= 50)) {
       canOutrankPositions.push(index + 1);
@@ -100,7 +167,7 @@ export function calculateOutrankProbability(
   let top3Probability = ProbabilityLevel.LOW;
   const top3AvgDR = competitorDRs.slice(0, 3).reduce((a, b) => a + b, 0) / Math.max(1, Math.min(3, competitorDRs.length));
   const canOutrankTop3 = canOutrankPositions.some(p => p <= 3);
-  
+
   if (canOutrankTop3 && websiteDR >= top3AvgDR - 3) {
     top3Probability = ProbabilityLevel.HIGH;
   } else if (canOutrankTop3) {
@@ -111,7 +178,7 @@ export function calculateOutrankProbability(
   let top10Probability = ProbabilityLevel.LOW;
   const top10AvgDR = competitorDRs.reduce((a, b) => a + b, 0) / Math.max(1, competitorDRs.length);
   const canOutrankTop10Count = canOutrankPositions.filter(p => p <= 10).length;
-  
+
   if (canOutrankTop10Count >= 3 || websiteDR >= top10AvgDR) {
     top10Probability = ProbabilityLevel.HIGH;
   } else if (canOutrankTop10Count >= 1) {
@@ -485,10 +552,10 @@ export async function analyzeCompetitors(
           if (!r.url) continue;
 
           try {
-            onProgress?.(language === 'zh' 
-              ? `🔥 [${scrapedData.length + 1}/${targetScrapeCount}] 正在抓取: ${r.url.substring(0, 50)}...` 
+            onProgress?.(language === 'zh'
+              ? `🔥 [${scrapedData.length + 1}/${targetScrapeCount}] 正在抓取: ${r.url.substring(0, 50)}...`
               : `🔥 [${scrapedData.length + 1}/${targetScrapeCount}] Scraping: ${r.url.substring(0, 50)}...`);
-            
+
             const result = await scrapeWebsite(r.url, false);
             const processedContent = processScrapedContent(result.markdown || '');
 
@@ -500,12 +567,12 @@ export async function analyzeCompetitors(
                 url: r.url,
                 content: processedContent
               });
-              onProgress?.(language === 'zh' 
-                ? `✅ 已抓取 [${scrapedData.length}/${targetScrapeCount}]: ${r.title.substring(0, 30)}...` 
+              onProgress?.(language === 'zh'
+                ? `✅ 已抓取 [${scrapedData.length}/${targetScrapeCount}]: ${r.title.substring(0, 30)}...`
                 : `✅ Scraped [${scrapedData.length}/${targetScrapeCount}]: ${r.title.substring(0, 30)}...`);
             } else {
-              onProgress?.(language === 'zh' 
-                ? `⚠️ 抓取内容过短，跳过: ${r.url.substring(0, 30)}...` 
+              onProgress?.(language === 'zh'
+                ? `⚠️ 抓取内容过短，跳过: ${r.url.substring(0, 30)}...`
                 : `⚠️ Content too short, skipping: ${r.url.substring(0, 30)}...`);
             }
           } catch (e: any) {
@@ -961,73 +1028,119 @@ export const analyzeRankingProbability = async (
     }
   }
 
-    const analyzeSingleKeyword = async (keywordData: KeywordData): Promise<KeywordData> => {
-      const keywordStartTime = Date.now();
-      onProgress?.(uiLanguage === 'zh' 
-        ? `🔍 [${keywordData.keyword}] 开始深度分析...` 
-        : `🔍 [${keywordData.keyword}] Starting deep analysis...`);
+  // 优化版本：使用预获取的 SERP 和 DR 数据进行分析
+  const analyzeSingleKeywordWithPreFetchedData = async (
+    keywordData: KeywordData,
+    serpData: SerpData | undefined,
+    allDomainsDRMap: Map<string, number>
+  ): Promise<KeywordData> => {
+    // 使用预获取的 SERP 数据
+    let serpResults: any[] = [];
+    let serpResultCount = -1;
 
-      // Step 1: Fetch real Google SERP results
-      let serpData;
-      let serpResults: any[] = [];
-      let serpResultCount = -1;
+    if (serpData) {
+      serpResults = serpData.results || [];
+      serpResultCount = serpData.totalResults || -1;
+    }
 
+    // 从预获取的 DR Map 中提取竞争对手 DR 值
+    let competitorDRs: number[] = [];
+    if (serpResults.length > 0) {
+      competitorDRs = serpResults.slice(0, 10).map(r => {
+        if (!r.url) return 0;
+        const domain = r.url.replace(/^https?:\/\//, '').split('/')[0];
+        return allDomainsDRMap.get(domain) || 0;
+      });
+    }
+
+    // 继续使用原有的分析逻辑...
+    return await continueAnalysisWithSerpAndDR(keywordData, serpResults, serpResultCount, competitorDRs);
+  };
+
+  // 原有版本：串行获取 SERP 和 DR（保留作为备用）
+  const analyzeSingleKeyword = async (keywordData: KeywordData): Promise<KeywordData> => {
+    onProgress?.(uiLanguage === 'zh'
+      ? `🔍 [${keywordData.keyword}] 开始深度分析...`
+      : `🔍 [${keywordData.keyword}] Starting deep analysis...`);
+
+    // Step 1: Fetch real Google SERP results
+    let serpData;
+    let serpResults: any[] = [];
+    let serpResultCount = -1;
+
+    try {
+      onProgress?.(uiLanguage === 'zh'
+        ? `📡 [${keywordData.keyword}] 正在抓取 ${searchEngine} 实时搜索结果...`
+        : `📡 [${keywordData.keyword}] Fetching ${searchEngine} real-time SERP...`);
+
+      serpData = await fetchSerpResults(keywordData.keyword, targetLanguage, searchEngine);
+      serpResults = serpData.results || [];
+      serpResultCount = serpData.totalResults || -1;
+
+      onProgress?.(uiLanguage === 'zh'
+        ? `✅ [${keywordData.keyword}] 已获取 ${serpResults.length} 条搜索结果`
+        : `✅ [${keywordData.keyword}] Fetched ${serpResults.length} search results`);
+    } catch (error: any) {
+      console.warn(`[Agent 2] Failed to fetch ${searchEngine} SERP for ${keywordData.keyword}:`, error.message);
+    }
+
+    // Step 1.5: Fetch DR for Top 10 competitors
+    let competitorDRs: number[] = [];
+    if (serpResults.length > 0) {
       try {
-        onProgress?.(uiLanguage === 'zh' 
-          ? `📡 [${keywordData.keyword}] 正在抓取 ${searchEngine} 实时搜索结果...` 
-          : `📡 [${keywordData.keyword}] Fetching ${searchEngine} real-time SERP...`);
-        
-        serpData = await fetchSerpResults(keywordData.keyword, targetLanguage, searchEngine);
-        serpResults = serpData.results || [];
-        serpResultCount = serpData.totalResults || -1;
-        
-        onProgress?.(uiLanguage === 'zh' 
-          ? `✅ [${keywordData.keyword}] 已获取 ${serpResults.length} 条搜索结果` 
-          : `✅ [${keywordData.keyword}] Fetched ${serpResults.length} search results`);
-      } catch (error: any) {
-        console.warn(`[Agent 2] Failed to fetch ${searchEngine} SERP for ${keywordData.keyword}:`, error.message);
-      }
+        onProgress?.(uiLanguage === 'zh'
+          ? `🛡️ [${keywordData.keyword}] 正在评估前 ${Math.min(10, serpResults.length)} 名竞争对手的域名权威度 (DR)...`
+          : `🛡️ [${keywordData.keyword}] Assessing Domain Rating (DR) for top competitors...`);
 
-      // Step 1.5: Fetch DR for Top 10 competitors
-      let competitorDRs: number[] = [];
-      if (serpResults.length > 0) {
-        try {
-          onProgress?.(uiLanguage === 'zh' 
-            ? `🛡️ [${keywordData.keyword}] 正在评估前 ${Math.min(10, serpResults.length)} 名竞争对手的域名权威度 (DR)...` 
-            : `🛡️ [${keywordData.keyword}] Assessing Domain Rating (DR) for top competitors...`);
-          
-          const drFetchStart = Date.now();
-          const topDomains = serpResults.slice(0, 10).map(r => r.url).filter(Boolean);
-          if (topDomains.length > 0) {
-            const domainMap = await getBatchDomainOverview(topDomains);
-            competitorDRs = topDomains.map(url => {
-              const domain = url.replace(/^https?:\/\//, '').split('/')[0];
-              return (domainMap.get(domain) as any)?.dr || 0;
-            });
-          }
-          
-          onProgress?.(uiLanguage === 'zh' 
-            ? `✅ [${keywordData.keyword}] 竞争对手权威度评估完成` 
-            : `✅ [${keywordData.keyword}] Competitor DR assessment completed`);
-        } catch (e) {
-          console.warn(`[Agent 2] Failed to fetch competitor DRs:`, e);
+        const drFetchStart = Date.now();
+        const topDomains = serpResults.slice(0, 10).map(r => r.url).filter(Boolean);
+        if (topDomains.length > 0) {
+          const domainMap = await getBatchDomainOverview(topDomains);
+          competitorDRs = topDomains.map(url => {
+            const domain = url.replace(/^https?:\/\//, '').split('/')[0];
+            return (domainMap.get(domain) as any)?.dr || 0;
+          });
         }
-      }
 
-      // Step 2: Build system instruction with real SERP data
+        onProgress?.(uiLanguage === 'zh'
+          ? `✅ [${keywordData.keyword}] 竞争对手权威度评估完成`
+          : `✅ [${keywordData.keyword}] Competitor DR assessment completed`);
+      } catch (e) {
+        console.warn(`[Agent 2] Failed to fetch competitor DRs:`, e);
+      }
+    }
+
+    return await continueAnalysisWithSerpAndDR(keywordData, serpResults, serpResultCount, competitorDRs);
+  };
+
+  // 提取共同的分析逻辑
+  const continueAnalysisWithSerpAndDR = async (
+    keywordData: KeywordData,
+    serpResults: any[],
+    serpResultCount: number,
+    competitorDRs: number[]
+  ): Promise<KeywordData> => {
+    // 记录分析开始时间，用于性能统计
+    const keywordStartTime = Date.now();
+
+    // Step 2: Build system instruction with real SERP data
     // 限制SERP结果数量和数据长度，避免输入token过多
     const maxSerpResults = 5; // 只使用前5个结果
     const maxSerpSnippetLength = 150; // 限制snippet长度（用于SERP上下文）
+    // 蓝海模式判断：如果没有siteDR，就是蓝海模式，不需要DR对比
+    const isBlueOceanMode = siteDR === undefined;
+
     const serpContext = serpResults.length > 0
       ? `\n\nTOP ${engineName} SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\n⚠️ CRITICAL: These are ONLY the TOP ${maxSerpResults} ranking results provided to you for competition analysis. This is a SAMPLE, NOT the total number of competing pages.\n\n⚠️ DO NOT infer total competition from this sample size. Google typically has thousands or millions of results for any keyword. Focus on QUALITY of competition (authority, relevance, optimization) rather than quantity.\n\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
         const snippet = r.snippet ? (r.snippet.length > maxSerpSnippetLength ? r.snippet.substring(0, maxSerpSnippetLength) + '...' : r.snippet) : '';
-        const drInfo = competitorDRs[i] !== undefined ? ` (Domain Authority: ${competitorDRs[i]})` : '';
+        // 蓝海模式下不显示DR信息
+        const drInfo = (!isBlueOceanMode && competitorDRs[i] !== undefined) ? ` (Domain Authority: ${competitorDRs[i]})` : '';
         return `${i + 1}. Title: ${r.title}\n   URL: ${r.url}${drInfo}\n   Snippet: ${snippet}`;
       }).join('\n\n')}\n\nEstimated Total Results on ${engineName}: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: 
 - Use these top results to assess the QUALITY of competition you need to beat
 - Evaluate if results match the EXPECTED industry context (especially for brand keywords)
 - NEVER state "only X results exist" or "competition is extremely low with only X results" based on this sample
-- Focus on relevance, authority, and industry context match${siteDR !== undefined ? `\n\nYOUR WEBSITE AUTHORITY: ${siteDR}. Compare this with competitors to judge if you can outrank them.` : ''}`
+- Focus on relevance, authority, and industry context match${!isBlueOceanMode && siteDR !== undefined ? `\n\nYOUR WEBSITE AUTHORITY: ${siteDR}. Compare this with competitors to judge if you can outrank them.` : ''}`
       : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
 
     // Add DataForSEO data context if available (use dataForSEOData or serankingData for backward compatibility)
@@ -1082,119 +1195,55 @@ ACTION: Analyze SERP results first. Do NOT automatically assign HIGH probability
     const fullSystemInstruction = `
 ${systemInstruction}
 
-TASK: Analyze the ${engineName} SERP competition for the keyword: "${keywordData.keyword}".
+TASK: Analyze ${engineName} SERP competition for: "${keywordData.keyword}"
 ${serpContext}
 ${dataForSEOContext}
 
-**SEARCH ENGINE CONTEXT: ${engineName}**
-${searchEngine === 'google' ? '- Google focuses on E-E-A-T, helpful content, and specific SERP features like SGE, Featured Snippets, and PAA.' : ''}
-${searchEngine === 'baidu' ? '- Baidu prioritizes Chinese-language content, mobile-first indexing, and its own ecosystem (Baidu Zhidao, Baike, Baijiahao). Heavy weight on homepage and meta tags.' : ''}
-${searchEngine === 'bing' ? '- Bing values exact match keywords, social signals, and multimedia content. It also features AI-driven Web Answers.' : ''}
-${searchEngine === 'yandex' ? '- Yandex is dominant in Russian markets, emphasizing regional targeting (GEO), user behavior signals, and Yandex Zen integration.' : ''}
+**ANALYSIS STEPS:**
 
-**STEP 1: PREDICT SEARCH INTENT & INDUSTRY CONTEXT**
-First, predict what the user's search intent is when they type this keyword. Consider:
-- What problem are they trying to solve?
-- What information are they seeking?
-- Are they looking to buy, learn, compare, or find a specific resource?
-- What stage of the buyer's journey are they in?
+1. **Search Intent**: Classify as Informational/Transactional/Commercial/Local/Proper Noun. Identify expected industry context.
 
-**CRITICAL: Intent Recognition & Industry Context**
-1. **Brand vs Generic Keyword Identification**:
-   - Is this a BRAND keyword (e.g., "nanobanana", "Apple iPhone") or a GENERIC keyword (e.g., "banana", "smartphone")?
-   - For brand keywords, identify the EXPECTED industry/business context (e.g., "nanobanana" = tech/product brand, NOT botanical)
-   - For generic keywords, consider broader interpretations but still prioritize commercial intent
+2. **SERP Competition Analysis**:
+   - Site types: Big Brand / Niche Site / Forum/Social / Weak Page / Gov/Edu
+   - Evaluate RELEVANCE: Does content match keyword topic AND industry context?
+   - For proper nouns: Reject results that don't match actual business context
+   - Focus on QUALITY, not quantity (SERP sample ≠ total competition)
 
-2. **Industry Context Matching**:
-   - Evaluate if SERP results match the EXPECTED industry context
-   - Brand keywords MUST match the brand's actual business context - reject irrelevant results (e.g., botanical content for tech brands)
-   - Low industry relevance = HIGH opportunity (strong blue ocean signal)
-   - Example: "nanobanana" showing banana plant content = industry mismatch = opportunity
+3. **Probability Scoring**:
+   - HIGH: Top 3 are weak/off-topic, no relevant authorities in top 5
+   - MEDIUM: Mixed competition, some gaps in top results
+   - LOW: Top 3 include highly relevant big brands/authorities with exact match
 
-3. **Intent Classification**:
-   - **Informational**: User wants to learn (How-to, What is, Guide)
-   - **Transactional**: User wants to buy/purchase (Buy, Price, Best)
-   - **Commercial**: User wants to compare/evaluate (vs, alternative, review)
-   - **Local**: User wants location-specific results (near me, local)
-   - **Brand**: User is searching for a specific brand/product
-   - Ensure SERP results match the identified intent
+**KEY PRINCIPLES:**
+- Relevance > Authority (relevant blog > irrelevant Wikipedia)
+- Authority without relevance = opportunity
+- Authority with high relevance = strong competition
+- For non-English (${targetLanguage}): DataForSEO "no data" ≠ blue ocean (verify with SERP)
 
-**STEP 2: ANALYZE SERP COMPETITION**
-Based on the REAL SERP results provided above (if available), analyze:
-1. **CRITICAL: DO NOT infer total competition from sample size** - The SERP results provided are ONLY a sample (top 5-10) for analysis. Google typically has thousands or millions of results. NEVER state "only X results exist" or "competition is extremely low with only X results" based on the provided sample.
-2. What type of sites are ranking (Big Brand, Niche Site, Forum/Social, Weak Page, Gov/Edu) - analyze the actual URLs and domains
-3. **CRITICAL: Evaluate RELEVANCE of each result** - Does the page content match the keyword topic AND expected industry context?
-4. **CRITICAL: Evaluate INDUSTRY CONTEXT MATCH** - Do results match the expected industry/business context? (e.g., brand keywords should match brand's industry, not generic dictionary definitions)
-5. The probability of ranking on page 1 (High, Medium, Low) - based on BOTH competition quality AND relevance AND industry context match
+**OUTPUT REQUIREMENTS:**
+- All text in ${uiLangName}
+- Use actual SERP results for topSerpSnippets (first 3)
+- Return ONLY valid JSON, no markdown or explanations
 
-STRICT SCORING CRITERIA (Be conservative and strict):
-
-🟢 **HIGH PROBABILITY** - Assign when ALL of the following are met:
-  * Top 3 results are ALL weak competitors (Forums like Reddit/Quora, Social Media, PDFs, low-quality blogs, OR off-topic/irrelevant content)
-  * NO highly relevant authoritative sites in top 5
-  * Content quality of top results is clearly poor, outdated, or doesn't match user intent
-  * **BONUS**: DataForSEO shows NO DATA - BUT ONLY if target language is English AND SERP also shows weak competition (do NOT assume blue ocean for non-English languages)
-
-  **RELEVANCE CHECK**: If you see Wikipedia/.gov/.edu in top results:
-    ├─ Are they HIGHLY RELEVANT to the keyword topic? → Competition is strong → NOT HIGH
-    └─ Are they OFF-TOPIC or weakly related? → They're just filling space → Still consider HIGH
-
-🟡 **MEDIUM PROBABILITY** - Assign when:
-  * Moderate competition exists (3-10 relevant results)
-  * Mix of weak and moderate competitors
-  * Some authoritative sites present BUT not all are highly relevant
-  * Top results partially satisfy user intent but have gaps
-  * Niche sites rank but aren't dominant market leaders
-
-🔴 **LOW PROBABILITY** - Assign when ANY of the following apply:
-  * Top 3 results include HIGHLY RELEVANT Big Brands (Amazon, major corporations for product keywords)
-  * HIGHLY RELEVANT Government/Educational sites (.gov, .edu) with exact topic match
-  * Multiple HIGHLY RELEVANT, high-quality niche authority sites with exact match content
-  * Strong competition with 10+ relevant, well-optimized results
-  * Top results clearly and comprehensively satisfy user intent
-
-**CRITICAL RELEVANCE PRINCIPLE**:
-- **Authority WITHOUT Relevance = Opportunity (not threat)**
-- **Authority WITH High Relevance = Strong Competition (threat)**
-- Example 1: Wikipedia page about "general topic" for keyword "specific product" → WEAK competitor
-- Example 2: Wikipedia page with exact match for keyword → STRONG competitor
-- Example 3: .gov site about unrelated topic → IGNORE, doesn't affect ranking
-- Example 4: .gov site with exact topic match → STRONG competitor
-
-IMPORTANT ANALYSIS RULES:
-- **Prioritize RELEVANCE over AUTHORITY** - A highly relevant blog beats an irrelevant Wikipedia page
-- **Prioritize INDUSTRY CONTEXT MATCH** - Ensure results match expected industry/business context (especially for brand keywords)
-- **NEVER infer total competition from sample size** - The provided SERP results are a sample, not total competition. Focus on quality, not quantity.
-- If authoritative sites are present but OFF-TOPIC or INDUSTRY-MISMATCHED, treat it as a blue ocean opportunity
-- Analyze the actual quality, relevance, and industry context match of top results, not just domain names
-- Use the REAL SERP results provided above for your analysis
-- **CRITICAL**: For non-English target languages (${targetLanguage}), DataForSEO "no data" is often due to limited database coverage, NOT a blue ocean signal. Do NOT treat it as positive. Always verify with SERP results first.
-- **CRITICAL**: Brand keywords require strict industry matching - reject results that don't match the brand's actual business context
-- Output all text fields (reasoning, searchIntent, intentAnalysis, topSerpSnippets titles/snippets) in ${uiLangName}
-- The user interface language is ${uiLanguage === 'zh' ? '中文' : 'English'}, so all explanations and descriptions must be in ${uiLangName}
-- For topSerpSnippets, use the ACTUAL results from the SERP data above (first 3 results)
-
-CRITICAL: Return ONLY a valid JSON object. Do NOT include any explanations, thoughts, reasoning process, or markdown formatting. Return ONLY the JSON object.
-
-Return a JSON object:
+JSON format:
 {
-  "searchIntent": "Detailed description of predicted user search intent in ${uiLangName}",
-  "intentAnalysis": "Comprehensive analysis of whether SERP results match the intent in ${uiLangName}",
+  "searchIntent": "User intent in ${uiLangName}",
+  "intentAnalysis": "SERP-intent match analysis in ${uiLangName}",
   "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
-  "relevanceScore": number (0-1 scale, how well your site topic matches this keyword),
-  "reasoning": "Detailed explanation in ${uiLangName} based on the real SERP results - provide comprehensive analysis",
+  "relevanceScore": 0-1,
+  "reasoning": "Analysis in ${uiLangName} (concise, 200-400 chars)",
   "topSerpSnippets": ${topSerpSnippetsJson}
 }`;
 
     try {
       let response;
       try {
-        onProgress?.(uiLanguage === 'zh' 
-          ? `🤖 [${keywordData.keyword}] 正在调用 AI 专家进行胜率估算和蓝海信号分析...` 
+        onProgress?.(uiLanguage === 'zh'
+          ? `🤖 [${keywordData.keyword}] 正在调用 AI 专家进行胜率估算和蓝海信号分析...`
           : `🤖 [${keywordData.keyword}] Calling AI expert for outrank and blue ocean analysis...`);
-        
+
         const geminiStart = Date.now();
         response = await callGeminiAPI(
           `Analyze SEO competition for: ${keywordData.keyword}
@@ -1227,11 +1276,12 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
               },
               required: ['probability', 'reasoning']
             },
+            // 禁用思考模式以加快响应速度（性能优化）
+            reasoningMode: 'none',
             // 禁用 Google 搜索以避免 JSON 解析错误（联网模式会导致返回非纯 JSON 格式）
             enableGoogleSearch: false,
-            // 设置最大输出token限制（Gemini 2.5 Flash 支持最大 65536）
-            // 设置为最大值以确保有足够空间输出完整的 JSON（包括详细的 reasoning 和完整的 topSerpSnippets）
-            maxOutputTokens: 65536,
+            // 降低输出token限制以加快响应（reasoning限制为200-400字符，大幅减少输出）
+            maxOutputTokens: 8000,
             onRetry: (attempt, error, delay) => {
               onProgress?.(uiLanguage === 'zh'
                 ? `⚠️ [${keywordData.keyword}] AI 分析连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
@@ -1239,10 +1289,10 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
             }
           }
         );
-        onProgress?.(uiLanguage === 'zh' 
-          ? `✨ [${keywordData.keyword}] AI 分析完成` 
+        onProgress?.(uiLanguage === 'zh'
+          ? `✨ [${keywordData.keyword}] AI 分析完成`
           : `✨ [${keywordData.keyword}] AI analysis completed`);
-        
+
         console.log(`[Agent 2] Gemini analysis for "${keywordData.keyword}" completed in ${Date.now() - geminiStart}ms`);
       } catch (apiError: any) {
         // 如果API调用失败（如400错误），使用默认值并继续
@@ -1556,13 +1606,13 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         analysis.topDomainType = 'Weak Page';
       }
 
-      // 计算蓝海评分 (Workflow 1)
-      const blueOceanScore = calculateBlueOceanScore({
+      // 计算蓝海评分 (Workflow 1) - 返回详细分解
+      const blueOceanScoreData = calculateBlueOceanScore({
         ...keywordData,
         ...analysis
       });
-      
-      // 计算大鱼吃小鱼概率 (Workflow 3)
+
+      // 计算大鱼吃小鱼概率 (Workflow 3) - 仅在存量拓新模式（有siteDR）下计算
       let outrankData = {
         canOutrankPositions: [] as number[],
         top3Probability: ProbabilityLevel.LOW,
@@ -1570,7 +1620,8 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         finalProbability: analysis.probability as ProbabilityLevel
       };
 
-      if (siteDR !== undefined && competitorDRs.length > 0) {
+      // 蓝海模式下不需要DR对比，跳过"大鱼吃小鱼"计算
+      if (!isBlueOceanMode && siteDR !== undefined && competitorDRs.length > 0) {
         outrankData = calculateOutrankProbability(siteDR, competitorDRs, analysis.relevanceScore || 0.5);
         // 如果网站审计模式下计算出的概率更高，则使用它
         if (outrankData.finalProbability === ProbabilityLevel.HIGH) {
@@ -1583,7 +1634,11 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
       return {
         ...keywordData,
         ...analysis,
-        blueOceanScore,
+        blueOceanScore: blueOceanScoreData.totalScore,
+        blueOceanScoreBreakdown: {
+          totalScore: blueOceanScoreData.totalScore,
+          factors: blueOceanScoreData.factors
+        },
         websiteDR: siteDR,
         competitorDRs,
         canOutrankPositions: outrankData.canOutrankPositions,
@@ -1608,36 +1663,90 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
 
   const results: KeywordData[] = [];
   // 优化批处理参数以提升效率：
-  // - BATCH_SIZE: 从 2 提升到 6，充分利用 Gemini API 并发能力
+  // - BATCH_SIZE: 从 2 提升到 6，充分利用 API 并发能力
   // - BATCH_DELAY: 从 1000ms 降低到 300ms，减少不必要的等待时间
-  // 预期性能提升：20个关键词从 159-309秒 降低到 60-120秒（约2-2.5倍提升）
+  // - 新增：批次层面的批量并行处理（先批量获取 SERP，再批量获取 DR，最后批量调用 Gemini）
+  // 预期性能提升：20个关键词从 159-309秒 降低到 40-80秒（约3-4倍提升）
   const BATCH_SIZE = 6; // 提升批处理大小，充分利用 API 并发能力
   const BATCH_DELAY = 300; // 减少批次间延迟，避免过度等待
   const startTime = Date.now();
   const MAX_EXECUTION_TIME = 280000; // 保持 280 秒超时限制，确保在前端 300 秒超时前返回
 
-    for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
-      const elapsed = Date.now() - startTime;
-      if (elapsed > MAX_EXECUTION_TIME) {
-        console.warn(`[Agent 2] Timeout reached after ${elapsed}ms. Processed ${results.length}/${keywords.length} keywords.`);
-        onProgress?.(uiLanguage === 'zh'
-          ? `⏱️ 执行超时，已处理 ${results.length}/${keywords.length} 个关键词`
-          : `⏱️ Timeout reached. Processed ${results.length}/${keywords.length} keywords`);
-        break;
-      }
-
-      const batch = keywords.slice(i, i + BATCH_SIZE);
-      const currentBatchNum = Math.floor(i / BATCH_SIZE) + 1;
-      const totalBatches = Math.ceil(keywords.length / BATCH_SIZE);
-      
+  for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
+    const elapsed = Date.now() - startTime;
+    if (elapsed > MAX_EXECUTION_TIME) {
+      console.warn(`[Agent 2] Timeout reached after ${elapsed}ms. Processed ${results.length}/${keywords.length} keywords.`);
       onProgress?.(uiLanguage === 'zh'
-        ? `📦 正在处理第 ${currentBatchNum}/${totalBatches} 批关键词 (${batch.length}个)...`
-        : `📦 Processing batch ${currentBatchNum}/${totalBatches} (${batch.length} keywords)...`);
+        ? `⏱️ 执行超时，已处理 ${results.length}/${keywords.length} 个关键词`
+        : `⏱️ Timeout reached. Processed ${results.length}/${keywords.length} keywords`);
+      break;
+    }
 
-      // 并行处理批次内的所有关键词
-      const batchResults = await Promise.allSettled(
-        batch.map(k => analyzeSingleKeyword(k))
-      );
+    const batch = keywords.slice(i, i + BATCH_SIZE);
+    const currentBatchNum = Math.floor(i / BATCH_SIZE) + 1;
+    const totalBatches = Math.ceil(keywords.length / BATCH_SIZE);
+
+    onProgress?.(uiLanguage === 'zh'
+      ? `📦 正在处理第 ${currentBatchNum}/${totalBatches} 批关键词 (${batch.length}个)...`
+      : `📦 Processing batch ${currentBatchNum}/${totalBatches} (${batch.length} keywords)...`);
+
+    // 优化策略：批次层面的批量并行处理
+    // Step 1: 批量并行获取所有关键词的 SERP 结果
+    onProgress?.(uiLanguage === 'zh'
+      ? `📡 [批次 ${currentBatchNum}] 正在批量并行获取 SERP 结果...`
+      : `📡 [Batch ${currentBatchNum}] Batch fetching SERP results in parallel...`);
+
+    const batchKeywords = batch.map(k => k.keyword);
+    const serpResultsMap = await fetchSerpResultsBatch(
+      batchKeywords,
+      targetLanguage,
+      searchEngine, // engine 参数
+      BATCH_SIZE, // 批次大小
+      BATCH_DELAY // 批次延迟
+    );
+
+    // Step 2: 从所有 SERP 结果中提取所有需要查询的域名，批量并行获取 DR 值
+    onProgress?.(uiLanguage === 'zh'
+      ? `🛡️ [批次 ${currentBatchNum}] 正在批量并行获取竞争对手 DR 值...`
+      : `🛡️ [Batch ${currentBatchNum}] Batch fetching competitor DR values in parallel...`);
+
+    const allDomains = new Set<string>();
+    batch.forEach(k => {
+      const serpData = serpResultsMap.get(k.keyword.toLowerCase());
+      if (serpData?.results) {
+        serpData.results.slice(0, 10).forEach(r => {
+          if (r.url) {
+            const domain = r.url.replace(/^https?:\/\//, '').split('/')[0];
+            if (domain && domain.includes('.')) {
+              allDomains.add(domain);
+            }
+          }
+        });
+      }
+    });
+
+    let allDomainsDRMap = new Map<string, number>();
+    if (allDomains.size > 0) {
+      try {
+        const domainsArray = Array.from(allDomains);
+        const drMap = await getBatchDomainOverview(domainsArray);
+        // 转换 Map 格式
+        drMap.forEach((overview, domain) => {
+          allDomainsDRMap.set(domain, (overview as any)?.dr || 0);
+        });
+      } catch (e) {
+        console.warn(`[Agent 2] Failed to batch fetch DRs:`, e);
+      }
+    }
+
+    // Step 3: 并行处理批次内的所有关键词（使用已获取的 SERP 和 DR 数据）
+    const batchResults = await Promise.allSettled(
+      batch.map(k => analyzeSingleKeywordWithPreFetchedData(
+        k,
+        serpResultsMap.get(k.keyword.toLowerCase()),
+        allDomainsDRMap
+      ))
+    );
 
     const processedResults = batchResults.map((result, idx) => {
       if (result.status === 'fulfilled') {

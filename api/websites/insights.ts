@@ -60,24 +60,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const targetId = websiteData?.id || websiteId;
 
+    // 使用 JOIN 确保数据隔离：只查询属于当前用户的网站数据
     const overviewResult = await sql`
-      SELECT * FROM domain_overview_cache 
-      WHERE website_id = ${targetId}
-      ORDER BY data_date DESC LIMIT 1
+      SELECT doc.* 
+      FROM domain_overview_cache doc
+      INNER JOIN user_websites uw ON doc.website_id = uw.id
+      WHERE doc.website_id = ${targetId}
+        AND uw.user_id = ${userId}
+      ORDER BY doc.data_date DESC LIMIT 1
     `;
 
     const keywordsResult = await sql`
-      SELECT keyword, search_volume, current_position, competition 
-      FROM domain_keywords_cache 
-      WHERE website_id = ${targetId}
-      ORDER BY search_volume DESC LIMIT 15
+      SELECT dkc.keyword, dkc.search_volume, dkc.current_position, dkc.competition 
+      FROM domain_keywords_cache dkc
+      INNER JOIN user_websites uw ON dkc.website_id = uw.id
+      WHERE dkc.website_id = ${targetId}
+        AND uw.user_id = ${userId}
+      ORDER BY dkc.search_volume DESC LIMIT 15
     `;
 
     const competitorsResult = await sql`
-      SELECT competitor_domain, common_keywords 
-      FROM domain_competitors_cache 
-      WHERE website_id = ${targetId}
-      ORDER BY common_keywords DESC LIMIT 8
+      SELECT dcc.competitor_domain, dcc.common_keywords 
+      FROM domain_competitors_cache dcc
+      INNER JOIN user_websites uw ON dcc.website_id = uw.id
+      WHERE dcc.website_id = ${targetId}
+        AND uw.user_id = ${userId}
+      ORDER BY dcc.common_keywords DESC LIMIT 8
     `;
 
     const overview = overviewResult.rows[0] || {};

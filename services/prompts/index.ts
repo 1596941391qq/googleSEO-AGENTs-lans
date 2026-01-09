@@ -2223,17 +2223,21 @@ Estimate "Page 1 Ranking Probability" based on COMPETITION STRENGTH and RELEVANC
 
 **Intent Recognition & Industry Context**
 🔍 **CRITICAL: Accurately identify keyword intent and industry context**
-1. **Brand vs Generic Keywords**:
-   - Brand keywords (e.g., "nanobanana", "Apple iPhone") should match the BRAND's industry/context
-   - Generic keywords (e.g., "banana", "smartphone") may have broader interpretations
-   - If a brand keyword returns irrelevant results (e.g., "nanobanana" showing botanical content), this indicates LOW relevance and HIGH opportunity
-   - Brand keywords require STRICT industry matching - reject results that don't match the brand's actual business context
+1. **Proper Nouns vs Generic Keywords**:
+   - **Proper Nouns** (专有词) include brand names, product names, game names, software names, company names, and other proper nouns
+   - Examples: "nanobanana" (brand), "ChatGPT" (AI software), "Minecraft" (game), "Apple iPhone" (product), "Tesla" (company)
+   - **Generic Keywords** (通用词) are common nouns or descriptive terms (e.g., "banana", "smartphone", "game", "AI tool")
+   - Proper nouns should match their EXPECTED industry/business context
+   - If a proper noun returns irrelevant results (e.g., "nanobanana" showing botanical content, "Minecraft" showing mining industry content), this indicates LOW relevance and HIGH opportunity
+   - Proper nouns require STRICT context matching - reject results that don't match the actual business/industry context
+   - Example: "nanobanana" (tech/product brand) should NOT match botanical content about bananas
+   - Example: "Minecraft" (video game) should NOT match mining industry content
+   - Example: "ChatGPT" (AI chatbot) should NOT match generic chat or GPT protein content
 
 2. **Industry-Specific Relevance**:
    - Evaluate if SERP results match the EXPECTED industry context of the keyword
-   - For brand/product keywords, results should relate to the product/service category, NOT generic dictionary definitions
-   - Example: "nanobanana" (a tech brand) should NOT match botanical/agricultural content about bananas
-   - Example: "apple" (tech company) should NOT match fruit/orchard content when searched in tech context
+   - For proper nouns (brands/products/games/software), results should relate to the actual entity, NOT generic dictionary definitions or unrelated industries
+   - For generic keywords, consider broader interpretations but still prioritize commercial intent
    - Low industry relevance = HIGH opportunity (blue ocean signal)
 
 3. **Search Intent Classification**:
@@ -2241,7 +2245,7 @@ Estimate "Page 1 Ranking Probability" based on COMPETITION STRENGTH and RELEVANC
    - **Transactional**: User wants to buy/purchase (Buy, Price, Best)
    - **Commercial**: User wants to compare/evaluate (vs, alternative, review)
    - **Local**: User wants location-specific results (near me, local)
-   - **Brand**: User is searching for a specific brand/product
+   - **Proper Noun**: User is searching for a specific proper noun (brand/product/game/software/company)
    - Ensure SERP results match the identified intent - mismatched intent = opportunity
 
 **High Probability Indicators (Low Competition)**:
@@ -2250,7 +2254,7 @@ Estimate "Page 1 Ranking Probability" based on COMPETITION STRENGTH and RELEVANC
 3. **Non-Commercial Content**: Top results primarily offer non-commercial content, such as **PDFs, basic user guides, unoptimized listing pages, or personal portfolios.**
 4. **Low Content Quality**: The content in the Top 5 is generic, outdated, or lacks comprehensive depth (e.g., short articles < 500 words).
 5. **Off-Topic Authority Sites**: Authoritative sites (Wikipedia, .gov, .edu) appear but are **NOT highly relevant** to the keyword topic.
-6. **Industry Context Mismatch**: SERP results don't match the expected industry context (e.g., brand keyword showing unrelated content) - this is a STRONG blue ocean signal
+6. **Industry Context Mismatch**: SERP results don't match the expected industry context (e.g., proper noun showing unrelated content, game name showing unrelated industry content) - this is a STRONG blue ocean signal
 7. **SE Ranking No Data**: SE Ranking returns no data - BUT this is NOT automatically a blue ocean signal. For non-English languages, SE Ranking may simply lack database coverage. Always verify with SERP results before considering this a positive indicator.
 
 **Low Probability Indicators (High Competition)**:
@@ -2266,7 +2270,8 @@ Estimate "Page 1 Ranking Probability" based on COMPETITION STRENGTH and RELEVANC
 - **Industry Context Mismatch = Strong Opportunity (blue ocean)**
 - Example: Wikipedia page about "general topic" for keyword "specific product" → WEAK competitor
 - Example: Wikipedia page with exact match for keyword → STRONG competitor
-- Example: Brand keyword "nanobanana" showing botanical content → STRONG opportunity (industry mismatch)
+- Example: Proper noun "nanobanana" (tech brand) showing botanical content → STRONG opportunity (industry mismatch)
+- Example: Game name "Minecraft" showing mining industry content → STRONG opportunity (context mismatch)
 
 **Analysis Framework**:
 - **PRIORITIZE RELEVANCE OVER AUTHORITY** - Evaluate if authoritative sites are actually relevant to the keyword
@@ -2294,17 +2299,21 @@ Return: "High", "Medium", or "Low" probability with detailed reasoning.
 
 **意图识别与行业上下文**
 🔍 **关键：准确识别关键词意图和行业上下文**
-1. **品牌词 vs 通用词**：
-   - 品牌关键词（如"nanobanana"、"苹果iPhone"）应匹配该品牌的行业/上下文
-   - 通用关键词（如"香蕉"、"智能手机"）可能有更广泛的解释
-   - 如果品牌关键词返回无关结果（如"nanobanana"显示植物学内容），这表明相关性低、机会高
-   - 品牌关键词需要严格的行业匹配 - 拒绝不匹配品牌实际业务上下文的结果
+1. **专有词 vs 通用词**：
+   - **专有词**（Proper Nouns）包括品牌名、产品名、游戏名、软件名、公司名等专有名词
+   - 示例："nanobanana"（品牌）、"ChatGPT"（AI软件）、"Minecraft"（游戏）、"苹果iPhone"（产品）、"特斯拉"（公司）
+   - **通用词**（Generic Keywords）是普通名词或描述性术语（如"香蕉"、"智能手机"、"游戏"、"AI工具"）
+   - 专有词应匹配其预期的行业/业务上下文
+   - 如果专有词返回无关结果（如"nanobanana"显示植物学内容、"Minecraft"显示采矿业内容），这表明相关性低、机会高
+   - 专有词需要严格的上下文匹配 - 拒绝不匹配实际业务/行业上下文的结果
+   - 示例："nanobanana"（科技/产品品牌）不应匹配关于香蕉的植物学内容
+   - 示例："Minecraft"（视频游戏）不应匹配采矿业内容
+   - 示例："ChatGPT"（AI聊天机器人）不应匹配通用聊天或GPT蛋白质内容
 
 2. **行业特定相关性**：
    - 评估SERP结果是否匹配关键词的预期行业上下文
-   - 对于品牌/产品关键词，结果应关联产品/服务类别，而非通用词典定义
-   - 示例："nanobanana"（科技品牌）不应匹配关于香蕉的植物学/农业内容
-   - 示例："苹果"（科技公司）在科技上下文中搜索时不应匹配水果/果园内容
+   - 对于专有词（品牌/产品/游戏/软件），结果应关联实际实体，而非通用词典定义或无关行业
+   - 对于通用关键词，考虑更广泛的解释，但仍优先考虑商业意图
    - 行业相关性低 = 高机会（蓝海信号）
 
 3. **搜索意图分类**：
@@ -2312,7 +2321,7 @@ Return: "High", "Medium", or "Low" probability with detailed reasoning.
    - **交易型**：用户想购买（购买、价格、最佳）
    - **商业型**：用户想比较/评估（对比、替代品、评测）
    - **本地型**：用户想要位置特定结果（附近、本地）
-   - **品牌型**：用户搜索特定品牌/产品
+   - **专有词型**：用户搜索特定专有词（品牌/产品/游戏/软件/公司）
    - 确保SERP结果匹配识别的意图 - 意图不匹配 = 机会
 
 **高概率指标（低竞争）**：
@@ -2321,7 +2330,7 @@ Return: "High", "Medium", or "Low" probability with detailed reasoning.
 3. **非商业内容**：前5名结果主要提供非商业内容，如**PDF、基础用户指南、未优化的列表页面或个人作品集**。
 4. **内容质量低**：前5名内容通用、过时或缺乏全面深度（例如短文<500字）。
 5. **离题权威网站**：权威网站（Wikipedia、.gov、.edu）出现但**与关键词主题不高度相关**。
-6. **行业上下文不匹配**：SERP结果不匹配预期行业上下文（如品牌关键词显示无关内容）- 这是强烈的蓝海信号
+6. **行业上下文不匹配**：SERP结果不匹配预期行业上下文（如专有词显示无关内容、游戏名显示无关行业内容）- 这是强烈的蓝海信号
 7. **SE Ranking无数据**：SE Ranking返回无数据 - 但这**不是**自动的蓝海信号。对于非英语语言，SE Ranking可能只是缺乏数据库覆盖。在将其视为积极指标之前，必须先用SERP结果验证。
 
 **低概率指标（高竞争）**：
@@ -2337,7 +2346,8 @@ Return: "High", "Medium", or "Low" probability with detailed reasoning.
 - **行业上下文不匹配 = 强机会（蓝海）**
 - 例如：关于"一般主题"的Wikipedia页面对关键词"特定产品"→弱竞争对手
 - 例如：具有精确匹配的Wikipedia页面对关键词→强竞争对手
-- 例如：品牌关键词"nanobanana"显示植物学内容→强机会（行业不匹配）
+- 例如：专有词"nanobanana"（科技品牌）显示植物学内容→强机会（行业不匹配）
+- 例如：游戏名"Minecraft"显示采矿业内容→强机会（上下文不匹配）
 
 **分析框架**：
 - **相关性优先于权威** - 评估权威网站是否实际上与关键词相关

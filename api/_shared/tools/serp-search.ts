@@ -217,39 +217,60 @@ export async function fetchSerpResults(
 }
 
 /**
- * 批量获取SERP结果（带限流）
+ * 批量并行获取SERP结果（优化版本 - 真正的并行处理）
  * 
  * @param keywords - 关键词数组
  * @param language - 语言，默认 'en'
- * @param location - 搜索地区，默认 'us'
- * @param delayMs - 请求间隔（毫秒），默认 500ms
+ * @param engine - 搜索引擎，默认 'google'
+ * @param batchSize - 并发批次大小，默认 6（与 Agent 2 批处理大小一致）
+ * @param batchDelay - 批次间延迟（毫秒），默认 300ms
  * @returns 关键词到SERP数据的Map
  */
 export async function fetchSerpResultsBatch(
   keywords: string[],
   language: string = 'en',
-  location: string = 'us',
-  delayMs: number = 500
+  engine: string = 'google',
+  batchSize: number = 6,
+  batchDelay: number = 300
 ): Promise<Map<string, SerpData>> {
   const results = new Map<string, SerpData>();
 
-  for (let i = 0; i < keywords.length; i++) {
-    const keyword = keywords[i];
-    try {
-      const serpData = await fetchSerpResults(keyword, language, location);
-      results.set(keyword.toLowerCase(), serpData);
-
-      // 限流：除了最后一个请求，其他请求后等待
-      if (i < keywords.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+  // 分批并行处理，避免一次性并发过多导致限流
+  for (let i = 0; i < keywords.length; i += batchSize) {
+    const batch = keywords.slice(i, i + batchSize);
+    
+    // 并行获取批次内所有关键词的 SERP 结果
+    const batchPromises = batch.map(async (keyword) => {
+      try {
+        const serpData = await fetchSerpResults(keyword, language, engine);
+        return { keyword: keyword.toLowerCase(), serpData };
+      } catch (error: any) {
+        console.error(`Failed to fetch SERP for "${keyword}":`, error.message);
+        return { 
+          keyword: keyword.toLowerCase(), 
+          serpData: { keyword, results: [] } as SerpData 
+        };
       }
-    } catch (error: any) {
-      console.error(`Failed to fetch SERP for "${keyword}":`, error.message);
-      // 继续处理下一个关键词
-      results.set(keyword.toLowerCase(), {
-        keyword,
-        results: [],
-      });
+    });
+
+    const batchResults = await Promise.allSettled(batchPromises);
+    
+    // 处理批次结果
+    batchResults.forEach((result) => {
+      if (result.status === 'fulfilled') {
+        results.set(result.value.keyword, result.value.serpData);
+      } else {
+        // 如果整个批次失败，至少记录空结果
+        const keyword = batch[batchResults.indexOf(result)];
+        if (keyword) {
+          results.set(keyword.toLowerCase(), { keyword, results: [] });
+        }
+      }
+    });
+
+    // 批次间短暂延迟，避免 API 限流（仅在还有更多批次时延迟）
+    if (i + batchSize < keywords.length) {
+      await new Promise(resolve => setTimeout(resolve, batchDelay));
     }
   }
 

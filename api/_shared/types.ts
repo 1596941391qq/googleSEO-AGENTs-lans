@@ -88,6 +88,14 @@ export interface KeywordData {
 
   // Blue Ocean Scoring (new)
   blueOceanScore?: number; // 0-100
+  blueOceanScoreBreakdown?: {
+    totalScore: number;
+    factors: Array<{
+      name: string;
+      score: number;
+      reason: string;
+    }>;
+  };
 
   // Verification
   isIndexed?: boolean;
