@@ -55,7 +55,7 @@ class RawSQL {
 // 导出 SQL 查询函数 (tagged template 语法)
 // 使用连接池而不是每次创建新连接，大大提高性能
 export const sql = async <T extends QueryResultRow = any>(
-  strings: TemplateStringsArray,
+  strings: TemplateStringsArray | RawSQL,
   ...values: any[]
 ): Promise<{ rows: T[]; rowCount: number }> => {
   if (!pool || !connectionString) {
@@ -69,16 +69,23 @@ export const sql = async <T extends QueryResultRow = any>(
   const params: any[] = [];
   let paramIndex = 1;
 
-  for (let i = 0; i < strings.length; i++) {
-    queryText += strings[i];
-    if (i < values.length) {
-      // 如果值是 RawSQL 实例，直接插入 SQL，不参数化
-      if (values[i] instanceof RawSQL) {
-        queryText += values[i].value;
-      } else {
-        queryText += `$${paramIndex}`;
-        params.push(values[i]);
-        paramIndex++;
+  if (strings instanceof RawSQL) {
+    // 如果直接传递 RawSQL 对象 (作为普通函数调用)
+    queryText = strings.value;
+    params.push(...values);
+  } else {
+    // 处理模板字符串
+    for (let i = 0; i < strings.length; i++) {
+      queryText += strings[i];
+      if (i < values.length) {
+        // 如果值是 RawSQL 实例，直接插入 SQL，不参数化
+        if (values[i] instanceof RawSQL) {
+          queryText += values[i].value;
+        } else {
+          queryText += `$${paramIndex}`;
+          params.push(values[i]);
+          paramIndex++;
+        }
       }
     }
   }

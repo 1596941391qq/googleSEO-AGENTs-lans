@@ -202,8 +202,17 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
 
   const handleAddPromoUrl = (e: React.KeyboardEvent | React.MouseEvent) => {
     if (e.type === 'keydown' && (e as React.KeyboardEvent).key !== 'Enter') return;
-    if (newPromoUrl.trim() && !promotedWebsites.includes(newPromoUrl.trim())) {
-      setPromotedWebsites([...promotedWebsites, newPromoUrl.trim()]);
+    
+    const url = newPromoUrl.trim();
+    if (!url) return;
+
+    if (!isValidUrl(url)) {
+      alert(uiLanguage === "zh" ? "请输入有效的 URL (例如: https://example.com)" : "Please enter a valid URL (e.g., https://example.com)");
+      return;
+    }
+
+    if (!promotedWebsites.includes(url)) {
+      setPromotedWebsites([...promotedWebsites, url]);
       setNewPromoUrl("");
     }
   };
@@ -325,9 +334,14 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
           const printableChars =
             extractedText.match(/[\x20-\x7E\n\r]/g)?.length || 0;
           if (printableChars < extractedText.length * 0.3) {
-            throw new Error("PDF text extraction needs backend processing");
+            throw new Error("PDF text extraction failed: Document appears to be binary or scanned. Please provide a text-based PDF or copy-paste the content.");
           }
-        } catch (pdfError) {
+        } catch (pdfError: any) {
+          // If it was already our custom error, rethrow it
+          if (pdfError.message.includes("PDF text extraction failed")) {
+            throw pdfError;
+          }
+          
           // Send to backend for processing
           const fileContent = await file.text();
           const response = await fetch("/api/extract-document-text", {
@@ -352,8 +366,8 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
           extractedText = data.content || "";
         }
       } else if (fileExtension === ".docx") {
-        // For DOCX, send to backend
-        // Note: DOCX requires special parsing, frontend extraction is complex
+        // For DOCX, warn that it's experimental
+        console.warn("DOCX extraction is experimental. For best results, use .txt or .md");
         const fileContent = await file.text();
         const response = await fetch("/api/extract-document-text", {
           method: "POST",
@@ -456,13 +470,19 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
     e.preventDefault();
     if (!keyword.trim()) return;
 
+    // Robustness: If there's a valid URL in the promo input but not added yet, add it
+    let finalPromotedWebsites = [...promotedWebsites];
+    if (newPromoUrl.trim() && isValidUrl(newPromoUrl.trim()) && !finalPromotedWebsites.includes(newPromoUrl.trim())) {
+      finalPromotedWebsites.push(newPromoUrl.trim());
+    }
+
     // Validate URL if provided
     if (referenceType === "url" && referenceUrl.trim()) {
       if (!isValidUrl(referenceUrl.trim())) {
         setUrlError(
           uiLanguage === "zh"
-            ? "请先修正无效的 URL"
-            : "Please fix the invalid URL first"
+            ? "请先修正无效的参考 URL"
+            : "Please fix the invalid reference URL first"
         );
         return;
       }
@@ -494,7 +514,7 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
       visualStyle,
       targetAudience: audience,
       targetMarket,
-      promotedWebsites: promotedWebsites.length > 0 ? promotedWebsites : undefined,
+      promotedWebsites: finalPromotedWebsites.length > 0 ? finalPromotedWebsites : undefined,
       promotionIntensity,
     };
 

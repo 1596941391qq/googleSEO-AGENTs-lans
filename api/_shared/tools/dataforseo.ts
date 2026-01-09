@@ -161,6 +161,9 @@ async function fetchBatchWithRetry(
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
     try {
       // 不同搜索引擎对应的端点
       let endpoint = '';
@@ -177,9 +180,6 @@ async function fetchBatchWithRetry(
           language_code: languageCode,
         }
       ];
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
       const response = await fetch(endpoint, {
         method: 'POST',

@@ -221,6 +221,7 @@ interface ArticleGeneratorLayoutProps {
     targetMarket?: string;
     promotedWebsites?: string[];
     promotionIntensity?: "natural" | "strong";
+    reference?: any; // Added reference field to state
     isGenerating: boolean;
     progress: number;
     currentStage:
@@ -514,7 +515,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
       targetMarket: config.targetMarket,
       promotedWebsites: config.promotedWebsites,
       promotionIntensity: config.promotionIntensity,
-      // @ts-ignore - Ensure reference is preserved in state
+      // Ensure reference is preserved in state
       reference: config.reference,
     });
 
