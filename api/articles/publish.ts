@@ -64,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return sendErrorResponse(res, null, 'Medium Token is required', 400);
       }
       publishResult = await publishToMedium(
-        { title: article.title, content: article.content, keyword: article.keyword },
+        { title: article.title, content: article.content, images: [], keyword: article.keyword },
         { integrationToken: config.mediumToken, publishStatus: 'public' }
       );
       liveUrl = publishResult.url;

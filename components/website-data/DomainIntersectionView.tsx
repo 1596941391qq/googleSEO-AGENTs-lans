@@ -12,7 +12,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../contexts/AuthContext";
-import { getUserId } from "./utils";
+import { postWithAuth } from "../../lib/api-client";
 
 interface DomainIntersection {
   targetDomain: string;
@@ -53,7 +53,6 @@ export const DomainIntersectionView: React.FC<DomainIntersectionViewProps> = ({
   uiLanguage,
 }) => {
   const { user } = useAuth();
-  const currentUserId = getUserId(user);
   const [intersection, setIntersection] = useState<DomainIntersection | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,14 +69,9 @@ export const DomainIntersectionView: React.FC<DomainIntersectionViewProps> = ({
     setError(null);
 
     try {
-      const response = await fetch("/api/website-data/domain-intersection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          userId: currentUserId,
-          competitorDomain,
-        }),
+      const response = await postWithAuth("/api/website-data/domain-intersection", {
+        websiteId,
+        competitorDomain,
       });
 
       if (response.ok) {

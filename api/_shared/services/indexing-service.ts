@@ -21,12 +21,11 @@ export async function notifyGoogleIndexing(url: string, type: 'URL_UPDATED' | 'U
   }
 
   try {
-    const auth = new google.auth.JWT(
-      SERVICE_ACCOUNT.client_email,
-      undefined,
-      SERVICE_ACCOUNT.private_key,
-      SCOPES
-    );
+    const auth = new google.auth.JWT({
+      email: SERVICE_ACCOUNT.client_email,
+      key: SERVICE_ACCOUNT.private_key,
+      scopes: SCOPES,
+    });
 
     const indexing = google.indexing({ version: 'v3', auth });
     

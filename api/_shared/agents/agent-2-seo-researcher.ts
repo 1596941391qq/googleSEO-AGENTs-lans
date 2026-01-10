@@ -1136,8 +1136,9 @@ export const analyzeRankingProbability = async (
 
     const serpContext = serpResults.length > 0
       ? `\n\nTOP ${maxSerpResults} ${engineName} RESULTS for "${keywordData.keyword}":\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
+        if (!r) return `${i + 1}. [No data]`;
         const drInfo = (!isBlueOceanMode && competitorDRs[i] !== undefined) ? ` [DR:${competitorDRs[i]}]` : '';
-        return `${i + 1}. ${r.title} | ${r.url}${drInfo}`;
+        return `${i + 1}. ${r.title || '[No title]'} | ${r.url || '[No URL]'}${drInfo}`;
       }).join('\n')}${!isBlueOceanMode && siteDR !== undefined ? `\n\nYour DR: ${siteDR}` : ''}`
       : `\n\nNote: SERP data unavailable.`;
 
@@ -1353,7 +1354,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         }
 
         // Strategy 1: Try to find JSON object with "probability" field
-        if (!recovered) {
+        if (!recovered && response?.text) {
           const jsonMatch1 = response.text.match(/\{[\s\S]*?"probability"[\s\S]*?\}/);
           if (jsonMatch1) {
             try {
@@ -1367,7 +1368,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         }
 
         // Strategy 2: Try to find any JSON object that looks complete (使用清理后的文本)
-        if (!recovered) {
+        if (!recovered && response?.text) {
           // 先清理 Markdown，再查找 JSON
           let cleanedText = response.text;
           // 移除 Markdown 格式标记
@@ -1604,8 +1605,8 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         canOutrankPositions: outrankData.canOutrankPositions,
         top3Probability: outrankData.top3Probability,
         top10Probability: outrankData.top10Probability,
-        rawResponse: response.text,
-        searchResults: response.searchResults // 添加联网搜索结果
+        rawResponse: response?.text || '',
+        searchResults: response?.searchResults // 添加联网搜索结果
       };
 
     } catch (error) {
@@ -1759,7 +1760,7 @@ export const extractCoreKeywords = async (
   try {
     const response = await callGeminiAPI(prompt, undefined, {
     });
-    const text = response.text.trim();
+    const text = (response?.text || '').trim();
     const jsonMatch = text.match(/\[.*?\]/s);
     if (jsonMatch) {
       const keywords = JSON.parse(jsonMatch[0]);

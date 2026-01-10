@@ -12,10 +12,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 interface CleanCacheRequestBody {
   websiteId: string;
-  userId?: number;
+  userId?: string | number; // 向后兼容，但优先使用 JWT 认证
 }
 
 // 清理关键词函数（与 dataforseo-domain.ts 中的逻辑一致）
@@ -52,15 +53,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验 - 使用 JWT token 认证
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId;
+
     const body = req.body as CleanCacheRequestBody;
 
     if (!body.websiteId) {
       return res.status(400).json({ error: 'websiteId is required' });
-    }
-
-    let userId = body.userId;
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized: userId is required' });
     }
 
     await initWebsiteDataTables();
@@ -74,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(404).json({ error: 'Website not found' });
     }
 
-    if (websiteResult.rows[0].user_id !== userId) {
+    if (String(websiteResult.rows[0].user_id) !== String(userId)) {
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 

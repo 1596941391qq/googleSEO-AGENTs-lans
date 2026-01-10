@@ -9,11 +9,12 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql, raw } from '../lib/database.js';
-import { authenticateRequest } from '../_shared/auth.js';
 import { getDomainKeywords } from '../_shared/tools/dataforseo-domain.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 interface KeywordsOnlyRequestBody {
   websiteId: string;
+  userId?: string | number; // 向后兼容，但优先使用 JWT 认证
   limit?: number;
   region?: string;
   sortBy?: 'searchVolume' | 'difficulty' | 'cpc' | 'position'; // 排序字段
@@ -39,12 +40,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // 权限校验
+    // 权限校验 - 使用 JWT token 认证
     const authResult = await authenticateRequest(req);
     if (!authResult) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const userId = authResult.userId;
+    const userId = authResult.userId; // userId 现在是归一化后的 UUID
 
     const body = req.body as KeywordsOnlyRequestBody;
 
@@ -71,13 +72,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const website = websiteResult.rows[0];
 
-    // 验证权限
+    // 验证权限 - 使用字符串比较以确保兼容性
     if (String(website.user_id) !== String(userId)) {
-      console.warn('[keywords-only] Permission denied:', {
-        websiteUserId: website.user_id,
-        authUserId: userId,
-        websiteId: body.websiteId,
-      });
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 
@@ -169,7 +165,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return [];
         })
         .catch((error) => {
-          console.error('[keywords-only] ❌ API call failed:', error.message);
+          const errorMessage = error?.message || error?.toString?.() || 'Unknown error';
+          console.error('[keywords-only] ❌ API call failed:', errorMessage);
           return [];
         });
 
@@ -344,7 +341,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch keywords',
-      details: error.message
+      details: error?.message || error?.toString?.() || 'Unknown error'
     });
   }
 }

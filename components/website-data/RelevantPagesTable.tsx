@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../contexts/AuthContext";
-import { getUserId } from "./utils";
+import { postWithAuth } from "../../lib/api-client";
 
 interface RelevantPage {
   url: string;
@@ -91,15 +91,10 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
     setError(null);
 
     try {
-      const response = await fetch("/api/website-data/relevant-pages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          userId: getUserId(user),
-          limit,
-          region,
-        }),
+      const response = await postWithAuth("/api/website-data/relevant-pages", {
+        websiteId,
+        limit,
+        region,
       });
 
       if (response.ok) {

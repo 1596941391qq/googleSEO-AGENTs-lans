@@ -1051,317 +1051,338 @@ const renderAgentDataTable = (
 
     return (
       <div className="space-y-3 mt-2">
-        {items.map((data, idx) => (
-          <div key={idx} className="space-y-3">
-            {/* Analysis Result Cards */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {items.map((data, idx) => {
+          // 蓝海模式判断：没有用户网站时为蓝海模式，隐藏 KD 和 DR
+          const isBlueOceanMode = data.websiteDR === undefined;
+
+          return (
+            <div key={idx} className="space-y-3">
+              {/* Analysis Result Cards - 蓝海模式显示3列，存量模式显示4列 */}
               <div
-                className={`p-3 rounded-lg border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30"
-                    : "bg-gray-50 border-gray-200"
-                }`}
+                className={`grid grid-cols-2 ${
+                  isBlueOceanMode ? "md:grid-cols-3" : "md:grid-cols-4"
+                } gap-2`}
               >
                 <div
-                  className={`text-[10px] font-bold mb-1 ${
-                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                  className={`p-3 rounded-lg border ${
+                    isDarkTheme
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-gray-50 border-gray-200"
                   }`}
                 >
-                  PROBABILITY
+                  <div
+                    className={`text-[10px] font-bold mb-1 ${
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                    }`}
+                  >
+                    PROBABILITY
+                  </div>
+                  <div
+                    className={`text-lg font-bold ${
+                      data.probability === "High"
+                        ? isDarkTheme
+                          ? "text-emerald-400"
+                          : "text-emerald-600"
+                        : data.probability === "Medium"
+                        ? isDarkTheme
+                          ? "text-yellow-400"
+                          : "text-yellow-600"
+                        : isDarkTheme
+                        ? "text-red-400"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {data.probability || "N/A"}
+                  </div>
                 </div>
-                <div
-                  className={`text-lg font-bold ${
-                    data.probability === "High"
-                      ? isDarkTheme
-                        ? "text-emerald-400"
-                        : "text-emerald-600"
-                      : data.probability === "Medium"
-                      ? isDarkTheme
-                        ? "text-yellow-400"
-                        : "text-yellow-600"
-                      : isDarkTheme
-                      ? "text-red-400"
-                      : "text-red-600"
-                  }`}
-                >
-                  {data.probability || "N/A"}
-                </div>
-              </div>
 
-              {/* KD Card */}
-              <div
-                className={`p-3 rounded-lg border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30"
-                    : "bg-gray-50 border-gray-200"
-                }`}
-              >
-                <div
-                  className={`text-[10px] font-bold mb-1 ${
-                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                  }`}
-                >
-                  {uiLanguage === "zh" ? "关键词难度" : "KEYWORD DIFFICULTY"}
-                </div>
-                <div
-                  className={`text-lg font-bold ${
-                    (data.serankingData?.difficulty || 0) <= 40
-                      ? isDarkTheme
-                        ? "text-emerald-400"
-                        : "text-emerald-600"
-                      : (data.serankingData?.difficulty || 0) <= 60
-                      ? isDarkTheme
-                        ? "text-yellow-400"
-                        : "text-yellow-600"
-                      : isDarkTheme
-                      ? "text-red-400"
-                      : "text-red-600"
-                  }`}
-                >
-                  {data.serankingData?.difficulty !== undefined
-                    ? data.serankingData.difficulty
-                    : data.dataForSEOData?.difficulty !== undefined
-                    ? data.dataForSEOData.difficulty
-                    : "N/A"}
-                </div>
-              </div>
-
-              {/* CPC Card */}
-              <div
-                className={`p-3 rounded-lg border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30"
-                    : "bg-gray-50 border-gray-200"
-                }`}
-              >
-                <div
-                  className={`text-[10px] font-bold mb-1 ${
-                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                  }`}
-                >
-                  CPC
-                </div>
-                <div
-                  className={`text-lg font-bold ${
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  }`}
-                >
-                  $
-                  {data.serankingData?.cpc !== undefined
-                    ? data.serankingData.cpc.toFixed(2)
-                    : data.dataForSEOData?.cpc !== undefined
-                    ? data.dataForSEOData.cpc.toFixed(2)
-                    : "N/A"}
-                </div>
-              </div>
-
-              {/* Volume Card */}
-              <div
-                className={`p-3 rounded-lg border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30"
-                    : "bg-gray-50 border-gray-200"
-                }`}
-              >
-                <div
-                  className={`text-[10px] font-bold mb-1 ${
-                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                  }`}
-                >
-                  {uiLanguage === "zh" ? "搜索量" : "SEARCH VOLUME"}
-                </div>
-                <div
-                  className={`text-lg font-bold ${
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  }`}
-                >
-                  {data.serankingData?.volume !== undefined
-                    ? data.serankingData.volume.toLocaleString()
-                    : data.dataForSEOData?.volume !== undefined
-                    ? data.dataForSEOData.volume.toLocaleString()
-                    : data.volume !== undefined
-                    ? data.volume.toLocaleString()
-                    : "N/A"}
-                </div>
-              </div>
-
-              <div
-                className={`p-3 rounded-lg border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30"
-                    : "bg-gray-50 border-gray-200"
-                }`}
-              >
-                <div
-                  className={`text-[10px] font-bold mb-1 ${
-                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                  }`}
-                >
-                  DOMAIN TYPE
-                </div>
-                <div
-                  className={`text-sm ${
-                    isDarkTheme ? "text-white" : "text-gray-800"
-                  }`}
-                >
-                  {data.topDomainType || "Unknown"}
-                </div>
-              </div>
-
-              {/* DR Comparison Card */}
-              <div
-                className={`p-3 rounded-lg border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30"
-                    : "bg-gray-50 border-gray-200"
-                }`}
-              >
-                <div
-                  className={`text-[10px] font-bold mb-1 ${
-                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                  }`}
-                >
-                  DR (YOU vs AVG)
-                </div>
-                <div
-                  className={`text-lg font-bold ${
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  }`}
-                >
-                  {data.websiteDR !== undefined
-                    ? Math.round(data.websiteDR)
-                    : "-"}
-                  <span className="text-[10px] font-normal text-white/40 mx-1">
-                    vs
-                  </span>
-                  {data.competitorDRs && data.competitorDRs.length > 0
-                    ? Math.round(
-                        data.competitorDRs.reduce(
-                          (a: number, b: number) => a + b,
-                          0
-                        ) / data.competitorDRs.length
-                      )
-                    : "-"}
-                </div>
-              </div>
-            </div>
-
-            {/* SERP Results */}
-            {data.topSerpSnippets && data.topSerpSnippets.length > 0 && (
-              <div
-                className={`p-3 rounded-lg border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30"
-                    : "bg-white border-gray-200"
-                }`}
-              >
-                <div
-                  className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
-                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                  }`}
-                >
-                  🔍 TOP GOOGLE RESULTS ({data.serpResultCount || "N/A"} total)
-                </div>
-                <div className="space-y-2">
-                  {data.topSerpSnippets.map((snippet: any, i: number) => (
-                    <div
-                      key={i}
-                      className={`p-2 rounded border ${
-                        isDarkTheme
-                          ? "bg-black border-emerald-500/20"
-                          : "bg-gray-50 border-gray-200"
-                      }`}
-                    >
-                      <div
-                        className={`text-xs font-medium mb-1 ${
-                          isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                        }`}
-                      >
-                        {snippet.title}
-                      </div>
-                      <div
-                        className={`text-[10px] mb-1 ${
-                          isDarkTheme ? "text-emerald-500/70" : "text-gray-500"
-                        }`}
-                      >
-                        {snippet.url}
-                      </div>
-                      <div
-                        className={`text-xs line-clamp-2 ${
-                          isDarkTheme ? "text-white/90" : "text-gray-600"
-                        }`}
-                      >
-                        {snippet.snippet}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Reasoning */}
-            {data.reasoning &&
-              (() => {
-                // 过滤掉错误信息
-                const hasErrorKeywords = (text: string): boolean => {
-                  const errorKeywords = [
-                    "无法确定",
-                    "Unable to determine",
-                    "分析失败",
-                    "Analysis failed",
-                    "AI响应被截断",
-                    "AI response was truncated",
-                    "原始错误",
-                    "Original error",
-                    "不完整的JSON",
-                    "incomplete JSON",
-                    "无效的JSON",
-                    "invalid JSON",
-                    "解析失败",
-                    "Failed to parse",
-                    "Unterminated string",
-                    "响应预览",
-                    "Response preview",
-                  ];
-                  return errorKeywords.some((keyword) =>
-                    text.includes(keyword)
-                  );
-                };
-
-                const isValidReasoning = !hasErrorKeywords(data.reasoning);
-                const displayReasoning = isValidReasoning
-                  ? data.reasoning
-                  : uiLanguage === "zh"
-                  ? "分析结果正在生成中，请稍候..."
-                  : "Analysis results are being generated, please wait...";
-
-                return (
+                {/* KD Card - 蓝海模式下隐藏 */}
+                {!isBlueOceanMode && (
                   <div
                     className={`p-3 rounded-lg border ${
                       isDarkTheme
-                        ? "bg-black border-emerald-500/20"
-                        : "bg-white border-gray-200"
+                        ? "bg-black border-emerald-500/30"
+                        : "bg-gray-50 border-gray-200"
                     }`}
                   >
                     <div
-                      className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
-                        isDarkTheme ? "text-white/70" : "text-gray-600"
+                      className={`text-[10px] font-bold mb-1 ${
+                        isDarkTheme ? "text-emerald-400" : "text-emerald-700"
                       }`}
                     >
-                      ANALYSIS REASONING
+                      {uiLanguage === "zh"
+                        ? "关键词难度"
+                        : "KEYWORD DIFFICULTY"}
                     </div>
                     <div
-                      className={`text-xs leading-relaxed ${
-                        isDarkTheme ? "text-white" : "text-gray-700"
+                      className={`text-lg font-bold ${
+                        (data.serankingData?.difficulty || 0) <= 40
+                          ? isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                          : (data.serankingData?.difficulty || 0) <= 60
+                          ? isDarkTheme
+                            ? "text-yellow-400"
+                            : "text-yellow-600"
+                          : isDarkTheme
+                          ? "text-red-400"
+                          : "text-red-600"
                       }`}
                     >
-                      {displayReasoning}
+                      {data.serankingData?.difficulty !== undefined
+                        ? data.serankingData.difficulty
+                        : data.dataForSEOData?.difficulty !== undefined
+                        ? data.dataForSEOData.difficulty
+                        : "N/A"}
                     </div>
                   </div>
-                );
-              })()}
-          </div>
-        ))}
+                )}
+
+                {/* CPC Card */}
+                <div
+                  className={`p-3 rounded-lg border ${
+                    isDarkTheme
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-gray-50 border-gray-200"
+                  }`}
+                >
+                  <div
+                    className={`text-[10px] font-bold mb-1 ${
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                    }`}
+                  >
+                    CPC
+                  </div>
+                  <div
+                    className={`text-lg font-bold ${
+                      isDarkTheme ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    $
+                    {data.serankingData?.cpc !== undefined
+                      ? data.serankingData.cpc.toFixed(2)
+                      : data.dataForSEOData?.cpc !== undefined
+                      ? data.dataForSEOData.cpc.toFixed(2)
+                      : "N/A"}
+                  </div>
+                </div>
+
+                {/* Volume Card */}
+                <div
+                  className={`p-3 rounded-lg border ${
+                    isDarkTheme
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-gray-50 border-gray-200"
+                  }`}
+                >
+                  <div
+                    className={`text-[10px] font-bold mb-1 ${
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                    }`}
+                  >
+                    {uiLanguage === "zh" ? "搜索量" : "SEARCH VOLUME"}
+                  </div>
+                  <div
+                    className={`text-lg font-bold ${
+                      isDarkTheme ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    {data.serankingData?.volume !== undefined
+                      ? data.serankingData.volume.toLocaleString()
+                      : data.dataForSEOData?.volume !== undefined
+                      ? data.dataForSEOData.volume.toLocaleString()
+                      : data.volume !== undefined
+                      ? data.volume.toLocaleString()
+                      : "N/A"}
+                  </div>
+                </div>
+
+                <div
+                  className={`p-3 rounded-lg border ${
+                    isDarkTheme
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-gray-50 border-gray-200"
+                  }`}
+                >
+                  <div
+                    className={`text-[10px] font-bold mb-1 ${
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                    }`}
+                  >
+                    DOMAIN TYPE
+                  </div>
+                  <div
+                    className={`text-sm ${
+                      isDarkTheme ? "text-white" : "text-gray-800"
+                    }`}
+                  >
+                    {data.topDomainType || "Unknown"}
+                  </div>
+                </div>
+
+                {/* DR Comparison Card */}
+                <div
+                  className={`p-3 rounded-lg border ${
+                    isDarkTheme
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-gray-50 border-gray-200"
+                  }`}
+                >
+                  <div
+                    className={`text-[10px] font-bold mb-1 ${
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                    }`}
+                  >
+                    DR (YOU vs AVG)
+                  </div>
+                  <div
+                    className={`text-lg font-bold ${
+                      isDarkTheme ? "text-white" : "text-gray-900"
+                    }`}
+                  >
+                    {data.websiteDR !== undefined
+                      ? Math.round(data.websiteDR)
+                      : "-"}
+                    <span className="text-[10px] font-normal text-white/40 mx-1">
+                      vs
+                    </span>
+                    {data.competitorDRs &&
+                    data.competitorDRs.length > 0 &&
+                    data.competitorDRs.some((dr: number) => dr > 0)
+                      ? Math.round(
+                          data.competitorDRs
+                            .filter((dr: number) => dr > 0)
+                            .reduce((a: number, b: number) => a + b, 0) /
+                            data.competitorDRs.filter((dr: number) => dr > 0)
+                              .length
+                        )
+                      : "-"}
+                  </div>
+                </div>
+              </div>
+
+              {/* SERP Results */}
+              {data.topSerpSnippets && data.topSerpSnippets.length > 0 && (
+                <div
+                  className={`p-3 rounded-lg border ${
+                    isDarkTheme
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-white border-gray-200"
+                  }`}
+                >
+                  <div
+                    className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                    }`}
+                  >
+                    🔍 TOP GOOGLE RESULTS ({data.serpResultCount || "N/A"}{" "}
+                    total)
+                  </div>
+                  <div className="space-y-2">
+                    {data.topSerpSnippets.map((snippet: any, i: number) => (
+                      <div
+                        key={i}
+                        className={`p-2 rounded border ${
+                          isDarkTheme
+                            ? "bg-black border-emerald-500/20"
+                            : "bg-gray-50 border-gray-200"
+                        }`}
+                      >
+                        <div
+                          className={`text-xs font-medium mb-1 ${
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-700"
+                          }`}
+                        >
+                          {snippet.title}
+                        </div>
+                        <div
+                          className={`text-[10px] mb-1 ${
+                            isDarkTheme
+                              ? "text-emerald-500/70"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          {snippet.url}
+                        </div>
+                        <div
+                          className={`text-xs line-clamp-2 ${
+                            isDarkTheme ? "text-white/90" : "text-gray-600"
+                          }`}
+                        >
+                          {snippet.snippet}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Reasoning */}
+              {data.reasoning &&
+                (() => {
+                  // 过滤掉错误信息
+                  const hasErrorKeywords = (text: string): boolean => {
+                    const errorKeywords = [
+                      "无法确定",
+                      "Unable to determine",
+                      "分析失败",
+                      "Analysis failed",
+                      "AI响应被截断",
+                      "AI response was truncated",
+                      "原始错误",
+                      "Original error",
+                      "不完整的JSON",
+                      "incomplete JSON",
+                      "无效的JSON",
+                      "invalid JSON",
+                      "解析失败",
+                      "Failed to parse",
+                      "Unterminated string",
+                      "响应预览",
+                      "Response preview",
+                    ];
+                    return errorKeywords.some((keyword) =>
+                      text.includes(keyword)
+                    );
+                  };
+
+                  const isValidReasoning = !hasErrorKeywords(data.reasoning);
+                  const displayReasoning = isValidReasoning
+                    ? data.reasoning
+                    : uiLanguage === "zh"
+                    ? "分析结果正在生成中，请稍候..."
+                    : "Analysis results are being generated, please wait...";
+
+                  return (
+                    <div
+                      className={`p-3 rounded-lg border ${
+                        isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                      }`}
+                    >
+                      <div
+                        className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
+                          isDarkTheme ? "text-white/70" : "text-gray-600"
+                        }`}
+                      >
+                        ANALYSIS REASONING
+                      </div>
+                      <div
+                        className={`text-xs leading-relaxed ${
+                          isDarkTheme ? "text-white" : "text-gray-700"
+                        }`}
+                      >
+                        {displayReasoning}
+                      </div>
+                    </div>
+                  );
+                })()}
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -4752,19 +4773,32 @@ export default function App() {
     if (authenticated) {
       saveNewTaskToBackend(newTask).then((backendId) => {
         if (backendId) {
-          setState((prev) => ({
-            ...prev,
-            taskManager: {
-              ...prev.taskManager,
-              tasks: prev.taskManager.tasks.map((t) =>
-                t.id === newTask.id ? { ...t, id: backendId } : t
-              ),
-              activeTaskId:
-                prev.taskManager.activeTaskId === newTask.id
-                  ? backendId
-                  : prev.taskManager.activeTaskId,
-            },
-          }));
+          setState((prev) => {
+            // 更新任务 ID 后，获取最新的任务状态用于同步
+            const taskToSync = prev.taskManager.tasks.find(
+              (t) => t.id === newTask.id
+            );
+            const updatedTask = taskToSync
+              ? { ...taskToSync, id: backendId }
+              : { ...newTask, id: backendId };
+
+            // 立即同步完整任务状态到后端
+            syncTaskToBackend(updatedTask);
+
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: prev.taskManager.tasks.map((t) =>
+                  t.id === newTask.id ? { ...t, id: backendId } : t
+                ),
+                activeTaskId:
+                  prev.taskManager.activeTaskId === newTask.id
+                    ? backendId
+                    : prev.taskManager.activeTaskId,
+              },
+            };
+          });
         }
       });
     }
@@ -5160,6 +5194,9 @@ export default function App() {
     }
   };
 
+  // Counter for generating unique thought IDs
+  const thoughtIdCounter = useRef(0);
+
   const addThought = (
     type: AgentThought["type"],
     content: string,
@@ -5170,8 +5207,12 @@ export default function App() {
       // If no taskId provided, use current active task (backward compatibility)
       const targetTaskId = taskId || prev.taskManager.activeTaskId;
 
+      // Generate unique ID using timestamp + counter + random suffix to avoid duplicates
+      thoughtIdCounter.current += 1;
       const thoughtEntry = {
-        id: `t-${Date.now()}`,
+        id: `t-${Date.now()}-${thoughtIdCounter.current}-${Math.random()
+          .toString(36)
+          .substr(2, 5)}`,
         round: prev.miningRound,
         type,
         content,
@@ -8667,6 +8708,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               );
             } catch (e) {
               console.error("Failed to save tasks", e);
+            }
+
+            // 同步当前任务状态到后端（确保任务看板能获取最新状态）
+            if (currentActiveTaskId && authenticated) {
+              const taskToSync = updatedTasks.find(
+                (t) => t.id === currentActiveTaskId
+              );
+              if (taskToSync && !taskToSync.id.startsWith("task-")) {
+                syncTaskToBackend(taskToSync);
+              }
             }
 
             return {

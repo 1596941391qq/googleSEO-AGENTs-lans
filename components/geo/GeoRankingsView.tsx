@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserId } from '../website-data/utils';
+import { postWithAuth } from '../../lib/api-client';
 
 interface GeoRanking {
   id: string;
@@ -57,7 +57,6 @@ export const GeoRankingsView: React.FC<GeoRankingsViewProps> = ({
   uiLanguage,
 }) => {
   const { user } = useAuth();
-  const currentUserId = getUserId(user);
   const [data, setData] = useState<GeoRankingsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,15 +72,10 @@ export const GeoRankingsView: React.FC<GeoRankingsViewProps> = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/geo/rankings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          websiteId,
-          keywordId,
-          countryCode: selectedCountry,
-          userId: currentUserId,
-        }),
+      const response = await postWithAuth('/api/geo/rankings', {
+        websiteId,
+        keywordId,
+        countryCode: selectedCountry,
       });
 
       if (response.ok) {

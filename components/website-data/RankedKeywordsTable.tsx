@@ -11,7 +11,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../contexts/AuthContext";
-import { getUserId } from "./utils";
+import { postWithAuth } from "../../lib/api-client";
 
 interface RankedKeyword {
   keyword: string;
@@ -49,7 +49,6 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
   region = "us",
 }) => {
   const { user } = useAuth();
-  const currentUserId = getUserId(user);
   const [keywords, setKeywords] = useState<RankedKeyword[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,17 +103,12 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
     setError(null);
 
     try {
-      const response = await fetch("/api/website-data/ranked-keywords", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          userId: currentUserId,
-          limit,
-          sortBy,
-          sortOrder,
-          region,
-        }),
+      const response = await postWithAuth("/api/website-data/ranked-keywords", {
+        websiteId,
+        limit,
+        sortBy,
+        sortOrder,
+        region,
       });
 
       if (response.ok) {

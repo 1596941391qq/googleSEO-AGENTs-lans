@@ -4,6 +4,8 @@ import { TargetLanguage } from "./types.js";
 const PROXY_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
 const API_KEY = process.env.GEMINI_API_KEY || 'sk-BMlZyFmI7p2DVrv53P0WOiigC4H6fcgYTevils2nXkW0Wv9s';
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+// Fallback model to use when primary model fails (faster, more reliable)
+const FALLBACK_MODEL = 'gemini-2.5-flash';
 
 interface GeminiConfig {
   model?: string;
@@ -36,10 +38,12 @@ interface GeminiConfig {
 
 /**
  * Call Gemini API with automatic retries for network errors
+ * Includes fallback to gemini-2.5-flash when primary model fails
  */
 export async function callGeminiAPI(prompt: string, systemInstruction?: string, config?: GeminiConfig) {
   const maxRetries = 3;
   let lastError: any;
+  const currentModel = config?.model || MODEL;
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
@@ -82,6 +86,20 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
       throw error;
     }
   }
+
+  // After all retries failed, try fallback model if different from current model
+  if (currentModel !== FALLBACK_MODEL) {
+    console.warn(`[Gemini API] All retries failed with model ${currentModel}. Falling back to ${FALLBACK_MODEL}...`);
+    try {
+      const fallbackConfig = { ...config, model: FALLBACK_MODEL };
+      return await _callGeminiInternal(prompt, systemInstruction, fallbackConfig);
+    } catch (fallbackError: any) {
+      console.error(`[Gemini API] Fallback model ${FALLBACK_MODEL} also failed:`, fallbackError.message);
+      // Throw the original error as it's more informative
+      throw lastError;
+    }
+  }
+
   throw lastError;
 }
 

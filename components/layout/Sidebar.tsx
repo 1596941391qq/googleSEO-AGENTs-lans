@@ -157,7 +157,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ? {
           myWebsite: "我的网站",
           websiteData: "网站数据",
-          projects: "内容项目",
+          projects: "任务看板",
           publish: "发布",
           visualArticle: "AI 图文工场",
           activeTasks: "进行中的任务",

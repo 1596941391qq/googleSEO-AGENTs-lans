@@ -812,6 +812,7 @@ export async function getDomainKeywords(
       }
 
       const data = await response.json();
+      console.log('[DataForSEO Domain] Response structure:', {
         hasTasks: !!data.tasks,
         tasksCount: data.tasks?.length || 0,
         hasResult: !!data.tasks?.[0]?.result,

@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
 import { cn } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
-import { getUserId } from '../website-data/utils';
+import { postWithAuth } from '../../lib/api-client';
 
 interface GeoOpportunity {
   id: string;
@@ -68,7 +68,6 @@ export const GeoOpportunitiesView: React.FC<GeoOpportunitiesViewProps> = ({
   uiLanguage,
 }) => {
   const { user } = useAuth();
-  const currentUserId = getUserId(user);
   const [data, setData] = useState<GeoOpportunitiesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,17 +82,12 @@ export const GeoOpportunitiesView: React.FC<GeoOpportunitiesViewProps> = ({
     setError(null);
 
     try {
-      const response = await fetch('/api/geo/opportunities', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          websiteId,
-          targetCountry,
-          minPositionGap,
-          status: filterStatus,
-          limit: 100,
-          userId: currentUserId,
-        }),
+      const response = await postWithAuth('/api/geo/opportunities', {
+        websiteId,
+        targetCountry,
+        minPositionGap,
+        status: filterStatus,
+        limit: 100,
       });
 
       if (response.ok) {

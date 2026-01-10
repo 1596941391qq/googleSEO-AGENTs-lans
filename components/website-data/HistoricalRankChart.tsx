@@ -6,7 +6,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../contexts/AuthContext";
-import { getUserId } from "./utils";
+import { postWithAuth } from "../../lib/api-client";
 
 interface HistoricalRankOverview {
   date: string;
@@ -33,7 +33,6 @@ export const HistoricalRankChart: React.FC<HistoricalRankChartProps> = ({
   days = 30,
 }) => {
   const { user } = useAuth();
-  const currentUserId = getUserId(user);
   const [history, setHistory] = useState<HistoricalRankOverview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,14 +49,9 @@ export const HistoricalRankChart: React.FC<HistoricalRankChartProps> = ({
     setError(null);
 
     try {
-      const response = await fetch("/api/website-data/historical-rank", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          websiteId,
-          userId: currentUserId,
-          days: selectedDays,
-        }),
+      const response = await postWithAuth("/api/website-data/historical-rank", {
+        websiteId,
+        days: selectedDays,
       });
 
       if (response.ok) {
