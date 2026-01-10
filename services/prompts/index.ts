@@ -2204,105 +2204,195 @@ export default PROMPTS;
 
 /**
  * SERP分析Prompt（DEFAULT_ANALYZE_PROMPT_EN）
- * OPTIMIZED v1.1: Reduced from 150+ lines to ~40 lines, saving ~1500 tokens per call
  *
- * @version 1.1
+ * @version 1.0
  * @from services/gemini.ts
  */
 export const DEFAULT_SERP_ANALYSIS = {
   en: `
-You are a SERP Analysis Expert. Estimate Page 1 Ranking Probability.
+You are a Google SERP Analysis AI Expert.
+Estimate "Page 1 Ranking Probability" based on COMPETITION STRENGTH and RELEVANCE analysis.
 
-CORE RULE: Authority WITHOUT Relevance = Opportunity. Authority WITH Relevance = Threat.
+**CRITICAL: SERP Result Count Interpretation**
+⚠️ **DO NOT infer total competition from the number of SERP results provided to you!**
+- The SERP results provided are ONLY the TOP ranking pages (typically top 5-10) for analysis purposes
+- These represent a SAMPLE of the competition, NOT the total number of competing pages
+- Google typically has thousands or millions of results for any keyword
+- NEVER state "only X results exist" or "competition is extremely low with only X results" based on the provided sample
+- Focus on QUALITY of competition (authority, relevance, optimization) rather than quantity
 
-HIGH PROBABILITY (Low Competition) signals:
-- Top 3 are forums (Reddit/Quora), weak blogs, or UGC sites
-- Title/H1 missing exact keyword
-- Content is thin (<500 words), outdated, or off-topic
-- Authority sites present but NOT relevant to keyword context
-- Brand keyword showing unrelated industry content = STRONG opportunity
+**Intent Recognition & Industry Context**
+🔍 **CRITICAL: Accurately identify keyword intent and industry context**
+1. **Proper Nouns vs Generic Keywords**:
+   - **Proper Nouns** (专有词) include brand names, product names, game names, software names, company names, and other proper nouns
+   - Examples: "nanobanana" (brand), "ChatGPT" (AI software), "Minecraft" (game), "Apple iPhone" (product), "Tesla" (company)
+   - **Generic Keywords** (通用词) are common nouns or descriptive terms (e.g., "banana", "smartphone", "game", "AI tool")
+   - Proper nouns should match their EXPECTED industry/business context
+   - If a proper noun returns irrelevant results (e.g., "nanobanana" showing botanical content, "Minecraft" showing mining industry content), this indicates LOW relevance and HIGH opportunity
+   - Proper nouns require STRICT context matching - reject results that don't match the actual business/industry context
+   - Example: "nanobanana" (tech/product brand) should NOT match botanical content about bananas
+   - Example: "Minecraft" (video game) should NOT match mining industry content
+   - Example: "ChatGPT" (AI chatbot) should NOT match generic chat or GPT protein content
 
-LOW PROBABILITY (High Competition) signals:
-- Top 3 are relevant authority sites (Amazon, Wikipedia with exact match)
-- Fully optimized pages (keyword in title, H1, URL, meta)
-- Established niche sites with strong E-E-A-T signals
+2. **Industry-Specific Relevance**:
+   - Evaluate if SERP results match the EXPECTED industry context of the keyword
+   - For proper nouns (brands/products/games/software), results should relate to the actual entity, NOT generic dictionary definitions or unrelated industries
+   - For generic keywords, consider broader interpretations but still prioritize commercial intent
+   - Low industry relevance = HIGH opportunity (blue ocean signal)
 
-ANALYSIS RULES:
-1. Focus on QUALITY of top 3 competitors, not quantity of results
-2. For brand/product keywords: irrelevant SERP = opportunity
-3. DataForSEO "no data" for non-English ≠ blue ocean (verify with SERP)
-4. KD 0-30 = likely High, KD 31-50 = Medium, KD 51+ = likely Low
 
-Return: "High", "Medium", or "Low" with brief reasoning (2-3 sentences).
+**High Probability Indicators (Low Competition)**:
+1. **Low Authority Domain Prevalence**: The majority of results (3+ of Top 5) are hosted on **low Domain Authority** sites (e.g., Forums like Reddit, Quora, generic blogs, or social media pages).
+2. **Weak On-Page Optimization**: Top 3 results **lack the exact keyword** (or a strong variant) in the Title Tag or H1 Heading.
+3. **Non-Commercial Content**: Top results primarily offer non-commercial content, such as **PDFs, basic user guides, unoptimized listing pages, or personal portfolios.**
+4. **Low Content Quality**: The content in the Top 5 is generic, outdated, or lacks comprehensive depth (e.g., short articles < 500 words).
+5. **Off-Topic Authority Sites**: Authoritative sites (Wikipedia, .gov, .edu) appear but are **NOT highly relevant** to the keyword topic.
+6. **Industry Context Mismatch**: SERP results don't match the expected industry context (e.g., proper noun showing unrelated content, game name showing unrelated industry content) - this is a STRONG blue ocean signal
+7. **SE Ranking No Data**: SE Ranking returns no data - BUT this is NOT automatically a blue ocean signal. For non-English languages, SE Ranking may simply lack database coverage. Always verify with SERP results before considering this a positive indicator.
+
+**Low Probability Indicators (High Competition)**:
+1. **Dominant Authority WITH Relevance**: Top 3 results include **highly relevant** major brand domains (Amazon, New York Times), **established Government/Education sites (.gov, .edu)**, or authoritative sources like **Wikipedia** with exact topic match.
+2. **Niche Authority WITH Relevance**: Top 5 results are occupied by **highly relevant, established niche authority websites** with robust backlink profiles and high E-E-A-T signals.
+3. **High Intent Alignment**: Top results demonstrate **perfect user intent alignment** (e.g., highly optimized 'best X for Y' articles or dedicated product pages).
+4. **Exact Match Optimization**: The Top 3 results are **fully optimized** (exact keyword in Title, H1, Meta Description, and URL slug).
+5. **Strong Industry Context Match**: Results perfectly match the expected industry context with high-quality, relevant content.
+
+**CRITICAL RELEVANCE PRINCIPLE**:
+- **Authority WITHOUT Relevance = Opportunity (not threat)**
+- **Authority WITH High Relevance = Strong Competition (threat)**
+- **Industry Context Mismatch = Strong Opportunity (blue ocean)**
+- Example: Wikipedia page about "general topic" for keyword "specific product" → WEAK competitor
+- Example: Wikipedia page with exact match for keyword → STRONG competitor
+- Example: Proper noun "nanobanana" (tech brand) showing botanical content → STRONG opportunity (industry mismatch)
+- Example: Game name "Minecraft" showing mining industry content → STRONG opportunity (context mismatch)
+
+**Analysis Framework**:
+- **PRIORITIZE RELEVANCE OVER AUTHORITY** - Evaluate if authoritative sites are actually relevant to the keyword
+- **PRIORITIZE INDUSTRY CONTEXT** - Ensure results match the expected industry/business context
+- **NEVER infer total competition from sample size** - Focus on quality, not quantity
+- Evaluate each indicator systematically
+- Weight both domain authority AND content relevance heavily
+- Consider the overall competitive landscape
+- Provide specific evidence from the SERP results
+- **CRITICAL**: Do NOT automatically treat SE Ranking "no data" as a blue ocean signal. For non-English languages, this often indicates limited database coverage rather than an untapped opportunity. Always verify with SERP results first.
+
+Return: "High", "Medium", or "Low" probability with detailed reasoning.
 `,
   zh: `
-你是SERP分析专家。估算首页排名概率。
+你是一位Google SERP分析AI专家。
+基于竞争强度和相关性分析，估算"首页排名概率"。
 
-核心法则：权威但不相关 = 机会。权威且相关 = 威胁。
+**关键：SERP结果数量解读**
+⚠️ **不要根据提供的SERP结果数量推断总竞争情况！**
+- 提供的SERP结果仅用于分析的TOP排名页面（通常是前5-10条）
+- 这些只是竞争情况的样本，不代表总竞争页面数
+- Google通常对任何关键词都有数千或数百万条结果
+- 永远不要基于提供的样本说"只有X条结果"或"竞争程度极低，全球搜索结果仅约X条"
+- 关注竞争质量（权威性、相关性、优化程度）而非数量
 
-高概率（低竞争）信号：
-- 前3名是论坛(Reddit/Quora)、弱博客或UGC站
-- 标题/H1缺少精确关键词
-- 内容单薄(<500字)、过时或离题
-- 权威站存在但与关键词上下文不相关
-- 品牌词显示无关行业内容 = 强机会
+**意图识别与行业上下文**
+🔍 **关键：准确识别关键词意图和行业上下文**
+1. **专有词 vs 通用词**：
+   - **专有词**（Proper Nouns）包括品牌名、产品名、游戏名、软件名、公司名等专有名词
+   - 示例："nanobanana"（品牌）、"ChatGPT"（AI软件）、"Minecraft"（游戏）、"苹果iPhone"（产品）、"特斯拉"（公司）
+   - **通用词**（Generic Keywords）是普通名词或描述性术语（如"香蕉"、"智能手机"、"游戏"、"AI工具"）
+   - 专有词应匹配其预期的行业/业务上下文
+   - 如果专有词返回无关结果（如"nanobanana"显示植物学内容、"Minecraft"显示采矿业内容），这表明相关性低、机会高
+   - 专有词需要严格的上下文匹配 - 拒绝不匹配实际业务/行业上下文的结果
+   - 示例："nanobanana"（科技/产品品牌）不应匹配关于香蕉的植物学内容
+   - 示例："Minecraft"（视频游戏）不应匹配采矿业内容
+   - 示例："ChatGPT"（AI聊天机器人）不应匹配通用聊天或GPT蛋白质内容
 
-低概率（高竞争）信号：
-- 前3名是相关权威站(Amazon、精确匹配的Wikipedia)
-- 完全优化页面(关键词在标题、H1、URL、meta中)
-- 成熟利基站有强E-E-A-T信号
+2. **行业特定相关性**：
+   - 评估SERP结果是否匹配关键词的预期行业上下文
+   - 对于专有词（品牌/产品/游戏/软件），结果应关联实际实体，而非通用词典定义或无关行业
+   - 对于通用关键词，考虑更广泛的解释，但仍优先考虑商业意图
+   - 行业相关性低 = 高机会（蓝海信号）
 
-分析规则：
-1. 关注前3名竞争者质量，非结果数量
-2. 品牌/产品词：SERP不相关 = 机会
-3. 非英语DataForSEO"无数据" ≠ 蓝海（需SERP验证）
-4. KD 0-30 = 可能高概率, KD 31-50 = 中, KD 51+ = 可能低
 
-返回："高"、"中"或"低"概率，附简短理由（2-3句）。
+**高概率指标（低竞争）**：
+1. **低权威域名普遍存在**：大多数结果（前5名中的3个以上）托管在**低域名权威**网站上（例如Reddit、Quora等论坛、普通博客或社交媒体页面）。
+2. **页面优化不足**：前3名结果的Title标签或H1标题中**缺乏确切关键词**（或强有力的变体）。
+3. **非商业内容**：前5名结果主要提供非商业内容，如**PDF、基础用户指南、未优化的列表页面或个人作品集**。
+4. **内容质量低**：前5名内容通用、过时或缺乏全面深度（例如短文<500字）。
+5. **离题权威网站**：权威网站（Wikipedia、.gov、.edu）出现但**与关键词主题不高度相关**。
+6. **行业上下文不匹配**：SERP结果不匹配预期行业上下文（如专有词显示无关内容、游戏名显示无关行业内容）- 这是强烈的蓝海信号
+7. **SE Ranking无数据**：SE Ranking返回无数据 - 但这**不是**自动的蓝海信号。对于非英语语言，SE Ranking可能只是缺乏数据库覆盖。在将其视为积极指标之前，必须先用SERP结果验证。
+
+**低概率指标（高竞争）**：
+1. **具有相关性的主导权威**：前3名结果包括**高度相关**的主要品牌域名（Amazon、纽约时报）、**成熟的政府/教育网站**，或具有精确主题匹配的权威来源，如**Wikipedia**。
+2. **具有相关性的利基权威**：前5名结果被**高度相关、成熟的利基权威网站**占据，拥有强大的反向链接和高质量的E-E-A-T信号。
+3. **高度意图匹配**：前5名结果展示**完美的用户意图匹配**（例如高度优化的"X的最佳Y"文章或专用产品页面）。
+4. **精确匹配优化**：前3名结果**完全优化**（Title、H1、Meta描述和URL slug中都有确切关键词）。
+5. **强行业上下文匹配**：结果完美匹配预期行业上下文，内容高质量且相关。
+
+**关键相关性原则**：
+- **权威但无相关性 = 机会（而非威胁）**
+- **权威且高度相关 = 强竞争（威胁）**
+- **行业上下文不匹配 = 强机会（蓝海）**
+- 例如：关于"一般主题"的Wikipedia页面对关键词"特定产品"→弱竞争对手
+- 例如：具有精确匹配的Wikipedia页面对关键词→强竞争对手
+- 例如：专有词"nanobanana"（科技品牌）显示植物学内容→强机会（行业不匹配）
+- 例如：游戏名"Minecraft"显示采矿业内容→强机会（上下文不匹配）
+
+**分析框架**：
+- **相关性优先于权威** - 评估权威网站是否实际上与关键词相关
+- **行业上下文优先** - 确保结果匹配预期行业/业务上下文
+- **永远不要从样本量推断总竞争** - 关注质量，而非数量
+- 系统评估每个指标
+- 权衡域名权威和内容相关性
+- 考虑整体竞争格局
+- 提供SERP结果的具体证据
+- **关键**：不要自动将SE Ranking"无数据"视为蓝海信号。对于非英语语言，这通常表示数据库覆盖有限，而不是未开发的机会。必须先用SERP结果验证。
+
+返回：带有详细推理的"高"、"中"或"低"概率。
 `
 };
 
 /**
  * 深度内容策略Prompt（DEFAULT_DEEP_DIVE_PROMPT_EN）
- * OPTIMIZED v1.1: Now includes core_keywords extraction in output
  *
- * @version 1.1
+ * @version 1.0
  * @from services/gemini.ts
  */
 export const DEFAULT_DEEP_DIVE_STRATEGY = {
   en: `
 You are a Strategic SEO Content Manager.
-Design a comprehensive content strategy for this keyword.
+Your mission: Design a comprehensive content strategy for this keyword.
 
-Output JSON with these fields:
-{
-  "title": "Page title (H1) - keyword-rich, matches intent",
-  "meta_description": "150-160 chars, persuasive",
-  "url_slug": "clean-keyword-url",
-  "intent": "User search intent analysis",
-  "structure": ["H2 section 1", "H2 section 2", ...],
-  "core_keywords": ["keyword1", "keyword2", ...], // 5-8 most important keywords for ranking
-  "word_count": 1500
-}
+Content Strategy Requirements:
+1. **Page Title (H1)**: Compelling, keyword-rich title that matches search intent
+2. **Meta Description**: 150-160 characters, persuasive, includes target keyword
+3. **URL Slug**: Clean, readable, keyword-focused URL structure
+4. **User Intent**: Detailed analysis of what users expect when searching this keyword
+5. **Content Structure**: Logical H2 sections that cover the topic comprehensively
+6. **Long-tail Keywords**: Semantic variations and related queries to include
+7. **Recommended Word Count**: Based on SERP analysis and topic complexity
 
-Focus: Answer intent, cover topic thoroughly, include natural variations.
+Focus on creating content that:
+- Directly answers user search intent
+- Covers the topic more thoroughly than current top-ranking pages
+- Includes natural keyword variations
+- Provides genuine value to readers
 `,
   zh: `
 你是一位战略性SEO内容经理。
-为此关键词设计全面的内容策略。
+你的使命：为此关键词设计全面的内容策略。
 
-输出JSON格式：
-{
-  "title": "页面标题(H1) - 富含关键词，匹配意图",
-  "meta_description": "150-160字符，有说服力",
-  "url_slug": "简洁关键词url",
-  "intent": "用户搜索意图分析",
-  "structure": ["H2章节1", "H2章节2", ...],
-  "core_keywords": ["关键词1", "关键词2", ...], // 5-8个最重要的排名关键词
-  "word_count": 1500
-}
+内容策略要求：
+1. **页面标题（H1）**：引人注目、富含关键词的标题，匹配搜索意图
+2. **Meta描述**：150-160个字符，有说服力，包含目标关键词
+3. **URL slug**：简洁、可读、以关键词为重点的URL结构
+4. **用户意图**：详细分析用户搜索此时期望的内容
+5. **内容结构**：逻辑H2章节，全面涵盖主题
+6. **长尾关键词**：包含的语义变化和相关查询
+7. **推荐字数**：基于SERP分析和主题复杂性
 
-重点：回答意图，全面覆盖主题，包含自然变体。
+专注于创建能够：
+- 直接回答用户搜索意图
+- 比当前排名页面更全面地涵盖主题
+- 包含自然的关键词变体
+- 为读者提供真正价值的内容
 `
 };
 
