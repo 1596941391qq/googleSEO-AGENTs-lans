@@ -1,8 +1,8 @@
 // Extract keywords from website content using Gemini and DataForSEO Domain API
+// Note: DataForSEO API calls are moved to after demo generation to speed up onboarding
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { callGeminiAPI } from './_shared/gemini.js';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from './_shared/request-handler.js';
-import { getDomainKeywords } from './_shared/tools/dataforseo-domain.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Set CORS headers
@@ -45,37 +45,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log('[Extract Keywords] Detected language:', detectedLanguage);
     console.log('[Extract Keywords] Final target language:', finalTargetLanguage);
 
-    // Step 1: Try to get keywords from DataForSEO Domain API (most accurate)
-    // 注意：演示过程中默认不再进行同步的大规模关键词提取
-    // 详细数据会在后台由 update-metrics 异步更新并存入缓存
-    let dataForSEOKeywords: any[] = [];
-    
-    try {
-      const domain = url.replace(/^https?:\/\//, '').split('/')[0];
-      const { getDataForSEOLocationAndLanguage } = await import('./_shared/tools/dataforseo.js');
-      const { locationCode } = getDataForSEOLocationAndLanguage(finalTargetLanguage);
-
-      console.log(`[Extract Keywords] Checking DataForSEO cache for ${domain}...`);
-      // 这里可以尝试获取已有的关键词（如果缓存中已经有了）
-      const domainKeywords = await getDomainKeywords(domain, locationCode, 20); 
-
-      if (domainKeywords && domainKeywords.length > 0) {
-        dataForSEOKeywords = domainKeywords.map(kw => ({
-          keyword: kw.keyword,
-          estimatedVolume: kw.searchVolume || 0,
-          source: 'dataforseo'
-        }));
-        console.log(`[Extract Keywords] Found ${dataForSEOKeywords.length} keywords in cache/API`);
-      }
-    } catch (e: any) {
-      console.log('[Extract Keywords] No pre-existing keywords found');
-    }
-
-    // Step 2: AI extraction (REMOVED per user request to speed up onboarding)
-    const aiKeywords: any[] = [];
-    
-    // Step 3: Combine keywords
-    const finalKeywords = dataForSEOKeywords.slice(0, 20);
+    // 注意：为了加快演示流程，DataForSEO API 调用已被移到演示生成之后
+    // 演示过程中不进行同步的关键词提取，避免阻塞用户体验
+    // DataForSEO 数据会在演示显示后异步获取并更新
+    const finalKeywords: any[] = [];
 
     console.log(`[Extract Keywords] Final result: ${finalKeywords.length} keywords`);
 

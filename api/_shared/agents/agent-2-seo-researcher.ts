@@ -40,13 +40,15 @@ export function calculateBlueOceanScore(analysis: any): {
     });
   }
 
-  // 2. 内容相关性判断 (从 intentAnalysis 提取关键词)
+  // 2. 内容相关性判断 (从 intentAssessment 或 intentAnalysis 提取关键词，向后兼容)
   const lowRelevanceKeywords = [
     '不相关', 'irrelevant', 'off-topic', '弱相关', 'weakly related',
     'low relevance', 'not matching', 'mismatch', '偏移', '不匹配',
     'wrong intent', '意图不符', 'mixed intent', '混合意图', '未覆盖'
   ];
-  if (analysis.intentAnalysis && lowRelevanceKeywords.some(k => analysis.intentAnalysis.toLowerCase().includes(k))) {
+  // 优先使用 intentAssessment，如果没有则使用 intentAnalysis（向后兼容）
+  const intentText = analysis.intentAssessment || analysis.intentAnalysis || '';
+  if (intentText && lowRelevanceKeywords.some(k => intentText.toLowerCase().includes(k))) {
     const score = 25;
     totalScore += score;
     factors.push({
@@ -72,29 +74,9 @@ export function calculateBlueOceanScore(analysis: any): {
     });
   }
 
-  // 4. SERP 结果数量
-  if (analysis.serpResultCount !== undefined && analysis.serpResultCount !== -1) {
-    if (analysis.serpResultCount < 10000) {
-      const score = 15;
-      totalScore += score;
-      factors.push({
-        name: '搜索结果数量较少',
-        score: score,
-        reason: `搜索结果数量较少 (${analysis.serpResultCount.toLocaleString()}个)，竞争相对较小`
-      });
-    } else if (analysis.serpResultCount < 100000) {
-      const score = 10;
-      totalScore += score;
-      factors.push({
-        name: '搜索结果数量中等',
-        score: score,
-        reason: `搜索结果数量中等 (${analysis.serpResultCount.toLocaleString()}个)，存在一定竞争`
-      });
-    }
-  }
-
-  // 5. 额外加分：如果没有竞争对手 (serpResultCount 为 0)
-  if (analysis.serpResultCount === 0) {
+  // 4. 额外加分：如果没有直接竞争对手 (基于实际 SERP 返回结果)
+  // 注意：这里基于 SERP API 实际返回的结果数量，而非 serpResultCount（该值不可靠）
+  if (analysis.topSerpSnippets && Array.isArray(analysis.topSerpSnippets) && analysis.topSerpSnippets.length === 0) {
     const score = 20;
     totalScore += score;
     factors.push({
@@ -104,7 +86,7 @@ export function calculateBlueOceanScore(analysis: any): {
     });
   }
 
-  // 6. 考虑关键词难度 (如果有)
+  // 5. 考虑关键词难度 (如果有)
   const kd = analysis.difficulty ?? analysis.dataForSEOData?.difficulty ?? analysis.serankingData?.difficulty;
   if (kd !== undefined) {
     if (kd <= 20) {
@@ -518,7 +500,8 @@ export async function analyzeCompetitors(
   targetMarket: string = 'global',
   searchEngine: SearchEngine = 'google',
   onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  probability?: ProbabilityLevel // 新增：用于决定是否使用 Firecrawl
 ): Promise<CompetitorAnalysisResult> {
   try {
     // 如果没有提供 SERP 数据，则获取
@@ -535,14 +518,17 @@ export async function analyzeCompetitors(
       ).join('\n\n')
       : 'No SERP results available.';
 
-    // 2. Firecrawl: 抓取 Top 3 页面的深度内容
-    // 跳过失败的URL，继续抓取下一个可抓取的结果
+    // 2. Firecrawl: 抓取 Top 3 页面的深度内容（优化：仅对 MEDIUM 概率关键词使用）
+    // HIGH 概率：竞争很弱，无需深度抓取
+    // LOW 概率：竞争太强，不值得深度抓取
+    // MEDIUM 概率：需要深度分析来确定优化方向
     let deepContentContext = '';
+    const shouldUseFirecrawl = probability === ProbabilityLevel.MEDIUM;
     const allResults = serpResults.results || [];
     const targetScrapeCount = 3; // 目标抓取数量
     const scrapedData: Array<{ rank: number; title: string; url: string; content: string }> = [];
 
-    if (allResults.length > 0) {
+    if (shouldUseFirecrawl && allResults.length > 0) {
       onProgress?.(language === 'zh' ? `🕵️ 正在抓取前 ${targetScrapeCount} 名竞争对手的页面内容以进行深度分析...` : `🕵️ Scaping top ${targetScrapeCount} competitor pages for deep analysis...`);
 
       try {
@@ -594,6 +580,9 @@ export async function analyzeCompetitors(
       } catch (err) {
         console.error('[Agent 2] Firecrawl scraping failed, falling back to snippets only', err);
       }
+    } else if (!shouldUseFirecrawl) {
+      // 跳过 Firecrawl（HIGH 或 LOW 概率）：使用 SERP snippet 已足够
+      console.log(`[Agent 2] Skipping Firecrawl for ${probability} probability keyword (using SERP snippets only)`);
     }
 
     // 构建市场标签
@@ -955,9 +944,10 @@ function extractPartialJSON(text: string): any {
     partial.reasoning = text.substring(reasoningStart, reasoningEnd).trim();
   }
 
-  const searchIntentMatch = text.match(/"searchIntent"\s*:\s*"([^"]*)/);
-  if (searchIntentMatch) {
-    const start = searchIntentMatch.index! + searchIntentMatch[0].length;
+  // 优先提取 intentAssessment（新格式）
+  const intentAssessmentMatch = text.match(/"intentAssessment"\s*:\s*"([^"]*)/);
+  if (intentAssessmentMatch) {
+    const start = intentAssessmentMatch.index! + intentAssessmentMatch[0].length;
     let end = text.length;
     for (let i = start; i < text.length; i++) {
       if (text[i] === '"' && (i === start || text[i - 1] !== '\\')) {
@@ -965,20 +955,36 @@ function extractPartialJSON(text: string): any {
         break;
       }
     }
-    partial.searchIntent = text.substring(start, end).trim();
+    partial.intentAssessment = text.substring(start, end).trim();
   }
 
-  const intentAnalysisMatch = text.match(/"intentAnalysis"\s*:\s*"([^"]*)/);
-  if (intentAnalysisMatch) {
-    const start = intentAnalysisMatch.index! + intentAnalysisMatch[0].length;
-    let end = text.length;
-    for (let i = start; i < text.length; i++) {
-      if (text[i] === '"' && (i === start || text[i - 1] !== '\\')) {
-        end = i;
-        break;
+  // 向后兼容：如果没有 intentAssessment，尝试提取 searchIntent 和 intentAnalysis
+  if (!partial.intentAssessment) {
+    const searchIntentMatch = text.match(/"searchIntent"\s*:\s*"([^"]*)/);
+    if (searchIntentMatch) {
+      const start = searchIntentMatch.index! + searchIntentMatch[0].length;
+      let end = text.length;
+      for (let i = start; i < text.length; i++) {
+        if (text[i] === '"' && (i === start || text[i - 1] !== '\\')) {
+          end = i;
+          break;
+        }
       }
+      partial.searchIntent = text.substring(start, end).trim();
     }
-    partial.intentAnalysis = text.substring(start, end).trim();
+
+    const intentAnalysisMatch = text.match(/"intentAnalysis"\s*:\s*"([^"]*)/);
+    if (intentAnalysisMatch) {
+      const start = intentAnalysisMatch.index! + intentAnalysisMatch[0].length;
+      let end = text.length;
+      for (let i = start; i < text.length; i++) {
+        if (text[i] === '"' && (i === start || text[i - 1] !== '\\')) {
+          end = i;
+          break;
+        }
+      }
+      partial.intentAnalysis = text.substring(start, end).trim();
+    }
   }
 
   const serpResultCountMatch = text.match(/"serpResultCount"\s*:\s*(-?\d+)/);
@@ -1227,15 +1233,19 @@ ${dataForSEOContext}
 
 JSON format:
 {
-  "searchIntent": "User intent in ${uiLangName}",
-  "intentAnalysis": "SERP-intent match analysis in ${uiLangName}",
+  "intentAssessment": "Combined intent analysis in ${uiLangName}: User intent description | SERP-intent match analysis",
   "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
   "relevanceScore": 0-1,
   "reasoning": "Analysis in ${uiLangName} (concise, 200-400 chars)",
   "topSerpSnippets": ${topSerpSnippetsJson}
-}`;
+}
+
+IMPORTANT: The intentAssessment field should combine both:
+1. User search intent (what users are looking for)
+2. SERP-intent match analysis (how well SERP results match the intent)
+Format: "User Intent: [description] | SERP Match: [analysis]"`;
 
     try {
       let response;
@@ -1255,8 +1265,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
             responseSchema: {
               type: 'object',
               properties: {
-                searchIntent: { type: 'string' },
-                intentAnalysis: { type: 'string' },
+                intentAssessment: { type: 'string' },
                 serpResultCount: { type: 'number' },
                 topDomainType: { type: 'string' },
                 probability: { type: 'string', enum: ['High', 'Medium', 'Low'] },
@@ -1274,14 +1283,12 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
                   }
                 }
               },
-              required: ['probability', 'reasoning']
+              required: ['probability', 'reasoning', 'intentAssessment']
             },
             // 禁用思考模式以加快响应速度（性能优化）
             reasoningMode: 'none',
             // 禁用 Google 搜索以避免 JSON 解析错误（联网模式会导致返回非纯 JSON 格式）
             enableGoogleSearch: false,
-            // 降低输出token限制以加快响应（reasoning限制为200-400字符，大幅减少输出）
-            maxOutputTokens: 8000,
             onRetry: (attempt, error, delay) => {
               onProgress?.(uiLanguage === 'zh'
                 ? `⚠️ [${keywordData.keyword}] AI 分析连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
@@ -1299,12 +1306,9 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         console.error(`API call failed for keyword ${keywordData.keyword}:`, apiError.message);
         // 返回默认分析结果
         // 根据 uiLanguage 设置默认值
-        const defaultSearchIntent = uiLanguage === 'zh'
-          ? '无法确定意图（API调用失败）'
-          : 'Unable to determine intent due to API error';
-        const defaultIntentAnalysis = uiLanguage === 'zh'
-          ? '分析跳过：API调用失败'
-          : 'Analysis skipped due to API error';
+        const defaultIntentAssessment = uiLanguage === 'zh'
+          ? '用户意图：无法确定意图（API调用失败）| SERP匹配：分析跳过'
+          : 'User Intent: Unable to determine intent due to API error | SERP Match: Analysis skipped';
         const defaultReasoning = uiLanguage === 'zh'
           ? `API调用失败: ${apiError.message}. 使用默认分析结果。`
           : `API call failed: ${apiError.message}. Using default analysis result.`;
@@ -1313,16 +1317,15 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           ...keywordData,
           probability: ProbabilityLevel.MEDIUM,
           reasoning: defaultReasoning,
-          searchIntent: defaultSearchIntent,
-          intentAnalysis: defaultIntentAnalysis,
+          intentAssessment: defaultIntentAssessment,
           serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
-          topDomainType: "Unknown",
+          topDomainType: "Unknown" as const,
           topSerpSnippets: serpResults.slice(0, 3).map((r: any) => ({
             title: r.title || '',
             url: r.url || '',
             snippet: r.snippet || ''
           }))
-        };
+        } as KeywordData;
       }
 
       let text = response.text || "{}";
@@ -1494,18 +1497,18 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
               return errorKeywords.some(keyword => field.includes(keyword));
             };
 
-            const getFriendlySearchIntent = (extracted: string | undefined): string => {
+            const getFriendlyIntentAssessment = (extracted: string | undefined, searchIntent?: string, intentAnalysis?: string): string => {
+              // 优先使用 intentAssessment
               if (extracted && !hasErrorInField(extracted)) return extracted;
+              // 向后兼容：如果有 searchIntent 和 intentAnalysis，合并它们
+              if (searchIntent && intentAnalysis && !hasErrorInField(searchIntent) && !hasErrorInField(intentAnalysis)) {
+                return uiLanguage === 'zh'
+                  ? `用户意图：${searchIntent} | SERP匹配：${intentAnalysis}`
+                  : `User Intent: ${searchIntent} | SERP Match: ${intentAnalysis}`;
+              }
               return uiLanguage === 'zh'
-                ? '正在分析用户搜索意图...'
-                : 'Analyzing user search intent...';
-            };
-
-            const getFriendlyIntentAnalysis = (extracted: string | undefined): string => {
-              if (extracted && !hasErrorInField(extracted)) return extracted;
-              return uiLanguage === 'zh'
-                ? '正在评估搜索结果与用户意图的匹配度...'
-                : 'Evaluating how well search results match user intent...';
+                ? '正在分析用户搜索意图和SERP匹配度...'
+                : 'Analyzing user search intent and SERP match...';
             };
 
             const getFriendlyReasoning = (extracted: string | undefined): string => {
@@ -1523,8 +1526,11 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
             };
 
             analysis = {
-              searchIntent: getFriendlySearchIntent(partialJSON.searchIntent),
-              intentAnalysis: getFriendlyIntentAnalysis(partialJSON.intentAnalysis),
+              intentAssessment: getFriendlyIntentAssessment(
+                partialJSON.intentAssessment,
+                partialJSON.searchIntent,
+                partialJSON.intentAnalysis
+              ),
               serpResultCount: partialJSON.serpResultCount !== undefined ? partialJSON.serpResultCount : (serpResultCount > 0 ? serpResultCount : -1),
               topDomainType: partialJSON.topDomainType || "Unknown",
               probability: partialJSON.probability || "Medium",
@@ -1542,19 +1548,15 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
             console.error("⚠️  Response was truncated, consider reducing output length or splitting the request");
           }
           // 根据 uiLanguage 设置友好的默认值（不显示技术性错误信息）
-          const defaultSearchIntent = uiLanguage === 'zh'
-            ? '正在分析用户搜索意图...'
-            : 'Analyzing user search intent...';
-          const defaultIntentAnalysis = uiLanguage === 'zh'
-            ? '正在评估搜索结果与用户意图的匹配度...'
-            : 'Evaluating how well search results match user intent...';
+          const defaultIntentAssessment = uiLanguage === 'zh'
+            ? '用户意图：正在分析中... | SERP匹配：正在评估中...'
+            : 'User Intent: Analyzing... | SERP Match: Evaluating...';
           const defaultReasoning = uiLanguage === 'zh'
             ? '正在分析SERP竞争情况和排名概率，请稍候...'
             : 'Analyzing SERP competition and ranking probability, please wait...';
 
           analysis = {
-            searchIntent: defaultSearchIntent,
-            intentAnalysis: defaultIntentAnalysis,
+            intentAssessment: defaultIntentAssessment,
             serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
             topDomainType: "Unknown",
             probability: "Medium", // 默认中等概率
@@ -1588,11 +1590,19 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
       if (!analysis.reasoning) {
         analysis.reasoning = uiLanguage === 'zh' ? '分析完成' : 'Analysis completed';
       }
-      if (!analysis.searchIntent) {
-        analysis.searchIntent = uiLanguage === 'zh' ? '未知搜索意图' : 'Unknown search intent';
-      }
-      if (!analysis.intentAnalysis) {
-        analysis.intentAnalysis = uiLanguage === 'zh' ? '意图分析不可用' : 'Intent analysis not available';
+      // 处理 intentAssessment：如果没有，尝试从 searchIntent 和 intentAnalysis 合并（向后兼容）
+      if (!analysis.intentAssessment) {
+        if (analysis.searchIntent && analysis.intentAnalysis) {
+          // 向后兼容：合并旧字段
+          analysis.intentAssessment = uiLanguage === 'zh'
+            ? `用户意图：${analysis.searchIntent} | SERP匹配：${analysis.intentAnalysis}`
+            : `User Intent: ${analysis.searchIntent} | SERP Match: ${analysis.intentAnalysis}`;
+        } else {
+          // 设置默认值
+          analysis.intentAssessment = uiLanguage === 'zh'
+            ? '用户意图：未知 | SERP匹配：分析不可用'
+            : 'User Intent: Unknown | SERP Match: Analysis not available';
+        }
       }
       if (!Array.isArray(analysis.topSerpSnippets)) {
         analysis.topSerpSnippets = serpResults.length > 0
@@ -1606,28 +1616,40 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
         analysis.topDomainType = 'Weak Page';
       }
 
-      // 计算蓝海评分 (Workflow 1) - 返回详细分解
+      // 计算蓝海评分 - 作为统一评估指标
       const blueOceanScoreData = calculateBlueOceanScore({
         ...keywordData,
         ...analysis
       });
+
+      // 通过蓝海分数计算排名概率（统一评估体系）
+      // 蓝海分数 >= 70 → HIGH, 40-69 → MEDIUM, < 40 → LOW
+      let calculatedProbability: ProbabilityLevel;
+      if (blueOceanScoreData.totalScore >= 70) {
+        calculatedProbability = ProbabilityLevel.HIGH;
+      } else if (blueOceanScoreData.totalScore >= 40) {
+        calculatedProbability = ProbabilityLevel.MEDIUM;
+      } else {
+        calculatedProbability = ProbabilityLevel.LOW;
+      }
 
       // 计算大鱼吃小鱼概率 (Workflow 3) - 仅在存量拓新模式（有siteDR）下计算
       let outrankData = {
         canOutrankPositions: [] as number[],
         top3Probability: ProbabilityLevel.LOW,
         top10Probability: ProbabilityLevel.LOW,
-        finalProbability: analysis.probability as ProbabilityLevel
+        finalProbability: calculatedProbability
       };
 
-      // 蓝海模式下不需要DR对比，跳过"大鱼吃小鱼"计算
+      // 存量拓新模式：如果有 DR 数据，使用"大鱼吃小鱼"算法；否则使用蓝海分数
       if (!isBlueOceanMode && siteDR !== undefined && competitorDRs.length > 0) {
         outrankData = calculateOutrankProbability(siteDR, competitorDRs, analysis.relevanceScore || 0.5);
-        // 如果网站审计模式下计算出的概率更高，则使用它
-        if (outrankData.finalProbability === ProbabilityLevel.HIGH) {
-          analysis.probability = ProbabilityLevel.HIGH;
-        }
+        // 使用"大鱼吃小鱼"算法得出的概率（更精确）
+        calculatedProbability = outrankData.finalProbability;
       }
+
+      // 更新 analysis.probability 为基于蓝海分数的计算结果
+      analysis.probability = calculatedProbability;
 
       console.log(`[Agent 2] Total analysis for "${keywordData.keyword}" took ${Date.now() - keywordStartTime}ms`);
 
@@ -1706,37 +1728,46 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
     );
 
     // Step 2: 从所有 SERP 结果中提取所有需要查询的域名，批量并行获取 DR 值
-    onProgress?.(uiLanguage === 'zh'
-      ? `🛡️ [批次 ${currentBatchNum}] 正在批量并行获取竞争对手 DR 值...`
-      : `🛡️ [Batch ${currentBatchNum}] Batch fetching competitor DR values in parallel...`);
-
-    const allDomains = new Set<string>();
-    batch.forEach(k => {
-      const serpData = serpResultsMap.get(k.keyword.toLowerCase());
-      if (serpData?.results) {
-        serpData.results.slice(0, 10).forEach(r => {
-          if (r.url) {
-            const domain = r.url.replace(/^https?:\/\//, '').split('/')[0];
-            if (domain && domain.includes('.')) {
-              allDomains.add(domain);
-            }
-          }
-        });
-      }
-    });
-
+    // 蓝海模式（siteDR === undefined）跳过 DR 获取以节省 API 调用和时间
+    const isBlueOceanMode = siteDR === undefined;
     let allDomainsDRMap = new Map<string, number>();
-    if (allDomains.size > 0) {
-      try {
-        const domainsArray = Array.from(allDomains);
-        const drMap = await getBatchDomainOverview(domainsArray);
-        // 转换 Map 格式
-        drMap.forEach((overview, domain) => {
-          allDomainsDRMap.set(domain, (overview as any)?.dr || 0);
-        });
-      } catch (e) {
-        console.warn(`[Agent 2] Failed to batch fetch DRs:`, e);
+
+    if (!isBlueOceanMode) {
+      // 存量拓新模式：需要 DR 数据用于"大鱼吃小鱼"算法
+      onProgress?.(uiLanguage === 'zh'
+        ? `🛡️ [批次 ${currentBatchNum}] 正在批量并行获取竞争对手 DR 值...`
+        : `🛡️ [Batch ${currentBatchNum}] Batch fetching competitor DR values in parallel...`);
+
+      const allDomains = new Set<string>();
+      batch.forEach(k => {
+        const serpData = serpResultsMap.get(k.keyword.toLowerCase());
+        if (serpData?.results) {
+          serpData.results.slice(0, 10).forEach(r => {
+            if (r.url) {
+              const domain = r.url.replace(/^https?:\/\//, '').split('/')[0];
+              if (domain && domain.includes('.')) {
+                allDomains.add(domain);
+              }
+            }
+          });
+        }
+      });
+
+      if (allDomains.size > 0) {
+        try {
+          const domainsArray = Array.from(allDomains);
+          const drMap = await getBatchDomainOverview(domainsArray);
+          // 转换 Map 格式
+          drMap.forEach((overview, domain) => {
+            allDomainsDRMap.set(domain, (overview as any)?.dr || 0);
+          });
+        } catch (e) {
+          console.warn(`[Agent 2] Failed to batch fetch DRs:`, e);
+        }
       }
+    } else {
+      // 蓝海模式：跳过 DR 获取
+      console.log(`[Agent 2] Blue Ocean mode: Skipping competitor DR fetching to save API calls and time`);
     }
 
     // Step 3: 并行处理批次内的所有关键词（使用已获取的 SERP 和 DR 数据）

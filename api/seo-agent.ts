@@ -575,13 +575,7 @@ async function handleBatchTranslation(
           if (serankingData.volume) {
             keyword.volume = serankingData.volume;
           }
-
-          if (serankingData.difficulty && serankingData.difficulty > 40) {
-            keyword.probability = ProbabilityLevel.LOW;
-            keyword.reasoning = `Keyword Difficulty (${serankingData.difficulty}) is too high (>40).`;
-            skippedKeywords.push(keyword);
-            continue;
-          }
+          // 删除预筛选逻辑：所有关键词都应进行完整 SERP 分析，而不是基于单一 KD 值预筛选
         }
         keywordsToAnalyze.push(keyword);
       }

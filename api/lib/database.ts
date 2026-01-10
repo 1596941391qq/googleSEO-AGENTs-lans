@@ -1068,6 +1068,78 @@ export async function initDomainCacheTables() {
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_intersection_website ON domain_intersection_cache(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_domain_intersection_competitor ON domain_intersection_cache(competitor_domain)`;
 
+      // --- 关键词分析缓存表（优化工作流3和4的冗余）---
+      await sql`
+        CREATE TABLE IF NOT EXISTS keyword_analysis_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID REFERENCES user_websites(id) ON DELETE CASCADE,
+          keyword VARCHAR(500) NOT NULL,
+          location_code INTEGER DEFAULT 2840,
+          search_engine VARCHAR(50) DEFAULT 'google',
+          
+          -- DataForSEO 数据
+          dataforseo_volume INTEGER,
+          dataforseo_difficulty INTEGER,
+          dataforseo_cpc DECIMAL(10,2),
+          dataforseo_competition DECIMAL(10,2),
+          dataforseo_history_trend JSONB,
+          dataforseo_is_data_found BOOLEAN DEFAULT false,
+          
+          -- Agent 2 分析结果
+          agent2_probability VARCHAR(20),
+          agent2_search_intent TEXT,
+          agent2_intent_analysis TEXT,
+          agent2_reasoning TEXT,
+          agent2_top_domain_type VARCHAR(100),
+          agent2_serp_result_count INTEGER,
+          agent2_top_serp_snippets JSONB,
+          agent2_blue_ocean_score DECIMAL(5,2),
+          agent2_blue_ocean_breakdown JSONB,
+          
+          -- DR 相关（存量拓新模式）
+          website_dr INTEGER,
+          competitor_drs JSONB,
+          top3_probability VARCHAR(20),
+          top10_probability VARCHAR(20),
+          can_outrank_positions JSONB,
+          
+          -- 元数据
+          source VARCHAR(50) DEFAULT 'website-audit',
+          data_updated_at TIMESTAMP DEFAULT NOW(),
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '7 days',
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      // 创建部分唯一索引：website_id 为 NULL 时，keyword + location_code + search_engine 唯一
+      try {
+        await sql`
+          CREATE UNIQUE INDEX IF NOT EXISTS keyword_analysis_cache_null_website_unique 
+          ON keyword_analysis_cache (keyword, location_code, search_engine)
+          WHERE website_id IS NULL
+        `;
+      } catch (error: any) {
+        console.warn('[Database] Could not create null website unique index:', error.message);
+      }
+
+      // 创建唯一索引：website_id 不为 NULL 时，keyword + location_code + search_engine + website_id 唯一
+      try {
+        await sql`
+          CREATE UNIQUE INDEX IF NOT EXISTS keyword_analysis_cache_website_unique 
+          ON keyword_analysis_cache (keyword, location_code, search_engine, website_id)
+          WHERE website_id IS NOT NULL
+        `;
+      } catch (error: any) {
+        console.warn('[Database] Could not create website unique index:', error.message);
+      }
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_keyword_analysis_keyword ON keyword_analysis_cache(keyword)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_keyword_analysis_location ON keyword_analysis_cache(location_code)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_keyword_analysis_engine ON keyword_analysis_cache(search_engine)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_keyword_analysis_website ON keyword_analysis_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_keyword_analysis_expires ON keyword_analysis_cache(cache_expires_at)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_keyword_analysis_composite ON keyword_analysis_cache(keyword, location_code, search_engine, website_id)`;
+
       domainCacheTablesInitialized = true;
     } catch (error) {
       console.error('[initDomainCacheTables] Error:', error);
@@ -1389,6 +1461,226 @@ export async function deleteApiKey(keyId: string, userId: string): Promise<boole
     throw error;
   }
 }
+/**
+ * 关键词分析缓存接口
+ */
+export interface KeywordAnalysisCache {
+  id: string;
+  website_id?: string;
+  keyword: string;
+  location_code: number;
+  search_engine: string;
+  dataforseo_volume?: number;
+  dataforseo_difficulty?: number;
+  dataforseo_cpc?: number;
+  dataforseo_competition?: number;
+  dataforseo_history_trend?: any;
+  dataforseo_is_data_found?: boolean;
+  agent2_probability?: string;
+  agent2_search_intent?: string;
+  agent2_intent_analysis?: string;
+  agent2_reasoning?: string;
+  agent2_top_domain_type?: string;
+  agent2_serp_result_count?: number;
+  agent2_top_serp_snippets?: any;
+  agent2_blue_ocean_score?: number;
+  agent2_blue_ocean_breakdown?: any;
+  website_dr?: number;
+  competitor_drs?: any;
+  top3_probability?: string;
+  top10_probability?: string;
+  can_outrank_positions?: any;
+  source?: string;
+  data_updated_at?: Date;
+  cache_expires_at?: Date;
+  created_at?: Date;
+}
+
+/**
+ * 查询关键词分析缓存
+ */
+export async function getKeywordAnalysisCache(
+  keyword: string,
+  locationCode: number,
+  searchEngine: string,
+  websiteId?: string
+): Promise<KeywordAnalysisCache | null> {
+  try {
+    await initDomainCacheTables();
+    
+    let query;
+    if (websiteId) {
+      query = sql<KeywordAnalysisCache>`
+        SELECT * FROM keyword_analysis_cache
+        WHERE keyword = ${keyword}
+          AND location_code = ${locationCode}
+          AND search_engine = ${searchEngine}
+          AND (website_id = ${websiteId} OR website_id IS NULL)
+          AND cache_expires_at > NOW()
+        ORDER BY website_id DESC NULLS LAST
+        LIMIT 1
+      `;
+    } else {
+      query = sql<KeywordAnalysisCache>`
+        SELECT * FROM keyword_analysis_cache
+        WHERE keyword = ${keyword}
+          AND location_code = ${locationCode}
+          AND search_engine = ${searchEngine}
+          AND website_id IS NULL
+          AND cache_expires_at > NOW()
+        LIMIT 1
+      `;
+    }
+    
+    const result = await query;
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('[getKeywordAnalysisCache] Error:', error);
+    return null;
+  }
+}
+
+/**
+ * 批量查询关键词分析缓存
+ */
+export async function getKeywordAnalysisCacheBatch(
+  keywords: string[],
+  locationCode: number,
+  searchEngine: string,
+  websiteId?: string
+): Promise<Map<string, KeywordAnalysisCache>> {
+  const cacheMap = new Map<string, KeywordAnalysisCache>();
+  
+  if (keywords.length === 0) return cacheMap;
+  
+  try {
+    await initDomainCacheTables();
+    
+    let query;
+    if (websiteId) {
+      query = sql<KeywordAnalysisCache>`
+        SELECT * FROM keyword_analysis_cache
+        WHERE keyword = ANY(${keywords})
+          AND location_code = ${locationCode}
+          AND search_engine = ${searchEngine}
+          AND (website_id = ${websiteId} OR website_id IS NULL)
+          AND cache_expires_at > NOW()
+      `;
+    } else {
+      query = sql<KeywordAnalysisCache>`
+        SELECT * FROM keyword_analysis_cache
+        WHERE keyword = ANY(${keywords})
+          AND location_code = ${locationCode}
+          AND search_engine = ${searchEngine}
+          AND website_id IS NULL
+          AND cache_expires_at > NOW()
+      `;
+    }
+    
+    const result = await query;
+    
+    // 对于每个关键词，优先使用 website_id 匹配的缓存，否则使用通用缓存
+    const processedKeywords = new Set<string>();
+    for (const row of result.rows) {
+      if (!processedKeywords.has(row.keyword) || (websiteId && row.website_id === websiteId)) {
+        cacheMap.set(row.keyword.toLowerCase(), row);
+        processedKeywords.add(row.keyword);
+      }
+    }
+    
+    return cacheMap;
+  } catch (error) {
+    console.error('[getKeywordAnalysisCacheBatch] Error:', error);
+    return cacheMap;
+  }
+}
+
+/**
+ * 保存关键词分析缓存
+ */
+export async function saveKeywordAnalysisCache(
+  cache: Partial<KeywordAnalysisCache>
+): Promise<void> {
+  try {
+    await initDomainCacheTables();
+    
+    // 先删除可能存在的旧记录（处理唯一约束）
+    if (cache.keyword) {
+      await sql`
+        DELETE FROM keyword_analysis_cache
+        WHERE keyword = ${cache.keyword}
+          AND location_code = ${cache.location_code || 2840}
+          AND search_engine = ${cache.search_engine || 'google'}
+          AND (website_id = ${cache.website_id || null} OR (website_id IS NULL AND ${cache.website_id || null} IS NULL))
+      `;
+    }
+    
+    // 插入新记录
+    await sql`
+      INSERT INTO keyword_analysis_cache (
+        website_id,
+        keyword,
+        location_code,
+        search_engine,
+        dataforseo_volume,
+        dataforseo_difficulty,
+        dataforseo_cpc,
+        dataforseo_competition,
+        dataforseo_history_trend,
+        dataforseo_is_data_found,
+        agent2_probability,
+        agent2_search_intent,
+        agent2_intent_analysis,
+        agent2_reasoning,
+        agent2_top_domain_type,
+        agent2_serp_result_count,
+        agent2_top_serp_snippets,
+        agent2_blue_ocean_score,
+        agent2_blue_ocean_breakdown,
+        website_dr,
+        competitor_drs,
+        top3_probability,
+        top10_probability,
+        can_outrank_positions,
+        source,
+        data_updated_at,
+        cache_expires_at
+      ) VALUES (
+        ${cache.website_id || null},
+        ${cache.keyword},
+        ${cache.location_code || 2840},
+        ${cache.search_engine || 'google'},
+        ${cache.dataforseo_volume || null},
+        ${cache.dataforseo_difficulty || null},
+        ${cache.dataforseo_cpc || null},
+        ${cache.dataforseo_competition || null},
+        ${cache.dataforseo_history_trend ? JSON.stringify(cache.dataforseo_history_trend) : null},
+        ${cache.dataforseo_is_data_found || false},
+        ${cache.agent2_probability || null},
+        ${cache.agent2_search_intent || null},
+        ${cache.agent2_intent_analysis || null},
+        ${cache.agent2_reasoning || null},
+        ${cache.agent2_top_domain_type || null},
+        ${cache.agent2_serp_result_count || null},
+        ${cache.agent2_top_serp_snippets ? JSON.stringify(cache.agent2_top_serp_snippets) : null},
+        ${cache.agent2_blue_ocean_score || null},
+        ${cache.agent2_blue_ocean_breakdown ? JSON.stringify(cache.agent2_blue_ocean_breakdown) : null},
+        ${cache.website_dr || null},
+        ${cache.competitor_drs ? JSON.stringify(cache.competitor_drs) : null},
+        ${cache.top3_probability || null},
+        ${cache.top10_probability || null},
+        ${cache.can_outrank_positions ? JSON.stringify(cache.can_outrank_positions) : null},
+        ${cache.source || 'website-audit'},
+        NOW(),
+        ${cache.cache_expires_at || sql`NOW() + INTERVAL '7 days'`}
+      )
+    `;
+  } catch (error) {
+    console.error('[saveKeywordAnalysisCache] Error:', error);
+    // 不抛出错误，避免影响主流程
+  }
+}
+
 export interface User {
   id: string;
   email: string;

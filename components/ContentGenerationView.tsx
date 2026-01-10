@@ -1250,9 +1250,19 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               "[Content Generation] Loaded website from database:",
               result.data.currentWebsite
             );
-            setState({
-              website: result.data.currentWebsite,
-              onboardingStep: 5, // Set to bound state
+            setState((prev) => {
+              // Don't overwrite if user is in onboarding process (steps 1-4)
+              if (prev.onboardingStep >= 1 && prev.onboardingStep <= 4) {
+                console.log(
+                  "[Content Generation] Skipping website load - user in onboarding"
+                );
+                return prev;
+              }
+              return {
+                ...prev,
+                website: result.data.currentWebsite,
+                onboardingStep: 5, // Set to bound state
+              };
             });
             setIsCheckingWebsite(false); // Finished checking
             return;
@@ -1267,9 +1277,19 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             "[Content Generation] Loaded website from localStorage:",
             website
           );
-          setState({
-            website,
-            onboardingStep: 5, // Set to bound state
+          setState((prev) => {
+            // Don't overwrite if user is in onboarding process (steps 1-4)
+            if (prev.onboardingStep >= 1 && prev.onboardingStep <= 4) {
+              console.log(
+                "[Content Generation] Skipping website load - user in onboarding"
+              );
+              return prev;
+            }
+            return {
+              ...prev,
+              website,
+              onboardingStep: 5, // Set to bound state
+            };
           });
           setIsCheckingWebsite(false); // Finished checking
           return;
@@ -1310,9 +1330,19 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           const savedWebsite = localStorage.getItem("google_seo_bound_website");
           if (savedWebsite) {
             const website = JSON.parse(savedWebsite);
-            setState({
-              website,
-              onboardingStep: 5, // Set to bound state
+            setState((prev) => {
+              // Don't overwrite if user is in onboarding process (steps 1-4)
+              if (prev.onboardingStep >= 1 && prev.onboardingStep <= 4) {
+                console.log(
+                  "[Content Generation] Skipping website load from localStorage - user in onboarding"
+                );
+                return prev;
+              }
+              return {
+                ...prev,
+                website,
+                onboardingStep: 5, // Set to bound state
+              };
             });
             setIsCheckingWebsite(false); // Finished checking
           } else {
@@ -1379,6 +1409,29 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
       img.src = state.demoContent.screenshot;
     }
   }, [state.onboardingStep, state.demoContent?.screenshot]);
+
+  // Debug: Log onboardingStep changes
+  useEffect(() => {
+    console.log(
+      "[Content Generation] onboardingStep changed to:",
+      state.onboardingStep
+    );
+    console.log("[Content Generation] demoContent:", {
+      hasChatGPTDemo: !!state.demoContent?.chatGPTDemo,
+      hasArticleDemo: !!state.demoContent?.articleDemo,
+      domain: state.demoContent?.domain,
+      brandName: state.demoContent?.brandName,
+      hasScreenshot: !!state.demoContent?.screenshot,
+    });
+    if (state.demoContent?.chatGPTDemo) {
+      console.log("[Content Generation] chatGPTDemo data:", {
+        hasUserQuestion: !!state.demoContent.chatGPTDemo.userQuestion,
+        userQuestion: state.demoContent.chatGPTDemo.userQuestion,
+        hasAiAnswer: !!state.demoContent.chatGPTDemo.aiAnswer,
+        hasComparisonTable: !!state.demoContent.chatGPTDemo.comparisonTable,
+      });
+    }
+  }, [state.onboardingStep, state.demoContent]);
 
   // Random author information pool
   const randomAuthor = useMemo(() => {
@@ -1548,20 +1601,34 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
       );
 
       if (data.success && data.data) {
+        const urlDomain = new URL(processedUrl).hostname;
+        const urlBrand =
+          urlDomain.split(".")[0].charAt(0).toUpperCase() +
+          urlDomain.split(".")[0].slice(1);
+
         // Store scraped data in state (don't set website yet - only after full onboarding)
-        setState({
+        // Don't set onboardingStep to 1 here, wait until demo generation completes
+        setState((prev) => ({
+          ...prev,
           websiteData: {
             rawContent: data.data.markdown,
-            extractedKeywords: [], // Will extract now
+            extractedKeywords: [], // Will extract in background
             rankingOpportunities: [], // Will analyze later
           },
-          onboardingStep: 1, // Stay on loading while extracting keywords
-        });
+          onboardingStep: 1, // Stay on loading while generating demo
+        }));
 
-        // Now extract keywords
+        // Step 2: Generate demo content FIRST (without waiting for keywords)
         try {
-          console.log("[Content Generation] Step 2: Extracting keywords...");
-          const extractResponse = await fetch("/api/extract-keywords", {
+          console.log(
+            "[Content Generation] Step 2: Generating demo content..."
+          );
+          console.log(
+            "[Content Generation] Current onboardingStep before fetch:",
+            state.onboardingStep
+          );
+
+          const demoResponse = await fetch("/api/generate-demo-content", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -1572,135 +1639,166 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             body: JSON.stringify({
               content: data.data.markdown,
               url: processedUrl,
-              targetLanguage: uiLanguage === "zh" ? "zh" : "en",
+              keywords: [], // Empty keywords for now, will update later
+              targetLanguage: uiLanguage,
               uiLanguage: uiLanguage,
+              websiteTitle: data.data.title || "",
             }),
           });
 
-          if (!extractResponse.ok) {
-            const errorData = await extractResponse.json();
-            console.error("[Content Generation] Extract failed:", errorData);
-            throw new Error(errorData.error || "Failed to extract keywords");
-          }
-
-          const extractData = await extractResponse.json();
           console.log(
-            "[Content Generation] Extract success, keywords:",
-            extractData.data?.keywords?.length || 0
+            "[Content Generation] Demo response received, status:",
+            demoResponse.status
           );
 
-          if (extractData.success && extractData.data) {
-            const urlDomain = new URL(processedUrl).hostname;
-            const urlBrand =
-              urlDomain.split(".")[0].charAt(0).toUpperCase() +
-              urlDomain.split(".")[0].slice(1);
+          if (!demoResponse.ok) {
+            const errorText = await demoResponse.text();
+            console.error(
+              "[Content Generation] Demo response not OK:",
+              demoResponse.status,
+              errorText
+            );
+            throw new Error("Failed to generate demo content");
+          }
 
-            setState({
-              websiteData: {
-                rawContent: data.data.markdown,
-                extractedKeywords: extractData.data.keywords || [],
-                rankingOpportunities: [],
-              },
-              demoContent: {
-                chatGPTDemo: null, // Initial null state
-                articleDemo: null,
-                domain: urlDomain,
-                brandName: urlBrand,
-                screenshot: data.data.screenshot,
-              },
+          console.log("[Content Generation] Parsing demo response JSON...");
+          const demoData = await demoResponse.json();
+          console.log("[Content Generation] ✅ Demo data received:", {
+            success: demoData.success,
+            hasData: !!demoData.data,
+            chatGPTDemo: !!demoData.data?.chatGPTDemo,
+            articleDemo: !!demoData.data?.articleDemo,
+            domain: demoData.data?.domain,
+            brandName: demoData.data?.brandName,
+          });
+          console.log(
+            "[Content Generation] ✅ Full demoData:",
+            JSON.stringify(demoData).substring(0, 200)
+          );
+
+          if (demoData.success && demoData.data) {
+            console.log(
+              "[Content Generation] ✅ demoData.success && demoData.data is true, proceeding..."
+            );
+            // Show demo content immediately
+            console.log(
+              "[Content Generation] Setting state to step 2 with demo content..."
+            );
+            console.log(
+              "[Content Generation] Current onboardingStep before setState:",
+              state.onboardingStep
+            );
+
+            setState((prev) => {
+              console.log(
+                "[Content Generation] setState callback - prev.onboardingStep:",
+                prev.onboardingStep
+              );
+              console.log("[Content Generation] demoData.data:", demoData.data);
+              console.log(
+                "[Content Generation] chatGPTDemo:",
+                demoData.data?.chatGPTDemo
+              );
+              console.log(
+                "[Content Generation] articleDemo:",
+                demoData.data?.articleDemo
+              );
+
+              const newState = {
+                ...prev,
+                demoContent: {
+                  ...demoData.data,
+                  screenshot: data.data.screenshot,
+                },
+                onboardingStep: 2, // Move to step 2 to show demo content
+              };
+              console.log(
+                "[Content Generation] State updated to step 2, onboardingStep:",
+                newState.onboardingStep
+              );
+              console.log(
+                "[Content Generation] newState.demoContent:",
+                newState.demoContent
+              );
+              console.log(
+                "[Content Generation] newState.demoContent.chatGPTDemo:",
+                newState.demoContent?.chatGPTDemo
+              );
+              return newState;
             });
 
-            // Now generate demo content - WAIT for it to avoid hardcoded demo display
-            try {
-              console.log(
-                "[Content Generation] Step 3: Generating demo content..."
-              );
-              const demoResponse = await fetch("/api/generate-demo-content", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${
-                    localStorage.getItem("auth_token") || ""
-                  }`,
-                },
-                body: JSON.stringify({
-                  content: data.data.markdown,
-                  url: processedUrl,
-                  keywords: extractData.data.keywords || [],
-                  targetLanguage: uiLanguage,
-                  uiLanguage: uiLanguage,
-                  websiteTitle: data.data.title || "",
-                }),
-              });
-
-              if (!demoResponse.ok) {
-                throw new Error("Failed to generate demo content");
-              }
-
-              const demoData = await demoResponse.json();
-              if (demoData.success && demoData.data) {
-                setState((prev) => ({
-                  ...prev,
-                  demoContent: {
-                    ...demoData.data,
-                    screenshot: data.data.screenshot,
-                  },
-                  onboardingStep: 2, // Move to step 2 ONLY after demo content is ready
-                }));
-              } else {
-                throw new Error("Invalid demo content format");
-              }
-            } catch (demoError) {
-              console.error(
-                "[Content Generation] Demo generation failed:",
-                demoError
-              );
-              // Fallback to step 2 anyway so the user isn't stuck
-              setState((prev) => ({ ...prev, onboardingStep: 2 }));
-            }
-          } else {
-            throw new Error("Invalid extract response format");
-          }
-        } catch (extractError: any) {
-          console.error(
-            "[Content Generation] Error extracting keywords:",
-            extractError
-          );
-
-          // 处理网络错误
-          if (
-            extractError?.message?.includes("Failed to fetch") ||
-            extractError?.name === "TypeError"
-          ) {
-            console.warn(
-              "[Content Generation] Network error during keyword extraction"
+            // Step 3: Extract keywords in background (async, non-blocking)
+            // Note: DataForSEO API will be called here, but it won't block the UI
+            console.log(
+              "[Content Generation] Step 3: Extracting keywords in background..."
             );
-          }
+            (async () => {
+              try {
+                const extractResponse = await fetch("/api/extract-keywords", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${
+                      localStorage.getItem("auth_token") || ""
+                    }`,
+                  },
+                  body: JSON.stringify({
+                    content: data.data.markdown,
+                    url: processedUrl,
+                    targetLanguage: uiLanguage === "zh" ? "zh" : "en",
+                    uiLanguage: uiLanguage,
+                  }),
+                });
 
-          // Still move to next step, just without keywords
-          console.log("[Content Generation] Moving to step 2 without keywords");
-          const urlDomain2 = new URL(processedUrl).hostname;
-          const urlBrand2 =
-            urlDomain2.split(".")[0].charAt(0).toUpperCase() +
-            urlDomain2.split(".")[0].slice(1);
-          setState({
+                if (extractResponse.ok) {
+                  const extractData = await extractResponse.json();
+                  if (extractData.success && extractData.data?.keywords) {
+                    console.log(
+                      "[Content Generation] Keywords extracted:",
+                      extractData.data.keywords.length
+                    );
+                    // Update state with keywords (non-blocking)
+                    setState((prev) => ({
+                      ...prev,
+                      websiteData: {
+                        ...prev.websiteData,
+                        extractedKeywords: extractData.data.keywords || [],
+                      },
+                    }));
+                  }
+                } else {
+                  console.warn(
+                    "[Content Generation] Keyword extraction failed, continuing without keywords"
+                  );
+                }
+              } catch (extractError: any) {
+                console.warn(
+                  "[Content Generation] Error extracting keywords (non-blocking):",
+                  extractError
+                );
+                // Don't block the UI, just log the error
+              }
+            })();
+          } else {
+            throw new Error("Invalid demo content format");
+          }
+        } catch (demoError) {
+          console.error(
+            "[Content Generation] Demo generation failed:",
+            demoError
+          );
+          // Fallback to step 2 anyway so the user isn't stuck
+          setState((prev) => ({
+            ...prev,
             demoContent: {
               chatGPTDemo: null,
               articleDemo: null,
-              domain: urlDomain2,
-              brandName: urlBrand2,
+              domain: urlDomain,
+              brandName: urlBrand,
               screenshot: data.data.screenshot,
             },
-            onboardingStep: 1, // Stay on loading step
-          });
-
-          // After a short delay, move to step 2 (GPT demo)
-          setTimeout(() => {
-            setState((prev) => ({
-              ...prev,
-              onboardingStep: 2, // Move to GPT demo
-            }));
-          }, 1000);
+            onboardingStep: 2,
+          }));
         }
       } else {
         throw new Error("No data returned from scrape");
@@ -1826,20 +1924,48 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           });
 
           if (!demoResponse.ok) {
+            const errorText = await demoResponse.text();
+            console.error(
+              "[Content Generation] Demo response not OK:",
+              demoResponse.status,
+              errorText
+            );
             throw new Error("Failed to generate demo content");
           }
 
           const demoData = await demoResponse.json();
+          console.log(
+            "[Content Generation] Demo data received (handleAddWebsiteFromManager):",
+            {
+              success: demoData.success,
+              hasData: !!demoData.data,
+              chatGPTDemo: !!demoData.data?.chatGPTDemo,
+              articleDemo: !!demoData.data?.articleDemo,
+              domain: demoData.data?.domain,
+              brandName: demoData.data?.brandName,
+            }
+          );
+
           if (demoData.success && demoData.data) {
             // Show demo content immediately
-            setState((prev) => ({
-              ...prev,
-              demoContent: {
-                ...demoData.data,
-                screenshot: data.data.screenshot,
-              },
-              onboardingStep: 2, // Move to step 2 to show demo content
-            }));
+            console.log(
+              "[Content Generation] Setting state to step 2 with demo content (handleAddWebsiteFromManager)..."
+            );
+            setState((prev) => {
+              const newState = {
+                ...prev,
+                demoContent: {
+                  ...demoData.data,
+                  screenshot: data.data.screenshot,
+                },
+                onboardingStep: 2, // Move to step 2 to show demo content
+              };
+              console.log(
+                "[Content Generation] State updated to step 2 (handleAddWebsiteFromManager), onboardingStep:",
+                newState.onboardingStep
+              );
+              return newState;
+            });
 
             // Step 3: Extract keywords in background (async, non-blocking)
             console.log(
@@ -2622,8 +2748,20 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                         : "bg-emerald-500 text-white"
                     )}
                   >
-                    {state.demoContent?.chatGPTDemo?.userQuestion ||
-                      t.bestAgeVerification}
+                    {(() => {
+                      const userQuestion =
+                        state.demoContent?.chatGPTDemo?.userQuestion;
+                      console.log(
+                        "[Content Generation] Rendering userQuestion:",
+                        {
+                          hasDemoContent: !!state.demoContent,
+                          hasChatGPTDemo: !!state.demoContent?.chatGPTDemo,
+                          userQuestion: userQuestion,
+                          willUseDefault: !userQuestion,
+                        }
+                      );
+                      return userQuestion || t.bestAgeVerification;
+                    })()}
                   </div>
                 </div>
 

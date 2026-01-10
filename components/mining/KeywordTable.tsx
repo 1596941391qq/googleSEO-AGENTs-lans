@@ -38,6 +38,9 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
 }) => {
   // 蓝海模式不显示DR对比列
   const showDRComparison = miningMode === "existing-website-audit";
+  // 跟踪哪个关键词的蓝海分数详细分解是展开的（默认折叠）
+  const [expandedScoreBreakdownId, setExpandedScoreBreakdownId] =
+    React.useState<string | null>(null);
   return (
     <div className="overflow-x-auto custom-scrollbar">
       <table
@@ -250,7 +253,9 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                     >
                       <div className="flex flex-col md:flex-row gap-6">
                         <div className="flex-1 space-y-4">
-                          {(item.searchIntent || item.intentAnalysis) &&
+                          {(item.intentAssessment ||
+                            item.searchIntent ||
+                            item.intentAnalysis) &&
                             (() => {
                               // 过滤掉错误信息，只显示有效内容
                               const hasErrorKeywords = (
@@ -279,6 +284,12 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                                 );
                               };
 
+                              // 优先使用 intentAssessment（新格式）
+                              const isValidIntentAssessment =
+                                item.intentAssessment &&
+                                !hasErrorKeywords(item.intentAssessment);
+
+                              // 向后兼容：检查旧格式
                               const isValidSearchIntent =
                                 item.searchIntent &&
                                 !hasErrorKeywords(item.searchIntent);
@@ -288,6 +299,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
 
                               // 如果都包含错误信息，不显示这个卡片
                               if (
+                                !isValidIntentAssessment &&
                                 !isValidSearchIntent &&
                                 !isValidIntentAnalysis
                               ) {
@@ -320,7 +332,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                                     </CardTitle>
                                   </CardHeader>
                                   <CardContent className="space-y-3">
-                                    {isValidSearchIntent && (
+                                    {isValidIntentAssessment ? (
+                                      // 新格式：显示合并的 intentAssessment
                                       <Card
                                         className={cn(
                                           isDarkTheme
@@ -329,66 +342,92 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                                         )}
                                       >
                                         <CardContent className="p-4">
-                                          <div
-                                            className={cn(
-                                              "text-xs font-semibold mb-2",
-                                              isDarkTheme
-                                                ? "text-emerald-400"
-                                                : "text-emerald-700"
-                                            )}
-                                          >
-                                            {t.userIntent ||
-                                              (uiLanguage === "zh"
-                                                ? "用户意图"
-                                                : "USER INTENT")}
-                                          </div>
                                           <p
                                             className={cn(
-                                              "text-sm leading-relaxed",
+                                              "text-sm leading-relaxed whitespace-pre-line",
                                               isDarkTheme
                                                 ? "text-white"
                                                 : "text-slate-700"
                                             )}
                                           >
-                                            {item.searchIntent}
+                                            {item.intentAssessment}
                                           </p>
                                         </CardContent>
                                       </Card>
-                                    )}
-                                    {isValidIntentAnalysis && (
-                                      <Card
-                                        className={cn(
-                                          isDarkTheme
-                                            ? "bg-black border-emerald-500/30"
-                                            : "bg-emerald-50 border-emerald-200"
+                                    ) : (
+                                      // 向后兼容：显示分离的 searchIntent 和 intentAnalysis
+                                      <>
+                                        {isValidSearchIntent && (
+                                          <Card
+                                            className={cn(
+                                              isDarkTheme
+                                                ? "bg-black border-emerald-500/30"
+                                                : "bg-emerald-50 border-emerald-200"
+                                            )}
+                                          >
+                                            <CardContent className="p-4">
+                                              <div
+                                                className={cn(
+                                                  "text-xs font-semibold mb-2",
+                                                  isDarkTheme
+                                                    ? "text-emerald-400"
+                                                    : "text-emerald-700"
+                                                )}
+                                              >
+                                                {t.userIntent ||
+                                                  (uiLanguage === "zh"
+                                                    ? "用户意图"
+                                                    : "USER INTENT")}
+                                              </div>
+                                              <p
+                                                className={cn(
+                                                  "text-sm leading-relaxed",
+                                                  isDarkTheme
+                                                    ? "text-white"
+                                                    : "text-slate-700"
+                                                )}
+                                              >
+                                                {item.searchIntent}
+                                              </p>
+                                            </CardContent>
+                                          </Card>
                                         )}
-                                      >
-                                        <CardContent className="p-4">
-                                          <div
+                                        {isValidIntentAnalysis && (
+                                          <Card
                                             className={cn(
-                                              "text-xs font-semibold mb-2",
                                               isDarkTheme
-                                                ? "text-emerald-400"
-                                                : "text-emerald-700"
+                                                ? "bg-black border-emerald-500/30"
+                                                : "bg-emerald-50 border-emerald-200"
                                             )}
                                           >
-                                            {t.intentVsSerpMatch ||
-                                              (uiLanguage === "zh"
-                                                ? "意图与SERP匹配"
-                                                : "INTENT vs SERP MATCH")}
-                                          </div>
-                                          <p
-                                            className={cn(
-                                              "text-sm leading-relaxed",
-                                              isDarkTheme
-                                                ? "text-white"
-                                                : "text-slate-700"
-                                            )}
-                                          >
-                                            {item.intentAnalysis}
-                                          </p>
-                                        </CardContent>
-                                      </Card>
+                                            <CardContent className="p-4">
+                                              <div
+                                                className={cn(
+                                                  "text-xs font-semibold mb-2",
+                                                  isDarkTheme
+                                                    ? "text-emerald-400"
+                                                    : "text-emerald-700"
+                                                )}
+                                              >
+                                                {t.intentVsSerpMatch ||
+                                                  (uiLanguage === "zh"
+                                                    ? "意图与SERP匹配"
+                                                    : "INTENT vs SERP MATCH")}
+                                              </div>
+                                              <p
+                                                className={cn(
+                                                  "text-sm leading-relaxed",
+                                                  isDarkTheme
+                                                    ? "text-white"
+                                                    : "text-slate-700"
+                                                )}
+                                              >
+                                                {item.intentAnalysis}
+                                              </p>
+                                            </CardContent>
+                                          </Card>
+                                        )}
+                                      </>
                                     )}
                                   </CardContent>
                                 </Card>
@@ -406,20 +445,53 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                                 )}
                               >
                                 <CardHeader className="pb-3">
-                                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                    <Lightbulb className="w-4 h-4 text-emerald-500" />
-                                    <span
+                                  <div className="flex items-center justify-between">
+                                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                      <Lightbulb className="w-4 h-4 text-emerald-500" />
+                                      <span
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "text-white"
+                                            : "text-slate-900"
+                                        )}
+                                      >
+                                        {uiLanguage === "zh"
+                                          ? "蓝海信号评分"
+                                          : "Blue Ocean Score"}
+                                      </span>
+                                    </CardTitle>
+                                    <button
+                                      onClick={() =>
+                                        setExpandedScoreBreakdownId(
+                                          expandedScoreBreakdownId === item.id
+                                            ? null
+                                            : item.id
+                                        )
+                                      }
                                       className={cn(
+                                        "text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors",
                                         isDarkTheme
-                                          ? "text-white"
-                                          : "text-slate-900"
+                                          ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                                          : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                       )}
                                     >
-                                      {uiLanguage === "zh"
-                                        ? "蓝海信号评分详情"
-                                        : "Blue Ocean Score Breakdown"}
-                                    </span>
-                                  </CardTitle>
+                                      {expandedScoreBreakdownId === item.id ? (
+                                        <>
+                                          <ChevronUp className="w-3 h-3" />
+                                          {uiLanguage === "zh"
+                                            ? "收起详情"
+                                            : "Hide Details"}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <ChevronDown className="w-3 h-3" />
+                                          {uiLanguage === "zh"
+                                            ? "查看详情"
+                                            : "View Details"}
+                                        </>
+                                      )}
+                                    </button>
+                                  </div>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                   <div
@@ -470,76 +542,92 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                                         </span>
                                       </span>
                                     </div>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <div
-                                      className={cn(
-                                        "text-xs font-semibold mb-2",
-                                        isDarkTheme
-                                          ? "text-slate-400"
-                                          : "text-slate-600"
-                                      )}
-                                    >
-                                      {uiLanguage === "zh"
-                                        ? "评分维度"
-                                        : "Scoring Factors"}
-                                    </div>
-                                    {item.blueOceanScoreBreakdown.factors.map(
-                                      (factor, index) => (
-                                        <Card
-                                          key={index}
-                                          className={cn(
-                                            isDarkTheme
-                                              ? "bg-slate-900/50 border-slate-800"
-                                              : "bg-slate-50 border-slate-200"
-                                          )}
-                                        >
-                                          <CardContent className="p-3">
-                                            <div className="flex items-start justify-between gap-3 mb-1">
-                                              <span
-                                                className={cn(
-                                                  "text-sm font-medium flex-1",
-                                                  isDarkTheme
-                                                    ? "text-white"
-                                                    : "text-slate-900"
-                                                )}
-                                              >
-                                                {factor.name}
-                                              </span>
-                                              <span
-                                                className={cn(
-                                                  "text-sm font-bold px-2 py-0.5 rounded",
-                                                  factor.score >= 20
-                                                    ? isDarkTheme
-                                                      ? "bg-emerald-500/20 text-emerald-400"
-                                                      : "bg-emerald-100 text-emerald-700"
-                                                    : factor.score >= 10
-                                                    ? isDarkTheme
-                                                      ? "bg-yellow-500/20 text-yellow-400"
-                                                      : "bg-yellow-100 text-yellow-700"
-                                                    : isDarkTheme
-                                                    ? "bg-slate-500/20 text-slate-400"
-                                                    : "bg-slate-100 text-slate-700"
-                                                )}
-                                              >
-                                                +{factor.score}
-                                              </span>
-                                            </div>
-                                            <p
-                                              className={cn(
-                                                "text-xs leading-relaxed mt-1",
-                                                isDarkTheme
-                                                  ? "text-slate-400"
-                                                  : "text-slate-600"
-                                              )}
-                                            >
-                                              {factor.reason}
-                                            </p>
-                                          </CardContent>
-                                        </Card>
-                                      )
+                                    {expandedScoreBreakdownId !== item.id && (
+                                      <p
+                                        className={cn(
+                                          "text-xs mt-2",
+                                          isDarkTheme
+                                            ? "text-slate-400"
+                                            : "text-slate-600"
+                                        )}
+                                      >
+                                        {uiLanguage === "zh"
+                                          ? `共 ${item.blueOceanScoreBreakdown.factors.length} 个评分维度，点击"查看详情"查看完整分解`
+                                          : `${item.blueOceanScoreBreakdown.factors.length} scoring factors. Click "View Details" to see full breakdown`}
+                                      </p>
                                     )}
                                   </div>
+                                  {expandedScoreBreakdownId === item.id && (
+                                    <div className="space-y-2">
+                                      <div
+                                        className={cn(
+                                          "text-xs font-semibold mb-2",
+                                          isDarkTheme
+                                            ? "text-slate-400"
+                                            : "text-slate-600"
+                                        )}
+                                      >
+                                        {uiLanguage === "zh"
+                                          ? "评分维度"
+                                          : "Scoring Factors"}
+                                      </div>
+                                      {item.blueOceanScoreBreakdown.factors.map(
+                                        (factor, index) => (
+                                          <Card
+                                            key={index}
+                                            className={cn(
+                                              isDarkTheme
+                                                ? "bg-slate-900/50 border-slate-800"
+                                                : "bg-slate-50 border-slate-200"
+                                            )}
+                                          >
+                                            <CardContent className="p-3">
+                                              <div className="flex items-start justify-between gap-3 mb-1">
+                                                <span
+                                                  className={cn(
+                                                    "text-sm font-medium flex-1",
+                                                    isDarkTheme
+                                                      ? "text-white"
+                                                      : "text-slate-900"
+                                                  )}
+                                                >
+                                                  {factor.name}
+                                                </span>
+                                                <span
+                                                  className={cn(
+                                                    "text-sm font-bold px-2 py-0.5 rounded",
+                                                    factor.score >= 20
+                                                      ? isDarkTheme
+                                                        ? "bg-emerald-500/20 text-emerald-400"
+                                                        : "bg-emerald-100 text-emerald-700"
+                                                      : factor.score >= 10
+                                                      ? isDarkTheme
+                                                        ? "bg-yellow-500/20 text-yellow-400"
+                                                        : "bg-yellow-100 text-yellow-700"
+                                                      : isDarkTheme
+                                                      ? "bg-slate-500/20 text-slate-400"
+                                                      : "bg-slate-100 text-slate-700"
+                                                  )}
+                                                >
+                                                  +{factor.score}
+                                                </span>
+                                              </div>
+                                              <p
+                                                className={cn(
+                                                  "text-xs leading-relaxed mt-1",
+                                                  isDarkTheme
+                                                    ? "text-slate-400"
+                                                    : "text-slate-600"
+                                                )}
+                                              >
+                                                {factor.reason}
+                                              </p>
+                                            </CardContent>
+                                          </Card>
+                                        )
+                                      )}
+                                    </div>
+                                  )}
                                 </CardContent>
                               </Card>
                             )}

@@ -158,15 +158,8 @@ export async function enrichKeywordsWithDataForSEO(
         if (dataForSEOData.volume) {
           keyword.volume = dataForSEOData.volume;
         }
-
-        // 如果难度太高，跳过分析
-        if (dataForSEOData.difficulty && dataForSEOData.difficulty > 40) {
-          keyword.probability = ProbabilityLevel.LOW;
-          keyword.reasoning = `Keyword Difficulty (${dataForSEOData.difficulty}) is too high (>40).`;
-          skippedKeywords.push(keyword);
-          continue;
-        }
       }
+      // 删除预筛选逻辑：所有关键词都应进行完整 SERP 分析，而不是基于单一 KD 值预筛选
       enrichedKeywords.push(keyword);
     }
   } catch (error: any) {

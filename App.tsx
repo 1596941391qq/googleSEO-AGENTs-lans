@@ -4438,7 +4438,13 @@ export default function App() {
           };
         case "batch":
           let batchStep: AppState["step"] = "input";
-          if (
+          // 检查任务是否正在运行中
+          const isBatchRunning =
+            task.batchState &&
+            task.batchState.batchCurrentIndex < task.batchState.batchTotalCount;
+          if (isBatchRunning) {
+            batchStep = "batch-analyzing";
+          } else if (
             task.batchState?.batchKeywords &&
             task.batchState.batchKeywords.length > 0
           ) {
@@ -4503,6 +4509,70 @@ export default function App() {
         default:
           return prev;
       }
+    });
+  };
+
+  // Save current active task state before switching views
+  // This ensures running tasks continue in the background
+  const saveCurrentTaskState = (): TaskState[] => {
+    const currentActiveTaskId = state.taskManager.activeTaskId;
+    if (!currentActiveTaskId) {
+      return state.taskManager.tasks;
+    }
+
+    return state.taskManager.tasks.map((task) => {
+      if (task.id === currentActiveTaskId) {
+        return snapshotCurrentTask(state, task);
+      }
+      return task;
+    });
+  };
+
+  // Helper function to switch step while preserving running tasks
+  const switchStepWithTaskPreservation = (
+    newStep: AppState["step"],
+    additionalUpdates?: (prev: AppState) => Partial<AppState>
+  ) => {
+    setState((prev) => {
+      const currentActiveTaskId = prev.taskManager.activeTaskId;
+      let updatedTasks = prev.taskManager.tasks;
+
+      // Save current active task state if exists
+      if (currentActiveTaskId) {
+        updatedTasks = updatedTasks.map((task) => {
+          if (task.id === currentActiveTaskId) {
+            return snapshotCurrentTask(prev, task);
+          }
+          return task;
+        });
+      }
+
+      // Save to localStorage
+      try {
+        localStorage.setItem(
+          STORAGE_KEYS.TASKS,
+          JSON.stringify(updatedTasks)
+        );
+      } catch (e) {
+        console.error("Failed to save tasks", e);
+      }
+
+      const baseUpdate: Partial<AppState> = {
+        step: newStep,
+        taskManager: {
+          ...prev.taskManager,
+          tasks: updatedTasks,
+        },
+      };
+
+      // Apply additional updates if provided
+      const additional = additionalUpdates ? additionalUpdates(prev) : {};
+
+      return {
+        ...prev,
+        ...baseUpdate,
+        ...additional,
+      };
     });
   };
 
@@ -4731,7 +4801,14 @@ export default function App() {
 
         case "batch":
           let batchStep: AppState["step"] = "input";
-          if (
+          // 检查任务是否正在运行中
+          const isBatchRunning =
+            targetTask.batchState &&
+            targetTask.batchState.batchCurrentIndex <
+              targetTask.batchState.batchTotalCount;
+          if (isBatchRunning) {
+            batchStep = "batch-analyzing";
+          } else if (
             targetTask.batchState?.batchKeywords &&
             targetTask.batchState.batchKeywords.length > 0
           ) {
@@ -8435,26 +8512,71 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         uiLanguage={state.uiLanguage}
         step={state.step}
         isDarkTheme={isDarkTheme}
-        onContentGeneration={(tab) =>
-          setState((prev) => ({
-            ...prev,
-            step: "content-generation",
-            // 切换到"我的网站"时，清除activeTaskId，确保任务不是active
-            taskManager: {
-              ...prev.taskManager,
-              activeTaskId: null,
-              // 确保所有任务都不是active
-              tasks: prev.taskManager.tasks.map((t) => ({
-                ...t,
+        onContentGeneration={(tab) => {
+          // 在切换之前，先保存当前活跃任务的状态（如果有），然后切换到"我的网站"视图
+          setState((prev) => {
+            const currentActiveTaskId = prev.taskManager.activeTaskId;
+            let updatedTasks = prev.taskManager.tasks;
+
+            // 如果有活跃任务，先保存其状态
+            if (currentActiveTaskId) {
+              const currentTask = updatedTasks.find(
+                (t) => t.id === currentActiveTaskId
+              );
+              if (currentTask) {
+                updatedTasks = updatedTasks.map((task) => {
+                  if (task.id === currentActiveTaskId) {
+                    return {
+                      ...snapshotCurrentTask(prev, task),
+                      isActive: false,
+                    };
+                  }
+                  return {
+                    ...task,
+                    isActive: false,
+                  };
+                });
+              } else {
+                // 如果没有找到任务，只更新 isActive
+                updatedTasks = updatedTasks.map((task) => ({
+                  ...task,
+                  isActive: false,
+                }));
+              }
+            } else {
+              // 没有活跃任务，只更新 isActive
+              updatedTasks = updatedTasks.map((task) => ({
+                ...task,
                 isActive: false,
-              })),
-            },
-            contentGeneration: {
-              ...prev.contentGeneration,
-              activeTab: tab || prev.contentGeneration.activeTab,
-            },
-          }))
-        }
+              }));
+            }
+
+            // 保存到 localStorage
+            try {
+              localStorage.setItem(
+                STORAGE_KEYS.TASKS,
+                JSON.stringify(updatedTasks)
+              );
+            } catch (e) {
+              console.error("Failed to save tasks", e);
+            }
+
+            return {
+              ...prev,
+              step: "content-generation",
+              // 切换到"我的网站"时，清除activeTaskId，但保留任务状态（任务继续运行）
+              taskManager: {
+                ...prev.taskManager,
+                activeTaskId: null,
+                tasks: updatedTasks,
+              },
+              contentGeneration: {
+                ...prev.contentGeneration,
+                activeTab: tab || prev.contentGeneration.activeTab,
+              },
+            };
+          });
+        }}
         contentGenerationTab={state.contentGeneration.activeTab}
         onDeepDive={() =>
           setState((prev) => ({ ...prev, step: "article-generator" }))
@@ -8760,7 +8882,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     };
                   });
                 } else {
-                  setState((prev) => ({ ...prev, step: "input" }));
+                  switchStepWithTaskPreservation("input");
                 }
               }}
               uiLanguage={state.uiLanguage}
@@ -8843,12 +8965,32 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           {state.step === "content-generation" && (
             <ContentGenerationView
               state={state.contentGeneration}
-              setState={(update) =>
-                setState((prev) => ({
-                  ...prev,
-                  contentGeneration: { ...prev.contentGeneration, ...update },
-                }))
-              }
+              setState={(update) => {
+                if (typeof update === 'function') {
+                  // Support function form: setState((prev) => ({ ... }))
+                  console.log('[App.tsx] setState called with function form');
+                  setState((prev) => {
+                    const updatedContentGeneration = update(prev.contentGeneration);
+                    console.log('[App.tsx] Updated contentGeneration:', {
+                      onboardingStep: updatedContentGeneration?.onboardingStep,
+                      hasDemoContent: !!updatedContentGeneration?.demoContent,
+                      hasChatGPTDemo: !!updatedContentGeneration?.demoContent?.chatGPTDemo,
+                      hasArticleDemo: !!updatedContentGeneration?.demoContent?.articleDemo,
+                    });
+                    return {
+                      ...prev,
+                      contentGeneration: updatedContentGeneration,
+                    };
+                  });
+                } else {
+                  // Support object form: setState({ ... })
+                  console.log('[App.tsx] setState called with object form:', update);
+                  setState((prev) => ({
+                    ...prev,
+                    contentGeneration: { ...prev.contentGeneration, ...update },
+                  }));
+                }
+              }}
               isDarkTheme={isDarkTheme}
               uiLanguage={state.uiLanguage}
               onGenerateArticle={(keyword: KeywordData) => {
@@ -11035,10 +11177,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         </h4>
                         <button
                           onClick={() =>
-                            setState((prev) => ({
-                              ...prev,
-                              step: "workflow-config",
-                            }))
+                            switchStepWithTaskPreservation("workflow-config")
                           }
                           className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1 font-medium"
                         >
@@ -11184,9 +11323,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   {t.workflowConfigDesc}
                 </p>
                 <button
-                  onClick={() =>
-                    setState((prev) => ({ ...prev, step: "input" }))
-                  }
+                  onClick={() => switchStepWithTaskPreservation("input")}
                   className={`inline-flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
                     isDarkTheme
                       ? "text-slate-400 hover:text-emerald-400"
@@ -11318,7 +11455,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           {state.step === "test-agents" && (
             <TestAgentPanel
               isDarkTheme={isDarkTheme}
-              onClose={() => setState((prev) => ({ ...prev, step: "input" }))}
+              onClose={() => switchStepWithTaskPreservation("input")}
             />
           )}
 

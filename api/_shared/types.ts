@@ -75,8 +75,10 @@ export interface KeywordData {
   topSerpSnippets?: SerpSnippet[];
 
   // Search Intent Analysis
-  searchIntent?: string;
-  intentAnalysis?: string;
+  intentAssessment?: string; // 合并的搜索意图分析：包含用户意图 + 与SERP匹配度判断
+  // 向后兼容字段（已废弃，保留仅为兼容旧数据）
+  searchIntent?: string; // Predicted user search intent (deprecated: use intentAssessment)
+  intentAnalysis?: string; // Analysis of the intent (deprecated: use intentAssessment)
 
   // Domain Authority (new for "Big fish eats small fish")
   websiteDR?: number;

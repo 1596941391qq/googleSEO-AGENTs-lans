@@ -55,15 +55,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const shortContent = cleanContent.substring(0, 4000);
 
-    const keywordPromptPart = safeKeywords.length > 0 
+    const keywordPromptPart = safeKeywords.length > 0
       ? `- 提取的关键词：${safeKeywords.slice(0, 8).map(k => k.keyword).join(', ')}`
       : '- 关键词：(请从网站内容中分析提取)';
 
-    const keywordPromptPartEn = safeKeywords.length > 0 
+    const keywordPromptPartEn = safeKeywords.length > 0
       ? `- Top Keywords: ${safeKeywords.slice(0, 8).map(k => k.keyword).join(', ')}`
       : '- Keywords: (Please analyze and identify from the content provided)';
 
     console.log('[Generate Demo Content] Generating demos for:', domain);
+
+    // Helper function to add timeout to a promise
+    const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, taskName: string): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => {
+          setTimeout(() => {
+            console.warn(`[Generate Demo Content] ${taskName} timed out after ${timeoutMs}ms`);
+            reject(new Error(`${taskName} timeout after ${timeoutMs}ms`));
+          }, timeoutMs);
+        })
+      ]);
+    };
 
     // ===== PART 1: ChatGPT Demo Generation =====
     // Use uiLanguage instead of targetLanguage for demo content
@@ -317,11 +330,18 @@ Write a Medium article showcasing an amazing success story after using ${brandNa
 Return only the JSON, nothing else. Ensure content is realistic, detailed, and compelling, like written by a real person.`;
 
     // Parallelize generation of both demos to save time
-    const [chatGPTData, articleData] = await Promise.all([
-      // Task 1: ChatGPT Demo
+    // Use Promise.allSettled to ensure both tasks complete even if one fails
+    // Add timeout to each task (90 seconds) to prevent hanging
+    console.log('[Generate Demo Content] Starting parallel demo generation...');
+    const results = await Promise.allSettled([
+      // Task 1: ChatGPT Demo (with timeout)
       (async () => {
+        const startTime = Date.now();
         try {
-          const chatGPTResult = await callGeminiAPI(chatGPTPrompt, 'generate-chatgpt-demo', {
+          console.log('[Generate Demo Content] Starting ChatGPT demo generation...');
+          console.log('[Generate Demo Content] ChatGPT demo prompt length:', chatGPTPrompt.length, 'chars');
+
+          const chatGPTPromise = callGeminiAPI(chatGPTPrompt, 'generate-chatgpt-demo', {
             responseMimeType: 'application/json',
             responseSchema: {
               type: 'object',
@@ -341,7 +361,20 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
                   type: 'object',
                   properties: {
                     columns: { type: 'array', items: { type: 'string' } },
-                    rows: { type: 'array', items: { type: 'object' } }
+                    rows: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          platform: { type: 'string' },
+                          score: { type: 'string' },
+                          coreCapability: { type: 'string' },
+                          positioning: { type: 'string' },
+                          isRecommended: { type: 'boolean' }
+                        },
+                        required: ['platform', 'score', 'coreCapability', 'positioning', 'isRecommended']
+                      }
+                    }
                   },
                   required: ['columns', 'rows']
                 }
@@ -350,23 +383,37 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
             },
           });
 
+          console.log('[Generate Demo Content] ChatGPT demo API call initiated, waiting for response (timeout: 90s)...');
+          const chatGPTResult = await withTimeout(chatGPTPromise, 90000, 'ChatGPT demo generation');
+          const elapsedTime = Date.now() - startTime;
+          console.log(`[Generate Demo Content] ChatGPT demo API response received (${elapsedTime}ms)`);
+
           let jsonText = chatGPTResult.text.trim();
+          console.log('[Generate Demo Content] ChatGPT demo raw response length:', jsonText.length, 'chars');
           jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
           const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+            console.log('[Generate Demo Content] ChatGPT demo JSON extracted, parsing...');
+            const parsed = JSON.parse(jsonMatch[0]);
+            console.log('[Generate Demo Content] ChatGPT demo generation completed successfully');
+            return parsed;
           }
           throw new Error('No JSON found in ChatGPT demo response');
-        } catch (error) {
-          console.error('[Generate Demo] ChatGPT demo generation failed:', error);
-          return null;
+        } catch (error: any) {
+          const elapsedTime = Date.now() - startTime;
+          console.error(`[Generate Demo] ChatGPT demo generation failed after ${elapsedTime}ms:`, error?.message || error);
+          throw error;
         }
       })(),
 
-      // Task 2: Article Demo
+      // Task 2: Article Demo (with timeout)
       (async () => {
+        const startTime = Date.now();
         try {
-          const articleResult = await callGeminiAPI(articlePrompt, 'generate-article-demo', {
+          console.log('[Generate Demo Content] Starting Article demo generation...');
+          console.log('[Generate Demo Content] Article demo prompt length:', articlePrompt.length, 'chars');
+
+          const articlePromise = callGeminiAPI(articlePrompt, 'generate-article-demo', {
             responseMimeType: 'application/json',
             responseSchema: {
               type: 'object',
@@ -389,19 +436,47 @@ Return only the JSON, nothing else. Ensure content is realistic, detailed, and c
             },
           });
 
+          console.log('[Generate Demo Content] Article demo API call initiated, waiting for response (timeout: 90s)...');
+          const articleResult = await withTimeout(articlePromise, 90000, 'Article demo generation');
+          const elapsedTime = Date.now() - startTime;
+          console.log(`[Generate Demo Content] Article demo API response received (${elapsedTime}ms)`);
+
           let jsonText = articleResult.text.trim();
+          console.log('[Generate Demo Content] Article demo raw response length:', jsonText.length, 'chars');
           jsonText = jsonText.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
           const jsonMatch = jsonText.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+            console.log('[Generate Demo Content] Article demo JSON extracted, parsing...');
+            const parsed = JSON.parse(jsonMatch[0]);
+            console.log('[Generate Demo Content] Article demo generation completed successfully');
+            return parsed;
           }
           throw new Error('No JSON found in Article demo response');
-        } catch (error) {
-          console.error('[Generate Demo] Article demo generation failed:', error);
-          return null;
+        } catch (error: any) {
+          const elapsedTime = Date.now() - startTime;
+          console.error(`[Generate Demo] Article demo generation failed after ${elapsedTime}ms:`, error?.message || error);
+          throw error;
         }
       })()
     ]);
+
+    // Extract results from Promise.allSettled
+    const chatGPTData = results[0].status === 'fulfilled' ? results[0].value : null;
+    const articleData = results[1].status === 'fulfilled' ? results[1].value : null;
+
+    if (results[0].status === 'rejected') {
+      console.warn('[Generate Demo Content] ChatGPT demo generation failed:', results[0].reason);
+    }
+    if (results[1].status === 'rejected') {
+      console.warn('[Generate Demo Content] Article demo generation failed:', results[1].reason);
+    }
+
+    // At least one demo should be generated
+    if (!chatGPTData && !articleData) {
+      throw new Error('Both demo generations failed');
+    }
+
+    console.log('[Generate Demo Content] Demo generation completed. ChatGPT:', !!chatGPTData, 'Article:', !!articleData);
 
     // Return success response
     // Note: Sidebar content is hardcoded in frontend, not included in API response

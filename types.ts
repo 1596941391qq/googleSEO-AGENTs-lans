@@ -74,11 +74,35 @@ export interface KeywordData {
 
   // Search Intent Analysis
   searchResults?: Array<{ title: string; url: string; snippet?: string }>; // 联网搜索结果
-  searchIntent?: string; // Predicted user search intent
-  intentAnalysis?: string; // Analysis of the intent
+  intentAssessment?: string; // 合并的搜索意图分析：包含用户意图 + 与SERP匹配度判断
+  // 向后兼容字段（已废弃，保留仅为兼容旧数据）
+  searchIntent?: string; // Predicted user search intent (deprecated: use intentAssessment)
+  intentAnalysis?: string; // Analysis of the intent (deprecated: use intentAssessment)
+
+  // Domain Authority (for "Big fish eats small fish" mode)
+  websiteDR?: number;
+  competitorDRs?: number[];
+  canOutrankPositions?: number[];
+  top3Probability?: ProbabilityLevel;
+  top10Probability?: ProbabilityLevel;
+  relevanceScore?: number; // 0-1
+
+  // Blue Ocean Scoring
+  blueOceanScore?: number; // 0-100
+  blueOceanScoreBreakdown?: {
+    totalScore: number;
+    factors: Array<{
+      name: string;
+      score: number;
+      reason: string;
+    }>;
+  };
 
   // Verification (Step 3)
   isIndexed?: boolean;
+
+  // Debug
+  rawResponse?: string;
 }
 
 export interface SEOStrategyReport {
