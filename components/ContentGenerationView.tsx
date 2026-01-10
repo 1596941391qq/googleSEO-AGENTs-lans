@@ -41,7 +41,6 @@ import { KeywordData } from "../types";
 
 // 定义本地类型
 import { ProjectDashboard } from "./projects/ProjectDashboard";
-import { PublishTab } from "./article-generator/PublishTab";
 
 interface WebsiteBinding {
   id: string;
@@ -98,6 +97,7 @@ import { WebsiteManager } from "./WebsiteManager";
 import { WebsiteDataDashboard } from "./website-data";
 import { useAuth } from "../contexts/AuthContext";
 import { getUserId } from "./website-data/utils";
+import { fetchWithAuth, postWithAuth } from "../lib/api-client";
 
 // Opportunity Insight Terminal Component
 const OpportunityTerminal: React.FC<{
@@ -155,13 +155,10 @@ const OpportunityTerminal: React.FC<{
 
       // 缓存不存在或已过期，调用 API
       try {
-        const response = await fetch("/api/websites/insights", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
-          },
-          body: JSON.stringify({ websiteId, url, uiLanguage }),
+        const response = await postWithAuth("/api/websites/insights", {
+          websiteId,
+          url,
+          uiLanguage,
         });
         const result = await response.json();
         if (result.success && result.data?.insights) {
@@ -405,16 +402,9 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/article-rankings/get", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
-        },
-        body: JSON.stringify({
-          websiteUrl: website.url,
-          userId: currentUserId,
-        }),
+      const response = await postWithAuth("/api/article-rankings/get", {
+        websiteUrl: website.url,
+        userId: currentUserId,
       });
 
       if (response.ok) {
@@ -1622,16 +1612,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
       setIsCheckingWebsite(true); // Start checking
       try {
         // Try loading from database first
-        const response = await fetch(
-          `/api/websites/list?user_id=${currentUserId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${
-                localStorage.getItem("auth_token") || ""
-              }`,
-            },
-          }
-        );
+        const response = await fetchWithAuth(`/api/websites/list`);
 
         if (response.ok) {
           const result = await response.json();
@@ -1667,21 +1648,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   );
 
                   // 使用 overview-only 端点，只读取缓存，不触发 API 调用
-                  const cacheResponse = await fetch(
+                  const cacheResponse = await postWithAuth(
                     "/api/website-data/overview-only",
                     {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${
-                          localStorage.getItem("auth_token") || ""
-                        }`,
-                      },
-                      body: JSON.stringify({
-                        websiteId: loadedWebsite.id,
-                        userId: currentUserId,
-                        region: selectedRegion, // 确保传递正确的 region 字符串
-                      }),
+                      websiteId: loadedWebsite.id,
+                      userId: currentUserId,
+                      region: selectedRegion, // 确保传递正确的 region 字符串
                     }
                   );
 
@@ -1778,8 +1750,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           return;
         }
 
-        // If no website is bound, default to showing demo steps (step 2: ChatGPT demo)
-        // This ensures users always see the demo steps by default
+        // If no website is bound, default to showing step 1 (domain input)
+        // This ensures users always see the input page by default when not bound
         // Note: We check if onboardingStep is undefined or 0 to avoid overwriting existing state
         setState((prevState) => {
           if (
@@ -1789,14 +1761,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           ) {
             return {
               ...prevState,
-              onboardingStep: 2, // Start with ChatGPT demo
-              demoContent: prevState.demoContent || {
-                chatGPTDemo: null,
-                articleDemo: null,
-                domain: "example.com",
-                brandName: "Example",
-                screenshot: null,
-              },
+              onboardingStep: 0, // Start with domain input (Step 1)
+              demoContent: prevState.demoContent || null,
             };
           }
           return prevState;
@@ -2096,23 +2062,17 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             state.onboardingStep
           );
 
-          const demoResponse = await fetch("/api/generate-demo-content", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${
-                localStorage.getItem("auth_token") || ""
-              }`,
-            },
-            body: JSON.stringify({
+          const demoResponse = await postWithAuth(
+            "/api/generate-demo-content",
+            {
               content: data.data.markdown,
               url: processedUrl,
               keywords: [], // Empty keywords for now, will update later
               targetLanguage: uiLanguage,
               uiLanguage: uiLanguage,
               websiteTitle: data.data.title || "",
-            }),
-          });
+            }
+          );
 
           console.log(
             "[Content Generation] Demo response received, status:",
@@ -2202,21 +2162,15 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             );
             (async () => {
               try {
-                const extractResponse = await fetch("/api/extract-keywords", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${
-                      localStorage.getItem("auth_token") || ""
-                    }`,
-                  },
-                  body: JSON.stringify({
+                const extractResponse = await postWithAuth(
+                  "/api/extract-keywords",
+                  {
                     content: data.data.markdown,
                     url: processedUrl,
                     targetLanguage: uiLanguage === "zh" ? "zh" : "en",
                     uiLanguage: uiLanguage,
-                  }),
-                });
+                  }
+                );
 
                 if (extractResponse.ok) {
                   const extractData = await extractResponse.json();
@@ -2358,13 +2312,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
         );
 
         // Call Firecrawl API
-        const response = await fetch("/api/scrape-website", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
-          },
-          body: JSON.stringify({ url: processedUrl }),
+        const response = await postWithAuth("/api/scrape-website", {
+          url: processedUrl,
         });
 
         if (!response.ok) {
@@ -2401,23 +2350,17 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           console.log(
             "[Content Generation] Step 2: Generating demo content..."
           );
-          const demoResponse = await fetch("/api/generate-demo-content", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${
-                localStorage.getItem("auth_token") || ""
-              }`,
-            },
-            body: JSON.stringify({
+          const demoResponse = await postWithAuth(
+            "/api/generate-demo-content",
+            {
               content: data.data.markdown,
               url: processedUrl,
               keywords: [], // Empty keywords for now, will update later
               targetLanguage: uiLanguage,
               uiLanguage: uiLanguage,
               websiteTitle: data.data.title || "",
-            }),
-          });
+            }
+          );
 
           if (!demoResponse.ok) {
             const errorText = await demoResponse.text();
@@ -2469,21 +2412,15 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             );
             (async () => {
               try {
-                const extractResponse = await fetch("/api/extract-keywords", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${
-                      localStorage.getItem("auth_token") || ""
-                    }`,
-                  },
-                  body: JSON.stringify({
+                const extractResponse = await postWithAuth(
+                  "/api/extract-keywords",
+                  {
                     content: data.data.markdown,
                     url: processedUrl,
                     targetLanguage: uiLanguage === "zh" ? "zh" : "en",
                     uiLanguage: uiLanguage,
-                  }),
-                });
+                  }
+                );
 
                 if (extractResponse.ok) {
                   const extractData = await extractResponse.json();
@@ -3993,34 +3930,24 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
                     // Save website data to database
                     try {
-                      const saveResponse = await fetch(
+                      const saveResponse = await postWithAuth(
                         "/api/website-data/save",
                         {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                            Authorization: `Bearer ${
-                              localStorage.getItem("auth_token") || ""
-                            }`,
-                          },
-                          body: JSON.stringify({
-                            userId: currentUserId,
-                            websiteUrl: tempUrl,
-                            websiteTitle:
-                              state.demoContent?.articleDemo?.article?.title ||
-                              "",
-                            websiteDescription: "",
-                            websiteScreenshot:
-                              state.demoContent?.screenshot || "",
-                            rawContent: state.websiteData?.rawContent || "",
-                            keywords:
-                              state.websiteData?.extractedKeywords || [],
-                            industry: state.website?.industry,
-                            monthlyVisits: state.website?.monthlyVisits,
-                            monthlyRevenue: qa2,
-                            marketingTools: qa3,
-                            additionalInfo: qa4,
-                          }),
+                          userId: currentUserId,
+                          websiteUrl: tempUrl,
+                          websiteTitle:
+                            state.demoContent?.articleDemo?.article?.title ||
+                            "",
+                          websiteDescription: "",
+                          websiteScreenshot:
+                            state.demoContent?.screenshot || "",
+                          rawContent: state.websiteData?.rawContent || "",
+                          keywords: state.websiteData?.extractedKeywords || [],
+                          industry: state.website?.industry,
+                          monthlyVisits: state.website?.monthlyVisits,
+                          monthlyRevenue: qa2,
+                          marketingTools: qa3,
+                          additionalInfo: qa4,
                         }
                       );
 
@@ -4061,20 +3988,11 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
                       // Set as default website
                       try {
-                        const setDefaultResponse = await fetch(
+                        const setDefaultResponse = await postWithAuth(
                           "/api/websites/set-default",
                           {
-                            method: "POST",
-                            headers: {
-                              "Content-Type": "application/json",
-                              Authorization: `Bearer ${
-                                localStorage.getItem("auth_token") || ""
-                              }`,
-                            },
-                            body: JSON.stringify({
-                              websiteId: websiteId,
-                              userId: currentUserId,
-                            }),
+                            websiteId: websiteId,
+                            userId: currentUserId,
                           }
                         );
 

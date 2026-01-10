@@ -1130,62 +1130,25 @@ export const analyzeRankingProbability = async (
     const keywordStartTime = Date.now();
 
     // Step 2: Build system instruction with real SERP data
-    // 限制SERP结果数量和数据长度，避免输入token过多
-    const maxSerpResults = 5; // 只使用前5个结果
-    const maxSerpSnippetLength = 150; // 限制snippet长度（用于SERP上下文）
-    // 蓝海模式判断：如果没有siteDR，就是蓝海模式，不需要DR对比
+    // OPTIMIZED: Reduced from Top 5 to Top 3, removed verbose warnings
+    const maxSerpResults = 3; // 只使用前3个结果 (优化：从5减到3)
     const isBlueOceanMode = siteDR === undefined;
 
     const serpContext = serpResults.length > 0
-      ? `\n\nTOP ${engineName} SEARCH RESULTS FOR REFERENCE (analyzing "${keywordData.keyword}"):\n⚠️ CRITICAL: These are ONLY the TOP ${maxSerpResults} ranking results provided to you for competition analysis. This is a SAMPLE, NOT the total number of competing pages.\n\n⚠️ DO NOT infer total competition from this sample size. Google typically has thousands or millions of results for any keyword. Focus on QUALITY of competition (authority, relevance, optimization) rather than quantity.\n\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
-        const snippet = r.snippet ? (r.snippet.length > maxSerpSnippetLength ? r.snippet.substring(0, maxSerpSnippetLength) + '...' : r.snippet) : '';
-        // 蓝海模式下不显示DR信息
-        const drInfo = (!isBlueOceanMode && competitorDRs[i] !== undefined) ? ` (Domain Authority: ${competitorDRs[i]})` : '';
-        return `${i + 1}. Title: ${r.title}\n   URL: ${r.url}${drInfo}\n   Snippet: ${snippet}`;
-      }).join('\n\n')}\n\nEstimated Total Results on ${engineName}: ${serpResultCount > 0 ? serpResultCount.toLocaleString() : 'Unknown (Likely Many)'}\n\n⚠️ IMPORTANT: 
-- Use these top results to assess the QUALITY of competition you need to beat
-- Evaluate if results match the EXPECTED industry context (especially for brand keywords)
-- NEVER state "only X results exist" or "competition is extremely low with only X results" based on this sample
-- Focus on relevance, authority, and industry context match${!isBlueOceanMode && siteDR !== undefined ? `\n\nYOUR WEBSITE AUTHORITY: ${siteDR}. Compare this with competitors to judge if you can outrank them.` : ''}`
-      : `\n\nNote: Real SERP data could not be fetched. Analyze based on your knowledge.`;
+      ? `\n\nTOP ${maxSerpResults} ${engineName} RESULTS for "${keywordData.keyword}":\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
+        const drInfo = (!isBlueOceanMode && competitorDRs[i] !== undefined) ? ` [DR:${competitorDRs[i]}]` : '';
+        return `${i + 1}. ${r.title} | ${r.url}${drInfo}`;
+      }).join('\n')}${!isBlueOceanMode && siteDR !== undefined ? `\n\nYour DR: ${siteDR}` : ''}`
+      : `\n\nNote: SERP data unavailable.`;
 
     // Add DataForSEO data context if available (use dataForSEOData or serankingData for backward compatibility)
+    // OPTIMIZED: Reduced verbose explanations to single-line format
     const dataForSEOData = (keywordData as any).dataForSEOData || keywordData.serankingData;
     const dataForSEOContext = dataForSEOData && dataForSEOData.is_data_found
-      ? `\n\nDATAFORSEO KEYWORD DATA FOR "${keywordData.keyword}":
-- Search Volume: ${dataForSEOData.volume || 'N/A'} monthly searches
-- Keyword Difficulty (KD): ${dataForSEOData.difficulty || 'N/A'} (0-100 scale, higher = more competitive)
-- CPC: $${dataForSEOData.cpc || 'N/A'}
-- Competition: ${dataForSEOData.competition ? (dataForSEOData.competition * 100).toFixed(1) + '%' : 'N/A'}
-
-IMPORTANT: Consider the DataForSEO Keyword Difficulty (KD) score in your analysis:
-- KD 0-20: Very low competition (favors HIGH probability)
-- KD 21-40: Low to moderate competition (consider MEDIUM to HIGH)
-- KD 41-60: Moderate to high competition (likely MEDIUM to LOW)
-- KD 61-80: High competition (likely LOW)
-- KD 81-100: Very high competition (definitely LOW)
-
-Combine the KD score with your SERP analysis to make a final judgment.`
+      ? `\n\nKEYWORD DATA: Vol=${dataForSEOData.volume || 'N/A'}, KD=${dataForSEOData.difficulty || 'N/A'}, CPC=$${dataForSEOData.cpc || 'N/A'}`
       : dataForSEOData
-        ? `\n\nDATAFORSEO KEYWORD DATA FOR "${keywordData.keyword}":
-⚠️ NO DATA FOUND
-
-**CRITICAL**: Do NOT automatically treat "no DataForSEO data" as a blue ocean signal!
-
-When DataForSEO has no data for a keyword, it could mean:
-1. **For non-English languages (${targetLanguage})**: DataForSEO's database may not have comprehensive coverage for this language. This is NORMAL and does NOT indicate a blue ocean opportunity.
-2. Very low or zero search volume in their database (possible but not guaranteed)
-3. New, emerging, or highly niche keyword (possible but not guaranteed)
-4. Little to no advertising competition (possible but not guaranteed)
-
-**IMPORTANT ANALYSIS RULES**:
-- **For non-English target languages**: DataForSEO "no data" is often due to limited database coverage, NOT because it's a blue ocean keyword. Do NOT give bonus points for this.
-- **For English keywords**: DataForSEO "no data" MIGHT indicate a blue ocean, but you MUST verify with SERP results first.
-- **ALWAYS prioritize SERP analysis over DataForSEO data absence**: If SERP shows strong competition (authoritative sites, optimized content), the keyword is NOT a blue ocean regardless of DataForSEO data.
-- **Only consider it a positive signal if**: SERP results ALSO show weak competition (forums, low-quality content) AND the target language is English.
-
-ACTION: Analyze SERP results first. Do NOT automatically assign HIGH probability just because DataForSEO has no data.`
-        : `\n\nNote: DataForSEO keyword data not available for this keyword (API call failed or not attempted).`;
+        ? `\n\nKEYWORD DATA: No data (for non-English, this is normal - verify with SERP)`
+        : ``;
 
     // 限制topSerpSnippets的长度，避免JSON过大
     const maxTitleLengthForJson = 80;
@@ -1198,54 +1161,24 @@ ACTION: Analyze SERP results first. Do NOT automatically assign HIGH probability
       })))
       : '[]';
 
+    // OPTIMIZED: Reduced fullSystemInstruction by removing redundant guidance (already in systemInstruction)
     const fullSystemInstruction = `
 ${systemInstruction}
 
-TASK: Analyze ${engineName} SERP competition for: "${keywordData.keyword}"
+TASK: Analyze ${engineName} SERP for "${keywordData.keyword}"
 ${serpContext}
 ${dataForSEOContext}
 
-**ANALYSIS STEPS:**
-
-1. **Search Intent**: Classify as Informational/Transactional/Commercial/Local/Proper Noun. Identify expected industry context.
-
-2. **SERP Competition Analysis**:
-   - Site types: Big Brand / Niche Site / Forum/Social / Weak Page / Gov/Edu
-   - Evaluate RELEVANCE: Does content match keyword topic AND industry context?
-   - For proper nouns: Reject results that don't match actual business context
-   - Focus on QUALITY, not quantity (SERP sample ≠ total competition)
-
-3. **Probability Scoring**:
-   - HIGH: Top 3 are weak/off-topic, no relevant authorities in top 5
-   - MEDIUM: Mixed competition, some gaps in top results
-   - LOW: Top 3 include highly relevant big brands/authorities with exact match
-
-**KEY PRINCIPLES:**
-- Relevance > Authority (relevant blog > irrelevant Wikipedia)
-- Authority without relevance = opportunity
-- Authority with high relevance = strong competition
-- For non-English (${targetLanguage}): DataForSEO "no data" ≠ blue ocean (verify with SERP)
-
-**OUTPUT REQUIREMENTS:**
-- All text in ${uiLangName}
-- Use actual SERP results for topSerpSnippets (first 3)
-- Return ONLY valid JSON, no markdown or explanations
-
-JSON format:
+OUTPUT (${uiLangName}, JSON only):
 {
-  "intentAssessment": "Combined intent analysis in ${uiLangName}: User intent description | SERP-intent match analysis",
+  "intentAssessment": "Intent: [type] | SERP Match: [analysis]",
   "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
   "relevanceScore": 0-1,
-  "reasoning": "Analysis in ${uiLangName} (concise, 200-400 chars)",
+  "reasoning": "Brief analysis (2-3 sentences)",
   "topSerpSnippets": ${topSerpSnippetsJson}
-}
-
-IMPORTANT: The intentAssessment field should combine both:
-1. User search intent (what users are looking for)
-2. SERP-intent match analysis (how well SERP results match the intent)
-Format: "User Intent: [description] | SERP Match: [analysis]"`;
+}`;
 
     try {
       let response;
@@ -1301,6 +1234,11 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
           : `✨ [${keywordData.keyword}] AI analysis completed`);
 
         console.log(`[Agent 2] Gemini analysis for "${keywordData.keyword}" completed in ${Date.now() - geminiStart}ms`);
+        if (response && response.text) {
+          console.log(`[Agent 2] Gemini response length for "${keywordData.keyword}": ${response.text.length}`);
+        } else {
+          console.warn(`[Agent 2] Gemini response is empty or invalid for "${keywordData.keyword}"`);
+        }
       } catch (apiError: any) {
         // 如果API调用失败（如400错误），使用默认值并继续
         console.error(`API call failed for keyword ${keywordData.keyword}:`, apiError.message);
@@ -1341,7 +1279,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
       // 移除 Markdown 格式标记和思考过程
       if (text && typeof text === 'string') {
         const trimmedText = text.trim();
-        if (trimmedText && (trimmedText.startsWith('**') || trimmedText.startsWith('*'))) {
+        if (trimmedText && typeof trimmedText.startsWith === 'function' && (trimmedText.startsWith('**') || trimmedText.startsWith('*'))) {
           // 查找第一个 { 之前的所有内容，可能是思考过程
           const firstBrace = text.indexOf('{');
           if (firstBrace > 0) {
@@ -1692,7 +1630,7 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
   const BATCH_SIZE = 6; // 提升批处理大小，充分利用 API 并发能力
   const BATCH_DELAY = 300; // 减少批次间延迟，避免过度等待
   const startTime = Date.now();
-  const MAX_EXECUTION_TIME = 280000; // 保持 280 秒超时限制，确保在前端 300 秒超时前返回
+  const MAX_EXECUTION_TIME = 260000; // 保持 260 秒超时限制，确保在前端 300 秒超时前返回
 
   for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
     const elapsed = Date.now() - startTime;
@@ -1951,10 +1889,11 @@ export const generateDeepDiveStrategy = async (
           },
           longTailKeywords: { type: 'array', items: { type: 'string' } },
           longTailKeywords_trans: { type: 'array', items: { type: 'string' } },
+          coreKeywords: { type: 'array', items: { type: 'string' } }, // OPTIMIZED: Embedded core keywords extraction
           recommendedWordCount: { type: 'number' },
           markdown: { type: 'string' }
         },
-        required: ['pageTitleH1', 'metaDescription', 'contentStructure', 'markdown']
+        required: ['pageTitleH1', 'metaDescription', 'contentStructure', 'markdown', 'coreKeywords']
       },
       onRetry: (attempt, error, delay) => {
         onProgress?.(uiLanguage === 'zh'

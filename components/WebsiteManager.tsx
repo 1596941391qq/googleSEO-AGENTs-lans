@@ -104,9 +104,7 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
     setError(null);
 
     try {
-      const response = await fetchWithAuth(
-        `/api/websites/list?user_id=${userId}`
-      );
+      const response = await fetchWithAuth(`/api/websites/list`);
 
       if (response.ok) {
         const result = await response.json();

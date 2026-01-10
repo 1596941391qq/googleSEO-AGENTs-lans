@@ -140,11 +140,12 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
     }
   }
 
-  // Add timeout for fetch (300 seconds per request - balanced for performance and reliability)
+  // Add timeout for fetch (240 seconds per request - balanced for performance and reliability)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+  const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 minutes
 
   try {
+    console.log(`[Gemini API] Requesting ${config?.model || MODEL} with timeout 240s`);
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -187,7 +188,7 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
           content = cleanJSONFromSearchReferences(content);
           if (content && typeof content === 'string') {
             const trimmedContent = content.trim();
-            if (trimmedContent && (trimmedContent.startsWith('**') || trimmedContent.startsWith('*') || trimmedContent.startsWith('#'))) {
+            if (trimmedContent && typeof trimmedContent.startsWith === 'function' && (trimmedContent.startsWith('**') || trimmedContent.startsWith('*') || trimmedContent.startsWith('#'))) {
               const firstBrace = content.indexOf('{');
               if (firstBrace > 0) {
                 content = content.substring(firstBrace);

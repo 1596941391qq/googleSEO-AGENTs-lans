@@ -117,9 +117,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Combine analyzed keywords with skipped keywords
     const allKeywords = [...analyzedKeywords, ...skippedKeywords];
 
+    console.log(`[analyze-ranking] Analysis completed for ${analyzedKeywords.length} keywords. Total keywords: ${allKeywords.length}`);
+
     return res.json({ keywords: allKeywords });
   } catch (error: any) {
-    console.error('Handler error:', error);
+    console.error('Handler error in /api/analyze-ranking:', error);
+    if (error.stack) {
+      console.error('Stack trace:', error.stack);
+    }
     return sendErrorResponse(res, error, 'Failed to analyze ranking');
   }
 }

@@ -646,7 +646,7 @@ export async function auditWebsiteForKeywords(
           // 批量保存到缓存
           const savePromises = analyzedKeywords.map(async (keyword) => {
             await saveKeywordAnalysisCache({
-              website_id: websiteId,
+              website_id: options.websiteId,
               keyword: keyword.keyword,
               location_code: locationCode,
               search_engine: searchEngine,

@@ -11,11 +11,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 import { getHistoricalRankOverview } from '../_shared/tools/dataforseo-domain.js';
 
 interface HistoricalRankRequestBody {
   websiteId: string;
-  userId?: number;
   days?: number;
   region?: string;
 }
@@ -35,15 +35,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId;
+
     const body = req.body as HistoricalRankRequestBody;
 
     if (!body.websiteId) {
       return res.status(400).json({ error: 'websiteId is required' });
-    }
-
-    let userId = body.userId;
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized: userId is required' });
     }
 
     const days = body.days || 30;
@@ -64,7 +66,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const website = websiteResult.rows[0];
 
     // 验证权限
-    if (website.user_id !== userId) {
+    if (String(website.user_id) !== String(userId)) {
+      console.warn('[historical-rank] Permission denied:', {
+        websiteUserId: website.user_id,
+        authUserId: userId,
+        websiteId: body.websiteId,
+      });
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 
@@ -101,10 +108,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 如果缓存过期或不存在，从 API 获取
     if (cacheResult.rows.length === 0) {
       console.log('[historical-rank] 🔍 Fetching from DataForSEO API...');
-      
+
       try {
         const apiHistory = await getHistoricalRankOverview(domain, locationCode, days);
-        
+
         if (apiHistory.length > 0) {
           // 保存到缓存
           await Promise.all(
@@ -140,7 +147,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 cache_expires_at = EXCLUDED.cache_expires_at
             `)
           );
-          
+
           history = apiHistory;
           fromApi = true;
           console.log(`[historical-rank] ✅ Successfully fetched and cached ${history.length} history points from API`);

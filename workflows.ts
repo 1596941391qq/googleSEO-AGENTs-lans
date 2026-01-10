@@ -45,6 +45,7 @@ export const MINING_WORKFLOW: WorkflowDefinition = {
 };
 
 // === Batch Translation Workflow ===
+// OPTIMIZED: Merged batch-intent into batch-analyze to reduce LLM calls
 export const BATCH_WORKFLOW: WorkflowDefinition = {
   id: 'batch',
   name: 'Batch Translation Workflow',
@@ -69,7 +70,7 @@ Ensure the translation is natural and commonly used by native speakers.`,
       name: 'SEO词研究工具',
       description: 'SE Ranking API - Gets keyword difficulty, volume, CPC, and competition data',
       configurable: false,
-      isSystem: true, // Special flag to indicate this is a non-configurable system tool
+      isSystem: true,
     },
     {
       id: 'batch-serp',
@@ -79,23 +80,10 @@ Ensure the translation is natural and commonly used by native speakers.`,
       configurable: false,
     },
     {
-      id: 'batch-intent',
-      type: 'agent',
-      name: 'Intent Analysis Agent',
-      description: 'Predicts user search intent and analyzes SERP match',
-      configurable: true,
-      prompt: `You are a Search Intent Analysis expert.
-Analyze what users are looking for when they search this keyword.
-Evaluate whether the SERP results match the predicted intent.`,
-      defaultPrompt: `You are a Search Intent Analysis expert.
-Analyze what users are looking for when they search this keyword.
-Evaluate whether the SERP results match the predicted intent.`,
-    },
-    {
       id: 'batch-analyze',
       type: 'agent',
-      name: 'Competition Analysis Agent',
-      description: 'Analyzes SERP competition and assigns probability',
+      name: 'Intent & Competition Analysis Agent',
+      description: 'Analyzes search intent, SERP competition, and assigns ranking probability',
       configurable: true,
       prompt: DEFAULT_ANALYZE_PROMPT_EN,
       defaultPrompt: DEFAULT_ANALYZE_PROMPT_EN,
@@ -104,34 +92,21 @@ Evaluate whether the SERP results match the predicted intent.`,
 };
 
 // === Deep Dive Workflow ===
+// OPTIMIZED: Merged deepdive-extract into deepdive-strategy (output includes core_keywords)
+// OPTIMIZED: Merged deepdive-intent into single analysis step
 export const DEEP_DIVE_WORKFLOW: WorkflowDefinition = {
   id: 'deepDive',
   name: 'Deep Dive Strategy Workflow',
-  description: 'Generate content strategy, extract core keywords, research with SEO tools, verify SERP, analyze ranking probability',
+  description: 'Generate content strategy with core keywords, research with SEO tools, verify SERP, analyze ranking',
   nodes: [
     {
       id: 'deepdive-strategy',
       type: 'agent',
       name: 'Content Strategy Agent',
-      description: 'Creates comprehensive SEO content strategy',
+      description: 'Creates SEO content strategy with embedded core keywords',
       configurable: true,
       prompt: DEFAULT_DEEP_DIVE_PROMPT_EN,
       defaultPrompt: DEFAULT_DEEP_DIVE_PROMPT_EN,
-    },
-    {
-      id: 'deepdive-extract',
-      type: 'agent',
-      name: 'Core Keyword Extractor',
-      description: 'Extracts 5-8 core keywords from content strategy',
-      configurable: true,
-      prompt: `You are an SEO keyword extraction specialist.
-Extract the 5-8 most important keywords from the given content strategy.
-Focus on keywords that are critical for ranking and content optimization.
-Return ONLY a JSON array of keywords.`,
-      defaultPrompt: `You are an SEO keyword extraction specialist.
-Extract the 5-8 most important keywords from the given content strategy.
-Focus on keywords that are critical for ranking and content optimization.
-Return ONLY a JSON array of keywords.`,
     },
     {
       id: 'deepdive-seranking',
@@ -149,25 +124,13 @@ Return ONLY a JSON array of keywords.`,
       configurable: false,
     },
     {
-      id: 'deepdive-intent',
+      id: 'deepdive-analyze',
       type: 'agent',
-      name: 'Intent & Probability Agent',
-      description: 'Analyzes search intent, content match, and ranking probability',
+      name: 'SERP Analysis Agent',
+      description: 'Analyzes SERP competition and estimates ranking probability',
       configurable: true,
-      prompt: `You are a comprehensive SEO analysis expert.
-Analyze:
-1. User search intent for the keyword
-2. Whether the proposed content matches this intent
-3. Overall probability of ranking on page 1 based on SERP competition
-
-Provide detailed reasoning for each aspect.`,
-      defaultPrompt: `You are a comprehensive SEO analysis expert.
-Analyze:
-1. User search intent for the keyword
-2. Whether the proposed content matches this intent
-3. Overall probability of ranking on page 1 based on SERP competition
-
-Provide detailed reasoning for each aspect.`,
+      prompt: DEFAULT_ANALYZE_PROMPT_EN,
+      defaultPrompt: DEFAULT_ANALYZE_PROMPT_EN,
     },
   ],
 };

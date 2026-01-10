@@ -173,7 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ${overview.totalKeywords},
           ${overview.newKeywords},
           ${overview.lostKeywords},
-          ${overview.improved_keywords || 0},
+          ${overview.improvedKeywords || 0},
           ${overview.declinedKeywords || 0},
           ${overview.avgPosition},
           ${overview.trafficCost},

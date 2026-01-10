@@ -11,11 +11,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 import { getRelevantPages } from '../_shared/tools/dataforseo-domain.js';
 
 interface RelevantPagesRequestBody {
   websiteId: string;
-  userId?: number;
   limit?: number;
   region?: string;
 }
@@ -35,15 +35,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId;
+
     const body = req.body as RelevantPagesRequestBody;
 
     if (!body.websiteId) {
       return res.status(400).json({ error: 'websiteId is required' });
-    }
-
-    let userId = body.userId;
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized: userId is required' });
     }
 
     const limit = body.limit || 20;
@@ -64,7 +66,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const website = websiteResult.rows[0];
 
     // 验证权限
-    if (website.user_id !== userId) {
+    if (String(website.user_id) !== String(userId)) {
+      console.warn('[relevant-pages] Permission denied:', {
+        websiteUserId: website.user_id,
+        authUserId: userId,
+        websiteId: body.websiteId,
+      });
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 

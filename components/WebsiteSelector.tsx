@@ -20,6 +20,7 @@ import { cn } from "../lib/utils";
 import type { Website, WebsitesListData } from "./WebsiteManager";
 import { useAuth } from "../contexts/AuthContext";
 import { getUserId } from "./website-data/utils";
+import { fetchWithAuth } from "../lib/api-client";
 
 interface WebsiteSelectorProps {
   userId?: number;
@@ -52,11 +53,7 @@ export const WebsiteSelector: React.FC<WebsiteSelectorProps> = ({
     setError(null);
 
     try {
-      const response = await fetch(`/api/websites/list?user_id=${currentUserId}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
-        },
-      });
+      const response = await fetchWithAuth(`/api/websites/list`);
 
       if (response.ok) {
         const result = await response.json();

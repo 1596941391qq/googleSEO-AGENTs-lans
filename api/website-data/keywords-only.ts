@@ -9,11 +9,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql, raw } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 import { getDomainKeywords } from '../_shared/tools/dataforseo-domain.js';
 
 interface KeywordsOnlyRequestBody {
   websiteId: string;
-  userId?: number;
   limit?: number;
   region?: string;
   sortBy?: 'searchVolume' | 'difficulty' | 'cpc' | 'position'; // 排序字段
@@ -39,15 +39,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId;
+
     const body = req.body as KeywordsOnlyRequestBody;
 
     if (!body.websiteId) {
       return res.status(400).json({ error: 'websiteId is required' });
-    }
-
-    let userId = body.userId;
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized: userId is required' });
     }
 
     const limit = body.limit || 20;
@@ -70,7 +72,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const website = websiteResult.rows[0];
 
     // 验证权限
-    if (website.user_id !== userId) {
+    if (String(website.user_id) !== String(userId)) {
+      console.warn('[keywords-only] Permission denied:', {
+        websiteUserId: website.user_id,
+        authUserId: userId,
+        websiteId: body.websiteId,
+      });
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 

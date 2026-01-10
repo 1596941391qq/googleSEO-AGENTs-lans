@@ -155,7 +155,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (cached && cached.dataforseo_is_data_found) {
         // 使用缓存中的 DataForSEO 数据
         keyword.dataForSEOData = {
-          keyword: keyword.keyword,
           volume: cached.dataforseo_volume || 0,
           difficulty: cached.dataforseo_difficulty || null,
           cpc: cached.dataforseo_cpc || null,
@@ -179,7 +178,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           keyword.searchIntent = cached.agent2_search_intent;
           keyword.intentAnalysis = cached.agent2_intent_analysis;
           keyword.reasoning = cached.agent2_reasoning;
-          keyword.topDomainType = cached.agent2_top_domain_type;
+          keyword.topDomainType = cached.agent2_top_domain_type as any;
           keyword.serpResultCount = cached.agent2_serp_result_count;
           keyword.topSerpSnippets = cached.agent2_top_serp_snippets || [];
           (keyword as any).blueOceanScore = cached.agent2_blue_ocean_score;

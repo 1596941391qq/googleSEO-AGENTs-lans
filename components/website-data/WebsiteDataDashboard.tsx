@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import { cn } from "../../lib/utils";
+import { fetchWithAuth, postWithAuth } from "../../lib/api-client";
 import { useAuth } from "../../contexts/AuthContext";
 import { KeywordData } from "../../types";
 import { getUserId } from "./utils";
@@ -195,11 +196,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
       
       try {
         // 同步调用API更新，等待完成（这是第一个调用，优先于所有其他请求）
-        const updateResponse = await fetch("/api/website-data/update-metrics", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(baseRequest),
-        });
+        const updateResponse = await postWithAuth("/api/website-data/update-metrics", baseRequest);
 
         if (updateResponse.ok) {
           const updateResult = await updateResponse.json();
@@ -220,14 +217,10 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
     // 只有在 update-metrics 失败时才读取缓存作为后备
     if (useCacheAsFallback) {
-      try {
-        const cacheResponse = await fetch("/api/website-data/overview-only", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(baseRequest),
-        });
+    try {
+      const cacheResponse = await postWithAuth("/api/website-data/overview-only", baseRequest);
 
-        if (cacheResponse.ok) {
+      if (cacheResponse.ok) {
           const cacheResult = await cacheResponse.json();
           cachedOverviewResult = cacheResult; // 保存缓存结果作为后备
         }
@@ -244,16 +237,8 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
             status: 200,
             headers: { 'Content-Type': 'application/json' }
           }))
-        : fetch("/api/website-data/overview-only", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(baseRequest),
-          }),
-      keywords: fetch("/api/website-data/keywords-only", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...baseRequest, limit: 20 }),
-      }),
+        : postWithAuth("/api/website-data/overview-only", baseRequest),
+      keywords: postWithAuth("/api/website-data/keywords-only", { ...baseRequest, limit: 20 }),
     };
 
     // 处理每个请求，哪个先返回就先更新
@@ -427,11 +412,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
           region: selectedRegion,
         };
 
-        const response = await fetch("/api/website-data/overview-only", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(baseRequest),
-        });
+        const response = await postWithAuth("/api/website-data/overview-only", baseRequest);
 
         if (response.ok) {
           const result = await response.json();

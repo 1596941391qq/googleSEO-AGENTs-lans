@@ -733,7 +733,8 @@ const renderAgentDataTable = (
     | "dataforseo-competitors"
     | "dataforseo-keywords"
     | "google-search-results",
-  isDarkTheme: boolean = true
+  isDarkTheme: boolean = true,
+  uiLanguage: string = "zh"
 ) => {
   // 对于这些 cardType，使用 AgentStreamFeed 组件渲染（在 AgentStream 中处理）
   // 这里只处理需要特殊渲染的 dataType
@@ -1079,15 +1080,15 @@ const renderAgentDataTable = (
                         ? "text-yellow-400"
                         : "text-yellow-600"
                       : isDarkTheme
-                        ? "text-red-400"
-                        : "text-red-600"
+                      ? "text-red-400"
+                      : "text-red-600"
                   }`}
                 >
                   {data.probability || "N/A"}
                 </div>
               </div>
 
-              {/* Blue Ocean Score Card with Breakdown */}
+              {/* KD Card */}
               <div
                 className={`p-3 rounded-lg border ${
                   isDarkTheme
@@ -1096,68 +1097,92 @@ const renderAgentDataTable = (
                 }`}
               >
                 <div
-                  className={`text-[10px] font-bold mb-2 ${
+                  className={`text-[10px] font-bold mb-1 ${
                     isDarkTheme ? "text-emerald-400" : "text-emerald-700"
                   }`}
                 >
-                  BLUE OCEAN SCORE
+                  {uiLanguage === "zh" ? "关键词难度" : "KEYWORD DIFFICULTY"}
                 </div>
                 <div
-                  className={`text-lg font-bold mb-2 ${
+                  className={`text-lg font-bold ${
+                    (data.serankingData?.difficulty || 0) <= 40
+                      ? isDarkTheme
+                        ? "text-emerald-400"
+                        : "text-emerald-600"
+                      : (data.serankingData?.difficulty || 0) <= 60
+                      ? isDarkTheme
+                        ? "text-yellow-400"
+                        : "text-yellow-600"
+                      : isDarkTheme
+                      ? "text-red-400"
+                      : "text-red-600"
+                  }`}
+                >
+                  {data.serankingData?.difficulty !== undefined
+                    ? data.serankingData.difficulty
+                    : data.dataForSEOData?.difficulty !== undefined
+                    ? data.dataForSEOData.difficulty
+                    : "N/A"}
+                </div>
+              </div>
+
+              {/* CPC Card */}
+              <div
+                className={`p-3 rounded-lg border ${
+                  isDarkTheme
+                    ? "bg-black border-emerald-500/30"
+                    : "bg-gray-50 border-gray-200"
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-bold mb-1 ${
+                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                  }`}
+                >
+                  CPC
+                </div>
+                <div
+                  className={`text-lg font-bold ${
                     isDarkTheme ? "text-white" : "text-gray-900"
                   }`}
                 >
-                  {data.blueOceanScore !== undefined ? Math.round(data.blueOceanScore) : "N/A"}
-                  <span className="text-[10px] font-normal text-white/40 ml-1">/ 100</span>
+                  $
+                  {data.serankingData?.cpc !== undefined
+                    ? data.serankingData.cpc.toFixed(2)
+                    : data.dataForSEOData?.cpc !== undefined
+                    ? data.dataForSEOData.cpc.toFixed(2)
+                    : "N/A"}
                 </div>
-                {/* 蓝海分数详细分解 */}
-                {data.blueOceanScoreBreakdown && data.blueOceanScoreBreakdown.factors && data.blueOceanScoreBreakdown.factors.length > 0 && (
-                  <div className="space-y-1.5 mt-2 pt-2 border-t border-emerald-500/20">
-                    <div className={`text-[9px] font-semibold mb-1 ${
-                      isDarkTheme ? "text-emerald-400/80" : "text-emerald-700/80"
-                    }`}>
-                      评分维度:
-                    </div>
-                    {data.blueOceanScoreBreakdown.factors.map((factor: any, idx: number) => (
-                      <div
-                        key={idx}
-                        className={`p-1.5 rounded text-[9px] ${
-                          isDarkTheme
-                            ? "bg-emerald-950/30 border border-emerald-500/20"
-                            : "bg-emerald-50 border border-emerald-200"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className={`font-medium ${
-                            isDarkTheme ? "text-white/90" : "text-gray-900"
-                          }`}>
-                            {factor.name}
-                          </span>
-                          <span className={`font-bold px-1 py-0.5 rounded ${
-                            factor.score >= 20
-                              ? isDarkTheme
-                                ? "bg-emerald-500/20 text-emerald-400"
-                                : "bg-emerald-100 text-emerald-700"
-                              : factor.score >= 10
-                              ? isDarkTheme
-                                ? "bg-yellow-500/20 text-yellow-400"
-                                : "bg-yellow-100 text-yellow-700"
-                              : isDarkTheme
-                              ? "bg-slate-500/20 text-slate-400"
-                              : "bg-slate-100 text-slate-700"
-                          }`}>
-                            +{factor.score}
-                          </span>
-                        </div>
-                        <div className={`text-[8px] leading-tight ${
-                          isDarkTheme ? "text-white/70" : "text-gray-600"
-                        }`}>
-                          {factor.reason}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              </div>
+
+              {/* Volume Card */}
+              <div
+                className={`p-3 rounded-lg border ${
+                  isDarkTheme
+                    ? "bg-black border-emerald-500/30"
+                    : "bg-gray-50 border-gray-200"
+                }`}
+              >
+                <div
+                  className={`text-[10px] font-bold mb-1 ${
+                    isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                  }`}
+                >
+                  {uiLanguage === "zh" ? "搜索量" : "SEARCH VOLUME"}
+                </div>
+                <div
+                  className={`text-lg font-bold ${
+                    isDarkTheme ? "text-white" : "text-gray-900"
+                  }`}
+                >
+                  {data.serankingData?.volume !== undefined
+                    ? data.serankingData.volume.toLocaleString()
+                    : data.dataForSEOData?.volume !== undefined
+                    ? data.dataForSEOData.volume.toLocaleString()
+                    : data.volume !== undefined
+                    ? data.volume.toLocaleString()
+                    : "N/A"}
+                </div>
               </div>
 
               <div
@@ -1203,10 +1228,19 @@ const renderAgentDataTable = (
                     isDarkTheme ? "text-white" : "text-gray-900"
                   }`}
                 >
-                  {data.websiteDR !== undefined ? Math.round(data.websiteDR) : "-"}
-                  <span className="text-[10px] font-normal text-white/40 mx-1">vs</span>
-                  {data.competitorDRs && data.competitorDRs.length > 0 
-                    ? Math.round(data.competitorDRs.reduce((a: number, b: number) => a + b, 0) / data.competitorDRs.length)
+                  {data.websiteDR !== undefined
+                    ? Math.round(data.websiteDR)
+                    : "-"}
+                  <span className="text-[10px] font-normal text-white/40 mx-1">
+                    vs
+                  </span>
+                  {data.competitorDRs && data.competitorDRs.length > 0
+                    ? Math.round(
+                        data.competitorDRs.reduce(
+                          (a: number, b: number) => a + b,
+                          0
+                        ) / data.competitorDRs.length
+                      )
                     : "-"}
                 </div>
               </div>
@@ -1266,54 +1300,66 @@ const renderAgentDataTable = (
             )}
 
             {/* Reasoning */}
-            {data.reasoning && (() => {
-              // 过滤掉错误信息
-              const hasErrorKeywords = (text: string): boolean => {
-                const errorKeywords = [
-                  '无法确定', 'Unable to determine', 
-                  '分析失败', 'Analysis failed', 
-                  'AI响应被截断', 'AI response was truncated',
-                  '原始错误', 'Original error',
-                  '不完整的JSON', 'incomplete JSON',
-                  '无效的JSON', 'invalid JSON',
-                  '解析失败', 'Failed to parse',
-                  'Unterminated string', '响应预览', 'Response preview'
-                ];
-                return errorKeywords.some(keyword => text.includes(keyword));
-              };
+            {data.reasoning &&
+              (() => {
+                // 过滤掉错误信息
+                const hasErrorKeywords = (text: string): boolean => {
+                  const errorKeywords = [
+                    "无法确定",
+                    "Unable to determine",
+                    "分析失败",
+                    "Analysis failed",
+                    "AI响应被截断",
+                    "AI response was truncated",
+                    "原始错误",
+                    "Original error",
+                    "不完整的JSON",
+                    "incomplete JSON",
+                    "无效的JSON",
+                    "invalid JSON",
+                    "解析失败",
+                    "Failed to parse",
+                    "Unterminated string",
+                    "响应预览",
+                    "Response preview",
+                  ];
+                  return errorKeywords.some((keyword) =>
+                    text.includes(keyword)
+                  );
+                };
 
-              const isValidReasoning = !hasErrorKeywords(data.reasoning);
-              const displayReasoning = isValidReasoning 
-                ? data.reasoning 
-                : (uiLanguage === "zh" 
-                    ? "分析结果正在生成中，请稍候..." 
-                    : "Analysis results are being generated, please wait...");
+                const isValidReasoning = !hasErrorKeywords(data.reasoning);
+                const displayReasoning = isValidReasoning
+                  ? data.reasoning
+                  : uiLanguage === "zh"
+                  ? "分析结果正在生成中，请稍候..."
+                  : "Analysis results are being generated, please wait...";
 
-              return (
-                <div
-                  className={`p-3 rounded-lg border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/20"
-                      : "bg-white border-gray-200"
-                  }`}
-                >
+                return (
                   <div
-                    className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
-                      isDarkTheme ? "text-white/70" : "text-gray-600"
+                    className={`p-3 rounded-lg border ${
+                      isDarkTheme
+                        ? "bg-black border-emerald-500/20"
+                        : "bg-white border-gray-200"
                     }`}
                   >
-                    ANALYSIS REASONING
+                    <div
+                      className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
+                        isDarkTheme ? "text-white/70" : "text-gray-600"
+                      }`}
+                    >
+                      ANALYSIS REASONING
+                    </div>
+                    <div
+                      className={`text-xs leading-relaxed ${
+                        isDarkTheme ? "text-white" : "text-gray-700"
+                      }`}
+                    >
+                      {displayReasoning}
+                    </div>
                   </div>
-                  <div
-                    className={`text-xs leading-relaxed ${
-                      isDarkTheme ? "text-white" : "text-gray-700"
-                    }`}
-                  >
-                    {displayReasoning}
-                  </div>
-                </div>
-              );
-            })()}
+                );
+              })()}
           </div>
         ))}
       </div>
@@ -1696,7 +1742,8 @@ const AgentStream = ({
                     return renderAgentDataTable(
                       thought.data,
                       dataType,
-                      isDarkTheme
+                      isDarkTheme,
+                      uiLanguage
                     );
                   })()}
                 </div>
@@ -1949,84 +1996,107 @@ const BatchAnalysisStream = ({
             )}
 
             {/* Intent Analysis Display */}
-            {thought.type === "intent-analysis" && thought.intentData && (() => {
-              // 过滤掉错误信息
-              const hasErrorKeywords = (text: string | undefined): boolean => {
-                if (!text) return false;
-                const errorKeywords = [
-                  '无法确定', 'Unable to determine', 
-                  '分析失败', 'Analysis failed', 
-                  'AI响应被截断', 'AI response was truncated',
-                  '原始错误', 'Original error',
-                  '不完整的JSON', 'incomplete JSON',
-                  '无效的JSON', 'invalid JSON',
-                  '解析失败', 'Failed to parse',
-                  'Unterminated string', '响应预览', 'Response preview'
-                ];
-                return errorKeywords.some(keyword => text.includes(keyword));
-              };
+            {thought.type === "intent-analysis" &&
+              thought.intentData &&
+              (() => {
+                // 过滤掉错误信息
+                const hasErrorKeywords = (
+                  text: string | undefined
+                ): boolean => {
+                  if (!text) return false;
+                  const errorKeywords = [
+                    "无法确定",
+                    "Unable to determine",
+                    "分析失败",
+                    "Analysis failed",
+                    "AI响应被截断",
+                    "AI response was truncated",
+                    "原始错误",
+                    "Original error",
+                    "不完整的JSON",
+                    "incomplete JSON",
+                    "无效的JSON",
+                    "invalid JSON",
+                    "解析失败",
+                    "Failed to parse",
+                    "Unterminated string",
+                    "响应预览",
+                    "Response preview",
+                  ];
+                  return errorKeywords.some((keyword) =>
+                    text.includes(keyword)
+                  );
+                };
 
-              const isValidSearchIntent = thought.intentData.searchIntent && !hasErrorKeywords(thought.intentData.searchIntent);
-              const isValidIntentAnalysis = thought.intentData.intentAnalysis && !hasErrorKeywords(thought.intentData.intentAnalysis);
+                const isValidSearchIntent =
+                  thought.intentData.searchIntent &&
+                  !hasErrorKeywords(thought.intentData.searchIntent);
+                const isValidIntentAnalysis =
+                  thought.intentData.intentAnalysis &&
+                  !hasErrorKeywords(thought.intentData.intentAnalysis);
 
-              // 如果都包含错误信息，不显示
-              if (!isValidSearchIntent && !isValidIntentAnalysis) {
-                return null;
-              }
+                // 如果都包含错误信息，不显示
+                if (!isValidSearchIntent && !isValidIntentAnalysis) {
+                  return null;
+                }
 
-              return (
-                <div className="mt-2 space-y-2">
-                  {isValidSearchIntent && (
-                    <div
-                      className={`p-2 rounded border ${
-                        isDarkTheme
-                          ? "bg-black border-emerald-500/30"
-                          : "bg-emerald-50 border-emerald-200"
-                      }`}
-                    >
+                return (
+                  <div className="mt-2 space-y-2">
+                    {isValidSearchIntent && (
                       <div
-                        className={`text-[10px] font-bold mb-1 ${
-                          isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                        className={`p-2 rounded border ${
+                          isDarkTheme
+                            ? "bg-black border-emerald-500/30"
+                            : "bg-emerald-50 border-emerald-200"
                         }`}
                       >
-                        USER INTENT
+                        <div
+                          className={`text-[10px] font-bold mb-1 ${
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-700"
+                          }`}
+                        >
+                          USER INTENT
+                        </div>
+                        <p
+                          className={`text-xs ${
+                            isDarkTheme ? "text-white" : "text-gray-700"
+                          }`}
+                        >
+                          {thought.intentData.searchIntent}
+                        </p>
                       </div>
-                      <p
-                        className={`text-xs ${
-                          isDarkTheme ? "text-white" : "text-gray-700"
-                        }`}
-                      >
-                        {thought.intentData.searchIntent}
-                      </p>
-                    </div>
-                  )}
-                  {isValidIntentAnalysis && (
-                    <div
-                      className={`p-2 rounded border ${
-                        isDarkTheme
-                          ? "bg-black border-emerald-500/30"
-                          : "bg-emerald-50 border-emerald-200"
-                      }`}
-                    >
+                    )}
+                    {isValidIntentAnalysis && (
                       <div
-                        className={`text-[10px] font-bold mb-1 ${
-                          isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                        className={`p-2 rounded border ${
+                          isDarkTheme
+                            ? "bg-black border-emerald-500/30"
+                            : "bg-emerald-50 border-emerald-200"
                         }`}
                       >
-                        INTENT vs SERP
+                        <div
+                          className={`text-[10px] font-bold mb-1 ${
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-700"
+                          }`}
+                        >
+                          INTENT vs SERP
+                        </div>
+                        <p
+                          className={`text-xs ${
+                            isDarkTheme ? "text-white" : "text-gray-700"
+                          }`}
+                        >
+                          {thought.intentData.intentAnalysis}
+                        </p>
                       </div>
-                      <p
-                        className={`text-xs ${
-                          isDarkTheme ? "text-white" : "text-gray-700"
-                        }`}
-                      >
-                        {thought.intentData.intentAnalysis}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
+                    )}
+                  </div>
+                );
+              })()}
 
             {/* SERP Snippets */}
             {thought.type === "serp-search" &&
@@ -3090,7 +3160,7 @@ export default function App() {
   // Load website list for dropdown
   const loadWebsiteList = async (mode?: "mining" | "batch") => {
     try {
-      const response = await fetch(`/api/websites/list?user_id=1`);
+      const response = await fetchWithAuth(`/api/websites/list`);
       if (response.ok) {
         const result = await response.json();
         setWebsiteListData(result.data);
@@ -3651,7 +3721,8 @@ export default function App() {
         name,
         status:
           task.miningState?.miningSuccess ||
-          (task.batchState?.batchKeywords && task.batchState.batchKeywords.length > 0)
+          (task.batchState?.batchKeywords &&
+            task.batchState.batchKeywords.length > 0)
             ? "completed"
             : "in_progress",
         state: task,
@@ -3692,7 +3763,10 @@ export default function App() {
   // Auto-save tasks to localStorage and backend
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (state.taskManager.tasks.length > 0 && state.taskManager.activeTaskId) {
+      if (
+        state.taskManager.tasks.length > 0 &&
+        state.taskManager.activeTaskId
+      ) {
         const activeTask = state.taskManager.tasks.find(
           (t) => t.id === state.taskManager.activeTaskId
         );
@@ -3716,7 +3790,10 @@ export default function App() {
           const updatedTasks = state.taskManager.tasks.map((t) =>
             t.id === state.taskManager.activeTaskId ? updatedTask : t
           );
-          localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(updatedTasks));
+          localStorage.setItem(
+            STORAGE_KEYS.TASKS,
+            JSON.stringify(updatedTasks)
+          );
         } catch (e) {
           console.error("Failed to save tasks to local storage", e);
         }
@@ -4479,11 +4556,14 @@ export default function App() {
             deepDiveCurrentStep: "",
           };
         case "article-generator":
-          const articleState = task.articleGeneratorState || prev.articleGeneratorState;
+          const articleState =
+            task.articleGeneratorState || prev.articleGeneratorState;
           // 如果有 finalArticle，确保 isGenerating 为 false，以便显示预览
-          const hasFinalArticle = articleState?.finalArticle && 
-            (articleState.finalArticle.title || articleState.finalArticle.content);
-          
+          const hasFinalArticle =
+            articleState?.finalArticle &&
+            (articleState.finalArticle.title ||
+              articleState.finalArticle.content);
+
           return {
             ...prev,
             ...baseState,
@@ -4491,7 +4571,9 @@ export default function App() {
             articleGeneratorState: {
               ...articleState,
               // 如果有 finalArticle，强制设置 isGenerating 为 false
-              isGenerating: hasFinalArticle ? false : (articleState?.isGenerating || false),
+              isGenerating: hasFinalArticle
+                ? false
+                : articleState?.isGenerating || false,
             },
             // Clear other task types' state
             seedKeyword: "",
@@ -4549,10 +4631,7 @@ export default function App() {
 
       // Save to localStorage
       try {
-        localStorage.setItem(
-          STORAGE_KEYS.TASKS,
-          JSON.stringify(updatedTasks)
-        );
+        localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(updatedTasks));
       } catch (e) {
         console.error("Failed to save tasks", e);
       }
@@ -4624,7 +4703,10 @@ export default function App() {
           };
 
           // 如果有 article-generator 任务且有 finalArticle，恢复状态并切换到预览
-          if (articleTaskWithResult && articleTaskWithResult.articleGeneratorState) {
+          if (
+            articleTaskWithResult &&
+            articleTaskWithResult.articleGeneratorState
+          ) {
             return {
               ...newState,
               step: "article-generator",
@@ -4896,11 +4978,14 @@ export default function App() {
         case "article-generator":
           // Determine step based on article generator state
           let articleStep: AppState["step"] = "article-generator";
-          
-          const articleStateForTask = targetTask.articleGeneratorState || prev.articleGeneratorState;
+
+          const articleStateForTask =
+            targetTask.articleGeneratorState || prev.articleGeneratorState;
           // 如果有 finalArticle，确保 isGenerating 为 false，以便显示预览
-          const hasFinalArticleForTask = articleStateForTask?.finalArticle && 
-            (articleStateForTask.finalArticle.title || articleStateForTask.finalArticle.content);
+          const hasFinalArticleForTask =
+            articleStateForTask?.finalArticle &&
+            (articleStateForTask.finalArticle.title ||
+              articleStateForTask.finalArticle.content);
 
           newState = {
             ...prev,
@@ -4909,7 +4994,9 @@ export default function App() {
             articleGeneratorState: {
               ...articleStateForTask,
               // 如果有 finalArticle，强制设置 isGenerating 为 false
-              isGenerating: hasFinalArticleForTask ? false : (articleStateForTask?.isGenerating || false),
+              isGenerating: hasFinalArticleForTask
+                ? false
+                : articleStateForTask?.isGenerating || false,
             },
             // Clear other task types
             seedKeyword: "",
@@ -5566,9 +5653,11 @@ export default function App() {
     }));
 
     // 保存网站信息到任务状态
-    const websiteId = (typeof websiteToUse.id === 'string' && websiteToUse.id.startsWith("manual-"))
-      ? `temp-${Date.now()}`
-      : websiteToUse.id;
+    const websiteId =
+      typeof websiteToUse.id === "string" &&
+      websiteToUse.id.startsWith("manual-")
+        ? `temp-${Date.now()}`
+        : websiteToUse.id;
     const websiteDomain =
       websiteToUse.domain ||
       new URL(websiteToUse.url).hostname.replace(/^www\./, "");
@@ -5683,12 +5772,12 @@ export default function App() {
       let response;
       let lastError: any = null;
       const maxRetries = 3;
-      
+
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           response = await fetch("/api/website-audit", {
             method: "POST",
-            headers: { 
+            headers: {
               "Content-Type": "application/json",
               Authorization: token ? `Bearer ${token}` : "",
             },
@@ -5707,27 +5796,35 @@ export default function App() {
           });
 
           clearTimeout(timeoutId);
-          
+
           if (!response.ok) {
-            const errorText = await response.text().catch(() => 'Unknown error');
+            const errorText = await response
+              .text()
+              .catch(() => "Unknown error");
             throw new Error(`API error: ${response.status} - ${errorText}`);
           }
-          
+
           // 成功，跳出重试循环
           break;
         } catch (error: any) {
           clearTimeout(timeoutId);
           lastError = error;
-          
+
           // 如果是最后一次尝试，或者错误不是网络错误，直接抛出
-          if (attempt === maxRetries || (error.name !== 'TypeError' && error.name !== 'AbortError')) {
-            if (error.name === 'AbortError') {
+          if (
+            attempt === maxRetries ||
+            (error.name !== "TypeError" && error.name !== "AbortError")
+          ) {
+            if (error.name === "AbortError") {
               throw new Error(
                 state.uiLanguage === "zh"
                   ? "请求超时 (10分钟)。请检查网络连接或稍后重试。"
                   : "Request timeout (10 minutes). Please check your network connection or try again later."
               );
-            } else if (error.message?.includes('Failed to fetch') || error.name === 'TypeError') {
+            } else if (
+              error.message?.includes("Failed to fetch") ||
+              error.name === "TypeError"
+            ) {
               throw new Error(
                 state.uiLanguage === "zh"
                   ? `网络请求失败。请检查网络连接或服务器状态。错误详情: ${error.message}`
@@ -5736,10 +5833,13 @@ export default function App() {
             }
             throw error;
           }
-          
+
           // 等待后重试（指数退避）
           const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
-          console.warn(`[Website Audit] API调用失败 (尝试 ${attempt}/${maxRetries})，${delay}ms 后重试:`, error.message);
+          console.warn(
+            `[Website Audit] API调用失败 (尝试 ${attempt}/${maxRetries})，${delay}ms 后重试:`,
+            error.message
+          );
           addLog(
             state.uiLanguage === "zh"
               ? `⚠️ 网络请求失败，${delay}ms 后重试 (${attempt}/${maxRetries})...`
@@ -5747,8 +5847,8 @@ export default function App() {
             "warning",
             currentTaskId
           );
-          await new Promise(resolve => setTimeout(resolve, delay));
-          
+          await new Promise((resolve) => setTimeout(resolve, delay));
+
           // 重新创建 controller 和 timeout
           const newController = new AbortController();
           const newTimeoutId = setTimeout(() => newController.abort(), 600000);
@@ -5756,12 +5856,15 @@ export default function App() {
           timeoutId = newTimeoutId;
         }
       }
-      
+
       if (!response) {
-        throw lastError || new Error(
-          state.uiLanguage === "zh"
-            ? "API调用失败 (已重试3次)"
-            : "API call failed (retried 3 times)"
+        throw (
+          lastError ||
+          new Error(
+            state.uiLanguage === "zh"
+              ? "API调用失败 (已重试3次)"
+              : "API call failed (retried 3 times)"
+          )
         );
       }
 
@@ -6530,19 +6633,24 @@ export default function App() {
         await new Promise((resolve) => setTimeout(resolve, 1500));
       } catch (err: any) {
         console.error(`[Mining Loop] Error in Round ${currentRound}:`, err);
-        
+
         // 提供更详细的错误信息
         let errorMessage = err?.message || String(err);
-        if (err?.message?.includes('Failed to fetch') || err?.name === 'TypeError') {
-          errorMessage = state.uiLanguage === "zh"
-            ? `网络请求失败: ${err.message}。请检查网络连接或服务器状态。`
-            : `Network request failed: ${err.message}. Please check your network connection or server status.`;
-        } else if (err?.name === 'AbortError') {
-          errorMessage = state.uiLanguage === "zh"
-            ? "请求超时。请检查网络连接或稍后重试。"
-            : "Request timeout. Please check your network connection or try again later.";
+        if (
+          err?.message?.includes("Failed to fetch") ||
+          err?.name === "TypeError"
+        ) {
+          errorMessage =
+            state.uiLanguage === "zh"
+              ? `网络请求失败: ${err.message}。请检查网络连接或服务器状态。`
+              : `Network request failed: ${err.message}. Please check your network connection or server status.`;
+        } else if (err?.name === "AbortError") {
+          errorMessage =
+            state.uiLanguage === "zh"
+              ? "请求超时。请检查网络连接或稍后重试。"
+              : "Request timeout. Please check your network connection or try again later.";
         }
-        
+
         addLog(
           state.uiLanguage === "zh"
             ? `❌ Round ${currentRound} 错误: ${errorMessage}`
@@ -6550,7 +6658,7 @@ export default function App() {
           "error",
           taskId
         );
-        
+
         addThought(
           "decision",
           state.uiLanguage === "zh"
@@ -6559,7 +6667,7 @@ export default function App() {
           undefined,
           taskId
         );
-        
+
         // 设置错误状态
         setState((prev) => {
           const updatedTasks = prev.taskManager.tasks.map((task) => {
@@ -6595,7 +6703,7 @@ export default function App() {
             };
           }
         });
-        
+
         stopMiningRef.current = true;
       }
     }
@@ -8630,9 +8738,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   <StepItem
                     number={3}
                     label={t.tabProjects}
-                    active={
-                      state.contentGeneration.activeTab === "projects"
-                    }
+                    active={state.contentGeneration.activeTab === "projects"}
                     isDarkTheme={isDarkTheme}
                   />
                   <ChevronRight
@@ -8896,7 +9002,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 visualStyle: state.articleGeneratorState.visualStyle,
                 targetMarket: state.articleGeneratorState.targetMarket,
                 promotedWebsites: state.articleGeneratorState.promotedWebsites,
-                promotionIntensity: state.articleGeneratorState.promotionIntensity,
+                promotionIntensity:
+                  state.articleGeneratorState.promotionIntensity,
                 isGenerating: state.articleGeneratorState.isGenerating,
                 progress: state.articleGeneratorState.progress,
                 currentStage: state.articleGeneratorState.currentStage,
@@ -8912,18 +9019,24 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       ...updates,
                     },
                   };
-                  
+
                   // 调试日志：检查状态更新
-                  if (process.env.NODE_ENV === 'development') {
-                    console.log('[App.tsx] ArticleGeneratorState updated:', {
+                  if (process.env.NODE_ENV === "development") {
+                    console.log("[App.tsx] ArticleGeneratorState updated:", {
                       updates,
                       isGenerating: newState.articleGeneratorState.isGenerating,
-                      hasFinalArticle: !!newState.articleGeneratorState.finalArticle,
-                      finalArticleTitle: newState.articleGeneratorState.finalArticle?.title,
-                      finalArticleContent: newState.articleGeneratorState.finalArticle?.content?.substring(0, 50),
+                      hasFinalArticle:
+                        !!newState.articleGeneratorState.finalArticle,
+                      finalArticleTitle:
+                        newState.articleGeneratorState.finalArticle?.title,
+                      finalArticleContent:
+                        newState.articleGeneratorState.finalArticle?.content?.substring(
+                          0,
+                          50
+                        ),
                     });
                   }
-                  
+
                   // Also update the task state
                   const activeTask = newState.taskManager.tasks.find(
                     (t) => t.id === newState.taskManager.activeTaskId
@@ -8933,7 +9046,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       setState((prevState) => {
                         const updatedTasks = prevState.taskManager.tasks.map(
                           (task) => {
-                            if (task.id === prevState.taskManager.activeTaskId) {
+                            if (
+                              task.id === prevState.taskManager.activeTaskId
+                            ) {
                               return {
                                 ...task,
                                 articleGeneratorState: {
@@ -8955,7 +9070,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       });
                     }, 0);
                   }
-                  
+
                   return newState;
                 });
               }}
@@ -8966,16 +9081,20 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             <ContentGenerationView
               state={state.contentGeneration}
               setState={(update) => {
-                if (typeof update === 'function') {
+                if (typeof update === "function") {
                   // Support function form: setState((prev) => ({ ... }))
-                  console.log('[App.tsx] setState called with function form');
+                  console.log("[App.tsx] setState called with function form");
                   setState((prev) => {
-                    const updatedContentGeneration = update(prev.contentGeneration);
-                    console.log('[App.tsx] Updated contentGeneration:', {
+                    const updatedContentGeneration = update(
+                      prev.contentGeneration
+                    );
+                    console.log("[App.tsx] Updated contentGeneration:", {
                       onboardingStep: updatedContentGeneration?.onboardingStep,
                       hasDemoContent: !!updatedContentGeneration?.demoContent,
-                      hasChatGPTDemo: !!updatedContentGeneration?.demoContent?.chatGPTDemo,
-                      hasArticleDemo: !!updatedContentGeneration?.demoContent?.articleDemo,
+                      hasChatGPTDemo:
+                        !!updatedContentGeneration?.demoContent?.chatGPTDemo,
+                      hasArticleDemo:
+                        !!updatedContentGeneration?.demoContent?.articleDemo,
                     });
                     return {
                       ...prev,
@@ -8984,7 +9103,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   });
                 } else {
                   // Support object form: setState({ ... })
-                  console.log('[App.tsx] setState called with object form:', update);
+                  console.log(
+                    "[App.tsx] setState called with object form:",
+                    update
+                  );
                   setState((prev) => ({
                     ...prev,
                     contentGeneration: { ...prev.contentGeneration, ...update },
@@ -11634,6 +11756,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     thoughts={state.agentThoughts}
                     t={t}
                     isDarkTheme={isDarkTheme}
+                    uiLanguage={state.uiLanguage}
                   />
                 </div>
               </div>
@@ -11749,7 +11872,15 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         <th className="px-4 py-4 w-10"></th>
                         <th className="px-4 py-4">{t.originalKeyword}</th>
                         <th className="px-4 py-4">{t.translatedKeyword}</th>
-                        <th className="px-4 py-4">{t.blueOceanScore}</th>
+                        <th className="px-4 py-4">
+                          {t.keywordDifficulty ||
+                            (state.uiLanguage === "zh" ? "难度" : "KD")}
+                        </th>
+                        <th className="px-4 py-4">CPC</th>
+                        <th className="px-4 py-4">
+                          {t.colVol ||
+                            (state.uiLanguage === "zh" ? "搜索量" : "Volume")}
+                        </th>
                         <th className="px-4 py-4">{t.drComparison}</th>
                         <th className="px-4 py-4">{t.colType}</th>
                         <th className="px-4 py-4 text-center">{t.colProb}</th>
@@ -11823,32 +11954,87 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                   }))
                                 }
                               >
-                                {item.blueOceanScore !== undefined ? (
-                                  <div className="flex flex-col">
-                                    <span className={cn(
-                                      item.blueOceanScore >= 70 ? "text-emerald-400" :
-                                      item.blueOceanScore >= 40 ? "text-yellow-400" : "text-red-400"
-                                    )}>
-                                      {Math.round(item.blueOceanScore)}
-                                    </span>
-                                    <div className="w-12 h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
-                                      <div 
-                                        className={cn(
-                                          "h-full rounded-full",
-                                          item.blueOceanScore >= 70 ? "bg-emerald-500" :
-                                          item.blueOceanScore >= 40 ? "bg-yellow-500" : "bg-red-500"
-                                        )}
-                                        style={{ width: `${item.blueOceanScore}%` }}
-                                      />
-                                    </div>
-                                  </div>
+                                {item.dataForSEOData?.difficulty !==
+                                undefined ? (
+                                  <span
+                                    className={cn(
+                                      item.dataForSEOData.difficulty <= 40
+                                        ? "text-emerald-400"
+                                        : item.dataForSEOData.difficulty <= 60
+                                        ? "text-yellow-400"
+                                        : "text-red-400"
+                                    )}
+                                  >
+                                    {item.dataForSEOData.difficulty}
+                                  </span>
+                                ) : item.serankingData?.difficulty !==
+                                  undefined ? (
+                                  <span
+                                    className={cn(
+                                      item.serankingData.difficulty <= 40
+                                        ? "text-emerald-400"
+                                        : item.serankingData.difficulty <= 60
+                                        ? "text-yellow-400"
+                                        : "text-red-400"
+                                    )}
+                                  >
+                                    {item.serankingData.difficulty}
+                                  </span>
                                 ) : (
                                   <span className="text-slate-500">-</span>
                                 )}
                               </td>
                               <td
                                 className={`px-4 py-4 cursor-pointer ${
-                                  isDarkTheme ? "text-white/80" : "text-gray-700"
+                                  isDarkTheme
+                                    ? "text-slate-300"
+                                    : "text-gray-700"
+                                }`}
+                                onClick={() =>
+                                  setState((prev) => ({
+                                    ...prev,
+                                    expandedRowId: isExpanded ? null : item.id,
+                                  }))
+                                }
+                              >
+                                {item.dataForSEOData?.cpc !== undefined ? (
+                                  <span>
+                                    ${item.dataForSEOData.cpc.toFixed(2)}
+                                  </span>
+                                ) : item.serankingData?.cpc !== undefined ? (
+                                  <span>
+                                    ${item.serankingData.cpc.toFixed(2)}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500">-</span>
+                                )}
+                              </td>
+                              <td
+                                className={`px-4 py-4 cursor-pointer font-mono ${
+                                  isDarkTheme
+                                    ? "text-slate-300"
+                                    : "text-gray-700"
+                                }`}
+                                onClick={() =>
+                                  setState((prev) => ({
+                                    ...prev,
+                                    expandedRowId: isExpanded ? null : item.id,
+                                  }))
+                                }
+                              >
+                                {item.dataForSEOData?.volume !== undefined
+                                  ? item.dataForSEOData.volume.toLocaleString()
+                                  : item.serankingData?.volume !== undefined
+                                  ? item.serankingData.volume.toLocaleString()
+                                  : item.volume !== undefined
+                                  ? item.volume.toLocaleString()
+                                  : "-"}
+                              </td>
+                              <td
+                                className={`px-4 py-4 cursor-pointer ${
+                                  isDarkTheme
+                                    ? "text-white/80"
+                                    : "text-gray-700"
                                 }`}
                                 onClick={() =>
                                   setState((prev) => ({
@@ -11858,11 +12044,23 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 }
                               >
                                 <div className="flex items-center gap-1">
-                                  <span className="font-bold">{item.websiteDR !== undefined ? Math.round(item.websiteDR) : "-"}</span>
-                                  <span className="text-[10px] text-slate-500">vs</span>
+                                  <span className="font-bold">
+                                    {item.websiteDR !== undefined
+                                      ? Math.round(item.websiteDR)
+                                      : "-"}
+                                  </span>
+                                  <span className="text-[10px] text-slate-500">
+                                    vs
+                                  </span>
                                   <span className="font-medium text-amber-400/80">
-                                    {item.competitorDRs && item.competitorDRs.length > 0 
-                                      ? Math.round(item.competitorDRs.reduce((a: number, b: number) => a + b, 0) / item.competitorDRs.length)
+                                    {item.competitorDRs &&
+                                    item.competitorDRs.length > 0
+                                      ? Math.round(
+                                          item.competitorDRs.reduce(
+                                            (a: number, b: number) => a + b,
+                                            0
+                                          ) / item.competitorDRs.length
+                                        )
                                       : "-"}
                                   </span>
                                 </div>
@@ -11944,7 +12142,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                     : "bg-gray-50 border-gray-200"
                                 }`}
                               >
-                                <td colSpan={8} className="px-4 py-6">
+                                <td colSpan={10} className="px-4 py-6">
                                   <div className="flex flex-col md:flex-row gap-6">
                                     <div className="flex-1 space-y-4">
                                       {/* SE Ranking Data Section */}
@@ -13447,19 +13645,21 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 <div className="flex gap-3">
                   <button
                     onClick={() => {
-                      setState(prev => ({
+                      setState((prev) => ({
                         ...prev,
-                        step: 'content-generation',
+                        step: "content-generation",
                         contentGeneration: {
                           ...prev.contentGeneration,
-                          activeTab: 'projects'
-                        }
+                          activeTab: "projects",
+                        },
                       }));
                     }}
                     className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 text-sm font-bold active:scale-95"
                   >
                     <TrendingUp className="w-4 h-4" />
-                    {state.uiLanguage === 'zh' ? '前往项目看板' : 'Go to Kanban'}
+                    {state.uiLanguage === "zh"
+                      ? "前往项目看板"
+                      : "Go to Kanban"}
                   </button>
                   <button
                     onClick={() => startMining(true)}
@@ -13598,8 +13798,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     state.taskManager.activeTaskId
                       ? state.taskManager.tasks.find(
                           (t) => t.id === state.taskManager.activeTaskId
-                        )?.miningState?.miningMode || 'blue-ocean'
-                      : 'blue-ocean'
+                        )?.miningState?.miningMode || "blue-ocean"
+                      : "blue-ocean"
                   }
                 />
               </div>

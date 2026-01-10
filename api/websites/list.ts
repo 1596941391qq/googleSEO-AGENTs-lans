@@ -316,7 +316,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
           } catch (error: any) {
             // 不抛出错误，只记录日志，避免影响其他网站
-            console.error(`[websites/list] ⚠️ Failed to auto-fetch data for website ${website.id}:`, error.message);
+            const errorMessage = error?.message || error?.toString?.() || 'Unknown error';
+            console.error(`[websites/list] ⚠️ Failed to auto-fetch data for website ${website.id}:`, errorMessage);
           }
         }
       })();

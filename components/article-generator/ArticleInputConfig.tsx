@@ -19,6 +19,7 @@ import {
   MousePointer2,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { fetchWithAuth, postWithAuth } from "../../lib/api-client";
 
 // Tone Options
 const getToneOptions = (uiLanguage: "en" | "zh" = "en") => [
@@ -181,10 +182,9 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   // Fetch bound websites
   useEffect(() => {
     const fetchWebsites = async () => {
-      if (!userId) return;
       setIsLoadingWebsites(true);
       try {
-        const response = await fetch(`/api/websites/list?user_id=${userId}`);
+        const response = await fetchWithAuth(`/api/websites/list`);
         if (response.ok) {
           const result = await response.json();
           if (result.success && result.data?.websites) {

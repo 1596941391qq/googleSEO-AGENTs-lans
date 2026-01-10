@@ -155,13 +155,13 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({
                   >
                     {card.icon}
                   </div>
-                  {/* 趋势指示器 - 右上角 */}
-                  <div className="flex items-center gap-1">
+                  {/* 趋势指示器 - 右上角 - 暂时隐藏没有意义的固定百分比 */}
+                  {/* <div className="flex items-center gap-1">
                     <TrendingUp className="w-3 h-3 text-emerald-400" />
                     <span className="text-sm font-medium text-emerald-400">
                       +12.5%
                     </span>
-                  </div>
+                  </div> */}
                 </div>
 
                 {/* 中文标签 */}

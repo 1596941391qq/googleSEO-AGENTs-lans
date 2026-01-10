@@ -163,6 +163,7 @@ export async function generateSEOStrategyReport(
 
 /**
  * Step 4: 从策略报告中提取核心关键词
+ * OPTIMIZED: 优先使用策略报告中已嵌入的 coreKeywords，避免额外 LLM 调用
  * 可单独测试
  */
 export async function extractCoreKeywordsFromReport(
@@ -170,6 +171,13 @@ export async function extractCoreKeywordsFromReport(
   targetLanguage: TargetLanguage,
   uiLanguage: 'zh' | 'en'
 ): Promise<string[]> {
+  // OPTIMIZED: Check if coreKeywords already embedded in strategy report
+  if (seoStrategyReport.coreKeywords && Array.isArray(seoStrategyReport.coreKeywords) && seoStrategyReport.coreKeywords.length > 0) {
+    console.log(`[Deep Dive Service] Using embedded coreKeywords (${seoStrategyReport.coreKeywords.length} keywords), skipping LLM extraction`);
+    return seoStrategyReport.coreKeywords;
+  }
+  // Fallback: Extract via LLM if not embedded
+  console.log(`[Deep Dive Service] No embedded coreKeywords, falling back to LLM extraction`);
   return await extractCoreKeywords(seoStrategyReport, targetLanguage, uiLanguage);
 }
 
