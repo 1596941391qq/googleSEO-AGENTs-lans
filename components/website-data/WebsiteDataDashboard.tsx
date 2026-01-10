@@ -410,6 +410,61 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode]); // 只在viewMode变化时检查
 
+  // 自动轮询：当检测到没有数据时，自动定期检查数据是否已更新
+  useEffect(() => {
+    // 只在有 websiteId 且没有数据时启动轮询
+    if (!websiteId || !data || data.hasData) {
+      return; // 有数据或没有 websiteId，不需要轮询
+    }
+
+    console.log("[Dashboard] 🔄 Starting auto-polling for website data...");
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const baseRequest = {
+          websiteId,
+          userId: getUserId(user),
+          region: selectedRegion,
+        };
+
+        const response = await fetch("/api/website-data/overview-only", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(baseRequest),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.data && (result.data.totalKeywords > 0 || result.data.organicTraffic > 0)) {
+            console.log("[Dashboard] ✅ Data updated, refreshing...");
+            // 重新加载所有数据
+            await loadDataParallel();
+            clearInterval(pollInterval); // 数据已更新，停止轮询
+          }
+        }
+      } catch (error) {
+        console.error("[Dashboard] Polling error:", error);
+      }
+    }, 3000); // 每3秒检查一次
+
+    // 最多轮询30次（90秒），避免无限轮询
+    const maxPolls = 30;
+    let pollCount = 0;
+    const countInterval = setInterval(() => {
+      pollCount++;
+      if (pollCount >= maxPolls) {
+        console.log("[Dashboard] ⏱️ Auto-polling timeout, stopping");
+        clearInterval(pollInterval);
+        clearInterval(countInterval);
+      }
+    }, 3000);
+
+    return () => {
+      clearInterval(pollInterval);
+      clearInterval(countInterval);
+    };
+  }, [websiteId, data?.hasData, selectedRegion, user]);
+
   // 如果没有 websiteId，显示错误
   if (!websiteId) {
     return (

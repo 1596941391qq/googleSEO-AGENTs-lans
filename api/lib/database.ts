@@ -504,7 +504,7 @@ export async function initUserWebsitesTable() {
       await sql`
         CREATE TABLE IF NOT EXISTS user_websites (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id INTEGER NOT NULL,
+          user_id UUID NOT NULL,
           website_url VARCHAR(500) NOT NULL,
           website_domain VARCHAR(255) NOT NULL,
           website_title VARCHAR(500),
@@ -524,6 +524,83 @@ export async function initUserWebsitesTable() {
           CONSTRAINT unique_user_website UNIQUE (user_id, website_url)
         )
       `;
+
+      // 迁移：如果表已存在且 user_id 是 INTEGER 或不存在，确保它是 UUID
+      try {
+        const tableCheck = await sql`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'user_websites'
+          )
+        `;
+        
+        if (tableCheck.rows[0].exists) {
+          const columnCheck = await sql`
+            SELECT data_type
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'user_websites' 
+            AND column_name = 'user_id'
+          `;
+          
+          // 如果列不存在，直接添加
+          if (columnCheck.rows.length === 0) {
+            await sql`ALTER TABLE user_websites ADD COLUMN user_id UUID NOT NULL`;
+            await sql`ALTER TABLE user_websites ADD CONSTRAINT unique_user_website UNIQUE (user_id, website_url)`;
+            console.log('[Database] ✅ Added missing user_id UUID column to user_websites');
+          } 
+          // 如果列存在但是 INTEGER 类型，需要迁移
+          else if (columnCheck.rows[0].data_type === 'integer') {
+            // 检查是否有数据
+            const dataCheck = await sql`SELECT COUNT(*) as count FROM user_websites`;
+            const rowCount = parseInt(dataCheck.rows[0].count || '0', 10);
+            
+            if (rowCount === 0) {
+              // 如果没有数据，删除约束、删除列、重新添加列和约束
+              await sql`ALTER TABLE user_websites DROP CONSTRAINT IF EXISTS unique_user_website`;
+              await sql`ALTER TABLE user_websites DROP COLUMN IF EXISTS user_id`;
+              await sql`ALTER TABLE user_websites ADD COLUMN user_id UUID NOT NULL`;
+              // 重新添加唯一约束
+              await sql`ALTER TABLE user_websites ADD CONSTRAINT unique_user_website UNIQUE (user_id, website_url)`;
+              console.log('[Database] ✅ Migrated user_websites.user_id from INTEGER to UUID (empty table)');
+            } else {
+              // 如果有数据，需要更复杂的迁移策略
+              console.warn('[Database] ⚠️  user_websites table has existing INTEGER user_id data. Migration requires manual intervention.');
+              if (process.env.NODE_ENV !== 'production') {
+                console.warn('[Database] In development mode, clearing existing data and migrating...');
+                await sql`DELETE FROM user_websites`;
+                await sql`ALTER TABLE user_websites DROP CONSTRAINT IF EXISTS unique_user_website`;
+                await sql`ALTER TABLE user_websites DROP COLUMN IF EXISTS user_id`;
+                await sql`ALTER TABLE user_websites ADD COLUMN user_id UUID NOT NULL`;
+                await sql`ALTER TABLE user_websites ADD CONSTRAINT unique_user_website UNIQUE (user_id, website_url)`;
+                console.log('[Database] ✅ Migrated user_websites.user_id from INTEGER to UUID (data cleared in dev)');
+              } else {
+                throw new Error('Cannot migrate user_websites.user_id from INTEGER to UUID: table contains data. Please manually migrate or clear data first.');
+              }
+            }
+          }
+          // 如果列已经是 UUID 类型，检查约束是否存在
+          else if (columnCheck.rows[0].data_type === 'uuid') {
+            // 检查约束是否存在
+            const constraintCheck = await sql`
+              SELECT EXISTS (
+                SELECT 1 FROM information_schema.table_constraints 
+                WHERE table_schema = 'public' 
+                AND table_name = 'user_websites' 
+                AND constraint_name = 'unique_user_website'
+              )
+            `;
+            if (!constraintCheck.rows[0].exists) {
+              await sql`ALTER TABLE user_websites ADD CONSTRAINT unique_user_website UNIQUE (user_id, website_url)`;
+              console.log('[Database] ✅ Added missing unique_user_website constraint');
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('[Database] Could not migrate user_websites.user_id:', error.message);
+        throw error; // 重新抛出错误，因为这是一个关键迁移
+      }
 
       await sql`CREATE INDEX IF NOT EXISTS idx_user_websites_user ON user_websites(user_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_user_websites_domain ON user_websites(website_domain)`;
@@ -738,7 +815,7 @@ export async function initUserPreferencesTable() {
     try {
       await sql`
         CREATE TABLE IF NOT EXISTS user_preferences (
-          user_id INTEGER PRIMARY KEY,
+          user_id UUID PRIMARY KEY,
           default_website_id UUID REFERENCES user_websites(id) ON DELETE SET NULL,
           last_selected_website_id UUID REFERENCES user_websites(id) ON DELETE SET NULL,
           ui_settings JSONB DEFAULT '{}'::jsonb,
@@ -746,6 +823,104 @@ export async function initUserPreferencesTable() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `;
+
+      // 迁移：如果表已存在且 user_id 是 INTEGER 或不存在，确保它是 UUID
+      try {
+        const tableCheck = await sql`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'user_preferences'
+          )
+        `;
+        
+        if (tableCheck.rows[0].exists) {
+          const columnCheck = await sql`
+            SELECT data_type
+            FROM information_schema.columns 
+            WHERE table_schema = 'public'
+            AND table_name = 'user_preferences' 
+            AND column_name = 'user_id'
+          `;
+          
+          // 辅助函数：删除现有的主键约束
+          const dropExistingPrimaryKey = async () => {
+            const existingPkCheck = await sql`
+              SELECT constraint_name
+              FROM information_schema.table_constraints 
+              WHERE table_schema = 'public' 
+              AND table_name = 'user_preferences' 
+              AND constraint_type = 'PRIMARY KEY'
+              LIMIT 1
+            `;
+            if (existingPkCheck.rows.length > 0) {
+              const pkName = existingPkCheck.rows[0].constraint_name;
+              await sql`ALTER TABLE user_preferences DROP CONSTRAINT IF EXISTS ${raw(pkName)}`;
+              console.log(`[Database] ✅ Dropped existing PRIMARY KEY constraint: ${pkName}`);
+            }
+          };
+          
+          // 如果列不存在，直接添加
+          if (columnCheck.rows.length === 0) {
+            // 先删除已存在的主键（如果有）
+            await dropExistingPrimaryKey();
+            await sql`ALTER TABLE user_preferences ADD COLUMN user_id UUID PRIMARY KEY`;
+            console.log('[Database] ✅ Added missing user_id UUID column to user_preferences');
+          } 
+          // 如果列存在但是 INTEGER 类型，需要迁移
+          else if (columnCheck.rows[0].data_type === 'integer') {
+            // 检查是否有数据
+            const dataCheck = await sql`SELECT COUNT(*) as count FROM user_preferences`;
+            const rowCount = parseInt(dataCheck.rows[0].count || '0', 10);
+            
+            if (rowCount === 0) {
+              // 如果没有数据，删除并重新添加列（CASCADE 会自动删除相关约束）
+              await dropExistingPrimaryKey();
+              await sql`ALTER TABLE user_preferences DROP COLUMN IF EXISTS user_id CASCADE`;
+              await sql`ALTER TABLE user_preferences ADD COLUMN user_id UUID PRIMARY KEY`;
+              console.log('[Database] ✅ Migrated user_preferences.user_id from INTEGER to UUID (empty table)');
+            } else {
+              // 如果有数据，需要更复杂的迁移策略
+              console.warn('[Database] ⚠️  user_preferences table has existing INTEGER user_id data. Migration requires manual intervention.');
+              if (process.env.NODE_ENV !== 'production') {
+                console.warn('[Database] In development mode, clearing existing data and migrating...');
+                await sql`DELETE FROM user_preferences`;
+                await dropExistingPrimaryKey();
+                await sql`ALTER TABLE user_preferences DROP COLUMN IF EXISTS user_id CASCADE`;
+                await sql`ALTER TABLE user_preferences ADD COLUMN user_id UUID PRIMARY KEY`;
+                console.log('[Database] ✅ Migrated user_preferences.user_id from INTEGER to UUID (data cleared in dev)');
+              } else {
+                throw new Error('Cannot migrate user_preferences.user_id from INTEGER to UUID: table contains data. Please manually migrate or clear data first.');
+              }
+            }
+          }
+          // 如果列已经是 UUID 类型，确保它是主键
+          else if (columnCheck.rows[0].data_type === 'uuid') {
+            // 检查 user_id 是否是主键
+            const pkCheck = await sql`
+              SELECT EXISTS (
+                SELECT 1 
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu 
+                  ON tc.constraint_name = kcu.constraint_name
+                WHERE tc.table_schema = 'public' 
+                AND tc.table_name = 'user_preferences' 
+                AND tc.constraint_type = 'PRIMARY KEY'
+                AND kcu.column_name = 'user_id'
+              )
+            `;
+            if (!pkCheck.rows[0].exists) {
+              // 如果 user_id 不是主键，先删除现有的主键（如果有），然后添加新的主键
+              await dropExistingPrimaryKey();
+              await sql`ALTER TABLE user_preferences ADD PRIMARY KEY (user_id)`;
+              console.log('[Database] ✅ Added missing PRIMARY KEY constraint on user_preferences.user_id');
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error('[Database] Could not migrate user_preferences.user_id:', error.message);
+        throw error; // 重新抛出错误，因为这是一个关键迁移
+      }
 
       await sql`CREATE INDEX IF NOT EXISTS idx_user_preferences_default_website ON user_preferences(default_website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_user_preferences_last_selected ON user_preferences(last_selected_website_id)`;

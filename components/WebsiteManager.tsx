@@ -65,7 +65,15 @@ interface WebsiteManagerProps {
   onWebsiteSelect?: (website: Website) => void;
   onWebsiteBind?: (website: Website) => void;
   onWebsiteUnbind?: (websiteId: string) => void;
-  onAddWebsite?: (url: string) => void;
+  onAddWebsite?: (
+    url: string,
+    scrapedData?: {
+      title?: string;
+      description?: string;
+      screenshot?: string;
+      content?: string;
+    }
+  ) => void;
   currentWebsiteId?: string | null;
 }
 
@@ -261,9 +269,14 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
         console.warn("[WebsiteManager] Failed to trigger initial metrics:", err)
       );
 
-      // If onAddWebsite callback is provided, trigger the demo flow
+      // If onAddWebsite callback is provided, trigger the demo flow with scraped data
       if (onAddWebsite) {
-        onAddWebsite(processedUrl);
+        onAddWebsite(processedUrl, {
+          title: scrapeData.data.title,
+          description: scrapeData.data.description,
+          screenshot: scrapeData.data.screenshot,
+          content: scrapeData.data.content,
+        });
         setNewWebsiteUrl("");
         setShowAddWebsite(false);
       } else {

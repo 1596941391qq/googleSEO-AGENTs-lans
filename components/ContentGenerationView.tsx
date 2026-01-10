@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   FileText,
   Globe,
@@ -29,6 +29,13 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { cn } from "../lib/utils";
 import { KeywordData } from "../types";
 
@@ -54,6 +61,22 @@ interface WebsiteBinding {
   top10Count?: number;
   trafficCost?: number;
 }
+
+type RegionCode = "us" | "uk" | "ca" | "au" | "de" | "fr" | "jp" | "cn";
+
+const REGION_OPTIONS: {
+  value: RegionCode;
+  label: { en: string; zh: string };
+}[] = [
+  { value: "us", label: { en: "United States", zh: "美国" } },
+  { value: "uk", label: { en: "United Kingdom", zh: "英国" } },
+  { value: "ca", label: { en: "Canada", zh: "加拿大" } },
+  { value: "au", label: { en: "Australia", zh: "澳大利亚" } },
+  { value: "de", label: { en: "Germany", zh: "德国" } },
+  { value: "fr", label: { en: "France", zh: "法国" } },
+  { value: "jp", label: { en: "Japan", zh: "日本" } },
+  { value: "cn", label: { en: "China", zh: "中国" } },
+];
 
 interface ContentGenerationState {
   activeTab: "my-website" | "website-data" | "projects" | "publish";
@@ -1225,6 +1248,372 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
   const [qa3, setQa3] = useState<string[]>([]);
   const [qa4, setQa4] = useState("");
   const [isCheckingWebsite, setIsCheckingWebsite] = useState(true); // Loading state for website check
+  const [selectedRegion, setSelectedRegion] = useState<RegionCode>("us"); // 默认选择美国
+  const [isLoadingData, setIsLoadingData] = useState(false); // 数据加载状态
+
+  // Helper function to save only essential website fields to localStorage
+  // Exclude large fields like screenshot to avoid quota exceeded errors
+  const saveWebsiteToLocalStorage = (website: WebsiteBinding | null) => {
+    if (!website) {
+      localStorage.removeItem("google_seo_bound_website");
+      return;
+    }
+
+    try {
+      // Only save essential fields, exclude large fields like screenshot
+      const minimalWebsite = {
+        id: website.id,
+        url: website.url,
+        domain: website.domain,
+        title: website.title,
+        description: website.description,
+        industry: website.industry,
+        monthlyVisits: website.monthlyVisits,
+        monthlyRevenue: website.monthlyRevenue,
+        marketingTools: website.marketingTools,
+        boundAt: website.boundAt,
+        keywordsCount: website.keywordsCount,
+        healthScore: website.healthScore,
+        top10Count: website.top10Count,
+        trafficCost: website.trafficCost,
+        // Explicitly exclude: screenshot (too large), additionalInfo (may be large), etc.
+      };
+
+      localStorage.setItem(
+        "google_seo_bound_website",
+        JSON.stringify(minimalWebsite)
+      );
+    } catch (error: any) {
+      // If quota exceeded, try to clear old data and retry once
+      if (error?.name === "QuotaExceededError") {
+        console.warn(
+          "[Content Generation] localStorage quota exceeded, attempting to clear old data..."
+        );
+        try {
+          // Clear all old website-related data
+          localStorage.removeItem("google_seo_bound_website");
+          // Try to save again with minimal data
+          const minimalWebsite = {
+            id: website.id,
+            url: website.url,
+            domain: website.domain,
+            title: website.title,
+            // Only the most essential fields
+          };
+          localStorage.setItem(
+            "google_seo_bound_website",
+            JSON.stringify(minimalWebsite)
+          );
+          console.log(
+            "[Content Generation] Successfully saved minimal website data to localStorage"
+          );
+        } catch (retryError) {
+          console.error(
+            "[Content Generation] Failed to save website to localStorage after retry:",
+            retryError
+          );
+          // Don't throw, just log - localStorage is just a backup
+        }
+      } else {
+        console.error(
+          "[Content Generation] Failed to save website to localStorage:",
+          error
+        );
+      }
+    }
+  };
+
+  // 记录已尝试加载数据的地区，避免重复请求
+  const attemptedRegionsRef = useRef<Set<string>>(new Set());
+
+  // Auto-polling: 当检测到数据为空时，自动轮询检查数据是否已更新
+  // 注意：只有在数据真正为 undefined/null 时才轮询，如果数据为 0 则不轮询（避免浪费 API）
+  React.useEffect(() => {
+    // 只在有网站且数据未获取时启动轮询（keywordsCount 为 undefined 或 null，而不是 0）
+    if (
+      !state.website ||
+      (state.website.keywordsCount !== undefined &&
+        state.website.keywordsCount !== null)
+    ) {
+      return; // 有数据（包括0）或没有网站，不需要轮询
+    }
+
+    // 检查是否已经尝试过加载该网站的数据
+    const siteKey = `${state.website.id}_${selectedRegion}`;
+    if (attemptedRegionsRef.current.has(siteKey)) {
+      // 已经尝试过，不再轮询（避免循环请求）
+      console.log(
+        `[Content Generation] ⏭️ Already attempted to load data for ${siteKey}, skipping polling`
+      );
+      return;
+    }
+
+    console.log(
+      `[Content Generation] 🔄 Starting auto-polling for website data (region: ${selectedRegion})...`
+    );
+
+    let pollCount = 0;
+    const maxPolls = 10; // 减少到最多10次（30秒），避免浪费 API
+
+    const pollInterval = setInterval(async () => {
+      pollCount++;
+
+      // 达到最大轮询次数，停止并标记为已尝试
+      if (pollCount >= maxPolls) {
+        console.log(
+          `[Content Generation] ⏱️ Auto-polling timeout after ${maxPolls} attempts, stopping`
+        );
+        attemptedRegionsRef.current.add(siteKey);
+        clearInterval(pollInterval);
+        return;
+      }
+
+      try {
+        // 只检查缓存，不触发 API 调用
+        const response = await fetch("/api/website-data/overview-only", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+          },
+          body: JSON.stringify({
+            websiteId: state.website?.id,
+            userId: user?.userId,
+            region: selectedRegion,
+          }),
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+
+          // 检查缓存中是否有数据
+          if (
+            result.success &&
+            result.data &&
+            result.data.organicTraffic !== undefined
+          ) {
+            const cached = result.data;
+            console.log(
+              "[Content Generation] ✅ Cached data found, updating website info:",
+              {
+                keywordsCount: cached.totalKeywords,
+                monthlyVisits: cached.organicTraffic,
+              }
+            );
+
+            setState((prev) => ({
+              ...prev,
+              website: {
+                ...prev.website!,
+                keywordsCount: cached.totalKeywords || 0,
+                monthlyVisits: cached.organicTraffic || 0,
+                top10Count: cached.rankingDistribution?.top10 || 0,
+                trafficCost: cached.trafficCost || 0,
+              },
+            }));
+
+            // 标记为已尝试
+            attemptedRegionsRef.current.add(siteKey);
+            clearInterval(pollInterval); // 数据已更新，停止轮询
+          }
+        }
+      } catch (error) {
+        console.error("[Content Generation] Polling error:", error);
+      }
+    }, 3000); // 每3秒检查一次
+
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [
+    state.website?.id,
+    state.website?.keywordsCount,
+    selectedRegion,
+    user?.userId,
+  ]);
+
+  // 请求去重：防止同时发起多个相同请求
+  const pendingRequestsRef = useRef<Set<string>>(new Set());
+
+  // 处理地区变更，重新加载数据
+  const handleRegionChange = async (region: RegionCode) => {
+    if (!state.website?.id) return;
+
+    // 请求去重：如果已有相同请求在进行，直接返回
+    const requestKey = `${state.website.id}_${region}`;
+    if (pendingRequestsRef.current.has(requestKey)) {
+      console.log(
+        `[Content Generation] ⏭️ Skipping duplicate request for region: ${region}`
+      );
+      return;
+    }
+
+    pendingRequestsRef.current.add(requestKey);
+    setIsLoadingData(true);
+
+    try {
+      console.log(`[Content Generation] 🔄 Loading data for region: ${region}`);
+
+      // 1. 先尝试从缓存读取（使用 overview-only 端点，不触发 API 调用）
+      try {
+        const cacheResponse = await fetch("/api/website-data/overview-only", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+          },
+          body: JSON.stringify({
+            websiteId: state.website.id,
+            userId: user?.userId,
+            region: region,
+          }),
+        });
+
+        if (cacheResponse.ok) {
+          const cacheData = await cacheResponse.json();
+
+          // 如果缓存中有数据，直接使用，不触发更新
+          if (
+            cacheData.success &&
+            cacheData.data &&
+            cacheData.data.organicTraffic !== undefined
+          ) {
+            const cached = cacheData.data;
+            console.log(
+              `[Content Generation] ✅ Using cached data for region: ${region}`
+            );
+
+            const updatedWebsite = {
+              ...state.website!,
+              monthlyVisits: cached.organicTraffic || 0,
+              keywordsCount: cached.totalKeywords || 0,
+              top10Count: cached.rankingDistribution?.top10 || 0,
+              trafficCost: cached.trafficCost || 0,
+            };
+
+            setState((prev) => ({
+              ...prev,
+              website: updatedWebsite,
+            }));
+
+            saveWebsiteToLocalStorage(updatedWebsite);
+            return; // 使用缓存数据，直接返回
+          }
+        }
+      } catch (cacheError) {
+        console.warn(
+          "[Content Generation] ⚠️ Failed to check cache (non-blocking):",
+          cacheError
+        );
+      }
+
+      // 2. 缓存中没有数据，获取概览数据（这会触发后台更新，但不阻塞）
+      const overviewResponse = await fetch("/api/website-data/overview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
+        body: JSON.stringify({
+          websiteId: state.website.id,
+          region: region, // 确保正确传递 region 字符串，如 'us', 'uk' 等
+        }),
+      });
+
+      if (overviewResponse.ok) {
+        const overviewData = await overviewResponse.json();
+        console.log(
+          `[Content Generation] 📊 Overview API response for region ${region}:`,
+          overviewData
+        );
+
+        if (overviewData.success && overviewData.data) {
+          const overview = overviewData.data.overview;
+
+          // 检查 overview 是否为 null
+          if (!overview) {
+            console.warn(
+              `[Content Generation] ⚠️ Overview is null for region: ${region}. Data may not be available yet. Will not retry automatically.`
+            );
+            // 即使没有数据，也更新状态为 0，避免显示"同步中..."
+            // 同时记录该地区已尝试过，避免重复请求
+            const updatedWebsite = {
+              ...state.website!,
+              monthlyVisits: 0,
+              keywordsCount: 0,
+              top10Count: 0,
+              trafficCost: 0,
+            };
+            setState((prev) => ({
+              ...prev,
+              website: updatedWebsite,
+            }));
+            // 不返回，继续执行后续逻辑，但不再自动重试
+          } else {
+            console.log(
+              `[Content Generation] 📈 Parsed overview for region ${region}:`,
+              {
+                organicTraffic: overview.organicTraffic,
+                totalKeywords: overview.totalKeywords,
+                top10Count: overview.rankingDistribution?.top10,
+                trafficCost: overview.trafficCost,
+              }
+            );
+
+            const updatedWebsite = {
+              ...state.website!,
+              monthlyVisits: overview.organicTraffic || 0,
+              keywordsCount: overview.totalKeywords || 0,
+              top10Count: overview.rankingDistribution?.top10 || 0,
+              trafficCost: overview.trafficCost || 0,
+            };
+
+            setState((prev) => ({
+              ...prev,
+              website: updatedWebsite,
+            }));
+
+            // 保存到 localStorage
+            saveWebsiteToLocalStorage(updatedWebsite);
+
+            console.log(
+              `[Content Generation] ✅ Data loaded and updated for region: ${region}`,
+              {
+                keywordsCount: overview.totalKeywords,
+                monthlyVisits: overview.organicTraffic,
+                top10Count: overview.rankingDistribution?.top10,
+                trafficCost: overview.trafficCost,
+              }
+            );
+          }
+        } else {
+          console.warn(
+            `[Content Generation] ⚠️ Overview data structure unexpected:`,
+            overviewData
+          );
+        }
+      } else {
+        // 处理认证错误
+        if (overviewResponse.status === 401) {
+          console.error(
+            `[Content Generation] ❌ Authentication failed. Please check your auth token.`
+          );
+        } else {
+          const errorText = await overviewResponse.text();
+          console.error(
+            `[Content Generation] ❌ Overview API failed for region ${region}:`,
+            overviewResponse.status,
+            errorText
+          );
+        }
+      }
+    } catch (error) {
+      console.error("[Content Generation] Error loading region data:", error);
+    } finally {
+      pendingRequestsRef.current.delete(requestKey);
+      setIsLoadingData(false);
+    }
+  };
 
   // Load website binding from database first, then fallback to localStorage
   React.useEffect(() => {
@@ -1250,6 +1639,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               "[Content Generation] Loaded website from database:",
               result.data.currentWebsite
             );
+            const loadedWebsite = result.data.currentWebsite;
+
             setState((prev) => {
               // Don't overwrite if user is in onboarding process (steps 1-4)
               if (prev.onboardingStep >= 1 && prev.onboardingStep <= 4) {
@@ -1260,10 +1651,101 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               }
               return {
                 ...prev,
-                website: result.data.currentWebsite,
+                website: loadedWebsite,
                 onboardingStep: 5, // Set to bound state
               };
             });
+
+            // 加载网站后，尝试从缓存加载默认地区的数据（不触发 API 调用）
+            if (loadedWebsite && loadedWebsite.id) {
+              // 异步加载缓存数据，不阻塞 UI，不触发 API 调用
+              (async () => {
+                try {
+                  console.log(
+                    `[Content Generation] 📦 Checking cache for website: ${loadedWebsite.id}, region: ${selectedRegion}`
+                  );
+
+                  // 使用 overview-only 端点，只读取缓存，不触发 API 调用
+                  const cacheResponse = await fetch(
+                    "/api/website-data/overview-only",
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${
+                          localStorage.getItem("auth_token") || ""
+                        }`,
+                      },
+                      body: JSON.stringify({
+                        websiteId: loadedWebsite.id,
+                        userId: currentUserId,
+                        region: selectedRegion, // 确保传递正确的 region 字符串
+                      }),
+                    }
+                  );
+
+                  if (cacheResponse.ok) {
+                    const cacheData = await cacheResponse.json();
+
+                    if (
+                      cacheData.success &&
+                      cacheData.data &&
+                      cacheData.data.organicTraffic !== undefined
+                    ) {
+                      // 缓存中有数据，使用缓存
+                      const cached = cacheData.data;
+                      const updatedWebsite = {
+                        ...loadedWebsite,
+                        monthlyVisits: cached.organicTraffic || 0,
+                        keywordsCount: cached.totalKeywords || 0,
+                        top10Count: cached.rankingDistribution?.top10 || 0,
+                        trafficCost: cached.trafficCost || 0,
+                      };
+
+                      setState((prev) => ({
+                        ...prev,
+                        website: updatedWebsite,
+                      }));
+
+                      saveWebsiteToLocalStorage(updatedWebsite);
+                      console.log(
+                        `[Content Generation] ✅ Loaded cached data for region: ${selectedRegion}`,
+                        {
+                          keywordsCount: cached.totalKeywords,
+                          monthlyVisits: cached.organicTraffic,
+                        }
+                      );
+                    } else {
+                      // 缓存中没有数据，设置为默认值，不自动触发更新
+                      console.log(
+                        `[Content Generation] 📭 No cached data for region: ${selectedRegion}. Data will be loaded when user selects this region or manually refreshes.`
+                      );
+                      const updatedWebsite = {
+                        ...loadedWebsite,
+                        monthlyVisits: 0,
+                        keywordsCount: 0,
+                        top10Count: 0,
+                        trafficCost: 0,
+                      };
+                      setState((prev) => ({
+                        ...prev,
+                        website: updatedWebsite,
+                      }));
+                    }
+                  } else {
+                    console.warn(
+                      `[Content Generation] ⚠️ Failed to check cache: ${cacheResponse.status}`
+                    );
+                  }
+                } catch (error) {
+                  console.error(
+                    "[Content Generation] Error checking cache:",
+                    error
+                  );
+                }
+              })();
+            }
+
             setIsCheckingWebsite(false); // Finished checking
             return;
           }
@@ -1384,22 +1866,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
 
   // Save website binding to localStorage whenever it changes
   React.useEffect(() => {
-    if (state.website) {
-      try {
-        localStorage.setItem(
-          "google_seo_bound_website",
-          JSON.stringify(state.website)
-        );
-      } catch (error) {
-        console.error(
-          "[Content Generation] Failed to save website to localStorage:",
-          error
-        );
-      }
-    } else {
-      // Clear localStorage when website is unbound
-      localStorage.removeItem("google_seo_bound_website");
-    }
+    saveWebsiteToLocalStorage(state.website);
   }, [state.website]);
 
   // Preload screenshot image when article demo is displayed
@@ -1830,7 +2297,15 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
   };
 
   // Handle adding website from WebsiteManager (bound state)
-  const handleAddWebsiteFromManager = async (url: string) => {
+  const handleAddWebsiteFromManager = async (
+    url: string,
+    scrapedData?: {
+      title?: string;
+      description?: string;
+      screenshot?: string;
+      content?: string;
+    }
+  ) => {
     // Auto-add https:// if missing
     let processedUrl = url.trim();
     if (!/^https?:\/\//i.test(processedUrl)) {
@@ -1857,32 +2332,52 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
     setTempUrl(processedUrl); // Store URL for later
 
     try {
-      console.log(
-        "[Content Generation] Step 1: Scraping website:",
-        processedUrl
-      );
+      let data: { success: boolean; data?: any };
 
-      // Call Firecrawl API
-      const response = await fetch("/api/scrape-website", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
-        },
-        body: JSON.stringify({ url: processedUrl }),
-      });
+      // If scraped data is provided, use it directly (avoid re-scraping)
+      if (scrapedData && scrapedData.content) {
+        console.log(
+          "[Content Generation] Using pre-scraped data (from WebsiteManager), content length:",
+          scrapedData.content.length
+        );
+        data = {
+          success: true,
+          data: {
+            markdown: scrapedData.content,
+            title: scrapedData.title,
+            description: scrapedData.description,
+            screenshot: scrapedData.screenshot,
+          },
+        };
+      } else {
+        // Otherwise, scrape the website
+        console.log(
+          "[Content Generation] Step 1: Scraping website:",
+          processedUrl
+        );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("[Content Generation] Scrape failed:", errorData);
-        throw new Error(errorData.error || "Failed to scrape website");
+        // Call Firecrawl API
+        const response = await fetch("/api/scrape-website", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+          },
+          body: JSON.stringify({ url: processedUrl }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error("[Content Generation] Scrape failed:", errorData);
+          throw new Error(errorData.error || "Failed to scrape website");
+        }
+
+        data = await response.json();
+        console.log(
+          "[Content Generation] Scrape success, content length:",
+          data.data?.markdown?.length || 0
+        );
       }
-
-      const data = await response.json();
-      console.log(
-        "[Content Generation] Scrape success, content length:",
-        data.data?.markdown?.length || 0
-      );
 
       if (data.success && data.data) {
         const urlDomain = new URL(processedUrl).hostname;
@@ -2178,14 +2673,61 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   : "Welcome back! Manage your digital assets and SEO strategies here."}
               </p>
             </div>
-            <Button
-              onClick={startGuide}
-              variant="outline"
-              className="rounded-2xl border-emerald-500/20 bg-emerald-500/5 text-emerald-500 hover:bg-emerald-500/10 font-bold"
-            >
-              <HelpCircle className="w-4 h-4 mr-2" />
-              {uiLanguage === "zh" ? "新手引导" : "Newbie Guide"}
-            </Button>
+            <div className="flex items-center gap-3">
+              {/* 地区选择器 */}
+              {state.website && (
+                <Select
+                  value={selectedRegion}
+                  onValueChange={(value: RegionCode) => {
+                    setSelectedRegion(value);
+                    // 当地区改变时，重新加载数据
+                    handleRegionChange(value);
+                  }}
+                >
+                  <SelectTrigger
+                    className={cn(
+                      "w-[140px] rounded-2xl border-2 font-bold transition-all",
+                      isDarkTheme
+                        ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 hover:border-emerald-500/60"
+                        : "border-emerald-600/40 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-600/60"
+                    )}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent
+                    className={cn(
+                      isDarkTheme
+                        ? "bg-zinc-900 border-emerald-500/30"
+                        : "bg-white border-emerald-500/30"
+                    )}
+                  >
+                    {REGION_OPTIONS.map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        className={cn(
+                          isDarkTheme
+                            ? "text-white hover:bg-emerald-500/20 focus:bg-emerald-500/20"
+                            : "text-zinc-900 hover:bg-emerald-50 focus:bg-emerald-50"
+                        )}
+                      >
+                        {uiLanguage === "zh"
+                          ? option.label.zh
+                          : option.label.en}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button
+                onClick={startGuide}
+                variant="outline"
+                className="rounded-2xl border-emerald-500/20 bg-emerald-500/5 text-emerald-500 hover:bg-emerald-500/10 font-bold"
+              >
+                <HelpCircle className="w-4 h-4 mr-2" />
+                {uiLanguage === "zh" ? "新手引导" : "Newbie Guide"}
+              </Button>
+            </div>
           </div>
 
           {/* Top: Website Info & Feature Guidance */}
@@ -2294,7 +2836,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                               : "Indexed Keywords"}
                           </span>
                           <p className="text-2xl lg:text-3xl font-black tracking-tighter text-white">
-                            {state.website.keywordsCount ? (
+                            {state.website.keywordsCount !== undefined &&
+                            state.website.keywordsCount !== null ? (
                               state.website.keywordsCount >= 1000000 ? (
                                 (state.website.keywordsCount / 1000000).toFixed(
                                   1
@@ -2447,8 +2990,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               onWebsiteSelect={(website) => {
                 setState({ website });
               }}
-              onAddWebsite={(url) => {
-                handleAddWebsiteFromManager(url);
+              onAddWebsite={(url, scrapedData) => {
+                handleAddWebsiteFromManager(url, scrapedData);
               }}
               onWebsiteBind={(website) => {
                 // Bind website and set to bound state
@@ -2464,20 +3007,26 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   monthlyRevenue: website.monthlyRevenue || null,
                   marketingTools: website.marketingTools || [],
                   boundAt: website.boundAt || new Date().toISOString(),
+                  keywordsCount:
+                    website.keywordsCount !== undefined
+                      ? website.keywordsCount
+                      : null,
+                  healthScore:
+                    website.healthScore !== undefined
+                      ? website.healthScore
+                      : null,
+                  top10Count:
+                    website.top10Count !== undefined
+                      ? website.top10Count
+                      : null,
+                  trafficCost:
+                    website.trafficCost !== undefined
+                      ? website.trafficCost
+                      : null,
                 };
 
-                // Save to localStorage as backup
-                try {
-                  localStorage.setItem(
-                    "google_seo_bound_website",
-                    JSON.stringify(boundWebsite)
-                  );
-                } catch (error) {
-                  console.error(
-                    "[Content Generation] Failed to save website to localStorage:",
-                    error
-                  );
-                }
+                // Save to localStorage as backup (using helper function to avoid quota issues)
+                saveWebsiteToLocalStorage(boundWebsite);
 
                 setState({
                   website: boundWebsite,
@@ -3571,18 +4120,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                         additionalInfo: qa4,
                       };
 
-                      // Save to localStorage as backup
-                      try {
-                        localStorage.setItem(
-                          "google_seo_bound_website",
-                          JSON.stringify(boundWebsite)
-                        );
-                      } catch (error) {
-                        console.error(
-                          "[Content Generation] Failed to save website to localStorage:",
-                          error
-                        );
-                      }
+                      // Save to localStorage as backup (using helper function to avoid quota issues)
+                      saveWebsiteToLocalStorage(boundWebsite);
 
                       setState({
                         website: boundWebsite,

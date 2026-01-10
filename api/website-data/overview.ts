@@ -17,10 +17,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 interface OverviewRequestBody {
   websiteId: string;
-  userId?: number;
+  region?: string; // 地区代码，如 'us', 'uk'
   forceRefresh?: boolean; // 强制刷新缓存
 }
 
@@ -40,15 +41,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId; // userId 现在是 UUID 字符串
+
     const body = req.body as OverviewRequestBody;
 
     if (!body.websiteId) {
       return res.status(400).json({ error: 'websiteId is required' });
-    }
-
-    let userId = body.userId;
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized: userId is required' });
     }
 
     // 初始化数据库表
@@ -96,20 +99,170 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const cacheExpired = hasCache && new Date(cacheCheck.rows[0].cache_expires_at) < new Date();
     const needsRefresh = body.forceRefresh || !hasCache || cacheExpired;
 
-    // 注意：不再在这里调用 update-metrics
-    // 原因：
-    // 1. 前端会自动检测并触发后台更新（不阻塞用户）
-    // 2. 用户可以通过刷新按钮手动触发更新
-    // 3. 避免重复调用和服务器负载
-    if (!hasCache) {
-      console.log('[overview] ⚠️ No cache found - frontend will trigger background update');
-    } else if (cacheExpired) {
-      console.log('[overview] ⚠️ Cache expired - frontend will trigger background update');
+    // 如果没有缓存或缓存过期，异步触发数据获取（不阻塞响应）
+    if (needsRefresh) {
+      (async () => {
+        try {
+          console.log('[overview] 🔄 Auto-fetching DataForSEO data for website:', body.websiteId);
+          
+          if (!website.website_domain) {
+            console.warn('[overview] ⚠️ Website has no domain, skipping auto-fetch');
+            return;
+          }
+
+          const regionToLocationCode: { [key: string]: number } = {
+            'us': 2840, 'uk': 2826, 'ca': 2124, 'au': 2036,
+            'de': 2276, 'fr': 2250, 'jp': 2384, 'cn': 2166,
+          };
+          const locationCode = regionToLocationCode[body.region || 'us'] || 2840;
+
+          // 调用 DataForSEO API 获取数据
+          const { getDomainOverview, getDomainKeywords, getDomainCompetitors } = await import('../_shared/tools/dataforseo-domain.js');
+
+          const [overview, keywords, competitors] = await Promise.all([
+            getDomainOverview(website.website_domain, locationCode).catch((err) => {
+              console.error('[overview] Failed to get overview:', err.message);
+              return null;
+            }),
+            getDomainKeywords(website.website_domain, locationCode, 50).catch((err) => {
+              console.error('[overview] Failed to get keywords:', err.message);
+              return [];
+            }),
+            getDomainCompetitors(website.website_domain, locationCode, 5).catch((err) => {
+              console.error('[overview] Failed to get competitors:', err.message);
+              return [];
+            }),
+          ]);
+
+          // 缓存概览数据（即使数据为 0 也要保存）
+          if (overview !== null && overview !== undefined) {
+            await sql`
+              INSERT INTO domain_overview_cache (
+                website_id, location_code, data_date, organic_traffic, paid_traffic, total_traffic,
+                total_keywords, new_keywords, lost_keywords, improved_keywords, declined_keywords,
+                avg_position, traffic_cost, top3_count, top10_count, top50_count, top100_count,
+                backlinks_info, data_updated_at, cache_expires_at
+              ) VALUES (
+                ${body.websiteId}, ${locationCode}, CURRENT_DATE, ${overview.organicTraffic}, ${overview.paidTraffic}, ${overview.totalTraffic},
+                ${overview.totalKeywords}, ${overview.newKeywords}, ${overview.lostKeywords},
+                ${overview.improvedKeywords || 0}, ${overview.declinedKeywords || 0},
+                ${overview.avgPosition}, ${overview.trafficCost},
+                ${overview.rankingDistribution.top3}, ${overview.rankingDistribution.top10},
+                ${overview.rankingDistribution.top50}, ${overview.rankingDistribution.top100},
+                ${overview.backlinksInfo ? JSON.stringify(overview.backlinksInfo) : null},
+                NOW(), NOW() + INTERVAL '24 hours'
+              )
+              ON CONFLICT (website_id, data_date, location_code) DO UPDATE SET
+                organic_traffic = EXCLUDED.organic_traffic,
+                paid_traffic = EXCLUDED.paid_traffic,
+                total_traffic = EXCLUDED.total_traffic,
+                total_keywords = EXCLUDED.total_keywords,
+                new_keywords = EXCLUDED.new_keywords,
+                lost_keywords = EXCLUDED.lost_keywords,
+                improved_keywords = EXCLUDED.improved_keywords,
+                declined_keywords = EXCLUDED.declined_keywords,
+                avg_position = EXCLUDED.avg_position,
+                traffic_cost = EXCLUDED.traffic_cost,
+                top3_count = EXCLUDED.top3_count,
+                top10_count = EXCLUDED.top10_count,
+                top50_count = EXCLUDED.top50_count,
+                top100_count = EXCLUDED.top100_count,
+                backlinks_info = EXCLUDED.backlinks_info,
+                data_updated_at = NOW(),
+                cache_expires_at = EXCLUDED.cache_expires_at
+            `;
+            console.log('[overview] ✅ Auto-cached overview data:', {
+              websiteId: body.websiteId,
+              totalKeywords: overview.totalKeywords,
+              organicTraffic: overview.organicTraffic,
+              locationCode
+            });
+          } else {
+            console.warn('[overview] ⚠️ No overview data to cache (overview is null)');
+          }
+
+          // 缓存关键词数据（前20个）
+          if (keywords.length > 0) {
+            const keywordsToCache = keywords.slice(0, 20);
+            await Promise.all(
+              keywordsToCache.map(kw => sql`
+                INSERT INTO domain_keywords_cache (
+                  website_id, location_code, keyword, current_position, previous_position,
+                  position_change, search_volume, cpc, competition, difficulty,
+                  traffic_percentage, ranking_url, data_updated_at, cache_expires_at
+                ) VALUES (
+                  ${body.websiteId}, ${locationCode}, ${kw.keyword}, ${kw.currentPosition},
+                  ${kw.previousPosition}, ${kw.positionChange}, ${kw.searchVolume},
+                  ${kw.cpc}, ${kw.competition !== null && kw.competition !== undefined ? Math.min(Math.max(Number(kw.competition) || 0, 0), 99999999.99) : null},
+                  ${kw.difficulty}, ${kw.trafficPercentage !== null && kw.trafficPercentage !== undefined ? Math.min(Math.max(Number(kw.trafficPercentage) || 0, 0), 99999999.99) : null},
+                  ${kw.url || ''}, NOW(), NOW() + INTERVAL '24 hours'
+                )
+                ON CONFLICT (website_id, keyword, location_code) DO UPDATE SET
+                  current_position = EXCLUDED.current_position,
+                  previous_position = EXCLUDED.previous_position,
+                  position_change = EXCLUDED.position_change,
+                  search_volume = EXCLUDED.search_volume,
+                  cpc = EXCLUDED.cpc,
+                  competition = CASE 
+                    WHEN EXCLUDED.competition IS NULL THEN NULL
+                    ELSE LEAST(GREATEST(EXCLUDED.competition, 0), 99999999.99)
+                  END,
+                  difficulty = EXCLUDED.difficulty,
+                  traffic_percentage = CASE 
+                    WHEN EXCLUDED.traffic_percentage IS NULL THEN NULL
+                    ELSE LEAST(GREATEST(EXCLUDED.traffic_percentage, 0), 99999999.99)
+                  END,
+                  ranking_url = EXCLUDED.ranking_url,
+                  data_updated_at = NOW(),
+                  cache_expires_at = EXCLUDED.cache_expires_at
+              `)
+            );
+            console.log(`[overview] ✅ Auto-cached ${keywordsToCache.length} keywords`);
+          }
+
+          // 缓存竞争对手数据
+          if (competitors.length > 0) {
+            await Promise.all(
+              competitors.map(comp => sql`
+                INSERT INTO domain_competitors_cache (
+                  website_id, location_code, competitor_domain, competitor_title,
+                  common_keywords, organic_traffic, total_keywords,
+                  gap_keywords, gap_traffic, data_updated_at, cache_expires_at
+                ) VALUES (
+                  ${body.websiteId}, ${locationCode}, ${comp.domain}, ${comp.title || null},
+                  ${comp.commonKeywords || 0}, ${comp.organicTraffic || 0}, ${comp.totalKeywords || 0},
+                  ${comp.gapKeywords || 0}, ${comp.gapTraffic || 0}, NOW(), NOW() + INTERVAL '7 days'
+                )
+                ON CONFLICT (website_id, competitor_domain, location_code) DO UPDATE SET
+                  competitor_title = EXCLUDED.competitor_title,
+                  common_keywords = EXCLUDED.common_keywords,
+                  organic_traffic = EXCLUDED.organic_traffic,
+                  total_keywords = EXCLUDED.total_keywords,
+                  gap_keywords = EXCLUDED.gap_keywords,
+                  gap_traffic = EXCLUDED.gap_traffic,
+                  data_updated_at = NOW(),
+                  cache_expires_at = EXCLUDED.cache_expires_at
+              `)
+            );
+            console.log(`[overview] ✅ Auto-cached ${competitors.length} competitors`);
+          }
+
+          console.log('[overview] ✅ Auto-fetch completed');
+        } catch (error: any) {
+          console.error('[overview] ⚠️ Failed to auto-fetch data (non-blocking):', error.message);
+        }
+      })();
     }
 
     // ==========================================
-    // Step 3: 获取概览数据
+    // Step 3: 获取概览数据（按 location_code 过滤）
     // ==========================================
+    const regionToLocationCode: { [key: string]: number } = {
+      'us': 2840, 'uk': 2826, 'ca': 2124, 'au': 2036,
+      'de': 2276, 'fr': 2250, 'jp': 2384, 'cn': 2166,
+    };
+    const locationCode = regionToLocationCode[body.region || 'us'] || 2840;
+
     const overviewResult = await sql`
       SELECT
         organic_traffic,
@@ -130,6 +283,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         cache_expires_at
       FROM domain_overview_cache
       WHERE website_id = ${body.websiteId}
+        AND location_code = ${locationCode}
       ORDER BY data_date DESC
       LIMIT 1
     `;

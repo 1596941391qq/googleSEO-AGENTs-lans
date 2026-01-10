@@ -155,6 +155,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         INSERT INTO domain_overview_cache (
           website_id,
           location_code,
+          data_date,
           organic_traffic,
           paid_traffic,
           total_traffic,
@@ -175,6 +176,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ) VALUES (
           ${body.websiteId},
           ${locationCode},
+          CURRENT_DATE,
           ${overview.organicTraffic},
           ${overview.paidTraffic},
           ${overview.totalTraffic},
@@ -212,7 +214,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           data_updated_at = NOW(),
           cache_expires_at = EXCLUDED.cache_expires_at
       `;
-      console.log('[update-metrics] ✅ Successfully cached overview data to database');
+      console.log('[update-metrics] ✅ Successfully cached overview data to database:', {
+        websiteId: body.websiteId,
+        totalKeywords: overview.totalKeywords,
+        organicTraffic: overview.organicTraffic,
+        locationCode
+      });
     } else {
       console.warn('[update-metrics] ⚠️ No overview data to cache (overview is null)');
     }
