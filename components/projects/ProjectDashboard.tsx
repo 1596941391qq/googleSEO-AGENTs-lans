@@ -411,37 +411,26 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
             <h1 className={cn('text-2xl font-bold tracking-tight', isDarkTheme ? 'text-white' : 'text-gray-900')}>
               {selectedProject 
                 ? selectedProject.name 
-                : (uiLanguage === 'zh' ? '内容项目看板' : 'Content Project Kanban')}
+                : (uiLanguage === 'zh' ? '任务进度看板' : 'Task Progress Kanban')}
             </h1>
             {!selectedProject && (
               <p className={cn("text-xs font-medium uppercase tracking-wider", isDarkTheme ? "text-zinc-500" : "text-gray-500")}>
-                {uiLanguage === 'zh' ? '自动追踪所有挖掘与生成任务' : 'Auto-track all mining and generation tasks'}
+                {uiLanguage === 'zh' ? '自动追踪所有关键词挖掘与内容生成任务' : 'Auto-track all mining and generation tasks'}
               </p>
             )}
           </div>
         </div>
-        {!selectedProject && (
-          <div className="flex gap-2">
-             <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchProjects}
-              className={cn("font-bold transition-all active:scale-95", isDarkTheme ? 'border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white' : 'border-gray-200 text-gray-600 hover:bg-gray-100')}
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              {uiLanguage === 'zh' ? '刷新' : 'Refresh'}
-            </Button>
-            <button
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md text-sm font-bold transition-all shadow-lg shadow-emerald-900/20 active:scale-95"
-              onClick={() => {
-                setIsCreateModalOpen(true);
-              }}
-            >
-              <Plus className="w-4 h-4" />
-              {uiLanguage === 'zh' ? '新建项目' : 'New Project'}
-            </button>
-          </div>
-        )}
+        <div className="flex gap-2">
+           <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchProjects}
+            className={cn("font-bold transition-all active:scale-95", isDarkTheme ? 'border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white' : 'border-gray-200 text-gray-600 hover:bg-gray-100')}
+          >
+            <RefreshCw className="w-4 h-4 mr-2" />
+            {uiLanguage === 'zh' ? '刷新' : 'Refresh'}
+          </Button>
+        </div>
       </div>
 
       {!selectedProject ? (
@@ -562,10 +551,36 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                 initialContent={editingDraft.content}
                 isDarkTheme={isDarkTheme}
                 uiLanguage={uiLanguage}
+                draftId={editingDraft.id}
                 onSave={async (newContent) => {
-                  console.log('Saving content...', newContent);
-                  // TODO: Implement save API
-                  setEditingDraft(null);
+                  try {
+                    const response = await fetch('/api/articles/save-draft', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
+                      },
+                      body: JSON.stringify({
+                        projectId: editingDraft.projectId,
+                        keywordId: editingDraft.keywordId,
+                        title: editingDraft.title,
+                        content: newContent,
+                      }),
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      setEditingDraft(null);
+                      // Optionally refresh keywords/stats
+                      if (selectedProject) {
+                        fetchKeywords(selectedProject.id);
+                      }
+                    } else {
+                      alert(result.error || 'Failed to save draft');
+                    }
+                  } catch (err) {
+                    console.error('Error saving draft:', err);
+                    alert('Failed to save draft');
+                  }
                 }}
               />
             </div>

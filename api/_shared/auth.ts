@@ -4,6 +4,26 @@ import { getApiKeyByHash, updateApiKeyLastUsed, getUserById } from '../lib/datab
 import { createHash } from 'crypto';
 
 /**
+ * 将测试用户 ID 转换为有效的 UUID（仅开发模式）
+ */
+function normalizeUserId(userId: string): string {
+  const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+  
+  // 验证是否是有效的 UUID 格式
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{12}$/i; // 简化正则，或者使用完整的
+  const fullUuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  
+  // 开发模式下的测试用户特殊处理
+  if (isDevelopment && (userId === '12345' || !fullUuidRegex.test(userId))) {
+    // 使用固定的测试用户 UUID
+    const testUUID = 'b61cbbf9-15b0-4353-8d49-89952042cf75';
+    return testUUID;
+  }
+  
+  return userId;
+}
+
+/**
  * 认证结果
  */
 export interface AuthResult {
@@ -22,54 +42,26 @@ export async function authenticateRequest(req: VercelRequest): Promise<AuthResul
   const authHeaderRaw = req.headers.authorization || req.headers.Authorization;
   const authHeader = Array.isArray(authHeaderRaw) ? authHeaderRaw[0] : authHeaderRaw;
 
-  console.log('[authenticateRequest] All headers:', Object.keys(req.headers));
-  console.log('[authenticateRequest] Authorization header present:', !!authHeader);
-  console.log('[authenticateRequest] Authorization header value:', authHeader ? (typeof authHeader === 'string' ? authHeader.substring(0, 30) + '...' : String(authHeader)) : 'null');
-
   if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
-    console.log('[authenticateRequest] No valid Bearer token in header');
     return null;
   }
 
   const token = authHeader.substring(7);
-  console.log('[authenticateRequest] Token extracted, length:', token.length, 'starts with:', token.substring(0, 20) + '...');
 
   // 尝试作为 JWT token 验证
   try {
-    console.log('[authenticateRequest] Attempting JWT verification...');
     const payload = await verifyToken(token);
     if (payload) {
-      console.log('[authenticateRequest] JWT verification successful, userId:', payload.userId);
-
-      // JWT token 验证成功即可，不需要检查用户是否存在于本地数据库
-      // 因为 JWT token 本身已经证明了用户的身份（由主应用签发）
-      // 如果需要在本地数据库中有用户记录，可以在需要时自动创建
-      console.log('[authenticateRequest] JWT token is valid, authentication successful');
       return {
-        userId: payload.userId,
+        userId: normalizeUserId(payload.userId),
         authType: 'jwt',
       };
-    } else {
-      console.log('[authenticateRequest] JWT verification returned null (token invalid but not expired)');
     }
   } catch (error: any) {
     // JWT 验证失败
-    console.error('[authenticateRequest] JWT verification error:', error);
-    console.error('[authenticateRequest] Error details:', {
-      message: error instanceof Error ? error.message : String(error),
-      name: error instanceof Error ? error.name : 'Unknown',
-      code: error?.code,
-      isExpired: error?.isExpired,
-    });
-
-    // 如果是过期错误，不尝试 API key，直接返回 null
-    // 让调用者知道是过期，可以返回更明确的错误信息
     if (error?.code === 'ERR_JWT_EXPIRED' || error?.isExpired) {
-      console.log('[authenticateRequest] Token expired, not trying API key');
-      // 返回 null，但会在响应中提供更明确的错误信息
       return null;
     }
-    // 其他错误继续尝试 API key
   }
 
   // 尝试作为 API key 验证
@@ -86,24 +78,17 @@ export async function authenticateRequest(req: VercelRequest): Promise<AuthResul
         }
 
         // 更新最后使用时间（异步，不阻塞）
-        updateApiKeyLastUsed(apiKey.id).catch((err) => {
-          console.error('Failed to update API key last used:', err);
-        });
+        updateApiKeyLastUsed(apiKey.id).catch(() => {});
 
-        // 获取用户信息
-        const user = await getUserById(apiKey.user_id);
-        if (user) {
-          return {
-            userId: apiKey.user_id,
-            authType: 'api_key',
-            apiKeyId: apiKey.id,
-          };
-        }
+        return {
+          userId: normalizeUserId(apiKey.user_id),
+          authType: 'api_key',
+          apiKeyId: apiKey.id,
+        };
       }
     }
   } catch (error) {
     // API key 验证失败
-    console.error('API key verification error:', error);
   }
 
   return null;

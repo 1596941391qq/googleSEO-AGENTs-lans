@@ -21,37 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResult) {
       return sendErrorResponse(res, null, 'Unauthorized', 401);
     }
-
-    const originalUserId = authResult.userId;
-    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
-
-    // 验证 userId 是否是有效的 UUID 格式
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isValidUUID = uuidRegex.test(originalUserId);
-
-    // 开发模式下的测试用户特殊处理
-    if (isDevelopment && (!isValidUUID || originalUserId === '12345')) {
-      console.log(`[Save Website Data] Test user detected (userId: ${originalUserId}), returning mock response in development mode`);
-      // 返回一个模拟的成功响应，不实际保存到数据库
-      return res.json({
-        success: true,
-        data: {
-          websiteId: `test-website-${Date.now()}`,
-          message: 'Website data saved successfully (test mode)',
-        },
-      });
-    }
-
-    if (!isValidUUID) {
-      return sendErrorResponse(
-        res,
-        new Error(`Invalid user ID format. Expected UUID but got: ${originalUserId}`),
-        'Invalid user ID format. Please refresh your session or re-login.',
-        400
-      );
-    }
-
-    const userId = originalUserId;
+    const userId = authResult.userId; // userId 已在 authenticateRequest 中归一化
 
     // Initialize tables
     await initWebsiteDataTables();
@@ -187,7 +157,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 这样用户完成设置后，数据会自动开始同步
     (async () => {
       try {
-        console.log('[Save Website Data] 🚀 Triggering DataForSEO metrics update for website:', websiteId);
+        // 检查是否最近已经有更新尝试或成功更新（10分钟内，save.ts 触发更频繁，窗口设短一点）
+        const recentCheck = await sql`
+          SELECT data_updated_at 
+          FROM domain_overview_cache 
+          WHERE website_id = ${websiteId} 
+            AND location_code = 2840
+            AND data_updated_at > NOW() - INTERVAL '10 minutes'
+          LIMIT 1
+        `;
+
+        if (recentCheck.rows.length > 0) {
+          return;
+        }
 
         // 调用内部函数来获取 DataForSEO 数据
         // 注意：这里直接调用逻辑，而不是通过 HTTP，避免循环依赖
@@ -199,22 +181,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
         const locationCode = regionToLocationCode['us'] || 2840; // 默认使用 US
 
-        console.log('[Save Website Data] 📍 Fetching DataForSEO data for domain:', domain, 'location:', locationCode);
-
         // 并行获取所有数据
         const [overview, keywords, competitors] = await Promise.all([
-          getDomainOverview(domain, locationCode).catch((err) => {
-            console.error('[Save Website Data] Failed to get overview:', err.message);
-            return null;
-          }),
-          getDomainKeywords(domain, locationCode, 50).catch((err) => {
-            console.error('[Save Website Data] Failed to get keywords:', err.message);
-            return [];
-          }),
-          getDomainCompetitors(domain, locationCode, 5).catch((err) => {
-            console.error('[Save Website Data] Failed to get competitors:', err.message);
-            return [];
-          }),
+          getDomainOverview(domain, locationCode).catch(() => null),
+          getDomainKeywords(domain, locationCode, 50).catch(() => []),
+          getDomainCompetitors(domain, locationCode, 5).catch(() => []),
         ]);
 
         // 缓存概览数据（即使数据为 0 也要保存，这样前端才知道数据已获取）
@@ -254,16 +225,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               data_updated_at = NOW(),
               cache_expires_at = EXCLUDED.cache_expires_at
           `;
-          console.log('[Save Website Data] ✅ Cached overview data:', {
-            websiteId,
-            totalKeywords: overview.totalKeywords,
-            organicTraffic: overview.organicTraffic,
-            totalTraffic: overview.totalTraffic,
-            top10Count: overview.rankingDistribution.top10,
-            locationCode
-          });
-        } else {
-          console.warn('[Save Website Data] ⚠️ No overview data to cache (overview is null or undefined)');
         }
 
         // 缓存关键词数据（前20个）
@@ -302,7 +263,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 cache_expires_at = EXCLUDED.cache_expires_at
             `)
           );
-          console.log(`[Save Website Data] ✅ Cached ${keywordsToCache.length} keywords`);
         }
 
         // 缓存竞争对手数据
@@ -329,10 +289,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 cache_expires_at = EXCLUDED.cache_expires_at
             `)
           );
-          console.log(`[Save Website Data] ✅ Cached ${competitors.length} competitors`);
         }
-
-        console.log('[Save Website Data] ✅ DataForSEO metrics update completed');
       } catch (metricsError: any) {
         // 不抛出错误，只记录日志，避免影响保存操作
         console.error('[Save Website Data] ⚠️ Failed to update metrics (non-blocking):', metricsError.message);

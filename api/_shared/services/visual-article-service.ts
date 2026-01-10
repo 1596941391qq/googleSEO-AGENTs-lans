@@ -7,6 +7,7 @@ import {
   CompetitorAnalysisResult
 } from '../agents/agent-2-seo-researcher.js';
 import { generateContent, ContentGenerationResult } from '../agents/agent-3-content-writer.js';
+import { reviewQuality, QualityReviewResult } from '../agents/agent-4-quality-reviewer.js';
 import {
   extractVisualThemes,
   generateImagePrompts,
@@ -57,21 +58,21 @@ export interface VisualArticleOptions {
 }
 
 export async function generateVisualArticle(options: VisualArticleOptions) {
-  const { 
-    keyword, 
-    tone, 
-    visualStyle, 
-    targetAudience, 
-    targetMarket, 
-    uiLanguage, 
-    targetLanguage, 
-    userId, 
-    projectId, 
-    projectName, 
-    reference, 
+  const {
+    keyword,
+    tone,
+    visualStyle,
+    targetAudience,
+    targetMarket,
+    uiLanguage,
+    targetLanguage,
+    userId,
+    projectId,
+    projectName,
+    reference,
     promotedWebsites,
     promotionIntensity,
-    onEvent 
+    onEvent
   } = options;
 
   const emit = (agentId: AgentStreamEvent['agentId'], type: AgentStreamEvent['type'], message?: string, cardType?: AgentStreamEvent['cardType'], data?: any) => {
@@ -274,7 +275,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       const selectedThemes = visualThemes.themes.slice(0, imageCount);
       // 传递关键词和文章标题以增强图像与主题的相关性
       const prompts = await generateImagePrompts(
-        selectedThemes, 
+        selectedThemes,
         uiLanguage,
         keyword,
         pageTitle || undefined
@@ -375,7 +376,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       interval: 50
     });
 
-    let contentResult;
+    let contentResult: ContentGenerationResult;
     try {
       contentResult = await generateContent(
         strategyReport,
@@ -407,9 +408,9 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     }
 
     // Update streaming text with final content
-    if (contentResult.content || contentResult.article_body) {
+    if (contentResult!.content || contentResult!.article_body) {
       emit('writer', 'card', undefined, 'streaming-text', {
-        content: contentResult.content || contentResult.article_body || '',
+        content: contentResult!.content || contentResult!.article_body || '',
         speed: 3,
         interval: 50
       });
@@ -417,9 +418,9 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
 
     // Final result assembly with defensive checks
     const finalArticle = {
-      title: contentResult?.title || strategyReport?.pageTitleH1 || keyword,
-      content: contentResult?.content || contentResult?.article_body || '',
-      images: Array.isArray(generatedImages) ? generatedImages : []
+      title: contentResult!.title || strategyReport?.pageTitleH1 || keyword,
+      content: contentResult!.content || contentResult!.article_body || '',
+      images: Array.isArray(generatedImages) ? generatedImages : [],
     };
 
     // Auto-save to database if userId is provided
@@ -454,7 +455,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
           finalArticle.content,
           strategyReport.metaDescription,
           undefined, // url_slug
-          undefined // quality_score
+          undefined  // qualityScore
         );
 
         // Save images if any

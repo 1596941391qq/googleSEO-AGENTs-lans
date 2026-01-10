@@ -41,6 +41,7 @@ import { KeywordData } from "../types";
 
 // 定义本地类型
 import { ProjectDashboard } from "./projects/ProjectDashboard";
+import { PublishTab } from "./article-generator/PublishTab";
 
 interface WebsiteBinding {
   id: string;

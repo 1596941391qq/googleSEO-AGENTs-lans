@@ -211,8 +211,12 @@ export async function createWorkflowConfig(
   try {
     await initWorkflowConfigsTable();
 
-    // 验证 userId 是否是有效的 UUID 格式
-    if (!isValidUUID(userId)) {
+    // 将 userId 标准化为有效的 UUID 格式（开发模式下处理测试用户）
+    const normalizedUserId = normalizeUserIdForQuery(userId);
+    
+    // 在生产环境下，验证 userId 是否是有效的 UUID 格式
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+    if (!isDevelopment && !isValidUUID(normalizedUserId)) {
       const error: any = new Error(`Invalid UUID format for userId: ${userId}. Please ensure you are using a valid user ID.`);
       error.code = 'INVALID_USER_ID';
       throw error;
@@ -222,7 +226,7 @@ export async function createWorkflowConfig(
 
     const result = await sql`
       INSERT INTO workflow_configs (id, user_id, workflow_id, name, nodes, created_at, updated_at)
-      VALUES (${configId}, ${userId}, ${workflowId}, ${name.trim()}, ${JSON.stringify(nodes)}::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      VALUES (${configId}, ${normalizedUserId}, ${workflowId}, ${name.trim()}, ${JSON.stringify(nodes)}::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *
     `;
 
@@ -256,6 +260,39 @@ function isValidUUID(str: string): boolean {
 }
 
 /**
+ * 将测试用户 ID 转换为有效的 UUID（仅开发模式）
+ * 开发模式下，测试用户 ID "12345" 会被映射到一个固定的测试 UUID
+ * 这样测试用户可以正常使用所有功能，包括创建和保存工作流配置
+ */
+function normalizeUserIdForQuery(userId: string | number): string {
+  const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+  const userIdStr = userId.toString();
+  
+  // 开发模式下的测试用户特殊处理
+  if (isDevelopment && (userIdStr === '12345' || userIdStr === 'NaN')) {
+    // 使用固定的测试用户 UUID: b61cbbf9-15b0-4353-8d49-89952042cf75
+    // 这样可以将 "12345" 映射到一个有效的 UUID 格式，允许测试用户正常使用系统
+    // 所有使用此 UUID 的数据都可以被测试用户访问
+    const testUUID = 'b61cbbf9-15b0-4353-8d49-89952042cf75';
+    return testUUID;
+  }
+  
+  // 如果是有效的 UUID，直接返回
+  if (isValidUUID(userIdStr)) {
+    return userIdStr;
+  }
+  
+  // 如果既不是测试用户也不是有效 UUID，在开发模式下也使用测试 UUID
+  if (isDevelopment) {
+    const testUUID = 'b61cbbf9-15b0-4353-8d49-89952042cf75';
+    return testUUID;
+  }
+  
+  // 生产环境返回原值（会由调用者处理）
+  return userIdStr;
+}
+
+/**
  * 获取用户的工作流配置列表
  */
 export async function getUserWorkflowConfigs(
@@ -265,9 +302,12 @@ export async function getUserWorkflowConfigs(
   try {
     await initWorkflowConfigsTable();
 
-    // 验证 userId 是否是有效的 UUID 格式
-    // 如果不是，返回空数组（旧格式的数字 ID 不会有 workflow configs）
-    if (!isValidUUID(userId)) {
+    // 将 userId 标准化为有效的 UUID 格式（开发模式下处理测试用户）
+    const normalizedUserId = normalizeUserIdForQuery(userId);
+    
+    // 在生产环境下，如果仍然不是有效的 UUID，返回空数组
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+    if (!isDevelopment && !isValidUUID(normalizedUserId)) {
       console.warn(`[getUserWorkflowConfigs] Invalid UUID format for userId: ${userId}. Returning empty array.`);
       return [];
     }
@@ -276,13 +316,13 @@ export async function getUserWorkflowConfigs(
     if (workflowId) {
       result = await sql`
         SELECT * FROM workflow_configs
-        WHERE user_id = ${userId} AND workflow_id = ${workflowId}
+        WHERE user_id = ${normalizedUserId} AND workflow_id = ${workflowId}
         ORDER BY updated_at DESC
       `;
     } else {
       result = await sql`
         SELECT * FROM workflow_configs
-        WHERE user_id = ${userId}
+        WHERE user_id = ${normalizedUserId}
         ORDER BY updated_at DESC
       `;
     }
@@ -321,17 +361,21 @@ export async function getWorkflowConfigById(
   try {
     await initWorkflowConfigsTable();
 
-    // 如果提供了 userId，验证它是否是有效的 UUID 格式
-    if (userId && !isValidUUID(userId)) {
+    // 如果提供了 userId，将其标准化为有效的 UUID 格式（开发模式下处理测试用户）
+    const normalizedUserId = userId ? normalizeUserIdForQuery(userId) : undefined;
+    
+    // 在生产环境下，如果仍然不是有效的 UUID，返回 null
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+    if (userId && !isDevelopment && !isValidUUID(normalizedUserId!)) {
       console.warn(`[getWorkflowConfigById] Invalid UUID format for userId: ${userId}. Returning null.`);
       return null;
     }
 
     let result;
-    if (userId) {
+    if (normalizedUserId) {
       result = await sql`
         SELECT * FROM workflow_configs
-        WHERE id = ${configId} AND user_id = ${userId}
+        WHERE id = ${configId} AND user_id = ${normalizedUserId}
       `;
     } else {
       result = await sql`
@@ -380,8 +424,12 @@ export async function updateWorkflowConfig(
   try {
     await initWorkflowConfigsTable();
 
-    // 验证 userId 是否是有效的 UUID 格式
-    if (!isValidUUID(userId)) {
+    // 将 userId 标准化为有效的 UUID 格式（开发模式下处理测试用户）
+    const normalizedUserId = normalizeUserIdForQuery(userId);
+    
+    // 在生产环境下，如果仍然不是有效的 UUID，返回 null
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+    if (!isDevelopment && !isValidUUID(normalizedUserId)) {
       console.warn(`[updateWorkflowConfig] Invalid UUID format for userId: ${userId}. Returning null.`);
       return null;
     }
@@ -399,7 +447,7 @@ export async function updateWorkflowConfig(
 
     if (updateParts.length === 0) {
       // 没有要更新的字段，直接返回现有配置
-      return await getWorkflowConfigById(configId, userId);
+      return await getWorkflowConfigById(configId, normalizedUserId);
     }
 
     // 总是更新 updated_at
@@ -416,7 +464,7 @@ export async function updateWorkflowConfig(
     const result = await sql`
       UPDATE workflow_configs
       SET ${setClause}
-      WHERE id = ${configId} AND user_id = ${userId}
+      WHERE id = ${configId} AND user_id = ${normalizedUserId}
       RETURNING *
     `;
 
@@ -455,15 +503,19 @@ export async function deleteWorkflowConfig(
   try {
     await initWorkflowConfigsTable();
 
-    // 验证 userId 是否是有效的 UUID 格式
-    if (!isValidUUID(userId)) {
+    // 将 userId 标准化为有效的 UUID 格式（开发模式下处理测试用户）
+    const normalizedUserId = normalizeUserIdForQuery(userId);
+    
+    // 在生产环境下，如果仍然不是有效的 UUID，返回 false
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+    if (!isDevelopment && !isValidUUID(normalizedUserId)) {
       console.warn(`[deleteWorkflowConfig] Invalid UUID format for userId: ${userId}. Returning false.`);
       return false;
     }
 
     const result = await sql`
       DELETE FROM workflow_configs
-      WHERE id = ${configId} AND user_id = ${userId}
+      WHERE id = ${configId} AND user_id = ${normalizedUserId}
       RETURNING id
     `;
 
@@ -1516,7 +1568,7 @@ export async function initPublishedArticlesTable() {
       await sql`
         CREATE TABLE IF NOT EXISTS published_articles (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id INTEGER NOT NULL,
+          user_id UUID NOT NULL,
           title VARCHAR(500) NOT NULL,
           content TEXT NOT NULL,
           images JSONB DEFAULT '[]'::jsonb,
@@ -1528,11 +1580,35 @@ export async function initPublishedArticlesTable() {
           status VARCHAR(50) DEFAULT 'draft',
           published_at TIMESTAMP,
           created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
+          updated_at TIMESTAMP DEFAULT NOW(),
+          url_slug VARCHAR(500)
         )
       `;
 
-      // 添加 published_at 字段（如果表已存在但没有这个字段）
+      // 迁移：确保 user_id 是 UUID 类型
+      try {
+        const columnCheck = await sql`
+          SELECT data_type
+          FROM information_schema.columns 
+          WHERE table_name = 'published_articles' 
+          AND column_name = 'user_id'
+        `;
+        
+        if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
+          console.warn('[Database] ⚠️ Migrating published_articles.user_id from INTEGER to UUID');
+          if (process.env.NODE_ENV !== 'production') {
+            await sql`DELETE FROM published_articles`;
+            await sql`ALTER TABLE published_articles ALTER COLUMN user_id TYPE UUID USING NULL`;
+            console.log('[Database] ✅ Migrated published_articles.user_id to UUID (data cleared in dev)');
+          } else {
+            await sql`ALTER TABLE published_articles ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid`;
+          }
+        }
+      } catch (e) {
+        console.error('[Database] Could not migrate published_articles.user_id:', e);
+      }
+
+      // 添加 published_at 和 url_slug 字段（如果表已存在但没有这些字段）
       await sql`
         DO $$ 
         BEGIN
@@ -1542,6 +1618,14 @@ export async function initPublishedArticlesTable() {
             AND column_name = 'published_at'
           ) THEN
             ALTER TABLE published_articles ADD COLUMN published_at TIMESTAMP;
+          END IF;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'published_articles' 
+            AND column_name = 'url_slug'
+          ) THEN
+            ALTER TABLE published_articles ADD COLUMN url_slug VARCHAR(500);
           END IF;
         END $$;
       `;
@@ -1577,7 +1661,7 @@ export async function initTasksTable() {
       await sql`
         CREATE TABLE IF NOT EXISTS execution_tasks (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id VARCHAR(255) NOT NULL,
+          user_id UUID NOT NULL,
           type VARCHAR(50) NOT NULL, -- mining, batch, article-generator, deep-dive
           name VARCHAR(255),
           status VARCHAR(50) DEFAULT 'in_progress', -- in_progress, completed, failed
@@ -1587,6 +1671,29 @@ export async function initTasksTable() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `;
+
+      // 迁移：确保 user_id 是 UUID 类型
+      try {
+        const columnCheck = await sql`
+          SELECT data_type
+          FROM information_schema.columns 
+          WHERE table_name = 'execution_tasks' 
+          AND column_name = 'user_id'
+        `;
+        
+        if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type !== 'uuid') {
+          console.warn(`[Database] ⚠️ Migrating execution_tasks.user_id from ${columnCheck.rows[0].data_type} to UUID`);
+          if (process.env.NODE_ENV !== 'production') {
+            await sql`DELETE FROM execution_tasks`;
+            await sql`ALTER TABLE execution_tasks ALTER COLUMN user_id TYPE UUID USING NULL`;
+            console.log('[Database] ✅ Migrated execution_tasks.user_id to UUID (data cleared in dev)');
+          } else {
+            await sql`ALTER TABLE execution_tasks ALTER COLUMN user_id TYPE UUID USING user_id::uuid`;
+          }
+        }
+      } catch (e) {
+        console.error('[Database] Could not migrate execution_tasks.user_id:', e);
+      }
 
       await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_user ON execution_tasks(user_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_status ON execution_tasks(status)`;
@@ -1970,7 +2077,7 @@ export async function initProjectsTable() {
       await sql`
         CREATE TABLE IF NOT EXISTS projects (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id INTEGER NOT NULL,
+          user_id UUID NOT NULL,
           name VARCHAR(255) NOT NULL,
           seed_keyword VARCHAR(500),
           target_language VARCHAR(10),
@@ -1978,6 +2085,30 @@ export async function initProjectsTable() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `;
+
+      // 迁移：确保 user_id 是 UUID 类型
+      try {
+        const columnCheck = await sql`
+          SELECT data_type
+          FROM information_schema.columns 
+          WHERE table_name = 'projects' 
+          AND column_name = 'user_id'
+        `;
+        
+        if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
+          console.warn('[Database] ⚠️ Migrating projects.user_id from INTEGER to UUID');
+          if (process.env.NODE_ENV !== 'production') {
+            await sql`DELETE FROM projects`;
+            await sql`ALTER TABLE projects ALTER COLUMN user_id TYPE UUID USING NULL`;
+            console.log('[Database] ✅ Migrated projects.user_id to UUID (data cleared in dev)');
+          } else {
+            // 生产环境下尝试直接转换，如果失败则需要手动处理
+            await sql`ALTER TABLE projects ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid`;
+          }
+        }
+      } catch (e) {
+        console.error('[Database] Could not migrate projects.user_id:', e);
+      }
 
       await sql`CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_projects_created ON projects(created_at DESC)`;
@@ -2252,16 +2383,13 @@ export async function createOrGetProject(
   try {
     await initProjectsTable();
 
-    // 如果是 NaN，抛出错误
-    if (typeof userId === 'number' && isNaN(userId)) {
-      throw new Error('Invalid userId: NaN');
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     // Try to find existing project with same name and user
-    // 使用 ::text 确保兼容性
     const existing = await sql<Project>`
       SELECT * FROM projects
-      WHERE user_id::text = ${userId.toString()} AND name = ${name}
+      WHERE user_id = ${normalizedUserId} AND name = ${name}
       ORDER BY created_at DESC
       LIMIT 1
     `;
@@ -2271,11 +2399,9 @@ export async function createOrGetProject(
     }
 
     // Create new project
-    // 注意：如果是新创建，INSERT 仍然受限于列类型
-    // 如果列是 INTEGER 但 userId 是 UUID，这里仍然会报错
     const result = await sql<Project>`
       INSERT INTO projects (user_id, name, seed_keyword, target_language, created_at, updated_at)
-      VALUES (${userId}, ${name}, ${seedKeyword || null}, ${targetLanguage || null}, NOW(), NOW())
+      VALUES (${normalizedUserId}, ${name}, ${seedKeyword || null}, ${targetLanguage || null}, NOW(), NOW())
       RETURNING *
     `;
 
@@ -2365,6 +2491,92 @@ export async function saveContentDraft(
   } catch (error) {
     console.error('Error saving content draft:', error);
     throw error;
+  }
+}
+
+/**
+ * 获取内容草稿的所有版本
+ */
+export async function getContentDraftVersions(
+  projectId: string,
+  keywordId: string
+): Promise<ContentDraft[]> {
+  try {
+    await initContentDraftsTable();
+
+    const result = await sql<ContentDraft>`
+      SELECT * FROM content_drafts
+      WHERE project_id = ${projectId} AND keyword_id = ${keywordId}
+      ORDER BY version DESC
+    `;
+
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching content draft versions:', error);
+    return [];
+  }
+}
+
+/**
+ * 获取最新的内容草稿
+ */
+export async function getLatestContentDraft(
+  projectId: string,
+  keywordId: string
+): Promise<ContentDraft | null> {
+  try {
+    await initContentDraftsTable();
+
+    const result = await sql<ContentDraft>`
+      SELECT * FROM content_drafts
+      WHERE project_id = ${projectId} AND keyword_id = ${keywordId}
+      ORDER BY version DESC
+      LIMIT 1
+    `;
+
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching latest content draft:', error);
+    return null;
+  }
+}
+
+/**
+ * 获取特定版本的内容草稿
+ */
+export async function getContentDraftById(draftId: string): Promise<ContentDraft | null> {
+  try {
+    await initContentDraftsTable();
+
+    const result = await sql<ContentDraft>`
+      SELECT * FROM content_drafts
+      WHERE id = ${draftId}
+    `;
+
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('Error fetching content draft by id:', error);
+    return null;
+  }
+}
+
+/**
+ * 获取草稿关联的所有图片
+ */
+export async function getContentDraftImages(draftId: string): Promise<Image[]> {
+  try {
+    await initImagesTable();
+
+    const result = await sql<Image>`
+      SELECT * FROM images
+      WHERE content_draft_id = ${draftId}
+      ORDER BY position ASC
+    `;
+
+    return result.rows;
+  } catch (error) {
+    console.error('Error fetching content draft images:', error);
+    return [];
   }
 }
 
@@ -2465,10 +2677,8 @@ export async function getUserProjects(userId: string | number): Promise<any[]> {
   try {
     await initContentManagementTables();
 
-    // 如果是 NaN，直接返回空数组
-    if (typeof userId === 'number' && isNaN(userId)) {
-      return [];
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql`
       SELECT 
@@ -2480,7 +2690,7 @@ export async function getUserProjects(userId: string | number): Promise<any[]> {
       LEFT JOIN keywords k ON p.id = k.project_id
       LEFT JOIN content_drafts cd ON p.id = cd.project_id
       LEFT JOIN publications pub ON cd.id = pub.content_draft_id
-      WHERE p.user_id::text = ${userId.toString()}
+      WHERE p.user_id = ${normalizedUserId}
       GROUP BY p.id
       ORDER BY p.updated_at DESC
     `;
@@ -2499,13 +2709,11 @@ export async function getProjectById(projectId: string, userId: string | number)
   try {
     await initProjectsTable();
 
-    // 如果是 NaN，抛出错误
-    if (typeof userId === 'number' && isNaN(userId)) {
-      throw new Error('Invalid userId: NaN');
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql<Project>`
-      SELECT * FROM projects WHERE id = ${projectId} AND user_id::text = ${userId.toString()}
+      SELECT * FROM projects WHERE id = ${projectId} AND user_id = ${normalizedUserId}
     `;
     return result.rows[0] || null;
   } catch (error) {
@@ -2523,10 +2731,8 @@ export async function updateProject(
   updates: { name?: string; seed_keyword?: string; target_language?: string }
 ): Promise<Project | null> {
   try {
-    // 如果是 NaN，抛出错误
-    if (typeof userId === 'number' && isNaN(userId)) {
-      throw new Error('Invalid userId: NaN');
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const setParts: string[] = [];
     const values: any[] = [];
@@ -2547,9 +2753,9 @@ export async function updateProject(
 
     if (setParts.length === 0) return null;
 
-    values.push(projectId, userId.toString());
+    values.push(projectId, normalizedUserId);
     const result = await sql(
-      raw(`UPDATE projects SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id::text = $${i++} RETURNING *`),
+      raw(`UPDATE projects SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id = $${i++} RETURNING *`),
       ...values
     );
 
@@ -2565,13 +2771,11 @@ export async function updateProject(
  */
 export async function deleteProject(projectId: string, userId: string | number): Promise<boolean> {
   try {
-    // 如果是 NaN，抛出错误
-    if (typeof userId === 'number' && isNaN(userId)) {
-      throw new Error('Invalid userId: NaN');
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql`
-      DELETE FROM projects WHERE id = ${projectId} AND user_id::text = ${userId.toString()} RETURNING id
+      DELETE FROM projects WHERE id = ${projectId} AND user_id = ${normalizedUserId} RETURNING id
     `;
     return result.rows.length > 0;
   } catch (error) {
@@ -2622,10 +2826,8 @@ export async function getProjectStats(projectId: string, userId: string | number
   try {
     await initContentManagementTables();
 
-    // 如果是 NaN，抛出错误
-    if (typeof userId === 'number' && isNaN(userId)) {
-      throw new Error('Invalid userId: NaN');
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql`
       SELECT 
@@ -2635,7 +2837,8 @@ export async function getProjectStats(projectId: string, userId: string | number
         COUNT(*) FILTER (WHERE status = 'completed') as completed,
         COUNT(*) FILTER (WHERE status = 'failed') as failed
       FROM keywords
-      WHERE project_id = ${projectId}
+      JOIN projects ON projects.id = keywords.project_id
+      WHERE keywords.project_id = ${projectId} AND projects.user_id = ${normalizedUserId}
     `;
     return result.rows[0];
   } catch (error) {
@@ -2650,7 +2853,7 @@ export async function getProjectStats(projectId: string, userId: string | number
 
 export interface ExecutionTask {
   id: string;
-  user_id: number;
+  user_id: string;
   type: string;
   name: string;
   status: string;
@@ -2672,13 +2875,12 @@ export async function createExecutionTask(
   try {
     await initTasksTable();
 
-    if (typeof userId === 'number' && isNaN(userId)) {
-      throw new Error('Invalid userId: NaN');
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql<ExecutionTask>`
       INSERT INTO execution_tasks (user_id, type, name, params, status, created_at, updated_at)
-      VALUES (${userId.toString()}, ${type}, ${name}, ${JSON.stringify(params)}::jsonb, 'in_progress', NOW(), NOW())
+      VALUES (${normalizedUserId}, ${type}, ${name}, ${JSON.stringify(params)}::jsonb, 'in_progress', NOW(), NOW())
       RETURNING *
     `;
     return result.rows[0];
@@ -2699,9 +2901,8 @@ export async function updateExecutionTask(
   try {
     await initTasksTable();
 
-    if (typeof userId === 'number' && isNaN(userId)) {
-      throw new Error('Invalid userId: NaN');
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const setParts: string[] = [];
     const values: any[] = [];
@@ -2722,9 +2923,9 @@ export async function updateExecutionTask(
 
     if (setParts.length === 0) return null;
 
-    values.push(taskId, userId.toString());
+    values.push(taskId, normalizedUserId);
     const result = await sql(
-      raw(`UPDATE execution_tasks SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id::text = $${i++} RETURNING *`),
+      raw(`UPDATE execution_tasks SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id = $${i++} RETURNING *`),
       ...values
     );
 
@@ -2742,13 +2943,12 @@ export async function getUserExecutionTasks(userId: string | number, limit: numb
   try {
     await initTasksTable();
 
-    if (typeof userId === 'number' && isNaN(userId)) {
-      return [];
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql<ExecutionTask>`
       SELECT * FROM execution_tasks 
-      WHERE user_id::text = ${userId.toString()} 
+      WHERE user_id = ${normalizedUserId} 
       ORDER BY updated_at DESC 
       LIMIT ${limit}
     `;
@@ -2766,12 +2966,11 @@ export async function getExecutionTaskById(taskId: string, userId: string | numb
   try {
     await initTasksTable();
 
-    if (typeof userId === 'number' && isNaN(userId)) {
-      return null;
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql<ExecutionTask>`
-      SELECT * FROM execution_tasks WHERE id = ${taskId} AND user_id::text = ${userId.toString()}
+      SELECT * FROM execution_tasks WHERE id = ${taskId} AND user_id = ${normalizedUserId}
     `;
     return result.rows[0] || null;
   } catch (error) {
@@ -2787,12 +2986,11 @@ export async function deleteExecutionTask(taskId: string, userId: string | numbe
   try {
     await initTasksTable();
 
-    if (typeof userId === 'number' && isNaN(userId)) {
-      return false;
-    }
+    // 将 userId 标准化为有效的 UUID 格式
+    const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql`
-      DELETE FROM execution_tasks WHERE id = ${taskId} AND user_id::text = ${userId.toString()} RETURNING id
+      DELETE FROM execution_tasks WHERE id = ${taskId} AND user_id = ${normalizedUserId} RETURNING id
     `;
     return result.rows.length > 0;
   } catch (error) {

@@ -36,7 +36,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const numericUserId = parseInt(userId);
     const finalUserId = isNaN(numericUserId) ? userId : numericUserId;
     
-    const projects = await getUserProjects(finalUserId);
     const tasks = await getUserExecutionTasks(finalUserId);
 
     // 将任务转换为类似项目的结构，以便看板显示
@@ -76,15 +75,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       };
     });
 
-    // 将现有项目标记为 'project' 类型
-    const existingProjects = projects.map(p => ({
-      ...p,
-      type: 'project',
-      status: 'completed' // 现有项目默认视为已完成
-    }));
-
     // 合并并按更新时间排序
-    const allProjects = [...taskProjects, ...existingProjects].sort((a, b) => 
+    const allProjects = [...taskProjects].sort((a, b) => 
       new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
     );
 

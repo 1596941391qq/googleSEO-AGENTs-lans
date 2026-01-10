@@ -60,9 +60,9 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
             <th className="px-4 py-4">{t.colKw}</th>
             <th className="px-4 py-4">{t.colTrans}</th>
             <th className="px-4 py-4">
-              {t.blueOceanScore ||
-                (uiLanguage === "zh" ? "蓝海分" : "Blue Ocean")}
+              {t.keywordDifficulty || (uiLanguage === "zh" ? "难度" : "KD")}
             </th>
+            <th className="px-4 py-4">CPC</th>
             {showDRComparison && (
               <th className="px-4 py-4">
                 {t.drComparison || (uiLanguage === "zh" ? "DR对比" : "DR Comp")}
@@ -114,33 +114,43 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                       isDarkTheme ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    {item.blueOceanScore !== undefined ? (
-                      <div className="flex flex-col">
-                        <span
-                          className={cn(
-                            item.blueOceanScore >= 70
-                              ? "text-emerald-400"
-                              : item.blueOceanScore >= 40
-                              ? "text-yellow-400"
-                              : "text-red-400"
-                          )}
-                        >
-                          {Math.round(item.blueOceanScore)}
-                        </span>
-                        <div className="w-12 h-1 bg-white/10 rounded-full mt-1 overflow-hidden">
-                          <div
-                            className={cn(
-                              "h-full rounded-full",
-                              item.blueOceanScore >= 70
-                                ? "bg-emerald-500"
-                                : item.blueOceanScore >= 40
-                                ? "bg-yellow-500"
-                                : "bg-red-500"
-                            )}
-                            style={{ width: `${item.blueOceanScore}%` }}
-                          />
-                        </div>
-                      </div>
+                    {item.dataForSEOData?.difficulty !== undefined ? (
+                      <span
+                        className={cn(
+                          item.dataForSEOData.difficulty <= 40
+                            ? "text-emerald-400"
+                            : item.dataForSEOData.difficulty <= 60
+                            ? "text-yellow-400"
+                            : "text-red-400"
+                        )}
+                      >
+                        {item.dataForSEOData.difficulty}
+                      </span>
+                    ) : item.serankingData?.difficulty !== undefined ? (
+                      <span
+                        className={cn(
+                          item.serankingData.difficulty <= 40
+                            ? "text-emerald-400"
+                            : item.serankingData.difficulty <= 60
+                            ? "text-yellow-400"
+                            : "text-red-400"
+                        )}
+                      >
+                        {item.serankingData.difficulty}
+                      </span>
+                    ) : (
+                      <span className="text-slate-500">-</span>
+                    )}
+                  </td>
+                  <td
+                    className={`px-4 py-4 ${
+                      isDarkTheme ? "text-slate-300" : "text-gray-700"
+                    }`}
+                  >
+                    {item.dataForSEOData?.cpc !== undefined ? (
+                      <span>${item.dataForSEOData.cpc.toFixed(2)}</span>
+                    ) : item.serankingData?.cpc !== undefined ? (
+                      <span>${item.serankingData.cpc.toFixed(2)}</span>
                     ) : (
                       <span className="text-slate-500">-</span>
                     )}
@@ -248,7 +258,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                     }`}
                   >
                     <td
-                      colSpan={showDRComparison ? 9 : 8}
+                      colSpan={showDRComparison ? 10 : 9}
                       className="px-4 py-6"
                     >
                       <div className="flex flex-col md:flex-row gap-6">

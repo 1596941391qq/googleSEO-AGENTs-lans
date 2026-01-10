@@ -47,37 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     
-    const originalUserId = authResult.userId;
-    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
-    
-    // 验证 userId 是否是有效的 UUID 格式
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const isValidUUID = uuidRegex.test(originalUserId);
-    
-    // 开发模式下的测试用户特殊处理
-    if (isDevelopment && (!isValidUUID || originalUserId === '12345')) {
-      console.log(`[overview] Test user detected (userId: ${originalUserId}), returning empty result in development mode`);
-      return res.status(200).json({
-        success: true,
-        data: {
-          hasData: false,
-          website: null,
-          overview: null,
-          topKeywords: [],
-          competitors: [],
-          needsRefresh: false,
-        },
-      });
-    }
-    
-    if (!isValidUUID) {
-      return res.status(400).json({ 
-        error: 'Invalid user ID format',
-        message: 'The user ID in your session token is not in the correct format. Please refresh your session or re-login.'
-      });
-    }
-    
-    const userId = originalUserId;
+    const userId = authResult.userId; // userId 已在 authenticateRequest 中归一化
 
     const body = req.body as OverviewRequestBody;
 
@@ -134,10 +104,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (needsRefresh) {
       (async () => {
         try {
-          console.log('[overview] 🔄 Auto-fetching DataForSEO data for website:', body.websiteId);
-          
           if (!website.website_domain) {
-            console.warn('[overview] ⚠️ Website has no domain, skipping auto-fetch');
+            return;
+          }
+
+          // 检查是否最近已经有更新尝试或成功更新（10分钟内）
+          const recentCheck = await sql`
+            SELECT data_updated_at 
+            FROM domain_overview_cache 
+            WHERE website_id = ${body.websiteId} 
+              AND data_updated_at > NOW() - INTERVAL '10 minutes'
+            LIMIT 1
+          `;
+
+          if (recentCheck.rows.length > 0) {
             return;
           }
 
@@ -151,18 +131,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           const { getDomainOverview, getDomainKeywords, getDomainCompetitors } = await import('../_shared/tools/dataforseo-domain.js');
 
           const [overview, keywords, competitors] = await Promise.all([
-            getDomainOverview(website.website_domain, locationCode).catch((err) => {
-              console.error('[overview] Failed to get overview:', err.message);
-              return null;
-            }),
-            getDomainKeywords(website.website_domain, locationCode, 50).catch((err) => {
-              console.error('[overview] Failed to get keywords:', err.message);
-              return [];
-            }),
-            getDomainCompetitors(website.website_domain, locationCode, 5).catch((err) => {
-              console.error('[overview] Failed to get competitors:', err.message);
-              return [];
-            }),
+            getDomainOverview(website.website_domain, locationCode).catch(() => null),
+            getDomainKeywords(website.website_domain, locationCode, 50).catch(() => []),
+            getDomainCompetitors(website.website_domain, locationCode, 5).catch(() => []),
           ]);
 
           // 缓存概览数据（即使数据为 0 也要保存）
@@ -202,14 +173,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 data_updated_at = NOW(),
                 cache_expires_at = EXCLUDED.cache_expires_at
             `;
-            console.log('[overview] ✅ Auto-cached overview data:', {
-              websiteId: body.websiteId,
-              totalKeywords: overview.totalKeywords,
-              organicTraffic: overview.organicTraffic,
-              locationCode
-            });
-          } else {
-            console.warn('[overview] ⚠️ No overview data to cache (overview is null)');
           }
 
           // 缓存关键词数据（前20个）
@@ -248,7 +211,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   cache_expires_at = EXCLUDED.cache_expires_at
               `)
             );
-            console.log(`[overview] ✅ Auto-cached ${keywordsToCache.length} keywords`);
           }
 
           // 缓存竞争对手数据
@@ -275,10 +237,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   cache_expires_at = EXCLUDED.cache_expires_at
               `)
             );
-            console.log(`[overview] ✅ Auto-cached ${competitors.length} competitors`);
           }
-
-          console.log('[overview] ✅ Auto-fetch completed');
         } catch (error: any) {
           console.error('[overview] ⚠️ Failed to auto-fetch data (non-blocking):', error.message);
         }
@@ -320,17 +279,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `;
 
     const overview = overviewResult.rows[0];
-    
-    // 添加日志
-    if (overview) {
-      console.log('[overview] ✅ Found cached overview data:', {
-        totalKeywords: overview.total_keywords,
-        totalTraffic: overview.total_traffic,
-        updatedAt: overview.data_updated_at,
-      });
-    } else {
-      console.log('[overview] ⚠️ No cached overview data found');
-    }
 
     // ==========================================
     // Step 4: 获取排名分布数据（用于图表）
@@ -437,13 +385,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       competitors: competitors || [],
       needsRefresh,
     };
-
-    console.log('[overview] 📊 Response summary:', {
-      hasData,
-      hasOverview: !!responseData.overview,
-      keywordsCount: responseData.topKeywords.length,
-      competitorsCount: responseData.competitors.length,
-    });
 
     return res.status(200).json({
       success: true,

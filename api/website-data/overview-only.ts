@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResult) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const userId = authResult.userId; // userId 现在是 UUID 字符串
+    const userId = authResult.userId; // userId 现在是归一化后的 UUID
 
     const body = req.body as OverviewOnlyRequestBody;
 
@@ -62,15 +62,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const website = websiteResult.rows[0];
 
-    // 验证权限 - 确保类型一致（UUID 可能是对象或字符串）
-    const websiteUserId = String(website.user_id || '');
-    const authUserId = String(userId || '');
-    if (websiteUserId !== authUserId) {
-      console.warn('[overview-only] Permission denied:', {
-        websiteUserId,
-        authUserId,
-        websiteId: body.websiteId,
-      });
+    // 验证权限
+    if (String(website.user_id) !== String(userId)) {
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 
@@ -87,7 +80,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // overview-only 只从数据库缓存读取，不调用 API
     // API 调用应该通过 update-metrics 端点进行
-    console.log('[overview-only] 📦 Reading from database cache only (no API calls)');
     
     // 从数据库缓存读取
     const cacheResult = await sql`
@@ -132,7 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             ? JSON.parse(cached.backlinks_info)
             : cached.backlinks_info;
         } catch (error) {
-          console.warn('[overview-only] Failed to parse backlinks_info:', error);
+          // ignore
         }
       }
 
@@ -152,15 +144,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt: cached.data_updated_at,
         expiresAt: cached.cache_expires_at,
       };
-
-      console.log('[overview-only] ✅ Returning cached data:', {
-        websiteId: body.websiteId,
-        organicTraffic: responseData.organicTraffic,
-        totalKeywords: responseData.totalKeywords,
-        totalTraffic: responseData.totalTraffic,
-        rankingDistribution: responseData.rankingDistribution,
-        hasBacklinksInfo: !!responseData.backlinksInfo,
-      });
 
       return res.status(200).json({
         success: true,

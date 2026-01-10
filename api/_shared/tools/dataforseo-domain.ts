@@ -564,13 +564,6 @@ export async function getDomainOverview(
   limit: number = 1
 ): Promise<DomainOverview | null> {
   try {
-    console.log(`[DataForSEO Domain] 🔍 Getting overview for ${domain}, location: ${locationCode}`);
-    console.log(`[DataForSEO Domain] 🔑 API credentials check:`, {
-      hasLogin: !!DATAFORSEO_LOGIN,
-      hasPassword: !!DATAFORSEO_PASSWORD,
-      loginLength: DATAFORSEO_LOGIN?.length || 0,
-    });
-
     // Remove protocol and path if present
     const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0];
 
@@ -602,9 +595,6 @@ export async function getDomainOverview(
         requestBody.order_by = orderBy;
       }
 
-      console.log(`[DataForSEO Domain] 📡 Making API request to: ${endpoint}`);
-      console.log(`[DataForSEO Domain] 📦 Request body:`, JSON.stringify([requestBody]));
-      
       const response = await fetchWithRetry(
         endpoint,
         {
@@ -619,17 +609,13 @@ export async function getDomainOverview(
       );
       clearTimeout(timeoutId);
       
-      console.log(`[DataForSEO Domain] 📥 API response status: ${response.status} ${response.statusText}`);
-
       if (!response.ok) {
         if (response.status === 404) {
-          console.log(`[DataForSEO Domain] No data found for domain: ${cleanDomain}`);
           return null;
         }
         const errorText = await response.text();
         console.error('[DataForSEO Domain] API error:', response.status, errorText);
         if (response.status === 429) {
-          console.error('[DataForSEO Domain] Rate limit exceeded after retries');
           return null;
         }
         throw new Error(`DataForSEO Domain API error: ${response.status}`);
@@ -637,21 +623,8 @@ export async function getDomainOverview(
 
       const data = await response.json();
 
-      console.log(`[DataForSEO Domain] API Response structure:`, JSON.stringify(data, null, 2).substring(0, 1000));
-
       // 检查响应结构：tasks[0].result[0].items[]
-      if (!data.tasks || !data.tasks[0]) {
-        console.log(`[DataForSEO Domain] No tasks found for ${cleanDomain}`);
-        return null;
-      }
-
-      if (!data.tasks[0].result) {
-        console.log(`[DataForSEO Domain] No result in tasks for ${cleanDomain}`);
-        return null;
-      }
-
-      if (!data.tasks[0].result[0]) {
-        console.log(`[DataForSEO Domain] No result item in tasks for ${cleanDomain}`);
+      if (!data.tasks || !data.tasks[0] || !data.tasks[0].result || !data.tasks[0].result[0]) {
         return null;
       }
 
@@ -762,23 +735,6 @@ export async function getDomainOverview(
         backlinksInfo: backlinksInfo,
       };
 
-      console.log(`[DataForSEO Domain] ✅ Parsed overview data:`, {
-        domain: result.domain,
-        organicTraffic: result.organicTraffic,
-        paidTraffic: result.paidTraffic,
-        totalTraffic: result.totalTraffic,
-        totalKeywords: result.totalKeywords,
-        newKeywords: result.newKeywords,
-        lostKeywords: result.lostKeywords,
-        improvedKeywords: result.improvedKeywords,
-        declinedKeywords: result.declinedKeywords,
-        avgPosition: result.avgPosition,
-        trafficCost: result.trafficCost,
-        rankingDistribution: result.rankingDistribution,
-        hasBacklinksInfo: !!result.backlinksInfo,
-        backlinksCount: result.backlinksInfo?.backlinks || 0,
-      });
-
       // 验证关键数据是否存在
       if (result.totalKeywords === 0 && result.totalTraffic === 0) {
         console.warn('[DataForSEO Domain] ⚠️ Warning: Both totalKeywords and totalTraffic are 0, data might be incomplete');
@@ -788,13 +744,11 @@ export async function getDomainOverview(
     } catch (fetchError: any) {
       clearTimeout(timeoutId);
       if (fetchError.name === 'AbortError') {
-        console.error(`[DataForSEO Domain] Request timeout for overview: ${domain}`);
         return null;
       }
       throw fetchError;
     }
   } catch (error: any) {
-    console.error(`[DataForSEO Domain] Failed to get overview for ${domain}:`, error.message);
     return null;
   }
 }
@@ -813,8 +767,6 @@ export async function getDomainKeywords(
   limit: number = 100
 ): Promise<DomainKeyword[]> {
   try {
-    console.log(`[DataForSEO Domain] Getting keywords for ${domain}`);
-
     const cleanDomain = domain.replace(/^https?:\/\//, '').split('/')[0];
 
     // Add timeout control (30 seconds)
@@ -838,9 +790,6 @@ export async function getDomainKeywords(
         }
       ];
 
-      console.log(`[DataForSEO Domain] 📡 Making keywords API request to: ${endpoint}`);
-      console.log(`[DataForSEO Domain] 📦 Request body:`, JSON.stringify(requestBody));
-
       const response = await fetchWithRetry(
         endpoint,
         {
@@ -856,18 +805,13 @@ export async function getDomainKeywords(
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[DataForSEO Domain] API error:', response.status, errorText);
         if (response.status === 404 || response.status === 400) {
-          console.log(`[DataForSEO Domain] API endpoint may not be available or parameters incorrect`);
           return [];
         }
         throw new Error(`DataForSEO Domain API error: ${response.status}`);
       }
 
       const data = await response.json();
-
-      console.log(`[DataForSEO Domain] Keywords API Response structure:`, {
         hasTasks: !!data.tasks,
         tasksCount: data.tasks?.length || 0,
         hasResult: !!data.tasks?.[0]?.result,

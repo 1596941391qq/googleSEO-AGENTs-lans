@@ -23,9 +23,9 @@ function getUserIdForQuery(userId: string): string {
 
   // 如果是开发模式且 userId 是测试用户 ID，使用固定的测试 UUID
   if (isDevelopment && userId === '12345') {
-    // 使用固定的测试用户 UUID: 00000000-0000-0000-0000-000000001234
+    // 使用固定的测试用户 UUID: b61cbbf9-15b0-4353-8d49-89952042cf75
     // 这样可以将 "12345" 映射到一个有效的 UUID 格式
-    return '00000000-0000-0000-0000-000000001234';
+    return 'b61cbbf9-15b0-4353-8d49-89952042cf75';
   }
 
   // 验证是否是有效的 UUID 格式
@@ -33,8 +33,7 @@ function getUserIdForQuery(userId: string): string {
   if (!uuidRegex.test(userId)) {
     // 如果不是有效的 UUID，在开发模式下返回测试 UUID，否则抛出错误
     if (isDevelopment) {
-      console.warn(`[websites/list] Invalid UUID format for userId: ${userId}, using test UUID in development mode`);
-      return '00000000-0000-0000-0000-000000001234';
+      return 'b61cbbf9-15b0-4353-8d49-89952042cf75';
     }
     throw new Error(`Invalid UUID format for userId: ${userId}`);
   }
@@ -67,25 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const originalUserId = authResult.userId;
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
 
-    // 开发模式下的测试用户特殊处理
-    // 如果 userId 是 "12345" 或不是有效的 UUID，返回空结果（测试用户通常没有数据库记录）
-    if (isDevelopment && (originalUserId === '12345' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(originalUserId))) {
-      console.log(`[websites/list] Test user detected (userId: ${originalUserId}), returning empty result in development mode`);
-      return res.status(200).json({
-        success: true,
-        data: {
-          websites: [],
-          currentWebsite: null,
-          preferences: {
-            defaultWebsiteId: null,
-            lastSelectedWebsiteId: null,
-            uiSettings: {}
-          }
-        }
-      });
-    }
-
-    // 将 userId 转换为适合数据库查询的格式（处理其他情况）
+    // 将 userId 转换为适合数据库查询的格式（处理测试用户和其他情况）
     const userId = getUserIdForQuery(originalUserId);
 
     // 初始化数据库表
@@ -191,7 +172,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (async () => {
         for (const website of websitesWithoutData) {
           try {
-            console.log(`[websites/list] 🔄 Auto-fetching DataForSEO data for website: ${website.id} (${website.domain})`);
+            // 检查是否最近已经有更新尝试或成功更新（1小时内）
+            const recentCheck = await sql`
+              SELECT data_updated_at 
+              FROM domain_overview_cache 
+              WHERE website_id = ${website.id} 
+                AND location_code = 2840
+                AND data_updated_at > NOW() - INTERVAL '1 hour'
+              LIMIT 1
+            `;
+
+            if (recentCheck.rows.length > 0) {
+              // 最近刚更新过或正在更新中（逻辑上我们认为1小时内的记录是新鲜的）
+              continue;
+            }
 
             // 获取网站信息
             const websiteInfo = await sql`
@@ -199,7 +193,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             `;
 
             if (websiteInfo.rows.length === 0 || !websiteInfo.rows[0].website_domain) {
-              console.warn(`[websites/list] ⚠️ Website ${website.id} has no domain, skipping`);
               continue;
             }
 
@@ -214,18 +207,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const { getDomainOverview, getDomainKeywords, getDomainCompetitors } = await import('../_shared/tools/dataforseo-domain.js');
 
             const [overview, keywords, competitors] = await Promise.all([
-              getDomainOverview(domain, locationCode).catch((err) => {
-                console.error(`[websites/list] Failed to get overview for ${domain}:`, err.message);
-                return null;
-              }),
-              getDomainKeywords(domain, locationCode, 50).catch((err) => {
-                console.error(`[websites/list] Failed to get keywords for ${domain}:`, err.message);
-                return [];
-              }),
-              getDomainCompetitors(domain, locationCode, 5).catch((err) => {
-                console.error(`[websites/list] Failed to get competitors for ${domain}:`, err.message);
-                return [];
-              }),
+              getDomainOverview(domain, locationCode).catch(() => null),
+              getDomainKeywords(domain, locationCode, 50).catch(() => []),
+              getDomainCompetitors(domain, locationCode, 5).catch(() => []),
             ]);
 
             // 缓存概览数据（即使数据为 0 也要保存）
@@ -265,14 +249,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                   data_updated_at = NOW(),
                   cache_expires_at = EXCLUDED.cache_expires_at
               `;
-              console.log(`[websites/list] ✅ Cached overview data for ${domain}:`, {
-                websiteId: website.id,
-                totalKeywords: overview.totalKeywords,
-                organicTraffic: overview.organicTraffic,
-                locationCode
-              });
-            } else {
-              console.warn(`[websites/list] ⚠️ No overview data to cache for ${domain} (overview is null)`);
             }
 
             // 缓存关键词数据（前20个）
@@ -311,7 +287,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     cache_expires_at = EXCLUDED.cache_expires_at
                 `)
               );
-              console.log(`[websites/list] ✅ Cached ${keywordsToCache.length} keywords for ${domain}`);
             }
 
             // 缓存竞争对手数据
@@ -338,14 +313,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     cache_expires_at = EXCLUDED.cache_expires_at
                 `)
               );
-              console.log(`[websites/list] ✅ Cached ${competitors.length} competitors for ${domain}`);
             }
           } catch (error: any) {
             // 不抛出错误，只记录日志，避免影响其他网站
             console.error(`[websites/list] ⚠️ Failed to auto-fetch data for website ${website.id}:`, error.message);
           }
         }
-        console.log(`[websites/list] ✅ Auto-fetch completed for ${websitesWithoutData.length} website(s)`);
       })();
     }
 
