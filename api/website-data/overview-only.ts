@@ -9,11 +9,11 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initWebsiteDataTables, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 // 不再导入 getDomainOverview，因为此端点只读取缓存，不调用 API
 
 interface OverviewOnlyRequestBody {
   websiteId: string;
-  userId?: number;
   region?: string;
 }
 
@@ -34,15 +34,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验 - 使用 JWT token 认证
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const userId = authResult.userId; // userId 现在是 UUID 字符串
+
     const body = req.body as OverviewOnlyRequestBody;
 
     if (!body.websiteId) {
       return res.status(400).json({ error: 'websiteId is required' });
-    }
-
-    let userId = body.userId;
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized: userId is required' });
     }
 
     await initWebsiteDataTables();
@@ -60,8 +62,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const website = websiteResult.rows[0];
 
-    // 验证权限
-    if (website.user_id !== userId) {
+    // 验证权限 - 确保类型一致（UUID 可能是对象或字符串）
+    const websiteUserId = String(website.user_id || '');
+    const authUserId = String(userId || '');
+    if (websiteUserId !== authUserId) {
+      console.warn('[overview-only] Permission denied:', {
+        websiteUserId,
+        authUserId,
+        websiteId: body.websiteId,
+      });
       return res.status(403).json({ error: 'Website does not belong to user' });
     }
 

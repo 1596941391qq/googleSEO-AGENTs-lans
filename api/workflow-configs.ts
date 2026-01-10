@@ -217,6 +217,14 @@ async function createConfig(req: VercelRequest, res: VercelResponse, userId: str
     });
   } catch (error: any) {
     console.error('Error creating workflow config:', error);
+    // 如果是无效的 UUID 格式，返回更友好的错误信息
+    if (error?.code === 'INVALID_USER_ID' || error?.code === '22P02') {
+      return res.status(400).json({
+        error: 'Invalid user ID',
+        message: 'The user ID in your session token is not in the correct format. Please refresh your session or re-login to get a valid token.',
+        errorCode: 'INVALID_USER_ID'
+      });
+    }
     return sendErrorResponse(res, error, 'Failed to create workflow config');
   }
 }

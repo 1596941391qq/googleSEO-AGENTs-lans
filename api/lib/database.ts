@@ -211,6 +211,13 @@ export async function createWorkflowConfig(
   try {
     await initWorkflowConfigsTable();
 
+    // 验证 userId 是否是有效的 UUID 格式
+    if (!isValidUUID(userId)) {
+      const error: any = new Error(`Invalid UUID format for userId: ${userId}. Please ensure you are using a valid user ID.`);
+      error.code = 'INVALID_USER_ID';
+      throw error;
+    }
+
     const configId = `${workflowId}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     const result = await sql`
@@ -230,8 +237,22 @@ export async function createWorkflowConfig(
     };
   } catch (error) {
     console.error('Error creating workflow config:', error);
+    // 如果是 UUID 格式错误，提供更友好的错误信息
+    if (error && typeof error === 'object' && 'code' in error && (error.code === '22P02' || error.code === 'INVALID_USER_ID')) {
+      const friendlyError: any = new Error(`Invalid user ID format. The system requires a UUID format user ID. Please refresh your session or re-login to get a valid token.`);
+      friendlyError.code = 'INVALID_USER_ID';
+      throw friendlyError;
+    }
     throw error;
   }
+}
+
+/**
+ * 验证字符串是否是有效的 UUID 格式
+ */
+function isValidUUID(str: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(str);
 }
 
 /**
@@ -243,6 +264,13 @@ export async function getUserWorkflowConfigs(
 ): Promise<WorkflowConfig[]> {
   try {
     await initWorkflowConfigsTable();
+
+    // 验证 userId 是否是有效的 UUID 格式
+    // 如果不是，返回空数组（旧格式的数字 ID 不会有 workflow configs）
+    if (!isValidUUID(userId)) {
+      console.warn(`[getUserWorkflowConfigs] Invalid UUID format for userId: ${userId}. Returning empty array.`);
+      return [];
+    }
 
     let result;
     if (workflowId) {
@@ -274,6 +302,11 @@ export async function getUserWorkflowConfigs(
     if (error && typeof error === 'object' && 'code' in error && error.code === '42P01') {
       return [];
     }
+    // 如果是 UUID 格式错误，返回空数组而不是抛出错误
+    if (error && typeof error === 'object' && 'code' in error && error.code === '22P02') {
+      console.warn(`[getUserWorkflowConfigs] UUID format error for userId: ${userId}. Returning empty array.`);
+      return [];
+    }
     throw error;
   }
 }
@@ -287,6 +320,12 @@ export async function getWorkflowConfigById(
 ): Promise<WorkflowConfig | null> {
   try {
     await initWorkflowConfigsTable();
+
+    // 如果提供了 userId，验证它是否是有效的 UUID 格式
+    if (userId && !isValidUUID(userId)) {
+      console.warn(`[getWorkflowConfigById] Invalid UUID format for userId: ${userId}. Returning null.`);
+      return null;
+    }
 
     let result;
     if (userId) {
@@ -321,6 +360,11 @@ export async function getWorkflowConfigById(
     if (error && typeof error === 'object' && 'code' in error && error.code === '42P01') {
       return null;
     }
+    // 如果是 UUID 格式错误，返回 null 而不是抛出错误
+    if (error && typeof error === 'object' && 'code' in error && error.code === '22P02') {
+      console.warn(`[getWorkflowConfigById] UUID format error for userId: ${userId}. Returning null.`);
+      return null;
+    }
     throw error;
   }
 }
@@ -335,6 +379,12 @@ export async function updateWorkflowConfig(
 ): Promise<WorkflowConfig | null> {
   try {
     await initWorkflowConfigsTable();
+
+    // 验证 userId 是否是有效的 UUID 格式
+    if (!isValidUUID(userId)) {
+      console.warn(`[updateWorkflowConfig] Invalid UUID format for userId: ${userId}. Returning null.`);
+      return null;
+    }
 
     // 构建动态更新语句
     const updateParts: any[] = [];
@@ -386,6 +436,11 @@ export async function updateWorkflowConfig(
     };
   } catch (error) {
     console.error('Error updating workflow config:', error);
+    // 如果是 UUID 格式错误，返回 null 而不是抛出错误
+    if (error && typeof error === 'object' && 'code' in error && error.code === '22P02') {
+      console.warn(`[updateWorkflowConfig] UUID format error for userId: ${userId}. Returning null.`);
+      return null;
+    }
     throw error;
   }
 }
@@ -400,6 +455,12 @@ export async function deleteWorkflowConfig(
   try {
     await initWorkflowConfigsTable();
 
+    // 验证 userId 是否是有效的 UUID 格式
+    if (!isValidUUID(userId)) {
+      console.warn(`[deleteWorkflowConfig] Invalid UUID format for userId: ${userId}. Returning false.`);
+      return false;
+    }
+
     const result = await sql`
       DELETE FROM workflow_configs
       WHERE id = ${configId} AND user_id = ${userId}
@@ -411,6 +472,11 @@ export async function deleteWorkflowConfig(
     console.error('Error deleting workflow config:', error);
     // 如果表不存在，返回 false
     if (error && typeof error === 'object' && 'code' in error && error.code === '42P01') {
+      return false;
+    }
+    // 如果是 UUID 格式错误，返回 false 而不是抛出错误
+    if (error && typeof error === 'object' && 'code' in error && error.code === '22P02') {
+      console.warn(`[deleteWorkflowConfig] UUID format error for userId: ${userId}. Returning false.`);
       return false;
     }
     throw error;

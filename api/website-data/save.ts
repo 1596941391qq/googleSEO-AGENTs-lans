@@ -21,7 +21,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResult) {
       return sendErrorResponse(res, null, 'Unauthorized', 401);
     }
-    const userId = authResult.userId; // userId 现在是 UUID 字符串
+
+    const originalUserId = authResult.userId;
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+
+    // 验证 userId 是否是有效的 UUID 格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isValidUUID = uuidRegex.test(originalUserId);
+
+    // 开发模式下的测试用户特殊处理
+    if (isDevelopment && (!isValidUUID || originalUserId === '12345')) {
+      console.log(`[Save Website Data] Test user detected (userId: ${originalUserId}), returning mock response in development mode`);
+      // 返回一个模拟的成功响应，不实际保存到数据库
+      return res.json({
+        success: true,
+        data: {
+          websiteId: `test-website-${Date.now()}`,
+          message: 'Website data saved successfully (test mode)',
+        },
+      });
+    }
+
+    if (!isValidUUID) {
+      return sendErrorResponse(
+        res,
+        new Error(`Invalid user ID format. Expected UUID but got: ${originalUserId}`),
+        'Invalid user ID format. Please refresh your session or re-login.',
+        400
+      );
+    }
+
+    const userId = originalUserId;
 
     // Initialize tables
     await initWebsiteDataTables();

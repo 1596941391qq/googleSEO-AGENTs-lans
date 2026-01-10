@@ -46,7 +46,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResult) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const userId = authResult.userId; // userId 现在是 UUID 字符串
+    
+    const originalUserId = authResult.userId;
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+    
+    // 验证 userId 是否是有效的 UUID 格式
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isValidUUID = uuidRegex.test(originalUserId);
+    
+    // 开发模式下的测试用户特殊处理
+    if (isDevelopment && (!isValidUUID || originalUserId === '12345')) {
+      console.log(`[overview] Test user detected (userId: ${originalUserId}), returning empty result in development mode`);
+      return res.status(200).json({
+        success: true,
+        data: {
+          hasData: false,
+          website: null,
+          overview: null,
+          topKeywords: [],
+          competitors: [],
+          needsRefresh: false,
+        },
+      });
+    }
+    
+    if (!isValidUUID) {
+      return res.status(400).json({ 
+        error: 'Invalid user ID format',
+        message: 'The user ID in your session token is not in the correct format. Please refresh your session or re-login.'
+      });
+    }
+    
+    const userId = originalUserId;
 
     const body = req.body as OverviewRequestBody;
 

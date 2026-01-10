@@ -14,6 +14,34 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { initUserWebsitesTable, initWebsiteDataTables, sql } from '../lib/database.js';
 import { authenticateRequest } from '../_shared/auth.js';
 
+/**
+ * 将测试用户 ID 转换为有效的 UUID
+ * 开发模式下，测试用户 ID "12345" 会被映射到一个固定的测试 UUID
+ */
+function getUserIdForQuery(userId: string): string {
+  const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+
+  // 如果是开发模式且 userId 是测试用户 ID，使用固定的测试 UUID
+  if (isDevelopment && userId === '12345') {
+    // 使用固定的测试用户 UUID: 00000000-0000-0000-0000-000000001234
+    // 这样可以将 "12345" 映射到一个有效的 UUID 格式
+    return '00000000-0000-0000-0000-000000001234';
+  }
+
+  // 验证是否是有效的 UUID 格式
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(userId)) {
+    // 如果不是有效的 UUID，在开发模式下返回测试 UUID，否则抛出错误
+    if (isDevelopment) {
+      console.warn(`[websites/list] Invalid UUID format for userId: ${userId}, using test UUID in development mode`);
+      return '00000000-0000-0000-0000-000000001234';
+    }
+    throw new Error(`Invalid UUID format for userId: ${userId}`);
+  }
+
+  return userId;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -35,7 +63,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResult) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const userId = authResult.userId; // userId 现在是 UUID 字符串
+
+    const originalUserId = authResult.userId;
+    const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+
+    // 开发模式下的测试用户特殊处理
+    // 如果 userId 是 "12345" 或不是有效的 UUID，返回空结果（测试用户通常没有数据库记录）
+    if (isDevelopment && (originalUserId === '12345' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(originalUserId))) {
+      console.log(`[websites/list] Test user detected (userId: ${originalUserId}), returning empty result in development mode`);
+      return res.status(200).json({
+        success: true,
+        data: {
+          websites: [],
+          currentWebsite: null,
+          preferences: {
+            defaultWebsiteId: null,
+            lastSelectedWebsiteId: null,
+            uiSettings: {}
+          }
+        }
+      });
+    }
+
+    // 将 userId 转换为适合数据库查询的格式（处理其他情况）
+    const userId = getUserIdForQuery(originalUserId);
 
     // 初始化数据库表
     await initWebsiteDataTables();
@@ -131,7 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Step 3: 检查并自动获取缺失的数据（异步，不阻塞响应）
     // ==========================================
     // 找出没有数据的网站（没有 overview 缓存或数据为空）
-    const websitesWithoutData = websites.filter(w => 
+    const websitesWithoutData = websites.filter(w =>
       !w.keywordsCount || w.keywordsCount === 0 || !w.monthlyVisits || w.monthlyVisits === 0
     );
 
@@ -141,12 +192,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         for (const website of websitesWithoutData) {
           try {
             console.log(`[websites/list] 🔄 Auto-fetching DataForSEO data for website: ${website.id} (${website.domain})`);
-            
+
             // 获取网站信息
             const websiteInfo = await sql`
               SELECT website_domain FROM user_websites WHERE id = ${website.id}
             `;
-            
+
             if (websiteInfo.rows.length === 0 || !websiteInfo.rows[0].website_domain) {
               console.warn(`[websites/list] ⚠️ Website ${website.id} has no domain, skipping`);
               continue;
@@ -334,6 +385,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   } catch (error: any) {
     console.error('[API: websites/list] Error:', error);
+
+    // 如果是 UUID 格式错误且是开发模式，返回空结果而不是错误
+    if (error?.code === '22P02') {
+      const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
+      if (isDevelopment) {
+        console.warn('[API: websites/list] UUID format error in development mode, returning empty result');
+        return res.status(200).json({
+          success: true,
+          data: {
+            websites: [],
+            currentWebsite: null,
+            preferences: {
+              defaultWebsiteId: null,
+              lastSelectedWebsiteId: null,
+              uiSettings: {}
+            }
+          }
+        });
+      }
+    }
 
     return res.status(500).json({
       success: false,
