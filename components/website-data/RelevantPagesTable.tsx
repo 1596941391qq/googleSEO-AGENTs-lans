@@ -75,6 +75,10 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
 
   useEffect(() => {
     if (websiteId) {
+      // 切换地区时，重置状态
+      setPages([]);
+      setLoading(true);
+      
       // 先尝试从缓存加载
       const cached = getCachedData();
       if (cached && cached.length > 0) {
@@ -84,7 +88,7 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
       }
       loadPages();
     }
-  }, [websiteId]);
+  }, [websiteId, region]);
 
   const loadPages = async () => {
     setLoading(true);
@@ -99,7 +103,12 @@ export const RelevantPagesTable: React.FC<RelevantPagesTableProps> = ({
 
       if (response.ok) {
         const result = await response.json();
-        setPages(result.data || []);
+        const pagesData = result.data || [];
+        setPages(pagesData);
+        // 保存到缓存
+        if (pagesData.length > 0) {
+          setCachedData(pagesData);
+        }
       } else {
         setError(uiLanguage === "zh" ? "加载失败" : "Failed to load");
       }

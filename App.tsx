@@ -3716,6 +3716,59 @@ export default function App() {
             }
           });
 
+          // 同步本地未保存到后端的任务（ID 以 "task-" 开头的）
+          const unsyncedLocalTasks = localTasks.filter(
+            (lt) => lt.id.startsWith("task-") && !backendTasks.find((bt) => bt.id === lt.id)
+          );
+          
+          // 异步同步未保存的任务到后端
+          unsyncedLocalTasks.forEach(async (localTask) => {
+            try {
+              const saveResponse = await postWithAuth("/api/tasks/save", {
+                type: localTask.type,
+                name: localTask.name,
+                params: {
+                  seedKeyword: localTask.miningState?.seedKeyword,
+                  batchInput: localTask.batchState?.batchInputKeywords,
+                },
+              });
+              const saveResult = await saveResponse.json();
+              if (saveResult.success && saveResult.data.task.id) {
+                const backendId = saveResult.data.task.id;
+                // 更新本地任务ID为后端ID
+                setState((innerPrev) => ({
+                  ...innerPrev,
+                  taskManager: {
+                    ...innerPrev.taskManager,
+                    tasks: innerPrev.taskManager.tasks.map((t) =>
+                      t.id === localTask.id ? { ...t, id: backendId } : t
+                    ),
+                    activeTaskId:
+                      innerPrev.taskManager.activeTaskId === localTask.id
+                        ? backendId
+                        : innerPrev.taskManager.activeTaskId,
+                  },
+                }));
+                // 同步完整任务状态
+                const updatedTask = { ...localTask, id: backendId };
+                await postWithAuth("/api/tasks/update", {
+                  id: backendId,
+                  name: updatedTask.name,
+                  status:
+                    updatedTask.miningState?.miningSuccess ||
+                    (updatedTask.batchState?.batchKeywords &&
+                      updatedTask.batchState.batchKeywords.length > 0)
+                      ? "completed"
+                      : "in_progress",
+                  state: updatedTask,
+                });
+                console.log(`[Tasks] Synced local task ${localTask.id} to backend as ${backendId}`);
+              }
+            } catch (syncErr) {
+              console.error(`[Tasks] Failed to sync local task ${localTask.id} to backend:`, syncErr);
+            }
+          });
+
           return {
             ...prev,
             taskManager: {

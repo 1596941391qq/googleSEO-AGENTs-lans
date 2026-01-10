@@ -87,6 +87,10 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
 
   useEffect(() => {
     if (websiteId) {
+      // 切换地区时，重置状态
+      setKeywords([]);
+      setLoading(true);
+      
       // 先尝试从缓存加载
       const cached = getCachedData();
       if (cached && cached.length > 0) {
@@ -96,7 +100,7 @@ export const RankedKeywordsTable: React.FC<RankedKeywordsTableProps> = ({
       }
       loadKeywords();
     }
-  }, [websiteId, sortBy, sortOrder]);
+  }, [websiteId, sortBy, sortOrder, region]);
 
   const loadKeywords = async () => {
     setLoading(true);
