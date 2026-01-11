@@ -28,12 +28,12 @@ interface ApiCallOptions {
 
 const apiCall = async (endpoint: string, body: any, options: ApiCallOptions | number = 3) => {
   // 兼容旧的调用方式（直接传递 retries 数字）
-  const opts: ApiCallOptions = typeof options === 'number' 
-    ? { retries: options } 
+  const opts: ApiCallOptions = typeof options === 'number'
+    ? { retries: options }
     : options;
   const retries = opts.retries ?? 3;
   const onRetry = opts.onRetry;
-  
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 300000); // 5分钟超时
 
@@ -82,12 +82,12 @@ const apiCall = async (endpoint: string, body: any, options: ApiCallOptions | nu
       // 等待后重试（指数退避）
       const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
       console.warn(`API调用失败 (尝试 ${attempt}/${retries})，${delay}ms 后重试:`, error.message);
-      
+
       // 调用重试回调，通知调用者
       if (onRetry) {
         onRetry(attempt, error.message, delay);
       }
-      
+
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -159,12 +159,12 @@ export const analyzeRankingProbability = async (
     websiteDR,
     targetSearchEngine
   }, { retries: 3, onRetry });
-  
+
   // 如果有进度日志，通过回调返回
   if (result.progressLogs && onProgressLogs) {
     onProgressLogs(result.progressLogs);
   }
-  
+
   return result.keywords;
 };
 
@@ -234,12 +234,12 @@ export const translateAndAnalyzeSingle = async (
     websiteDR,
     skipTranslation
   }, { retries: 3, onRetry });
-  
+
   // 如果有进度日志，通过回调返回
   if (result.progressLogs && onProgressLogs) {
     onProgressLogs(result.progressLogs);
   }
-  
+
   return result;
 };
 
@@ -247,7 +247,7 @@ export const translateAndAnalyzeSingle = async (
 import {
   DEFAULT_GEN_PROMPT_EN,
   DEFAULT_ANALYZE_PROMPT_EN,
-  DEFAULT_DEEP_DIVE_PROMPT_EN,
+
   getKeywordMiningPrompt,
 } from './prompts/index';
 
@@ -256,6 +256,6 @@ import {
 export {
   DEFAULT_GEN_PROMPT_EN,
   DEFAULT_ANALYZE_PROMPT_EN,
-  DEFAULT_DEEP_DIVE_PROMPT_EN,
+
   getKeywordMiningPrompt, // Export the new keyword mining prompt function
 };

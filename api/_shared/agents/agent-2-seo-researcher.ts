@@ -359,6 +359,7 @@ export async function analyzeSearchPreferences(
 
     // 调用 Gemini API（使用 JSON 模式）
     const response = await callGeminiAPI(prompt, systemInstruction, {
+
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'object',
@@ -473,18 +474,10 @@ export async function analyzeSearchPreferences(
   }
 }
 
-import { scrapeWebsite, cleanMarkdown } from '../tools/firecrawl.js';
-
-// Helper to truncate content and extract headers
-function processScrapedContent(markdown: string, maxLength: number = 10000): string {
-  return cleanMarkdown(markdown, maxLength);
-}
-
 /**
  * 分析竞争对手
  * 
  * 通过分析SERP结果，识别Top 10竞争对手的内容结构、弱点和机会
- * 升级：使用 Firecrawl 抓取 Top 3 页面的实际内容进行深度分析
  * 
  * @param keyword - 目标关键词
  * @param serpData - SERP搜索结果数据（可选，如果不提供会自动获取）
@@ -500,8 +493,7 @@ export async function analyzeCompetitors(
   targetMarket: string = 'global',
   searchEngine: SearchEngine = 'google',
   onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
-  onProgress?: (message: string) => void,
-  probability?: ProbabilityLevel // 新增：用于决定是否使用 Firecrawl
+  onProgress?: (message: string) => void
 ): Promise<CompetitorAnalysisResult> {
   try {
     // 如果没有提供 SERP 数据，则获取
@@ -511,79 +503,15 @@ export async function analyzeCompetitors(
       serpResults = await fetchSerpResults(keyword, targetLanguage, searchEngine);
     }
 
-    // 1. 构建 SERP 结果上下文 (Snippet based)
+    // 构建 SERP 结果上下文 (Snippet based)
     const serpSnippetsContext = serpResults.results && serpResults.results.length > 0
       ? serpResults.results.slice(0, 10).map((r, i) =>
         `${i + 1}. [${r.title}](${r.url})\n   Snippet: ${r.snippet}`
       ).join('\n\n')
       : 'No SERP results available.';
 
-    // 2. Firecrawl: 抓取 Top 3 页面的深度内容（优化：仅对 MEDIUM 概率关键词使用）
-    // HIGH 概率：竞争很弱，无需深度抓取
-    // LOW 概率：竞争太强，不值得深度抓取
-    // MEDIUM 概率：需要深度分析来确定优化方向
-    let deepContentContext = '';
-    const shouldUseFirecrawl = probability === ProbabilityLevel.MEDIUM;
-    const allResults = serpResults.results || [];
-    const targetScrapeCount = 3; // 目标抓取数量
-    const scrapedData: Array<{ rank: number; title: string; url: string; content: string }> = [];
-
-    if (shouldUseFirecrawl && allResults.length > 0) {
-      onProgress?.(language === 'zh' ? `🕵️ 正在抓取前 ${targetScrapeCount} 名竞争对手的页面内容以进行深度分析...` : `🕵️ Scaping top ${targetScrapeCount} competitor pages for deep analysis...`);
-
-      try {
-        // 逐个尝试抓取，跳过失败的URL，直到获取到足够的成功结果
-        for (let i = 0; i < allResults.length && scrapedData.length < targetScrapeCount; i++) {
-          const r = allResults[i];
-          if (!r.url) continue;
-
-          try {
-            onProgress?.(language === 'zh'
-              ? `🔥 [${scrapedData.length + 1}/${targetScrapeCount}] 正在抓取: ${r.url.substring(0, 50)}...`
-              : `🔥 [${scrapedData.length + 1}/${targetScrapeCount}] Scraping: ${r.url.substring(0, 50)}...`);
-
-            const result = await scrapeWebsite(r.url, false);
-            const processedContent = processScrapedContent(result.markdown || '');
-
-            // 检查抓取的内容是否有效（不是错误页面）
-            if (processedContent && processedContent.length > 100) {
-              scrapedData.push({
-                rank: scrapedData.length + 1,
-                title: r.title,
-                url: r.url,
-                content: processedContent
-              });
-              onProgress?.(language === 'zh'
-                ? `✅ 已抓取 [${scrapedData.length}/${targetScrapeCount}]: ${r.title.substring(0, 30)}...`
-                : `✅ Scraped [${scrapedData.length}/${targetScrapeCount}]: ${r.title.substring(0, 30)}...`);
-            } else {
-              onProgress?.(language === 'zh'
-                ? `⚠️ 抓取内容过短，跳过: ${r.url.substring(0, 30)}...`
-                : `⚠️ Content too short, skipping: ${r.url.substring(0, 30)}...`);
-            }
-          } catch (e: any) {
-            console.warn(`[Agent 2] Failed to scrape ${r.url}:`, e.message);
-            // 继续尝试下一个URL，不中断流程
-            continue;
-          }
-        }
-
-        if (scrapedData.length > 0) {
-          deepContentContext = `\n\n=== DEEP DIVE: TOP COMPETITOR CONTENT ===\nI have scraped the full content of the top ${scrapedData.length} ranking pages. Use this for structural analysis:\n\n` +
-            scrapedData.map(page =>
-              `--- COMPETITOR #${page.rank}: ${page.title} ---\nURL: ${page.url}\nCONTENT START:\n${page.content}\nCONTENT END\n`
-            ).join('\n\n');
-          console.log(`[Agent 2] Successfully scraped ${scrapedData.length} competitor pages for deep analysis`);
-        } else {
-          console.warn(`[Agent 2] No competitor pages could be scraped successfully, falling back to snippets only`);
-        }
-      } catch (err) {
-        console.error('[Agent 2] Firecrawl scraping failed, falling back to snippets only', err);
-      }
-    } else if (!shouldUseFirecrawl) {
-      // 跳过 Firecrawl（HIGH 或 LOW 概率）：使用 SERP snippet 已足够
-      console.log(`[Agent 2] Skipping Firecrawl for ${probability} probability keyword (using SERP snippets only)`);
-    }
+    // 不使用深度抓取，仅基于 SERP snippets 进行分析
+    const deepContentContext = '';
 
     // 构建市场标签
     const marketLabel = targetMarket === 'global'
@@ -1151,18 +1079,9 @@ export const analyzeRankingProbability = async (
         ? `\n\nKEYWORD DATA: No data (for non-English, this is normal - verify with SERP)`
         : ``;
 
-    // 限制topSerpSnippets的长度，避免JSON过大
-    const maxTitleLengthForJson = 80;
-    const maxSnippetLengthForJson = 100;
-    const topSerpSnippetsJson = serpResults.length > 0
-      ? JSON.stringify(serpResults.slice(0, 3).map(r => ({
-        title: r.title ? (r.title.length > maxTitleLengthForJson ? r.title.substring(0, maxTitleLengthForJson) + '...' : r.title) : '',
-        url: r.url || '',
-        snippet: r.snippet ? (r.snippet.length > maxSnippetLengthForJson ? r.snippet.substring(0, maxSnippetLengthForJson) + '...' : r.snippet) : ''
-      })))
-      : '[]';
-
-    // OPTIMIZED: Reduced fullSystemInstruction by removing redundant guidance (already in systemInstruction)
+    // OPTIMIZED: Removed topSerpSnippets and serpResultCount from AI output
+    // These fields are populated from real SERP data after AI response (see lines 1520-1533)
+    // This reduces token consumption, improves response speed, and eliminates potential inconsistencies
     const fullSystemInstruction = `
 ${systemInstruction}
 
@@ -1173,12 +1092,10 @@ ${dataForSEOContext}
 OUTPUT (${uiLangName}, JSON only):
 {
   "intentAssessment": "Intent: [type] | SERP Match: [analysis]",
-  "serpResultCount": ${serpResultCount > 0 ? serpResultCount : -1},
   "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
   "probability": "High" | "Medium" | "Low",
   "relevanceScore": 0-1,
-  "reasoning": "Brief analysis (2-3 sentences)",
-  "topSerpSnippets": ${topSerpSnippetsJson}
+  "reasoning": "Brief analysis (2-3 sentences)"
 }`;
 
     try {
@@ -1192,36 +1109,27 @@ OUTPUT (${uiLangName}, JSON only):
         response = await callGeminiAPI(
           `Analyze SEO competition for: ${keywordData.keyword}
 
-CRITICAL: Return ONLY a valid JSON object in the exact format specified. No markdown, no explanations, no thinking process, just the JSON object starting with {`,
+CRITICAL: 
+- Return ONLY a valid JSON object in the exact format specified
+- No markdown, no explanations, no thinking process
+- JSON object must start with {`,
           fullSystemInstruction,
           {
+            model: 'gemini-2.5-flash',
             responseMimeType: 'application/json',
             responseSchema: {
               type: 'object',
               properties: {
                 intentAssessment: { type: 'string' },
-                serpResultCount: { type: 'number' },
                 topDomainType: { type: 'string' },
                 probability: { type: 'string', enum: ['High', 'Medium', 'Low'] },
                 relevanceScore: { type: 'number' },
-                reasoning: { type: 'string' },
-                topSerpSnippets: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      title: { type: 'string' },
-                      url: { type: 'string' },
-                      snippet: { type: 'string' }
-                    }
-                  }
-                }
+                reasoning: { type: 'string' }
+                // Note: serpResultCount and topSerpSnippets are NOT in schema
+                // They are populated from real SERP data after AI response (see lines 1520-1533)
               },
               required: ['probability', 'reasoning', 'intentAssessment']
             },
-            // 禁用思考模式以加快响应速度（性能优化）
-            reasoningMode: 'none',
-            // 禁用 Google 搜索以避免 JSON 解析错误（联网模式会导致返回非纯 JSON 格式）
             enableGoogleSearch: false,
             onRetry: (attempt, error, delay) => {
               onProgress?.(uiLanguage === 'zh'

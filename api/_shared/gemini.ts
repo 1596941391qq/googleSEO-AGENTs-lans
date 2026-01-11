@@ -24,20 +24,6 @@ interface ProxyConfig {
   getApiKey: () => string;
 }
 
-// 代理商配置表
-const PROXY_CONFIGS: Record<ProxyProvider, ProxyConfig> = {
-  '302': {
-    baseUrl: 'https://api.302.ai',
-    urlTemplate: '/v1/v1beta/models/{model}:generateContent',
-    getApiKey: () => process.env.GEMINI_API_KEY || '',
-  },
-  'tuzi': {
-    baseUrl: 'https://api.tu-zi.com',
-    urlTemplate: '/v1beta/models/{model}:generateContent',
-    getApiKey: () => process.env.GEMINI_TUZI_API_KEY || process.env.GEMINI_API_KEY || '',
-  },
-};
-
 // 当前请求的代理商覆盖（用于从前端动态切换）
 let requestProxyProviderOverride: ProxyProvider | null = null;
 // 当前请求的模型覆盖（用于从前端动态切换）
@@ -50,7 +36,6 @@ let requestModelOverride: string | null = null;
 export function setRequestProxyProvider(provider: '302' | 'tuzi' | null): void {
   if (provider === '302' || provider === 'tuzi') {
     requestProxyProviderOverride = provider;
-    console.log(`[Gemini] Proxy provider override set to: ${provider}`);
   } else {
     requestProxyProviderOverride = null;
   }
@@ -63,7 +48,6 @@ export function setRequestProxyProvider(provider: '302' | 'tuzi' | null): void {
 export function setRequestModel(model: string | null): void {
   if (model && model.startsWith('gemini-')) {
     requestModelOverride = model;
-    console.log(`[Gemini] Model override set to: ${model}`);
   } else {
     requestModelOverride = null;
   }
@@ -73,7 +57,9 @@ export function setRequestModel(model: string | null): void {
  * 获取当前使用的模型
  */
 export function getCurrentModel(): string {
-  return requestModelOverride || MODEL;
+  const result = requestModelOverride || MODEL;
+  console.log(`[Gemini] getCurrentModel: override=${requestModelOverride}, default=${MODEL}, result=${result}`);
+  return result;
 }
 
 /**
@@ -104,16 +90,37 @@ const getProxyProvider = (): ProxyProvider => {
   return '302';
 };
 
-// 获取代理配置
+// 获取代理配置（每次都从原始配置创建新对象，确保不会污染）
 const getProxyConfig = (): ProxyConfig & { provider: ProxyProvider } => {
   const provider = getProxyProvider();
-  const config = PROXY_CONFIGS[provider];
 
-  // 允许通过 GEMINI_PROXY_URL 覆盖默认 baseUrl
+  // 从原始配置获取（硬编码，确保不会出错）
+  let baseUrl: string;
+  let urlTemplate: string;
+  let getApiKey: () => string;
+
+  if (provider === 'tuzi') {
+    baseUrl = 'https://api.tu-zi.com';
+    urlTemplate = '/v1beta/models/{model}:generateContent';
+    getApiKey = () => process.env.GEMINI_TUZI_API_KEY || process.env.GEMINI_API_KEY || '';
+  } else {
+    baseUrl = 'https://api.302.ai';
+    urlTemplate = '/v1/v1beta/models/{model}:generateContent';
+    getApiKey = () => process.env.GEMINI_API_KEY || '';
+  }
+
+  // 允许通过 GEMINI_PROXY_URL 覆盖默认 baseUrl（但只在没有自定义时才使用）
   const customBaseUrl = process.env.GEMINI_PROXY_URL;
   if (customBaseUrl) {
-    config.baseUrl = customBaseUrl;
+    baseUrl = customBaseUrl;
   }
+
+
+  const config: ProxyConfig = {
+    baseUrl,
+    urlTemplate,
+    getApiKey,
+  };
 
   return { ...config, provider };
 };
@@ -289,8 +296,6 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
     contents: contents,
     generationConfig: {
       maxOutputTokens: config?.maxOutputTokens ?? 65536,
-      // 禁用思考模式以加快响应速度（默认使用 "none"）
-      // 对于性能敏感的场景（如批量关键词分析），禁用思考模式可以显著提升速度
       reasoningMode: config?.reasoningMode ?? 'none'
     }
   };

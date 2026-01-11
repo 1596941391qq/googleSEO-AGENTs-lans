@@ -22,6 +22,8 @@ import {
   Layout,
   PlusCircle,
   Link2,
+  Edit3,
+  X,
 } from "lucide-react";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
@@ -41,6 +43,7 @@ import { KeywordData } from "../types";
 
 // 定义本地类型
 import { ProjectDashboard } from "./projects/ProjectDashboard";
+import { RichTextEditor } from "./projects/RichTextEditor";
 
 interface WebsiteBinding {
   id: string;
@@ -963,6 +966,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const [updatingStatus, setUpdatingStatus] = React.useState<string | null>(
     null
   );
+  const [editingArticle, setEditingArticle] = React.useState<any | null>(null);
 
   const loadArticles = React.useCallback(async () => {
     try {
@@ -1093,6 +1097,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                 ? "bg-zinc-900 border-zinc-800 hover:border-emerald-500/50"
                 : "bg-white border-gray-200 hover:border-emerald-500"
             )}
+            onClick={() => setEditingArticle(article)}
           >
             <CardHeader>
               <div className="flex items-start justify-between mb-2">
@@ -1168,7 +1173,19 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         : "Published"}
                     </Badge>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1 text-xs h-7"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingArticle(article);
+                      }}
+                    >
+                      <Edit3 className="w-3 h-3 mr-1" />
+                      {uiLanguage === "zh" ? "编辑" : "Edit"}
+                    </Button>
                     {article.status === "draft" ? (
                       <Button
                         size="sm"
@@ -1213,6 +1230,114 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
           </Card>
         ))}
       </div>
+
+      {/* Rich Text Editor Modal */}
+      {editingArticle && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8">
+          <div className={cn(
+            "relative w-full max-w-6xl h-full max-h-[90vh] rounded-2xl border overflow-hidden flex flex-col shadow-2xl",
+            isDarkTheme ? "bg-[#0a0a0a] border-zinc-800" : "bg-white border-gray-200"
+          )}>
+            <div className={cn(
+              "flex items-center justify-between p-4 border-b",
+              isDarkTheme ? "border-zinc-800" : "border-gray-200"
+            )}>
+              <div className="flex items-center gap-3">
+                <Badge
+                  className={cn(
+                    "font-bold",
+                    editingArticle.status === "published"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-yellow-500/20 text-yellow-400"
+                  )}
+                >
+                  {editingArticle.status === "published"
+                    ? (uiLanguage === "zh" ? "已发布" : "Published")
+                    : (uiLanguage === "zh" ? "草稿" : "Draft")}
+                </Badge>
+                <h2 className={cn("text-lg font-bold truncate max-w-xl", isDarkTheme ? "text-white" : "text-gray-900")}>
+                  {editingArticle.title}
+                </h2>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setEditingArticle(null)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <RichTextEditor
+                initialContent={editingArticle.content}
+                isDarkTheme={isDarkTheme}
+                uiLanguage={uiLanguage}
+                draftId={editingArticle.id}
+                onSave={async (newContent) => {
+                  try {
+                    let response;
+                    const source = editingArticle.source || 'published';
+                    
+                    if (source === 'published') {
+                      // 更新 published_articles 表中的文章
+                      response = await fetch("/api/articles/update", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+                        },
+                        body: JSON.stringify({
+                          articleId: editingArticle.id,
+                          title: editingArticle.title,
+                          content: newContent,
+                        }),
+                      });
+                    } else if (source === 'draft') {
+                      // 更新 content_drafts 表中的文章
+                      // 注意：需要 projectId 和 keywordId，但文章列表中可能没有这些字段
+                      // 暂时尝试使用 save-draft API
+                      response = await fetch("/api/articles/save-draft", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+                        },
+                        body: JSON.stringify({
+                          articleId: editingArticle.id,
+                          title: editingArticle.title,
+                          content: newContent,
+                        }),
+                      });
+                    } else {
+                      // task 来源的文章，暂时不支持编辑
+                      alert(uiLanguage === "zh" ? "此文章类型暂不支持编辑" : "This article type is not editable");
+                      return;
+                    }
+                    
+                    const result = await response.json();
+                    if (result.success) {
+                      // Update local article list
+                      setArticles((prev) =>
+                        prev.map((a) =>
+                          a.id === editingArticle.id
+                            ? { ...a, content: newContent, updatedAt: new Date().toISOString() }
+                            : a
+                        )
+                      );
+                      setEditingArticle(null);
+                      // Trigger refresh event
+                      window.dispatchEvent(new CustomEvent("article-saved"));
+                      // Reload articles to get fresh data
+                      loadArticles();
+                    } else {
+                      alert(result.error || (uiLanguage === "zh" ? "保存失败" : "Failed to save"));
+                    }
+                  } catch (err) {
+                    console.error("Error saving article:", err);
+                    alert(uiLanguage === "zh" ? "保存失败" : "Failed to save article");
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

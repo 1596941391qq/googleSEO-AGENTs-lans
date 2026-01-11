@@ -1,6 +1,6 @@
 // Workflow Definitions
 import { WorkflowDefinition, WorkflowConfig } from "./types";
-import { DEFAULT_GEN_PROMPT_EN, DEFAULT_ANALYZE_PROMPT_EN, DEFAULT_DEEP_DIVE_PROMPT_EN } from "./services/gemini";
+import { DEFAULT_GEN_PROMPT_EN, DEFAULT_ANALYZE_PROMPT_EN } from "./services/gemini";
 
 // === Mining Workflow ===
 export const MINING_WORKFLOW: WorkflowDefinition = {
@@ -105,8 +105,7 @@ export const DEEP_DIVE_WORKFLOW: WorkflowDefinition = {
       name: 'Content Strategy Agent',
       description: 'Creates SEO content strategy with embedded core keywords',
       configurable: true,
-      prompt: DEFAULT_DEEP_DIVE_PROMPT_EN,
-      defaultPrompt: DEFAULT_DEEP_DIVE_PROMPT_EN,
+
     },
     {
       id: 'deepdive-seranking',

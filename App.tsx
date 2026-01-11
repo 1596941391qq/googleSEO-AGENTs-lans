@@ -116,7 +116,6 @@ import {
   translateAndAnalyzeSingle,
   DEFAULT_GEN_PROMPT_EN,
   DEFAULT_ANALYZE_PROMPT_EN,
-  DEFAULT_DEEP_DIVE_PROMPT_EN,
 } from "./services/gemini";
 import {
   MINING_WORKFLOW,
@@ -1156,66 +1155,6 @@ const renderAgentDataTable = (
                               .length
                         )
                       : "-"}
-                  </div>
-                </div>
-              )}
-
-              {/* SERP Results - 跳过前三个避免重复 */}
-              {data.topSerpSnippets && data.topSerpSnippets.length > 3 && (
-                <div
-                  className={`p-3 rounded-lg border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-white border-gray-200"
-                  }`}
-                >
-                  <div
-                    className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                    }`}
-                  >
-                    🔍 TOP GOOGLE RESULTS ({data.serpResultCount || "N/A"}{" "}
-                    total)
-                  </div>
-                  <div className="space-y-2">
-                    {data.topSerpSnippets
-                      .slice(3)
-                      .map((snippet: any, i: number) => (
-                        <div
-                          key={i}
-                          className={`p-2 rounded border ${
-                            isDarkTheme
-                              ? "bg-black border-emerald-500/20"
-                              : "bg-gray-50 border-gray-200"
-                          }`}
-                        >
-                          <div
-                            className={`text-xs font-medium mb-1 ${
-                              isDarkTheme
-                                ? "text-emerald-400"
-                                : "text-emerald-700"
-                            }`}
-                          >
-                            {snippet.title}
-                          </div>
-                          <div
-                            className={`text-[10px] mb-1 ${
-                              isDarkTheme
-                                ? "text-emerald-500/70"
-                                : "text-gray-500"
-                            }`}
-                          >
-                            {snippet.url}
-                          </div>
-                          <div
-                            className={`text-xs line-clamp-2 ${
-                              isDarkTheme ? "text-white/90" : "text-gray-600"
-                            }`}
-                          >
-                            {snippet.snippet}
-                          </div>
-                        </div>
-                      ))}
                   </div>
                 </div>
               )}
@@ -3217,7 +3156,7 @@ export default function App() {
     currentWorkflowConfigIds: {},
     deepDiveConfigs: [],
     currentDeepDiveConfigId: null,
-    deepDivePrompt: DEFAULT_DEEP_DIVE_PROMPT_EN,
+    deepDivePrompt: "",
 
     // Article Generator
     articleGeneratorState: {

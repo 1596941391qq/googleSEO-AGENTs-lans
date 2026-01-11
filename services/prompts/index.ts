@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AI Agent Prompt配置
  *
  * 所有Agent的默认Prompt都在这里配置
@@ -479,6 +479,11 @@ Please incorporate these additional requirements into your keyword generation.`;
 
   // 网站审计模式 - 第一轮
   if (isWebsiteAuditMode && roundIndex === 1 && websiteAuditReport) {
+    const reasoningLang = uiLanguage === 'zh' ? '中文' : 'English';
+    const reasoningInstruction = uiLanguage === 'zh'
+      ? `- reasoning: 解释为什么这个词在 2026 年具有增长潜力，它解决了用户的什么痛点？(要求 50-100 字，必须用${reasoningLang}撰写)`
+      : `- reasoning: Explain why this keyword has growth potential in 2026, what user pain points does it solve? (50-100 words required, must be written in ${reasoningLang})`;
+
     return language === 'zh'
       ? `你正在基于网站审计分析报告生成SEO关键词。该报告包含对现有网站内容、竞争对手关键词和已识别机会的详细分析。
 
@@ -507,9 +512,10 @@ ${industryGuidance}
 - translation: ${translationLang} 语言的含义（必须是 ${translationLang} 语言）
 - intent: "Informational" | "Transactional" | "Local" | "Commercial" 之一
 - volume: 估计的月搜索量（数字）
+${reasoningInstruction}
 
 示例格式：
-${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000, "reasoning": "这个词具有增长潜力，因为..."}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000, "reasoning": "This keyword has growth potential because..."}]'}`
       : `You are generating SEO keywords based on a Website Audit Analysis Report. This report contains a detailed analysis of an existing website's content, competitor keywords, and identified opportunities.
 
 WEBSITE AUDIT ANALYSIS REPORT:
@@ -537,9 +543,10 @@ Return a JSON array with objects containing:
 - translation: Meaning in ${translationLang} (must be in ${translationLang} language)
 - intent: One of "Informational", "Transactional", "Local", "Commercial"
 - volume: Estimated monthly searches (number)
+${reasoningInstruction}
 
 Example format:
-${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`;
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000, "reasoning": "这个词具有增长潜力，因为..."}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000, "reasoning": "This keyword has growth potential because..."}]'}`;
   }
 
   // 第一轮常规模式
@@ -547,6 +554,11 @@ ${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "inten
     const basePrompt = language === 'zh'
       ? KEYWORD_MINING_PROMPTS.base.zh
       : KEYWORD_MINING_PROMPTS.base.en;
+
+    const reasoningLang = uiLanguage === 'zh' ? '中文' : 'English';
+    const reasoningInstruction = uiLanguage === 'zh'
+      ? `- reasoning: 解释为什么这个词在 2026 年具有增长潜力，它解决了用户的什么痛点？(要求 50-100 字，必须用${reasoningLang}撰写)`
+      : `- reasoning: Explain why this keyword has growth potential in 2026, what user pain points does it solve? (50-100 words required, must be written in ${reasoningLang})`;
 
     return language === 'zh'
       ? `为种子词"${seedKeyword || '用户提供的关键词'}"生成 ${wordsPerRound} 个高潜力 ${targetLangName} SEO关键词。专注于商业和信息意图。
@@ -559,9 +571,10 @@ ${strategyGuidance}${industryGuidance}${userGuidance}
 - translation: ${translationLang} 语言的含义（必须是 ${translationLang} 语言）
 - intent: "Informational" | "Transactional" | "Local" | "Commercial" 之一
 - volume: 估计的月搜索量（数字）
+${reasoningInstruction}
 
 示例格式：
-${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000, "reasoning": "这个词具有增长潜力，因为..."}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000, "reasoning": "This keyword has growth potential because..."}]'}`
       : `Generate ${wordsPerRound} high-potential ${targetLangName} SEO keywords for the seed term: "${seedKeyword || 'user-provided keyword'}". Focus on commercial and informational intent.
 ${strategyGuidance}${industryGuidance}${userGuidance}
 
@@ -572,9 +585,10 @@ Return a JSON array with objects containing:
 - translation: Meaning in ${translationLang} (must be in ${translationLang} language)
 - intent: One of "Informational", "Transactional", "Local", "Commercial"
 - volume: Estimated monthly searches (number)
+${reasoningInstruction}
 
 Example format:
-${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`;
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000, "reasoning": "这个词具有增长潜力，因为..."}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000, "reasoning": "This keyword has growth potential because..."}]'}`;
   }
 
   // 后续轮次模式
@@ -583,6 +597,11 @@ ${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "inten
       ? `\n\n重要上下文 - 网站审计分析报告：\n${websiteAuditReport.substring(0, 1500)}${websiteAuditReport.length > 1500 ? '...' : ''}\n\n生成关键词时，优先考虑上述报告中提到的机会（内容缺口、优化机会、扩展方向）。`
       : `\n\nIMPORTANT CONTEXT - Website Audit Analysis Report:\n${websiteAuditReport.substring(0, 1500)}${websiteAuditReport.length > 1500 ? '...' : ''}\n\nWhen generating keywords, prioritize opportunities mentioned in the above report (content gaps, optimization opportunities, expansion directions).`)
     : '';
+
+  const reasoningLang = uiLanguage === 'zh' ? '中文' : 'English';
+  const reasoningInstruction = uiLanguage === 'zh'
+    ? `- reasoning: 解释为什么这个词在 2026 年具有增长潜力，它解决了用户的什么痛点？(要求 50-100 字，必须用${reasoningLang}撰写)`
+    : `- reasoning: Explain why this keyword has growth potential in 2026, what user pain points does it solve? (50-100 words required, must be written in ${reasoningLang})`;
 
   return language === 'zh'
     ? `
@@ -602,7 +621,8 @@ ${strategyGuidance}${industryGuidance}${userGuidance}${websiteAuditContext}
 - keyword: ${targetLangName} 语言的关键词
 - translation: ${translationLang} 语言的含义（必须是 ${translationLang} 语言）
 - intent: "Informational" | "Transactional" | "Local" | "Commercial" 之一
-- volume: 估计的月搜索量（数字）`
+- volume: 估计的月搜索量（数字）
+${reasoningInstruction}`
     : `
 The user is looking for "Blue Ocean" opportunities in the ${targetLangName} market.
 We have already generated these: ${existingKeywords.slice(-20).join(', ')}.
@@ -620,7 +640,8 @@ Return a JSON array with objects containing:
 - keyword: The keyword in ${targetLangName}
 - translation: Meaning in ${translationLang} (must be in ${translationLang} language)
 - intent: One of "Informational", "Transactional", "Local", "Commercial"
-- volume: Estimated monthly searches (number)`;
+- volume: Estimated monthly searches (number)
+${reasoningInstruction}`;
 }
 
 // ============================================================================

@@ -55,20 +55,27 @@ export async function fetchWithAuth(url: string, options: RequestInit = {}): Pro
   const proxyProvider = getProxyProvider();
   const model = getSelectedModel();
   
-  const headers = new Headers(options.headers || {});
+  // 创建 headers，确保正确处理 Headers 对象和普通对象
+  let headers: Headers;
+  if (options.headers instanceof Headers) {
+    headers = new Headers(options.headers);
+  } else {
+    headers = new Headers(options.headers || {});
+  }
   
   if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
   
-  // 添加代理商选择 header
-  if (!headers.has('X-Proxy-Provider')) {
-    headers.set('X-Proxy-Provider', proxyProvider);
-  }
+  // 添加代理商选择 header（总是覆盖，确保使用最新值）
+  headers.set('X-Proxy-Provider', proxyProvider);
   
-  // 添加模型选择 header
-  if (!headers.has('X-Gemini-Model')) {
-    headers.set('X-Gemini-Model', model);
+  // 添加模型选择 header（总是覆盖，确保使用最新值）
+  headers.set('X-Gemini-Model', model);
+  
+  // 调试日志（只在开发环境）
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    console.log(`[API Client] fetchWithAuth: X-Proxy-Provider=${proxyProvider}, X-Gemini-Model=${model}`);
   }
   
   const response = await fetch(url, {

@@ -97,7 +97,7 @@ export async function fetchSERankingData(
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
-        'Authorization': `Token e99cd2ae-c6f7-3d0f-577b-3ef9786bda02`,
+        'Authorization': `Token ${SERANKING_API_KEY}`,
       },
       body: formData,
       signal: controller.signal,

@@ -128,11 +128,10 @@ export async function analyzeCompetitorsForDeepDive(
   targetLanguage: TargetLanguage,
   targetMarket: string = 'global',
   searchEngine: SearchEngine = 'google',
-  onProgress?: (message: string) => void,
-  probability?: ProbabilityLevel // 新增：用于决定是否使用 Firecrawl
+  onProgress?: (message: string) => void
 ): Promise<CompetitorAnalysisResult> {
   const serpData = await fetchSerpResults(keyword, targetLanguage, searchEngine);
-  return await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, searchEngine, undefined, onProgress, probability);
+  return await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, searchEngine, undefined, onProgress);
 }
 
 /**
@@ -554,8 +553,7 @@ export async function executeDeepDive(
         targetLanguage,
         'global',
         'google',
-        (msg) => onProgress?.(2, msg),
-        keyword.probability // 传入概率：仅 MEDIUM 概率使用 Firecrawl
+        (msg) => onProgress?.(2, msg)
       );
     } catch (error: any) {
       console.warn(`[Deep Dive Service] Competitor analysis failed: ${error.message}`);
