@@ -41,16 +41,6 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
   // 跟踪哪个关键词的蓝海分数详细分解是展开的（默认折叠）
   const [expandedScoreBreakdownId, setExpandedScoreBreakdownId] =
     React.useState<string | null>(null);
-
-  // 检查是否所有关键词都已完成分析（Analysis Complete）
-  const isAnalysisComplete = React.useMemo(() => {
-    if (keywords.length === 0) return false;
-    // 所有关键词都有reasoning或probability，表示分析完成
-    return keywords.every(
-      (kw) => (kw.reasoning && kw.reasoning.trim() !== "") || kw.probability
-    );
-  }, [keywords]);
-
   return (
     <div className="overflow-x-auto custom-scrollbar">
       <table
@@ -963,8 +953,6 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                               </CardContent>
                             </Card>
                           ) : (
-                            // 分析完成后不再显示Google搜索结果
-                            !isAnalysisComplete &&
                             item.topSerpSnippets &&
                             item.topSerpSnippets.length > 0 && (
                               <Card

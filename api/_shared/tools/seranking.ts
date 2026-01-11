@@ -71,14 +71,67 @@ export async function fetchSERankingData(
   languageCode: string = 'en',
   useGlobal: boolean = true // 默认使用全球地区
 ): Promise<SERankingKeywordData[]> {
-  // 过滤空关键词
-  const validKeywords = keywords.filter(kw => kw && kw.trim().length > 0);
+  // SE-Ranking API 限制：
+  // - 每个关键词最大长度：255 个字符
+  // - 为了一致性，也应用 10 个单词的限制（参考 DataForSEO）
+  const MAX_WORDS_PER_KEYWORD = 10;
+  const MAX_CHARS_PER_KEYWORD = 255;
+  
+  // 过滤空关键词并检查限制
+  const validKeywords: string[] = [];
+  const skippedKeywords: string[] = [];
+  const skippedKeywordsMap = new Map<string, { wordCount?: number; charCount?: number; reason: string }>();
+  
+  keywords.forEach(kw => {
+    if (!kw || !kw.trim()) {
+      return; // 跳过空关键词
+    }
+    
+    const trimmed = kw.trim();
+    const charCount = trimmed.length;
+    const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
+    
+    // 检查字符长度限制（SE-Ranking API 限制：最多 255 个字符）
+    if (charCount > MAX_CHARS_PER_KEYWORD) {
+      skippedKeywords.push(trimmed);
+      skippedKeywordsMap.set(trimmed.toLowerCase(), {
+        charCount,
+        reason: `Keyword is too long (${charCount} > ${MAX_CHARS_PER_KEYWORD} characters)`
+      });
+      console.warn(`[SE-Ranking] Skipping keyword "${trimmed.substring(0, 50)}..." - ${charCount} characters (max ${MAX_CHARS_PER_KEYWORD})`);
+    }
+    // 检查单词数限制（为了一致性，应用与 DataForSEO 相同的限制）
+    else if (wordCount > MAX_WORDS_PER_KEYWORD) {
+      skippedKeywords.push(trimmed);
+      skippedKeywordsMap.set(trimmed.toLowerCase(), {
+        wordCount,
+        reason: `Keyword has too many words (${wordCount} > ${MAX_WORDS_PER_KEYWORD})`
+      });
+      console.warn(`[SE-Ranking] Skipping keyword "${trimmed}" - has ${wordCount} words (max ${MAX_WORDS_PER_KEYWORD})`);
+    } else {
+      validKeywords.push(trimmed);
+    }
+  });
+  
   if (validKeywords.length === 0) {
-    console.warn('[SE-Ranking] No valid keywords provided');
-    return [];
+    console.warn('[SE-Ranking] No valid keywords provided after filtering');
+    // 返回所有关键词的空数据（包括被跳过的）
+    return keywords.map(kw => {
+      const trimmed = kw?.trim() || '';
+      return {
+        keyword: trimmed,
+        is_data_found: false,
+      };
+    });
+  }
+  
+  if (skippedKeywords.length > 0) {
+    console.log(`[SE-Ranking] Filtered ${skippedKeywords.length} keywords (too long or too many words), ${validKeywords.length} keywords will be sent to API`);
   }
 
   // SE-Ranking API 支持最多 5000 个关键词，如果超过则分批处理
+  let apiResults: SERankingKeywordData[] = [];
+  
   if (validKeywords.length > SE_RANKING_MAX_KEYWORDS) {
     console.log(`[SE-Ranking] Processing ${validKeywords.length} keywords in batches of ${SE_RANKING_MAX_KEYWORDS} (API limit)`);
     const allResults: SERankingKeywordData[] = [];
@@ -99,11 +152,48 @@ export async function fetchSERankingData(
     }
 
     console.log(`[SE-Ranking] Completed batch processing: ${allResults.length} total results`);
-    return allResults;
+    apiResults = allResults;
+  } else {
+    // 关键词数量在 API 限制内，直接一次性批量调用（API 本身支持批量）
+    apiResults = await fetchSERankingDataBatch(validKeywords, languageCode, useGlobal);
   }
-
-  // 关键词数量在 API 限制内，直接一次性批量调用（API 本身支持批量）
-  return await fetchSERankingDataBatch(validKeywords, languageCode, useGlobal);
+  
+  // 为被跳过的关键词添加空数据
+  const finalResults: SERankingKeywordData[] = [...apiResults];
+  
+  skippedKeywords.forEach(skippedKw => {
+    finalResults.push({
+      keyword: skippedKw,
+      is_data_found: false,
+    });
+  });
+  
+  // 确保返回结果与输入关键词顺序一致
+  const resultMap = new Map<string, SERankingKeywordData>();
+  finalResults.forEach(r => {
+    if (r.keyword) {
+      resultMap.set(r.keyword.toLowerCase(), r);
+    }
+  });
+  
+  const orderedResults: SERankingKeywordData[] = [];
+  keywords.forEach(kw => {
+    const trimmed = kw?.trim();
+    if (trimmed) {
+      const result = resultMap.get(trimmed.toLowerCase());
+      if (result) {
+        orderedResults.push(result);
+      } else {
+        // 如果没有找到结果（不应该发生），添加空数据
+        orderedResults.push({
+          keyword: trimmed,
+          is_data_found: false,
+        });
+      }
+    }
+  });
+  
+  return orderedResults;
 }
 
 /**
@@ -164,11 +254,21 @@ async function fetchSERankingDataBatch(
       }
       console.error(`[SE-Ranking] API error: ${response.status} - ${errorText}`);
 
-      // 401/403 表示认证问题，可能 API key 无效
+      // 401/403 表示认证问题，可能 API key 无效或过期
       if (response.status === 401 || response.status === 403) {
         console.error('[SE-Ranking] Authentication failed. Please check your API key.');
+        // 检查是否是 License expired 错误
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.message && errorData.message.includes('License expired')) {
+            console.error('[SE-Ranking] License expired. Please renew your SE-Ranking subscription.');
+          }
+        } catch (e) {
+          // 无法解析错误消息，继续
+        }
       }
 
+      // 返回所有关键词的空数据，保持顺序
       return keywordsToFetch.map(kw => ({ keyword: kw, is_data_found: false }));
     }
 
@@ -213,7 +313,21 @@ async function fetchSERankingDataBatch(
 
     const foundCount = results.filter((r: SERankingKeywordData) => r.is_data_found).length;
     console.log(`[SE-Ranking] Batch returned ${foundCount}/${results.length} keywords with data`);
-
+    
+    // 详细日志：显示前几个结果的详细信息
+    if (results.length > 0) {
+      console.log(`[SE-Ranking] Sample results (first ${Math.min(3, results.length)}):`, 
+        JSON.stringify(results.slice(0, 3).map(r => ({
+          keyword: r.keyword,
+          is_data_found: r.is_data_found,
+          volume: r.volume,
+          difficulty: r.difficulty,
+          cpc: r.cpc,
+        })), null, 2)
+      );
+    }
+    
+    // 创建一个映射，以便快速查找（但在这个函数中，我们直接返回 results，顺序已经在外部函数中处理）
     return results;
 
   } catch (error: any) {

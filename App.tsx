@@ -1807,15 +1807,17 @@ const AgentStream = ({
               )}
 
               {/* 联网搜索结果 */}
-              {thought.searchResults && thought.searchResults.length > 0 && (
-                <div className="mt-2">
-                  <GoogleSearchResults
-                    results={thought.searchResults}
-                    isDarkTheme={isDarkTheme}
-                    uiLanguage={uiLanguage}
-                  />
-                </div>
-              )}
+              {thought.searchResults &&
+                thought.searchResults.length > 0 &&
+                !thought.content?.startsWith("Analysis Complete") && (
+                  <div className="mt-2">
+                    <GoogleSearchResults
+                      results={thought.searchResults}
+                      isDarkTheme={isDarkTheme}
+                      uiLanguage={uiLanguage}
+                    />
+                  </div>
+                )}
 
               {/* Card Display - Use AgentStreamFeed components for specific card types */}
               {thought.data && thought.dataType && (
@@ -6886,8 +6888,8 @@ export default function App() {
             table: undefined,
             data: highProbKeywords,
             dataType: "analysis",
-            searchResults:
-              allSearchResults.length > 0 ? allSearchResults : undefined, // 添加联网搜索结果
+            // 不再在Analysis Complete时显示Google搜索结果
+            searchResults: undefined,
           },
           taskId
         );
@@ -8312,46 +8314,70 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
     // Handle Workflow 4: Existing Website Audit + Cross-Market
     if (miningMode === "existing-website-audit") {
-      if (!batchSelectedWebsite) {
-        setState((prev) => ({ ...prev, error: "请先选择一个网站" }));
-        return;
-      }
-
-      try {
+      // 支持两种方式：从网站获取关键词 或 手动输入逗号分隔的关键词
+      if (batchInput.trim()) {
+        // 优先使用手动输入的关键词（支持逗号分隔）
+        keywordList = batchInput
+          .split(",")
+          .map((k) => k.trim())
+          .filter((k) => k.length > 0);
+        effectiveBatchInput = batchInput;
         addLog(
           state.uiLanguage === "zh"
-            ? `正在从网站 ${batchSelectedWebsite.domain} 获取关键词...`
-            : `Fetching keywords from website ${batchSelectedWebsite.domain}...`,
+            ? `使用手动输入的关键词: ${keywordList.length} 个`
+            : `Using manually entered keywords: ${keywordList.length}`,
           "info"
         );
-        const currentUserId = getUserId(user);
-        const response = await postWithAuth("/api/website-data/keywords-only", {
-          websiteId: batchSelectedWebsite.id,
-          userId: currentUserId,
-          limit: 20,
-        });
-
-        const result = await response.json();
-        if (result.success && result.data) {
-          keywordList = result.data.map((kw: any) => kw.keyword);
-          effectiveBatchInput = keywordList.join(", ");
+      } else if (batchSelectedWebsite) {
+        // 如果没有手动输入，则从网站获取关键词
+        try {
           addLog(
             state.uiLanguage === "zh"
-              ? `成功获取 ${keywordList.length} 个网站关键词。`
-              : `Successfully fetched ${keywordList.length} website keywords.`,
-            "success"
+              ? `正在从网站 ${batchSelectedWebsite.domain} 获取关键词...`
+              : `Fetching keywords from website ${batchSelectedWebsite.domain}...`,
+            "info"
           );
-        } else {
-          throw new Error(result.error || "Failed to fetch keywords");
+          const currentUserId = getUserId(user);
+          const response = await postWithAuth(
+            "/api/website-data/keywords-only",
+            {
+              websiteId: batchSelectedWebsite.id,
+              userId: currentUserId,
+              limit: 20,
+            }
+          );
+
+          const result = await response.json();
+          if (result.success && result.data) {
+            keywordList = result.data.map((kw: any) => kw.keyword);
+            effectiveBatchInput = keywordList.join(", ");
+            addLog(
+              state.uiLanguage === "zh"
+                ? `成功获取 ${keywordList.length} 个网站关键词。`
+                : `Successfully fetched ${keywordList.length} website keywords.`,
+              "success"
+            );
+          } else {
+            throw new Error(result.error || "Failed to fetch keywords");
+          }
+        } catch (err: any) {
+          console.error("Failed to fetch website keywords:", err);
+          setState((prev) => ({
+            ...prev,
+            error:
+              state.uiLanguage === "zh"
+                ? `获取网站关键词失败: ${err.message}`
+                : `Failed to fetch website keywords: ${err.message}`,
+          }));
+          return;
         }
-      } catch (err: any) {
-        console.error("Failed to fetch website keywords:", err);
+      } else {
         setState((prev) => ({
           ...prev,
           error:
             state.uiLanguage === "zh"
-              ? `获取网站关键词失败: ${err.message}`
-              : `Failed to fetch website keywords: ${err.message}`,
+              ? "请先选择一个网站或输入关键词"
+              : "Please select a website or enter keywords",
         }));
         return;
       }
@@ -12335,11 +12361,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         <th className="px-4 py-4">{t.originalKeyword}</th>
                         <th className="px-4 py-4">{t.translatedKeyword}</th>
                         <th className="px-4 py-4">
-                          {t.keywordDifficulty ||
-                            (state.uiLanguage === "zh" ? "难度" : "KD")}
-                        </th>
-                        <th className="px-4 py-4">CPC</th>
-                        <th className="px-4 py-4">
                           {t.colVol ||
                             (state.uiLanguage === "zh" ? "搜索量" : "Volume")}
                         </th>
@@ -12406,72 +12427,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 {item.keyword}
                               </td>
                               <td
-                                className={`px-4 py-4 cursor-pointer font-bold ${
-                                  isDarkTheme ? "text-white" : "text-gray-900"
-                                }`}
-                                onClick={() =>
-                                  setState((prev) => ({
-                                    ...prev,
-                                    expandedRowId: isExpanded ? null : item.id,
-                                  }))
-                                }
-                              >
-                                {item.dataForSEOData?.difficulty !==
-                                undefined ? (
-                                  <span
-                                    className={cn(
-                                      item.dataForSEOData.difficulty <= 40
-                                        ? "text-emerald-400"
-                                        : item.dataForSEOData.difficulty <= 60
-                                        ? "text-yellow-400"
-                                        : "text-red-400"
-                                    )}
-                                  >
-                                    {item.dataForSEOData.difficulty}
-                                  </span>
-                                ) : item.serankingData?.difficulty !==
-                                  undefined ? (
-                                  <span
-                                    className={cn(
-                                      item.serankingData.difficulty <= 40
-                                        ? "text-emerald-400"
-                                        : item.serankingData.difficulty <= 60
-                                        ? "text-yellow-400"
-                                        : "text-red-400"
-                                    )}
-                                  >
-                                    {item.serankingData.difficulty}
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-500">-</span>
-                                )}
-                              </td>
-                              <td
-                                className={`px-4 py-4 cursor-pointer ${
-                                  isDarkTheme
-                                    ? "text-slate-300"
-                                    : "text-gray-700"
-                                }`}
-                                onClick={() =>
-                                  setState((prev) => ({
-                                    ...prev,
-                                    expandedRowId: isExpanded ? null : item.id,
-                                  }))
-                                }
-                              >
-                                {item.dataForSEOData?.cpc !== undefined ? (
-                                  <span>
-                                    ${item.dataForSEOData.cpc.toFixed(2)}
-                                  </span>
-                                ) : item.serankingData?.cpc !== undefined ? (
-                                  <span>
-                                    ${item.serankingData.cpc.toFixed(2)}
-                                  </span>
-                                ) : (
-                                  <span className="text-slate-500">-</span>
-                                )}
-                              </td>
-                              <td
                                 className={`px-4 py-4 cursor-pointer font-mono ${
                                   isDarkTheme
                                     ? "text-slate-300"
@@ -12533,18 +12488,38 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 </span>
                               </td>
                               <td className="px-4 py-4 text-center">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                                    item.probability === ProbabilityLevel.HIGH
-                                      ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
-                                      : item.probability ===
-                                        ProbabilityLevel.MEDIUM
-                                      ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
-                                      : "bg-red-500/30 text-red-400 border-red-500/50"
-                                  }`}
-                                >
-                                  {item.probability}
-                                </span>
+                                {(() => {
+                                  // Normalize probability value for comparison
+                                  const normalizedProb = item.probability
+                                    ? String(item.probability).toLowerCase()
+                                    : "low";
+                                  const isHigh =
+                                    normalizedProb === "high" ||
+                                    normalizedProb ===
+                                      ProbabilityLevel.HIGH.toLowerCase();
+                                  const isMedium =
+                                    normalizedProb === "medium" ||
+                                    normalizedProb ===
+                                      ProbabilityLevel.MEDIUM.toLowerCase();
+                                  const displayProb = isHigh
+                                    ? ProbabilityLevel.HIGH
+                                    : isMedium
+                                    ? ProbabilityLevel.MEDIUM
+                                    : ProbabilityLevel.LOW;
+                                  return (
+                                    <span
+                                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                                        isHigh
+                                          ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
+                                          : isMedium
+                                          ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
+                                          : "bg-red-500/30 text-red-400 border-red-500/50"
+                                      }`}
+                                    >
+                                      {displayProb}
+                                    </span>
+                                  );
+                                })()}
                               </td>
                               <td className="px-4 py-4 text-right">
                                 <div className="flex items-center justify-end gap-3">
@@ -12604,7 +12579,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                     : "bg-gray-50 border-gray-200"
                                 }`}
                               >
-                                <td colSpan={10} className="px-4 py-6">
+                                <td colSpan={8} className="px-4 py-6">
                                   <div className="flex flex-col md:flex-row gap-6">
                                     <div className="flex-1 space-y-4">
                                       {/* SE Ranking Data Section */}
@@ -12680,113 +12655,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                       )}
                                                     >
                                                       monthly searches
-                                                    </div>
-                                                  </CardContent>
-                                                </Card>
-
-                                                {/* Keyword Difficulty */}
-                                                <Card
-                                                  className={cn(
-                                                    isDarkTheme
-                                                      ? "bg-black border-emerald-500/20"
-                                                      : "bg-emerald-50 border-emerald-200"
-                                                  )}
-                                                >
-                                                  <CardContent className="p-4">
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs font-medium mb-1.5",
-                                                        isDarkTheme
-                                                          ? "text-white/70"
-                                                          : "text-emerald-700"
-                                                      )}
-                                                    >
-                                                      KEYWORD DIFFICULTY
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xl font-bold",
-                                                        (item.serankingData
-                                                          .difficulty || 0) <=
-                                                          40
-                                                          ? isDarkTheme
-                                                            ? "text-emerald-400"
-                                                            : "text-emerald-600"
-                                                          : (item.serankingData
-                                                              .difficulty ||
-                                                              0) <= 60
-                                                          ? isDarkTheme
-                                                            ? "text-yellow-400"
-                                                            : "text-yellow-600"
-                                                          : isDarkTheme
-                                                          ? "text-red-400"
-                                                          : "text-red-600"
-                                                      )}
-                                                    >
-                                                      {item.serankingData
-                                                        .difficulty || "N/A"}
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs mt-1",
-                                                        isDarkTheme
-                                                          ? "text-white/60"
-                                                          : "text-emerald-600/70"
-                                                      )}
-                                                    >
-                                                      {(item.serankingData
-                                                        .difficulty || 0) <= 40
-                                                        ? "Low competition"
-                                                        : (item.serankingData
-                                                            .difficulty || 0) <=
-                                                          60
-                                                        ? "Medium competition"
-                                                        : "High competition"}
-                                                    </div>
-                                                  </CardContent>
-                                                </Card>
-
-                                                {/* CPC */}
-                                                <Card
-                                                  className={cn(
-                                                    isDarkTheme
-                                                      ? "bg-black border-emerald-500/20"
-                                                      : "bg-emerald-50 border-emerald-200"
-                                                  )}
-                                                >
-                                                  <CardContent className="p-4">
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs font-medium mb-1.5",
-                                                        isDarkTheme
-                                                          ? "text-white/70"
-                                                          : "text-emerald-700"
-                                                      )}
-                                                    >
-                                                      CPC
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xl font-bold",
-                                                        isDarkTheme
-                                                          ? "text-emerald-400"
-                                                          : "text-emerald-600"
-                                                      )}
-                                                    >
-                                                      $
-                                                      {item.serankingData.cpc?.toFixed(
-                                                        2
-                                                      ) || "N/A"}
-                                                    </div>
-                                                    <div
-                                                      className={cn(
-                                                        "text-xs mt-1",
-                                                        isDarkTheme
-                                                          ? "text-white/60"
-                                                          : "text-emerald-600/70"
-                                                      )}
-                                                    >
-                                                      cost per click
                                                     </div>
                                                   </CardContent>
                                                 </Card>
