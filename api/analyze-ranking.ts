@@ -33,8 +33,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Call DataForSEO API to get keyword difficulty data (before SERP analysis)
-    console.log(`[DataForSEO] Fetching DataForSEO data for ${keywords.length} keywords (Mining mode)`);
+    // Call Keyword Research API to get keyword data (before SERP analysis)
+    console.log(`[Keyword Research] Fetching data for ${keywords.length} keywords (Mining mode)`);
 
     const keywordsToAnalyze = [];
     const skippedKeywords = [];
@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // This is used to distinguish between "API failure" vs "API returned no data" (true blue ocean)
       const dataForSEOApiSucceeded = true;
 
-      console.log(`[DataForSEO] Successfully fetched data for ${dataForSEOResults.length}/${keywords.length} keywords`);
+      console.log(`[Keyword Research] Successfully fetched data for ${dataForSEOResults.length}/${keywords.length} keywords`);
 
       // Log DataForSEO data for each keyword
       dataForSEOResults.forEach(data => {
@@ -103,10 +103,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         keywordsToAnalyze.push(keyword);
       }
 
-      console.log(`[DataForSEO] ${keywordsToAnalyze.length} keywords will proceed to SERP analysis`);
+      console.log(`[Keyword Research] ${keywordsToAnalyze.length} keywords will proceed to SERP analysis`);
 
-    } catch (dataForSEOError) {
-      console.warn(`[DataForSEO] API call failed: ${dataForSEOError.message}. Proceeding with SERP analysis for all keywords.`);
+    } catch (dataForSEOError: any) {
+      console.warn(`[Keyword Research] API call failed: ${dataForSEOError?.message || 'Unknown error'}. Proceeding with SERP analysis for all keywords.`);
       // On DataForSEO failure, analyze all keywords normally
       keywordsToAnalyze.push(...keywords);
     }

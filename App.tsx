@@ -81,6 +81,7 @@ import {
   MiningConfig,
 } from "./components/workflow/KeywordMiningGuide";
 import { fetchWithAuth, postWithAuth } from "./lib/api-client";
+import { ProxySwitcher } from "./components/ProxySwitcher";
 import {
   AppState,
   KeywordData,
@@ -722,6 +723,30 @@ const SerpPreview = ({
 };
 
 // Render agent data as formatted table or cards
+// Helper function to translate intent based on UI language
+const translateIntent = (intent: string, uiLanguage: string): string => {
+  if (uiLanguage === "zh") {
+    const intentMap: Record<string, string> = {
+      Informational: "信息型",
+      Commercial: "商业型",
+      Transactional: "交易型",
+      Local: "本地型",
+    };
+    return intentMap[intent] || intent;
+  }
+  return intent;
+};
+
+// Helper function to translate reasoning if needed (currently reasoning is usually in English,
+// but we'll keep it as-is for now since translation would require API call)
+const getReasoningText = (
+  reasoning: string | undefined,
+  uiLanguage: string
+): string | undefined => {
+  // For now, return reasoning as-is. If translation is needed, it should be done at the API level
+  return reasoning;
+};
+
 const renderAgentDataTable = (
   data: any,
   dataType:
@@ -994,53 +1019,88 @@ const renderAgentDataTable = (
             </tr>
           </thead>
           <tbody>
-            {data.map((item: any, i: number) => (
-              <tr
-                key={i}
-                className={`border-b ${
-                  isDarkTheme
-                    ? "border-emerald-500/20 hover:bg-emerald-500/5"
-                    : "border-gray-200 hover:bg-emerald-50"
-                }`}
-              >
-                <td
-                  className={`py-2 px-3 ${
-                    isDarkTheme ? "text-white" : "text-gray-800"
+            {data.map((item: any, i: number) => {
+              const translatedIntent = translateIntent(
+                item.intent || "",
+                uiLanguage
+              );
+              const reasoning = getReasoningText(item.reasoning, uiLanguage);
+              const hasReasoning = !!reasoning;
+
+              return (
+                <tr
+                  key={i}
+                  className={`border-b ${
+                    isDarkTheme
+                      ? "border-emerald-500/20 hover:bg-emerald-500/5"
+                      : "border-gray-200 hover:bg-emerald-50"
                   }`}
                 >
-                  {item.keyword}
-                </td>
-                <td
-                  className={`py-2 px-3 ${
-                    isDarkTheme ? "text-white/80" : "text-gray-600"
-                  }`}
-                >
-                  {item.translation}
-                </td>
-                <td
-                  className={`py-2 px-3 ${
-                    isDarkTheme ? "text-white/80" : "text-gray-600"
-                  }`}
-                >
-                  <span
-                    className={`px-2 py-0.5 rounded text-xs ${
-                      isDarkTheme
-                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                        : "bg-emerald-100 text-emerald-700"
+                  <td
+                    className={`py-2 px-3 relative group ${
+                      isDarkTheme ? "text-white" : "text-gray-800"
                     }`}
                   >
-                    {item.intent}
-                  </span>
-                </td>
-                <td
-                  className={`py-2 px-3 font-mono ${
-                    isDarkTheme ? "text-white" : "text-gray-800"
-                  }`}
-                >
-                  {item.volume?.toLocaleString()}
-                </td>
-              </tr>
-            ))}
+                    <span className="cursor-help">{item.keyword}</span>
+                    {hasReasoning && (
+                      <div
+                        className={`absolute left-0 top-full mt-2 z-50 w-96 max-w-[calc(100vw-2rem)] p-3 rounded-lg shadow-lg border pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
+                          isDarkTheme
+                            ? "bg-black/95 border-emerald-500/30 text-white"
+                            : "bg-white border-gray-200 text-gray-800 shadow-xl"
+                        }`}
+                      >
+                        <div
+                          className={`text-xs font-semibold mb-2 ${
+                            isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-700"
+                          }`}
+                        >
+                          {uiLanguage === "zh" ? "分析推理" : "Reasoning"}
+                        </div>
+                        <div
+                          className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                            isDarkTheme ? "text-white/90" : "text-gray-700"
+                          }`}
+                        >
+                          {reasoning}
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td
+                    className={`py-2 px-3 ${
+                      isDarkTheme ? "text-white/80" : "text-gray-600"
+                    }`}
+                  >
+                    {item.translation}
+                  </td>
+                  <td
+                    className={`py-2 px-3 ${
+                      isDarkTheme ? "text-white/80" : "text-gray-600"
+                    }`}
+                  >
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs ${
+                        isDarkTheme
+                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                          : "bg-emerald-100 text-emerald-700"
+                      }`}
+                    >
+                      {translatedIntent}
+                    </span>
+                  </td>
+                  <td
+                    className={`py-2 px-3 font-mono ${
+                      isDarkTheme ? "text-white" : "text-gray-800"
+                    }`}
+                  >
+                    {item.volume?.toLocaleString()}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1058,12 +1118,8 @@ const renderAgentDataTable = (
 
           return (
             <div key={idx} className="space-y-3">
-              {/* Analysis Result Cards - 蓝海模式显示5列（无DR），存量模式显示6列 */}
-              <div
-                className={`grid grid-cols-2 ${
-                  isBlueOceanMode ? "md:grid-cols-5" : "md:grid-cols-6"
-                } gap-2`}
-              >
+              {/* DR Comparison Card - 只在存量模式下显示 */}
+              {!isBlueOceanMode && (
                 <div
                   className={`p-3 rounded-lg border ${
                     isDarkTheme
@@ -1076,201 +1132,36 @@ const renderAgentDataTable = (
                       isDarkTheme ? "text-emerald-400" : "text-emerald-700"
                     }`}
                   >
-                    PROBABILITY
-                  </div>
-                  <div
-                    className={`text-lg font-bold ${
-                      data.probability === "High"
-                        ? isDarkTheme
-                          ? "text-emerald-400"
-                          : "text-emerald-600"
-                        : data.probability === "Medium"
-                        ? isDarkTheme
-                          ? "text-yellow-400"
-                          : "text-yellow-600"
-                        : isDarkTheme
-                        ? "text-red-400"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {data.probability || "N/A"}
-                  </div>
-                </div>
-
-                {/* KD Card - 始终显示 */}
-                <div
-                  className={`p-3 rounded-lg border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div
-                    className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                    }`}
-                  >
-                    {uiLanguage === "zh" ? "关键词难度" : "KEYWORD DIFFICULTY"}
-                  </div>
-                  <div
-                    className={`text-lg font-bold ${
-                      ((data.serankingData?.difficulty ??
-                        data.dataForSEOData?.difficulty ??
-                        (data.dataForSEOData as any)?.competition_index) ||
-                        0) <= 40
-                        ? isDarkTheme
-                          ? "text-emerald-400"
-                          : "text-emerald-600"
-                        : ((data.serankingData?.difficulty ??
-                            data.dataForSEOData?.difficulty ??
-                            (data.dataForSEOData as any)?.competition_index) ||
-                            0) <= 60
-                        ? isDarkTheme
-                          ? "text-yellow-400"
-                          : "text-yellow-600"
-                        : isDarkTheme
-                        ? "text-red-400"
-                        : "text-red-600"
-                    }`}
-                  >
-                    {data.serankingData?.difficulty !== undefined
-                      ? data.serankingData.difficulty
-                      : data.dataForSEOData?.difficulty !== undefined
-                      ? data.dataForSEOData.difficulty
-                      : (data.dataForSEOData as any)?.competition_index !==
-                        undefined
-                      ? (data.dataForSEOData as any).competition_index
-                      : "N/A"}
-                  </div>
-                </div>
-
-                {/* CPC Card */}
-                <div
-                  className={`p-3 rounded-lg border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div
-                    className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                    }`}
-                  >
-                    CPC
+                    DR (YOU vs AVG)
                   </div>
                   <div
                     className={`text-lg font-bold ${
                       isDarkTheme ? "text-white" : "text-gray-900"
                     }`}
                   >
-                    $
-                    {data.serankingData?.cpc !== undefined
-                      ? data.serankingData.cpc.toFixed(2)
-                      : data.dataForSEOData?.cpc !== undefined
-                      ? data.dataForSEOData.cpc.toFixed(2)
-                      : "N/A"}
+                    {data.websiteDR !== undefined
+                      ? Math.round(data.websiteDR)
+                      : "-"}
+                    <span className="text-[10px] font-normal text-white/40 mx-1">
+                      vs
+                    </span>
+                    {data.competitorDRs &&
+                    data.competitorDRs.length > 0 &&
+                    data.competitorDRs.some((dr: number) => dr > 0)
+                      ? Math.round(
+                          data.competitorDRs
+                            .filter((dr: number) => dr > 0)
+                            .reduce((a: number, b: number) => a + b, 0) /
+                            data.competitorDRs.filter((dr: number) => dr > 0)
+                              .length
+                        )
+                      : "-"}
                   </div>
                 </div>
+              )}
 
-                {/* Volume Card */}
-                <div
-                  className={`p-3 rounded-lg border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div
-                    className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                    }`}
-                  >
-                    {uiLanguage === "zh" ? "搜索量" : "SEARCH VOLUME"}
-                  </div>
-                  <div
-                    className={`text-lg font-bold ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {data.serankingData?.volume !== undefined
-                      ? data.serankingData.volume.toLocaleString()
-                      : data.dataForSEOData?.volume !== undefined
-                      ? data.dataForSEOData.volume.toLocaleString()
-                      : data.volume !== undefined
-                      ? data.volume.toLocaleString()
-                      : "N/A"}
-                  </div>
-                </div>
-
-                <div
-                  className={`p-3 rounded-lg border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
-                  <div
-                    className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                    }`}
-                  >
-                    DOMAIN TYPE
-                  </div>
-                  <div
-                    className={`text-sm ${
-                      isDarkTheme ? "text-white" : "text-gray-800"
-                    }`}
-                  >
-                    {data.topDomainType || "Unknown"}
-                  </div>
-                </div>
-
-                {/* DR Comparison Card - 蓝海模式下隐藏 */}
-                {!isBlueOceanMode && (
-                  <div
-                    className={`p-3 rounded-lg border ${
-                      isDarkTheme
-                        ? "bg-black border-emerald-500/30"
-                        : "bg-gray-50 border-gray-200"
-                    }`}
-                  >
-                    <div
-                      className={`text-[10px] font-bold mb-1 ${
-                        isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                      }`}
-                    >
-                      DR (YOU vs AVG)
-                    </div>
-                    <div
-                      className={`text-lg font-bold ${
-                        isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
-                    >
-                      {data.websiteDR !== undefined
-                        ? Math.round(data.websiteDR)
-                        : "-"}
-                      <span className="text-[10px] font-normal text-white/40 mx-1">
-                        vs
-                      </span>
-                      {data.competitorDRs &&
-                      data.competitorDRs.length > 0 &&
-                      data.competitorDRs.some((dr: number) => dr > 0)
-                        ? Math.round(
-                            data.competitorDRs
-                              .filter((dr: number) => dr > 0)
-                              .reduce((a: number, b: number) => a + b, 0) /
-                              data.competitorDRs.filter((dr: number) => dr > 0)
-                                .length
-                          )
-                        : "-"}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* SERP Results */}
-              {data.topSerpSnippets && data.topSerpSnippets.length > 0 && (
+              {/* SERP Results - 跳过前三个避免重复 */}
+              {data.topSerpSnippets && data.topSerpSnippets.length > 3 && (
                 <div
                   className={`p-3 rounded-lg border ${
                     isDarkTheme
@@ -1287,42 +1178,44 @@ const renderAgentDataTable = (
                     total)
                   </div>
                   <div className="space-y-2">
-                    {data.topSerpSnippets.map((snippet: any, i: number) => (
-                      <div
-                        key={i}
-                        className={`p-2 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-gray-50 border-gray-200"
-                        }`}
-                      >
+                    {data.topSerpSnippets
+                      .slice(3)
+                      .map((snippet: any, i: number) => (
                         <div
-                          className={`text-xs font-medium mb-1 ${
+                          key={i}
+                          className={`p-2 rounded border ${
                             isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-700"
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-gray-50 border-gray-200"
                           }`}
                         >
-                          {snippet.title}
+                          <div
+                            className={`text-xs font-medium mb-1 ${
+                              isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-700"
+                            }`}
+                          >
+                            {snippet.title}
+                          </div>
+                          <div
+                            className={`text-[10px] mb-1 ${
+                              isDarkTheme
+                                ? "text-emerald-500/70"
+                                : "text-gray-500"
+                            }`}
+                          >
+                            {snippet.url}
+                          </div>
+                          <div
+                            className={`text-xs line-clamp-2 ${
+                              isDarkTheme ? "text-white/90" : "text-gray-600"
+                            }`}
+                          >
+                            {snippet.snippet}
+                          </div>
                         </div>
-                        <div
-                          className={`text-[10px] mb-1 ${
-                            isDarkTheme
-                              ? "text-emerald-500/70"
-                              : "text-gray-500"
-                          }`}
-                        >
-                          {snippet.url}
-                        </div>
-                        <div
-                          className={`text-xs line-clamp-2 ${
-                            isDarkTheme ? "text-white/90" : "text-gray-600"
-                          }`}
-                        >
-                          {snippet.snippet}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
               )}
@@ -3898,10 +3791,9 @@ export default function App() {
 
         try {
           // 使用本地 API 端点
-          const response = await fetch("/api/workflow-configs", {
+          const response = await fetchWithAuth("/api/workflow-configs", {
             method: "GET",
             headers: {
-              Authorization: `Bearer ${token}`,
               "Content-Type": "application/json",
             },
             credentials: "include",
@@ -6204,13 +6096,9 @@ export default function App() {
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          response = await fetch("/api/website-audit", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: token ? `Bearer ${token}` : "",
-            },
-            body: JSON.stringify({
+          response = await postWithAuth(
+            "/api/website-audit",
+            {
               websiteId: websiteId,
               websiteUrl: websiteToUse.url,
               websiteDomain: websiteDomain,
@@ -6220,9 +6108,11 @@ export default function App() {
               miningStrategy: state.miningStrategy || "horizontal",
               industry: state.miningConfig?.industry,
               additionalSuggestions: state.miningConfig?.additionalSuggestions,
-            }),
-            signal: controller.signal,
-          });
+            },
+            {
+              signal: controller.signal,
+            }
+          );
 
           clearTimeout(timeoutId);
 
@@ -8432,14 +8322,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           "info"
         );
         const currentUserId = getUserId(user);
-        const response = await fetch("/api/website-data/keywords-only", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            websiteId: batchSelectedWebsite.id,
-            userId: currentUserId,
-            limit: 20,
-          }),
+        const response = await postWithAuth("/api/website-data/keywords-only", {
+          websiteId: batchSelectedWebsite.id,
+          userId: currentUserId,
+          limit: 20,
         });
 
         const result = await response.json();
@@ -14371,6 +14257,13 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             onStart={handleMiningGuideStart}
             onCancel={() => setShowMiningGuide(false)}
           />
+        )}
+
+        {/* Proxy & Model Switcher - 开发环境浮动组件 */}
+        {import.meta.env.DEV && (
+          <div className="fixed bottom-4 right-4 z-50">
+            <ProxySwitcher isDarkTheme={isDarkTheme} compact />
+          </div>
         )}
       </div>
     </div>

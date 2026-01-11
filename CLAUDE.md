@@ -123,9 +123,12 @@ Required for local development and Vercel deployment:
 
 ```env
 # Gemini API (Primary AI Engine)
+# 代理商选择: "302" (默认) 或 "tuzi"
+GEMINI_PROXY_PROVIDER=302
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_PROXY_URL=https://api.302.ai
-GEMINI_MODEL=gemini-3-flash-preview
+GEMINI_TUZI_API_KEY=your_tuzi_api_key_here  # 可选，tu-zi.com 专用 Key
+GEMINI_PROXY_URL=https://api.302.ai  # 可选，自定义代理 URL
+
 
 # Nano Banana 2 API (Image Generation)
 NANO_BANANA_API_KEY=your_nano_banana_api_key

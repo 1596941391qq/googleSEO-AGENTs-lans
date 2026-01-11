@@ -10,7 +10,10 @@ import {
   AlertCircle,
   Copy,
   Layout,
-  Type
+  Type,
+  Send,
+  X,
+  Edit3
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "../ui/card";
@@ -25,6 +28,7 @@ import {
 } from "../ui/select";
 import { cn } from "../../lib/utils";
 import { apiClient } from "../../lib/api-client";
+import { RichTextEditor } from "../projects/RichTextEditor";
 
 interface Article {
   id: string;
@@ -46,6 +50,7 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [platform, setPlatform] = useState<'platform' | 'wordpress' | 'medium'>('platform');
   const [config, setConfig] = useState({
     wpUrl: '',
@@ -280,9 +285,10 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                 <Card 
                   key={article.id} 
                   className={cn(
-                    "border-none rounded-3xl overflow-hidden transition-all hover:scale-[1.01] group",
+                    "border-none rounded-3xl overflow-hidden transition-all hover:scale-[1.01] group cursor-pointer",
                     isDarkTheme ? "bg-zinc-900/50 hover:bg-zinc-900" : "bg-white shadow-sm hover:shadow-md"
                   )}
+                  onClick={() => setEditingArticle(article)}
                 >
                   <CardContent className="p-6">
                     <div className="flex items-start justify-between gap-4">
@@ -316,13 +322,29 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                         )}
                       </div>
                       
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className={cn(
+                            "rounded-xl font-bold",
+                            isDarkTheme ? "border-zinc-700 hover:bg-zinc-800" : "border-gray-200"
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingArticle(article);
+                          }}
+                        >
+                          <Edit3 className="w-4 h-4 mr-2" />
+                          {uiLanguage === 'zh' ? '编辑' : 'Edit'}
+                        </Button>
                         {article.status === 'published' ? (
                           <Button 
                             variant="outline" 
                             size="sm"
                             className="rounded-xl border-emerald-500/20 text-emerald-500 font-bold"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               const baseDomain = process.env.NEXT_PUBLIC_PLATFORM_DOMAIN || 'seo-factory.com';
                               // This is a placeholder for the actual live URL
                               window.open(`#`, '_blank');
@@ -336,7 +358,10 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                             size="sm"
                             disabled={publishingId === article.id}
                             className="rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
-                            onClick={() => handlePublish(article.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePublish(article.id);
+                            }}
                           >
                             {publishingId === article.id ? (
                               <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -355,6 +380,71 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
           )}
         </div>
       </div>
+
+      {/* Rich Text Editor Modal */}
+      {editingArticle && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8">
+          <div className={cn(
+            "relative w-full max-w-6xl h-full max-h-[90vh] rounded-2xl border overflow-hidden flex flex-col shadow-2xl",
+            isDarkTheme ? "bg-[#0a0a0a] border-zinc-800" : "bg-white border-gray-200"
+          )}>
+            <div className={cn(
+              "flex items-center justify-between p-4 border-b",
+              isDarkTheme ? "border-zinc-800" : "border-gray-200"
+            )}>
+              <div className="flex items-center gap-3">
+                <Badge className={cn(
+                  "font-bold",
+                  editingArticle.status === 'published' 
+                    ? "bg-emerald-500 text-white" 
+                    : "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                )}>
+                  {editingArticle.status === 'published' 
+                    ? (uiLanguage === 'zh' ? '已发布' : 'Published') 
+                    : (uiLanguage === 'zh' ? '草稿' : 'Draft')}
+                </Badge>
+                <h2 className={cn("text-lg font-bold truncate max-w-xl", isDarkTheme ? "text-white" : "text-gray-900")}>
+                  {editingArticle.title}
+                </h2>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setEditingArticle(null)}>
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <RichTextEditor
+                initialContent={editingArticle.content}
+                isDarkTheme={isDarkTheme}
+                uiLanguage={uiLanguage}
+                draftId={editingArticle.id}
+                onSave={async (newContent) => {
+                  try {
+                    const response = await apiClient.post('/api/articles/save-draft', {
+                      articleId: editingArticle.id,
+                      title: editingArticle.title,
+                      content: newContent,
+                    });
+                    if (response.success) {
+                      // Update local article list
+                      setArticles(prev => prev.map(a => 
+                        a.id === editingArticle.id 
+                          ? { ...a, content: newContent } 
+                          : a
+                      ));
+                      setEditingArticle(null);
+                    } else {
+                      alert(response.error || (uiLanguage === 'zh' ? '保存失败' : 'Failed to save'));
+                    }
+                  } catch (err) {
+                    console.error('Error saving draft:', err);
+                    alert(uiLanguage === 'zh' ? '保存失败' : 'Failed to save draft');
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

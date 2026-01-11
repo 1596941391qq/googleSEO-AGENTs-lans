@@ -5,7 +5,7 @@
  * 使用：Deep Dive模式 Step 8（可选）
  */
 
-import { callGeminiAPI } from '../gemini.js';
+import { callGeminiAPI, getCurrentProxyInfo } from '../gemini.js';
 import { getImageCreativePrompt, getNanoBananaPrompt } from '../../../services/prompts/index.js';
 import { ContentGenerationResult } from './agent-3-content-writer.js';
 
@@ -239,19 +239,24 @@ export async function generateImages(
   prompts: ImagePromptResult[],
   aspectRatio: '1:1' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9' = '4:3'
 ): Promise<Array<{ theme: string; imageUrl?: string; error?: string }>> {
-  // 使用 302.ai 的 API endpoint
-  const API_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
-  const API_KEY = process.env.GEMINI_API_KEY;
+  // 使用代理配置
+  const proxyInfo = getCurrentProxyInfo();
+  const API_BASE_URL = proxyInfo.baseUrl;
+  const API_KEY = proxyInfo.provider === 'tuzi' 
+    ? (process.env.GEMINI_TUZI_API_KEY || process.env.GEMINI_API_KEY)
+    : process.env.GEMINI_API_KEY;
 
   if (!API_KEY) {
-    console.warn('GEMINI_API_KEY is not configured. Skipping image generation.');
+    console.warn(`API Key is not configured for proxy: ${proxyInfo.provider}. Skipping image generation.`);
     return prompts.map(p => ({
       theme: p.theme,
-      error: '302.ai API key not configured'
+      error: `${proxyInfo.provider} API key not configured`
     }));
   }
 
+  // 图片生成 API 端点（302.ai 和 tuzi 使用相同的格式）
   const API_URL = `${API_BASE_URL}/google/v1/models/gemini-3-pro-image-preview?response_format=url`;
+  console.log(`[Image Generation] Using proxy: ${proxyInfo.provider}, URL: ${API_URL}`);
 
   const results: Array<{ theme: string; imageUrl?: string; error?: string }> = [];
 

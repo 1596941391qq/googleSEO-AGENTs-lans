@@ -115,7 +115,8 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     const serpCountryCode = countryCodeMap[targetMarket || 'global'] || 'us';
     let serpData;
     try {
-      serpData = await fetchSerpResults(keyword, targetLanguage, serpCountryCode);
+      // 参数顺序: keyword, language, engine (固定为 'google'), location (暂未使用)
+      serpData = await fetchSerpResults(keyword, targetLanguage, 'google');
     } catch (serpError: any) {
       console.error('[VisualArticle] Failed to fetch SERP results:', serpError);
       serpData = { keyword, results: [] };

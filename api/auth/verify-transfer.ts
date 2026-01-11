@@ -19,9 +19,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
 
     if (isDevelopment) {
-      // 生成 JWT 给假用户
+      // 生成 JWT 给假用户（使用有效的 UUID 格式）
       const fakeUser = {
-        userId: '12345',
+        userId: 'b61cbbf9-15b0-4353-8d49-89952042cf75',
         email: 'dev@example.com',
         name: 'Development User',
         picture: 'https://via.placeholder.com/150'

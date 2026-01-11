@@ -33,9 +33,19 @@ npm install
 在项目根目录创建 `.env` 文件：
 
 ```env
+# 代理商选择: "302" (302.ai, 默认) 或 "tuzi" (tu-zi.com)
+GEMINI_PROXY_PROVIDER=302
+
+# 302.ai 的 API Key
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_PROXY_URL=https://api.302.ai
-GEMINI_MODEL=gemini-2.5-flash
+
+# tu-zi.com 的 API Key（可选，如果不设置则使用 GEMINI_API_KEY）
+GEMINI_TUZI_API_KEY=your_tuzi_api_key_here
+
+# 自定义代理 URL（可选，会覆盖默认值）
+# GEMINI_PROXY_URL=https://api.302.ai
+
+
 ```
 
 **Vercel 部署**:
@@ -57,8 +67,9 @@ vercel dev
 ```
 
 这将同时启动：
+
 - 前端：http://localhost:3000
-- API：http://localhost:3000/api/*
+- API：http://localhost:3000/api/\*
 
 #### 方式二：只运行前端（连接远程 Vercel API）
 
@@ -82,6 +93,7 @@ npm run dev
 ### 快速部署
 
 1. 在 Vercel 项目设置中配置环境变量：
+
    - `GEMINI_API_KEY`: 你的 Gemini API 密钥
    - `GEMINI_PROXY_URL`: （可选）API 代理地址
    - `GEMINI_MODEL`: （可选）使用的模型

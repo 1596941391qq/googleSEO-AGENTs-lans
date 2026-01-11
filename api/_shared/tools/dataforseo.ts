@@ -12,6 +12,9 @@
  * 认证：Basic Auth (Base64 encoded login:password)
  */
 
+// 静态导入 SE-Ranking 模块（避免动态导入问题）
+import { isSERankingAvailable, fetchSERankingData } from './seranking.js';
+
 export type SearchEngine = 'google' | 'baidu' | 'bing' | 'yandex';
 
 const DATAFORSEO_LOGIN = process.env.DATAFORSEO_LOGIN || '';
@@ -348,7 +351,7 @@ export async function fetchKeywordDifficulty(
     if (error.name === 'AbortError') {
       console.warn('[DataForSEO] Keyword difficulty API timeout (5s). Skipping without retry.');
     } else {
-      console.error('[DataForSEO] Failed to fetch keyword difficulty:', error.message);
+    console.error('[DataForSEO] Failed to fetch keyword difficulty:', error.message);
     }
     return keywords.map(kw => ({ keyword: kw }));
   }
@@ -377,10 +380,9 @@ export async function fetchSingleKeywordData(
 }
 
 /**
- * 批量获取关键词数据（兼容别名，用于替换 SE Ranking）
+ * 批量获取关键词数据
  * 
- * 这个函数同时调用 search_volume 和 bulk_keyword_difficulty 两个端点
- * 以获取完整的关键词数据（包括搜索量、CPC、竞争度和关键词难度）
+ * 优先使用 SE-Ranking API（更快），如果失败或没有配置 API key 则回退到 DataForSEO
  * 
  * @param keywords - 关键词数组
  * @param locationCode - 位置代码，默认 2840 (美国)
@@ -402,30 +404,62 @@ export async function fetchKeywordData(
   difficulty?: number;
   history_trend?: { [date: string]: number };
 }>> {
+  // 前置检查：过滤空关键词
+  const validKeywords = keywords.filter(kw => kw && kw.trim().length > 0);
+  if (validKeywords.length === 0) {
+    console.warn('[Keyword Research] No valid keywords provided');
+    return [];
+  }
+
+  // 1. 尝试使用 SE-Ranking API（更快）
+  const seRankingAvailable = isSERankingAvailable();
+  console.log(`[Keyword Research] SE-Ranking available: ${seRankingAvailable}`);
+  
+  if (seRankingAvailable) {
+    console.log(`[Keyword Research] Trying SE-Ranking first (${validKeywords.length} keywords)...`);
+    
+    try {
+      const seRankingResults = await fetchSERankingData(validKeywords, languageCode);
+      
+      // 检查是否有有效数据
+      const foundCount = seRankingResults.filter((r: any) => r.is_data_found).length;
+      if (foundCount > 0) {
+        console.log(`[Keyword Research] SE-Ranking returned ${foundCount}/${seRankingResults.length} valid results`);
+        return seRankingResults;
+      }
+      console.log(`[Keyword Research] SE-Ranking returned no data, falling back to DataForSEO`);
+    } catch (seError: any) {
+      console.warn(`[Keyword Research] SE-Ranking failed: ${seError.message}, falling back to DataForSEO`);
+    }
+  } else {
+    console.log(`[Keyword Research] SE-Ranking API key not configured, using DataForSEO`);
+  }
+
+  // 2. 回退到 DataForSEO API
   try {
-    // 只调用 search_volume API，用 competition 作为 difficulty 的近似值
-    // 这样只需要一个 API 调用，更快
-    const volumeResults = await fetchDataForSEOData(keywords, locationCode, languageCode, engine).catch(err => {
-      console.warn(`[DataForSEO] Search volume API failed for ${engine}:`, err.message);
-      return keywords.map(kw => ({ keyword: kw, is_data_found: false }));
-    });
+    console.log(`[Keyword Research] Using DataForSEO (${validKeywords.length} keywords)...`);
+    
+    const volumeResults = await fetchDataForSEOData(validKeywords, locationCode, languageCode, engine);
 
     // 转换数据，直接用 competition_index 作为 difficulty
-    return volumeResults.map(data => {
-      return {
-        keyword: data.keyword,
-        is_data_found: data.is_data_found || false,
-        volume: data.search_volume, // search_volume -> volume
-        cpc: data.cpc,
-        competition: data.competition,
-        difficulty: data.competition_index, // 直接使用 competition_index 作为 difficulty
-        history_trend: data.history_trend,
-      };
-    });
-  } catch (error: any) {
-    console.error('[DataForSEO] Failed to fetch keyword data:', error.message);
+    const results = volumeResults.map(data => ({
+      keyword: data.keyword,
+      is_data_found: data.is_data_found || false,
+      volume: data.search_volume, // search_volume -> volume
+      cpc: data.cpc,
+      competition: data.competition,
+      difficulty: data.competition_index, // 直接使用 competition_index 作为 difficulty
+      history_trend: data.history_trend,
+    }));
+
+    const foundCount = results.filter(r => r.is_data_found).length;
+    console.log(`[Keyword Research] DataForSEO returned ${foundCount}/${results.length} valid results`);
+    
+    return results;
+  } catch (dataForSEOError: any) {
+    console.error(`[Keyword Research] DataForSEO failed: ${dataForSEOError.message}`);
     // 返回空数据而不是抛出错误
-    return keywords.map(kw => ({
+    return validKeywords.map(kw => ({
       keyword: kw,
       is_data_found: false,
     }));

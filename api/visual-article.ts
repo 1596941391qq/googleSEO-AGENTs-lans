@@ -7,10 +7,25 @@ import { scrapeWebsite, cleanMarkdown } from './_shared/tools/firecrawl.js';
 // Main app URL for credits API
 const MAIN_APP_URL = process.env.MAIN_APP_URL || process.env.VITE_MAIN_APP_URL || 'https://niche-mining-web.vercel.app';
 
+// Check if running in local development mode
+const IS_LOCAL_DEV = process.env.NODE_ENV === 'development' ||
+  process.env.ENABLE_DEV_AUTO_LOGIN === 'true' ||
+  MAIN_APP_URL.includes('localhost');
+
 /**
  * Check user credits balance
  */
 async function checkCreditsBalance(token: string): Promise<{ remaining: number; total: number; used: number }> {
+  // Skip credits check in local development mode
+  if (IS_LOCAL_DEV) {
+    console.log('[visual-article] Skipping credits check in local development mode');
+    return {
+      remaining: 9999,
+      total: 9999,
+      used: 0,
+    };
+  }
+
   const response = await fetch(`${MAIN_APP_URL}/api/user/dashboard`, {
     method: 'GET',
     headers: {
@@ -41,6 +56,15 @@ async function consumeCredits(
   description: string,
   amount: number
 ): Promise<{ remaining: number; used: number }> {
+  // Skip credits consumption in local development mode
+  if (IS_LOCAL_DEV) {
+    console.log(`[visual-article] Skipping credits consumption in local development mode (would consume ${amount} credits)`);
+    return {
+      remaining: 9999,
+      used: amount,
+    };
+  }
+
   const response = await fetch(`${MAIN_APP_URL}/api/credits/consume`, {
     method: 'POST',
     headers: {
@@ -78,7 +102,7 @@ async function consumeCredits(
 function extractToken(req: VercelRequest): string | null {
   const authHeaderRaw = req.headers.authorization || req.headers.Authorization;
   const authHeader = Array.isArray(authHeaderRaw) ? authHeaderRaw[0] : authHeaderRaw;
-  
+
   if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
     return null;
   }
@@ -114,19 +138,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Invalid request body', details: error.message });
     }
 
-    const { 
-      keyword, 
-      tone, 
-      visualStyle, 
-      targetAudience, 
-      targetMarket, 
-      uiLanguage, 
-      targetLanguage, 
-      reference, 
+    const {
+      keyword,
+      tone,
+      visualStyle,
+      targetAudience,
+      targetMarket,
+      uiLanguage,
+      targetLanguage,
+      reference,
       promotedWebsites,
       promotionIntensity,
-      userId, 
-      projectId, 
+      userId,
+      projectId,
       projectName,
       skipCreditsCheck = false
     } = body;

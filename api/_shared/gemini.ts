@@ -1,11 +1,152 @@
 // Shared Gemini API service for Vercel serverless functions
 import { TargetLanguage } from "./types.js";
 
-const PROXY_BASE_URL = process.env.GEMINI_PROXY_URL || 'https://api.302.ai';
-const API_KEY = process.env.GEMINI_API_KEY || 'sk-BMlZyFmI7p2DVrv53P0WOiigC4H6fcgYTevils2nXkW0Wv9s';
+/**
+ * Gemini 代理服务商配置
+ * 支持的代理: 302 (302.ai), tuzi (tu-zi.com)
+ * 
+ * 环境变量:
+ * - GEMINI_PROXY_PROVIDER: 选择代理商 ("302" | "tuzi")，默认 "302"
+ * - GEMINI_API_KEY: 302.ai 的 API Key
+ * - GEMINI_TUZI_API_KEY: tu-zi.com 的 API Key（如果不设置则使用 GEMINI_API_KEY）
+ * - GEMINI_PROXY_URL: 自定义代理 URL（可选，会覆盖默认值）
+ */
+
+// 代理商类型
+type ProxyProvider = '302' | 'tuzi';
+
+// 代理商配置
+interface ProxyConfig {
+  baseUrl: string;
+  // URL 路径模板，{model} 会被替换为模型名称
+  urlTemplate: string;
+  // 获取 API Key 的方式
+  getApiKey: () => string;
+}
+
+// 代理商配置表
+const PROXY_CONFIGS: Record<ProxyProvider, ProxyConfig> = {
+  '302': {
+    baseUrl: 'https://api.302.ai',
+    urlTemplate: '/v1/v1beta/models/{model}:generateContent',
+    getApiKey: () => process.env.GEMINI_API_KEY || '',
+  },
+  'tuzi': {
+    baseUrl: 'https://api.tu-zi.com',
+    urlTemplate: '/v1beta/models/{model}:generateContent',
+    getApiKey: () => process.env.GEMINI_TUZI_API_KEY || process.env.GEMINI_API_KEY || '',
+  },
+};
+
+// 当前请求的代理商覆盖（用于从前端动态切换）
+let requestProxyProviderOverride: ProxyProvider | null = null;
+// 当前请求的模型覆盖（用于从前端动态切换）
+let requestModelOverride: string | null = null;
+
+/**
+ * 设置当前请求的代理商（由 request-handler 调用）
+ * 这允许前端通过 X-Proxy-Provider header 来覆盖默认代理商
+ */
+export function setRequestProxyProvider(provider: '302' | 'tuzi' | null): void {
+  if (provider === '302' || provider === 'tuzi') {
+    requestProxyProviderOverride = provider;
+    console.log(`[Gemini] Proxy provider override set to: ${provider}`);
+  } else {
+    requestProxyProviderOverride = null;
+  }
+}
+
+/**
+ * 设置当前请求的模型（由 request-handler 调用）
+ * 这允许前端通过 X-Gemini-Model header 来覆盖默认模型
+ */
+export function setRequestModel(model: string | null): void {
+  if (model && model.startsWith('gemini-')) {
+    requestModelOverride = model;
+    console.log(`[Gemini] Model override set to: ${model}`);
+  } else {
+    requestModelOverride = null;
+  }
+}
+
+/**
+ * 获取当前使用的模型
+ */
+export function getCurrentModel(): string {
+  return requestModelOverride || MODEL;
+}
+
+/**
+ * 清除当前请求的代理商覆盖
+ */
+export function clearRequestProxyProvider(): void {
+  requestProxyProviderOverride = null;
+}
+
+/**
+ * 清除当前请求的模型覆盖
+ */
+export function clearRequestModel(): void {
+  requestModelOverride = null;
+}
+
+// 获取当前代理商
+const getProxyProvider = (): ProxyProvider => {
+  // 优先使用请求级别的覆盖
+  if (requestProxyProviderOverride) {
+    return requestProxyProviderOverride;
+  }
+  // 否则使用环境变量
+  const provider = (process.env.GEMINI_PROXY_PROVIDER || '302').toLowerCase();
+  if (provider === 'tuzi' || provider === 'tu-zi') {
+    return 'tuzi';
+  }
+  return '302';
+};
+
+// 获取代理配置
+const getProxyConfig = (): ProxyConfig & { provider: ProxyProvider } => {
+  const provider = getProxyProvider();
+  const config = PROXY_CONFIGS[provider];
+
+  // 允许通过 GEMINI_PROXY_URL 覆盖默认 baseUrl
+  const customBaseUrl = process.env.GEMINI_PROXY_URL;
+  if (customBaseUrl) {
+    config.baseUrl = customBaseUrl;
+  }
+
+  return { ...config, provider };
+};
+
+// 构建 API URL
+const buildApiUrl = (model: string): string => {
+  const config = getProxyConfig();
+  const url = config.baseUrl + config.urlTemplate.replace('{model}', model);
+  return url;
+};
+
+// 获取 API Key
+const getApiKey = (): string => {
+  const config = getProxyConfig();
+  return config.getApiKey();
+};
+
 const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 // Fallback model to use when primary model fails (faster, more reliable)
 const FALLBACK_MODEL = 'gemini-2.5-flash';
+
+// 导出当前代理和模型信息，方便调试
+export const getCurrentProxyInfo = () => {
+  const config = getProxyConfig();
+  return {
+    provider: config.provider,
+    baseUrl: config.baseUrl,
+    urlTemplate: config.urlTemplate,
+    hasApiKey: !!config.getApiKey(),
+    model: getCurrentModel(),
+    defaultModel: MODEL,
+  };
+};
 
 interface GeminiConfig {
   model?: string;
@@ -115,12 +256,18 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
  * Internal function to handle the actual API request
  */
 async function _callGeminiInternal(prompt: string, systemInstruction?: string, config?: GeminiConfig) {
-  if (!API_KEY || API_KEY.trim() === '') {
-    console.error('GEMINI_API_KEY is not configured');
-    throw new Error('GEMINI_API_KEY is not configured. Please set it in Vercel environment variables.');
+  const apiKey = getApiKey();
+  const proxyInfo = getCurrentProxyInfo();
+
+  if (!apiKey || apiKey.trim() === '') {
+    console.error(`API Key is not configured for proxy provider: ${proxyInfo.provider}`);
+    throw new Error(`API Key is not configured for ${proxyInfo.provider}. Please set GEMINI_API_KEY${proxyInfo.provider === 'tuzi' ? ' or GEMINI_TUZI_API_KEY' : ''} in environment variables.`);
   }
 
-  const url = `${PROXY_BASE_URL}/v1/v1beta/models/${config?.model || MODEL}:generateContent`;
+  // 优先级：config.model > requestModelOverride > 环境变量 MODEL
+  const modelName = config?.model || getCurrentModel();
+  const url = buildApiUrl(modelName);
+  console.log(`[Gemini API] Using proxy: ${proxyInfo.provider}, model: ${modelName}, URL: ${url}`);
 
   const contents: any[] = [];
   if (systemInstruction) {
@@ -176,7 +323,7 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': API_KEY,
+        'x-goog-api-key': apiKey,
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal,
