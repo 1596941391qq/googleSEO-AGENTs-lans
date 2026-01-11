@@ -180,14 +180,14 @@ export const KEYWORD_MINING_PROMPTS = {
   base: {
     zh: `
 # 角色
-你是一位拥有15年经验的资深谷歌SEO战略家，擅长利用语义分析发现低竞争、高转化的“蓝海”利基词。
+你是一位拥有15年经验的资深谷歌SEO战略家，擅长利用语义分析发现低竞争、高转化的“蓝海”词。
 
 # 核心任务
 针对用户提供的种子词和目标语言，通过多维度语义扩展，挖掘出10个具备真实商业潜力的SEO关键词。
 你的任务是用目标语言生成一份全面的高潜力关键词列表。
 
 <rules>
-1. **禁止行为**：严禁提供搜索量低于100的死词，严禁提供难度超过50的红海词。
+1. **禁止行为**：严禁提供搜索量低于100的死词，严禁提供难度超过60的红海词，也不要太过于偏门的词。
 2. **关键词多样性**：必须包含 30% 的问题型长尾词（如 How to, Why），40% 的商业比较词（如 vs, alternative），以及 30% 的直接行动词。
 3. **数据真实性**：如果无法确定搜索量，请基于行业常识给出最保守的区间估算。
 4. **语法**：确保目标语言的语法完美，表达地道。
@@ -340,22 +340,287 @@ CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoug
   }
 };
 
+/**
+ * 获取关键词挖掘提示词
+ * 
+ * @param language - 语言
+ * @param options - 选项参数
+ */
 export function getKeywordMiningPrompt(
   language: 'zh' | 'en',
-  industry?: string
+  options?: {
+    industry?: string;
+    seedKeyword?: string;
+    targetLangName?: string;
+    translationLang?: string;
+    uiLanguage?: 'zh' | 'en';
+    roundIndex?: number;
+    wordsPerRound?: number;
+    miningStrategy?: 'horizontal' | 'vertical';
+    userSuggestion?: string;
+    additionalSuggestions?: string;
+    existingKeywords?: string[];
+    isWebsiteAuditMode?: boolean;
+    websiteAuditReport?: string;
+  }
 ): string {
-  const basePrompt = language === 'zh'
-    ? KEYWORD_MINING_PROMPTS.base.zh
-    : KEYWORD_MINING_PROMPTS.base.en;
+  const {
+    industry,
+    seedKeyword,
+    targetLangName = 'English',
+    translationLang = 'English',
+    uiLanguage = 'en',
+    roundIndex = 1,
+    wordsPerRound = 10,
+    miningStrategy = 'horizontal',
+    userSuggestion,
+    additionalSuggestions,
+    existingKeywords = [],
+    isWebsiteAuditMode = false,
+    websiteAuditReport
+  } = options || {};
 
-  if (industry) {
-    const industryPrompt = language === 'zh'
-      ? KEYWORD_MINING_PROMPTS.withIndustry.zh(industry)
-      : KEYWORD_MINING_PROMPTS.withIndustry.en(industry);
-    return industryPrompt;
+  // 构建策略指导
+  const strategyGuidance = miningStrategy === 'horizontal'
+    ? (language === 'zh'
+      ? `
+横向挖掘策略（广泛主题）：
+- 探索与种子关键词相关的不同主题
+- 思考平行市场、相邻行业、互补产品
+- 寻找相关但不同的利基市场
+- 示例：如果种子词是"狗粮"，探索"宠物配件"、"宠物训练"、"宠物健康"`
+      : `
+HORIZONTAL MINING STRATEGY (Broad Topics):
+- Explore DIFFERENT topics related to the seed keyword
+- Think about PARALLEL markets, adjacent industries, complementary products
+- Find RELATED but DISTINCT niches
+- Example: If seed is "dog food", explore "pet accessories", "pet training", "pet health"`)
+    : (language === 'zh'
+      ? `
+纵向挖掘策略（深度挖掘）：
+- 深入挖掘与种子关键词相同的主题
+- 寻找长尾变体、具体用例、详细子类别
+- 针对同一利基市场中更具体的受众群体
+- 示例：如果种子词是"狗粮"，探索"无谷物狗粮"、"老年犬营养"、"大型犬幼犬食品"`
+      : `
+VERTICAL MINING STRATEGY (Deep Dive):
+- Go DEEPER into the SAME topic as the seed keyword
+- Find long-tail variations, specific use cases, detailed sub-categories
+- Target more specific audience segments within the same niche
+- Example: If seed is "dog food", explore "grain-free dog food", "senior dog nutrition", "large breed puppy food"`);
+
+  // 构建行业指导
+  const industryGuidance = industry && industry.trim()
+    ? (language === 'zh'
+      ? `
+
+用户行业背景：
+用户专注于"${industry}"行业。
+这是一个绝佳的选择！${industry}行业显示出巨大的潜力和增长机会。
+
+请通过考虑以下因素，专门为这个行业定制关键词建议：
+- 行业特定的术语和行话
+- 该行业的常见痛点和挑战
+- 与该行业相关的长尾问题关键词
+- 竞争对手比较术语
+- 行业趋势和新兴主题
+
+这对于生成高度相关和有针对性的关键词至关重要。`
+      : `
+
+USER INDUSTRY CONTEXT:
+The user is focusing on the "${industry}" industry.
+This is an excellent choice! The ${industry} industry shows tremendous potential and growth opportunities.
+
+Please tailor keyword suggestions specifically for this industry by considering:
+- Industry-specific terminology and jargon
+- Common pain points and challenges in this industry
+- Long-tail question keywords relevant to this industry
+- Competitor comparison terms
+- Industry trends and emerging topics
+
+This is crucial for generating highly relevant and targeted keywords.`)
+    : '';
+
+  // 构建用户指导
+  let userGuidance = '';
+  if (userSuggestion && userSuggestion.trim()) {
+    userGuidance = language === 'zh'
+      ? `
+
+本轮用户指导：
+${userSuggestion}
+
+请将用户的指导纳入你的关键词生成中。`
+      : `
+
+USER GUIDANCE FOR THIS ROUND:
+${userSuggestion}
+
+Please incorporate the user's guidance into your keyword generation.`;
   }
 
-  return basePrompt;
+  // 处理额外建议
+  if (additionalSuggestions && additionalSuggestions.trim() && !isWebsiteAuditMode) {
+    userGuidance += language === 'zh'
+      ? `
+
+额外用户建议：
+${additionalSuggestions}
+
+请将这些额外要求纳入你的关键词生成中。`
+      : `
+
+ADDITIONAL USER SUGGESTIONS:
+${additionalSuggestions}
+
+Please incorporate these additional requirements into your keyword generation.`;
+  }
+
+  // 网站审计模式 - 第一轮
+  if (isWebsiteAuditMode && roundIndex === 1 && websiteAuditReport) {
+    return language === 'zh'
+      ? `你正在基于网站审计分析报告生成SEO关键词。该报告包含对现有网站内容、竞争对手关键词和已识别机会的详细分析。
+
+网站审计分析报告：
+${websiteAuditReport}
+
+任务：基于上述分析报告，生成 ${wordsPerRound} 个与报告中识别的机会一致的高潜力 ${targetLangName} SEO关键词。
+
+关键要求：
+1. 专注于解决报告中提到的内容缺口、优化机会和扩展方向的关键词
+2. 优先考虑具有商业和信息意图的关键词
+3. 确保关键词与网站现有内容主题相关${industry ? `，并与 ${industry} 行业相关` : ''}
+4. 考虑竞争对手分析和已识别的机会
+5. ${miningStrategy === 'horizontal' ? '使用横向挖掘：探索与现有内容主题平行或相关的广泛主题领域' : '使用纵向挖掘：探索现有主题的长尾变体和具体用例'}
+${industryGuidance}
+
+重要提示：
+- 直接从报告中提到的机会中提取关键词
+- 专注于网站可以实际定位的可操作关键词
+- 生成关键词时考虑搜索量和竞争水平
+
+关键：仅返回有效的 JSON 数组。不要包含任何解释、思考过程或 markdown 格式。仅返回 JSON 数组。
+
+返回包含以下对象的 JSON 数组：
+- keyword: ${targetLangName} 语言的关键词
+- translation: ${translationLang} 语言的含义（必须是 ${translationLang} 语言）
+- intent: "Informational" | "Transactional" | "Local" | "Commercial" 之一
+- volume: 估计的月搜索量（数字）
+
+示例格式：
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`
+      : `You are generating SEO keywords based on a Website Audit Analysis Report. This report contains a detailed analysis of an existing website's content, competitor keywords, and identified opportunities.
+
+WEBSITE AUDIT ANALYSIS REPORT:
+${websiteAuditReport}
+
+TASK: Based on the above analysis report, generate ${wordsPerRound} high-potential ${targetLangName} SEO keywords that align with the opportunities identified in the report.
+
+KEY REQUIREMENTS:
+1. Focus on keywords that address the content gaps, optimization opportunities, and expansion directions mentioned in the report
+2. Prioritize keywords with commercial and informational intent
+3. Ensure keywords are relevant to the website's existing content themes${industry ? ` and the ${industry} industry` : ''}
+4. Consider the competitor analysis and identified opportunities
+5. ${miningStrategy === 'horizontal' ? 'Use horizontal mining: explore parallel or related broad topic areas to existing content themes' : 'Use vertical mining: explore long-tail variations and specific use cases of existing themes'}
+${industryGuidance}
+
+IMPORTANT: 
+- Extract keywords directly from the opportunities mentioned in the report
+- Focus on actionable keywords that the website can realistically target
+- Consider search volume and competition level when generating keywords
+
+CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
+
+Return a JSON array with objects containing:
+- keyword: The keyword in ${targetLangName}
+- translation: Meaning in ${translationLang} (must be in ${translationLang} language)
+- intent: One of "Informational", "Transactional", "Local", "Commercial"
+- volume: Estimated monthly searches (number)
+
+Example format:
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`;
+  }
+
+  // 第一轮常规模式
+  if (roundIndex === 1) {
+    const basePrompt = language === 'zh'
+      ? KEYWORD_MINING_PROMPTS.base.zh
+      : KEYWORD_MINING_PROMPTS.base.en;
+
+    return language === 'zh'
+      ? `为种子词"${seedKeyword || '用户提供的关键词'}"生成 ${wordsPerRound} 个高潜力 ${targetLangName} SEO关键词。专注于商业和信息意图。
+${strategyGuidance}${industryGuidance}${userGuidance}
+
+关键：仅返回有效的 JSON 数组。不要包含任何解释、思考过程或 markdown 格式。仅返回 JSON 数组。
+
+返回包含以下对象的 JSON 数组：
+- keyword: ${targetLangName} 语言的关键词
+- translation: ${translationLang} 语言的含义（必须是 ${translationLang} 语言）
+- intent: "Informational" | "Transactional" | "Local" | "Commercial" 之一
+- volume: 估计的月搜索量（数字）
+
+示例格式：
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`
+      : `Generate ${wordsPerRound} high-potential ${targetLangName} SEO keywords for the seed term: "${seedKeyword || 'user-provided keyword'}". Focus on commercial and informational intent.
+${strategyGuidance}${industryGuidance}${userGuidance}
+
+CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
+
+Return a JSON array with objects containing:
+- keyword: The keyword in ${targetLangName}
+- translation: Meaning in ${translationLang} (must be in ${translationLang} language)
+- intent: One of "Informational", "Transactional", "Local", "Commercial"
+- volume: Estimated monthly searches (number)
+
+Example format:
+${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`;
+  }
+
+  // 后续轮次模式
+  const websiteAuditContext = isWebsiteAuditMode && websiteAuditReport
+    ? (language === 'zh'
+      ? `\n\n重要上下文 - 网站审计分析报告：\n${websiteAuditReport.substring(0, 1500)}${websiteAuditReport.length > 1500 ? '...' : ''}\n\n生成关键词时，优先考虑上述报告中提到的机会（内容缺口、优化机会、扩展方向）。`
+      : `\n\nIMPORTANT CONTEXT - Website Audit Analysis Report:\n${websiteAuditReport.substring(0, 1500)}${websiteAuditReport.length > 1500 ? '...' : ''}\n\nWhen generating keywords, prioritize opportunities mentioned in the above report (content gaps, optimization opportunities, expansion directions).`)
+    : '';
+
+  return language === 'zh'
+    ? `
+用户正在寻找 ${targetLangName} 市场中的"蓝海"机会。
+我们已经生成了这些关键词：${existingKeywords.slice(-20).join('、')}。
+
+关键：不要生成相似的词。
+横向思考。使用"SCAMPER"方法。
+示例：如果种子词是"AI宠物照片"，思考"宠物身份证"、"假狗护照"、"猫咪族谱"。
+${strategyGuidance}${industryGuidance}${userGuidance}${websiteAuditContext}
+
+生成 ${wordsPerRound} 个与"${seedKeyword || '种子词'}"相关的新颖、意外但可搜索的 ${targetLangName} 关键词。
+
+关键：仅返回有效的 JSON 数组。不要包含任何解释、思考过程或 markdown 格式。仅返回 JSON 数组。
+
+返回包含以下对象的 JSON 数组：
+- keyword: ${targetLangName} 语言的关键词
+- translation: ${translationLang} 语言的含义（必须是 ${translationLang} 语言）
+- intent: "Informational" | "Transactional" | "Local" | "Commercial" 之一
+- volume: 估计的月搜索量（数字）`
+    : `
+The user is looking for "Blue Ocean" opportunities in the ${targetLangName} market.
+We have already generated these: ${existingKeywords.slice(-20).join(', ')}.
+
+CRITICAL: Do NOT generate similar words.
+Think LATERALLY. Use the "SCAMPER" method.
+Example: If seed is "AI Pet Photos", think "Pet ID Cards", "Fake Dog Passport", "Cat Genealogy".
+${strategyGuidance}${industryGuidance}${userGuidance}${websiteAuditContext}
+
+Generate ${wordsPerRound} NEW, UNEXPECTED, but SEARCHABLE keywords related to "${seedKeyword || 'seed keyword'}" in ${targetLangName}.
+
+CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
+
+Return a JSON array with objects containing:
+- keyword: The keyword in ${targetLangName}
+- translation: Meaning in ${translationLang} (must be in ${translationLang} language)
+- intent: One of "Informational", "Transactional", "Local", "Commercial"
+- volume: Estimated monthly searches (number)`;
 }
 
 // ============================================================================
@@ -2141,7 +2406,7 @@ export function example1_basicMining() {
  * 示例2: 带行业的挖词
  */
 export function example2_industryMining() {
-  const prompt = getKeywordMiningPrompt('zh', 'ai');
+  const prompt = getKeywordMiningPrompt('zh', { industry: 'ai' });
   console.log(prompt);
 }
 
@@ -2149,7 +2414,7 @@ export function example2_industryMining() {
  * 示例3: 带夸赞的挖词
  */
 export function example3_praisedMining() {
-  const basePrompt = getKeywordMiningPrompt('zh', 'ecommerce');
+  const basePrompt = getKeywordMiningPrompt('zh', { industry: 'ecommerce' });
   const enhancedPrompt = enhancePromptWithPraise(basePrompt, {
     industry: 'ecommerce',
     userInputType: 'keyword',
@@ -2411,13 +2676,13 @@ export function getDefaultPrompt(
   switch (promptType) {
     case 'generation':
       // 使用 KEYWORD_MINING_PROMPTS 替代 DEFAULT_KEYWORD_GENERATION
-      return getKeywordMiningPrompt(language, industry);
+      return getKeywordMiningPrompt(language, industry ? { industry } : undefined);
     case 'analysis':
       return language === 'zh' ? DEFAULT_SERP_ANALYSIS.zh : DEFAULT_SERP_ANALYSIS.en;
     case 'deepDive':
       return language === 'zh' ? DEFAULT_DEEP_DIVE_STRATEGY.zh : DEFAULT_DEEP_DIVE_STRATEGY.en;
     default:
-      return getKeywordMiningPrompt(language, industry);
+      return getKeywordMiningPrompt(language, industry ? { industry } : undefined);
   }
 }
 

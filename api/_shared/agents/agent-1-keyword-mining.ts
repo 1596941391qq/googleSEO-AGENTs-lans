@@ -7,6 +7,7 @@
 
 import { callGeminiAPI } from '../gemini.js';
 import { KeywordData, TargetLanguage } from '../types.js';
+import { getKeywordMiningPrompt } from '../../../services/prompts/index.js';
 
 /**
  * 获取语言名称
@@ -32,30 +33,30 @@ function getLanguageName(language: TargetLanguage): string {
  */
 function cleanSearchReferences(text: string): string {
   if (!text) return text;
-  
+
   // 移除常见的搜索引用格式
   // 1. 移除方括号引用，如 [1], [2], [source]
   text = text.replace(/\[\d+\]/g, '');
   text = text.replace(/\[source\]/gi, '');
   text = text.replace(/\[citation\]/gi, '');
-  
+
   // 2. 移除括号引用，如 (source: url), (from: ...)
   text = text.replace(/\(source[^)]*\)/gi, '');
   text = text.replace(/\(from[^)]*\)/gi, '');
   text = text.replace(/\(citation[^)]*\)/gi, '');
-  
+
   // 3. 移除独立出现的 URL（不在引号内的）
   text = text.replace(/(?<!["'])\bhttps?:\/\/[^\s)]+(?!["'])/g, '');
-  
+
   // 4. 移除引用前缀
   text = text.replace(/^(根据|基于|来自).{0,20}(搜索结果|搜索|资料)[:：]\s*/i, '');
   text = text.replace(/^(According to|Based on|From).{0,30}(search results|search|sources)[:：]\s*/i, '');
-  
+
   // 5. 移除 Markdown 标题和思考过程
   text = text.replace(/^\*\*[^*]+\*\*\s*/gm, ''); // 移除 **标题** 格式
   text = text.replace(/^#+\s+.*$/gm, ''); // 移除 Markdown 标题
   text = text.replace(/^(Alright|Okay|Right|So|Let's|I'm|My|The|This|We're|Given|As|With).*$/gmi, ''); // 移除常见的思考过程开头
-  
+
   // 6. 移除引用标记行
   const lines = text.split('\n');
   const cleanedLines = lines.filter(line => {
@@ -65,7 +66,7 @@ function cleanSearchReferences(text: string): string {
     if (/^\*\*[^*]+\*\*/.test(trimmed)) return false; // 移除 Markdown 粗体标题行
     return true;
   });
-  
+
   return cleanedLines.join('\n').trim();
 }
 
@@ -85,7 +86,7 @@ function extractJSON(text: string): string {
   const jsonMatch = cleaned.match(/(\[[\s\S]*\]|\{[\s\S]*\})/);
   if (jsonMatch) {
     let extracted = jsonMatch[1];
-    
+
     // 使用更精确的方法提取完整的 JSON
     const firstBrace = extracted.indexOf('{');
     const firstBracket = extracted.indexOf('[');
@@ -171,164 +172,45 @@ export async function generateKeywords(
   const targetLangName = getLanguageName(targetLanguage);
   const translationLang = uiLanguage === 'zh' ? 'Chinese' : 'English';
 
-  onProgress?.(uiLanguage === 'zh' 
-    ? `🧠 正在构思关键词挖掘策略 (${miningStrategy === 'horizontal' ? '横向' : '纵向'})...` 
+  onProgress?.(uiLanguage === 'zh'
+    ? `🧠 正在构思关键词挖掘策略 (${miningStrategy === 'horizontal' ? '横向' : '纵向'})...`
     : `🧠 Planning keyword mining strategy (${miningStrategy})...`);
-
-  // Build strategy-specific guidance
-  let strategyGuidance = '';
-  if (miningStrategy === 'horizontal') {
-    strategyGuidance = `
-HORIZONTAL MINING STRATEGY (Broad Topics):
-- Explore DIFFERENT topics related to the seed keyword
-- Think about PARALLEL markets, adjacent industries, complementary products
-- Find RELATED but DISTINCT niches
-- Example: If seed is "dog food", explore "pet accessories", "pet training", "pet health"`;
-  } else {
-    strategyGuidance = `
-VERTICAL MINING STRATEGY (Deep Dive):
-- Go DEEPER into the SAME topic as the seed keyword
-- Find long-tail variations, specific use cases, detailed sub-categories
-- Target more specific audience segments within the same niche
-- Example: If seed is "dog food", explore "grain-free dog food", "senior dog nutrition", "large breed puppy food"`;
-  }
-
-  // Add industry-specific guidance if provided
-  let industryGuidance = '';
-  if (industry && industry.trim()) {
-    industryGuidance = `
-
-USER INDUSTRY CONTEXT:
-The user is focusing on the "${industry}" industry.
-This is an excellent choice! The ${industry} industry shows tremendous potential and growth opportunities.
-
-Please tailor keyword suggestions specifically for this industry by considering:
-- Industry-specific terminology and jargon
-- Common pain points and challenges in this industry
-- Long-tail question keywords relevant to this industry
-- Competitor comparison terms
-- Industry trends and emerging topics
-
-This is crucial for generating highly relevant and targeted keywords.`;
-  }
-
-  // Add user suggestion if provided
-  let userGuidance = '';
-  if (userSuggestion && userSuggestion.trim()) {
-    userGuidance = `
-
-USER GUIDANCE FOR THIS ROUND:
-${userSuggestion}
-
-Please incorporate the user's guidance into your keyword generation.`;
-  }
 
   // Check if this is website audit mode (based on additionalSuggestions containing website audit report)
   const isWebsiteAuditMode = additionalSuggestions && additionalSuggestions.includes('--- Website Audit Analysis Report ---');
-  
-  // Add additional suggestions from mining config
+
+  // Extract website audit report if in audit mode
   let websiteAuditReport = '';
-  let regularAdditionalSuggestions = '';
-  
-  if (additionalSuggestions && additionalSuggestions.trim()) {
-    if (isWebsiteAuditMode) {
-      // Extract the website audit report
-      const reportMatch = additionalSuggestions.match(/--- Website Audit Analysis Report ---\n([\s\S]*?)\n--- End of Report ---/);
-      if (reportMatch) {
-        websiteAuditReport = reportMatch[1].trim();
-      } else {
-        // Fallback: use the entire additionalSuggestions as report
-        websiteAuditReport = additionalSuggestions.replace(/--- Website Audit Analysis Report ---\n?/g, '').replace(/\n?--- End of Report ---/g, '').trim();
-      }
+  if (additionalSuggestions && additionalSuggestions.trim() && isWebsiteAuditMode) {
+    const reportMatch = additionalSuggestions.match(/--- Website Audit Analysis Report ---\n([\s\S]*?)\n--- End of Report ---/);
+    if (reportMatch) {
+      websiteAuditReport = reportMatch[1].trim();
     } else {
-      regularAdditionalSuggestions = additionalSuggestions;
-      userGuidance += `
-
-ADDITIONAL USER SUGGESTIONS:
-${regularAdditionalSuggestions}
-
-Please incorporate these additional requirements into your keyword generation.`;
+      // Fallback: use the entire additionalSuggestions as report
+      websiteAuditReport = additionalSuggestions.replace(/--- Website Audit Analysis Report ---\n?/g, '').replace(/\n?--- End of Report ---/g, '').trim();
     }
   }
 
-  let promptContext = "";
-
-  // Website Audit Mode: Generate keywords based on analysis report, no seed keyword needed
-  if (isWebsiteAuditMode && roundIndex === 1 && websiteAuditReport) {
-    promptContext = `You are generating SEO keywords based on a Website Audit Analysis Report. This report contains a detailed analysis of an existing website's content, competitor keywords, and identified opportunities.
-
-WEBSITE AUDIT ANALYSIS REPORT:
-${websiteAuditReport}
-
-TASK: Based on the above analysis report, generate ${wordsPerRound} high-potential ${targetLangName} SEO keywords that align with the opportunities identified in the report.
-
-KEY REQUIREMENTS:
-1. Focus on keywords that address the content gaps, optimization opportunities, and expansion directions mentioned in the report
-2. Prioritize keywords with commercial and informational intent
-3. Ensure keywords are relevant to the website's existing content themes${industry ? ` and the ${industry} industry` : ''}
-4. Consider the competitor analysis and identified opportunities
-5. ${miningStrategy === 'horizontal' ? 'Use horizontal mining: explore parallel or related broad topic areas to existing content themes' : 'Use vertical mining: explore long-tail variations and specific use cases of existing themes'}
-${industryGuidance}
-
-IMPORTANT: 
-- Extract keywords directly from the opportunities mentioned in the report
-- Focus on actionable keywords that the website can realistically target
-- Consider search volume and competition level when generating keywords
-
-CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
-
-Return a JSON array with objects containing:
-- keyword: The keyword in ${targetLangName}
-- translation: Meaning in ${translationLang} (must be in ${translationLang} language)
-- intent: One of "Informational", "Transactional", "Local", "Commercial"
-- volume: Estimated monthly searches (number)
-
-Example format:
-${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`;
-  } else if (roundIndex === 1) {
-    // Regular mode: Use seed keyword
-    promptContext = `Generate ${wordsPerRound} high-potential ${targetLangName} SEO keywords for the seed term: "${seedKeyword}". Focus on commercial and informational intent.
-${strategyGuidance}${industryGuidance}${userGuidance}
-
-CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
-
-Return a JSON array with objects containing:
-- keyword: The keyword in ${targetLangName}
-- translation: Meaning in ${translationLang} (must be in ${translationLang} language)
-- intent: One of "Informational", "Transactional", "Local", "Commercial"
-- volume: Estimated monthly searches (number)
-
-Example format:
-${uiLanguage === 'zh' ? '[{"keyword": "example", "translation": "示例", "intent": "Informational", "volume": 1000}]' : '[{"keyword": "example", "translation": "example meaning", "intent": "Informational", "volume": 1000}]'}`;
-  } else {
-    // For subsequent rounds, if we have website audit report, use it to guide keyword generation
-    const websiteAuditContext = isWebsiteAuditMode && websiteAuditReport
-      ? `\n\nIMPORTANT CONTEXT - Website Audit Analysis Report:\n${websiteAuditReport.substring(0, 1500)}${websiteAuditReport.length > 1500 ? '...' : ''}\n\nWhen generating keywords, prioritize opportunities mentioned in the above report (content gaps, optimization opportunities, expansion directions).`
-      : '';
-    
-    promptContext = `
-The user is looking for "Blue Ocean" opportunities in the ${targetLangName} market.
-We have already generated these: ${existingKeywords.slice(-20).join(', ')}.
-
-CRITICAL: Do NOT generate similar words.
-Think LATERALLY. Use the "SCAMPER" method.
-Example: If seed is "AI Pet Photos", think "Pet ID Cards", "Fake Dog Passport", "Cat Genealogy".
-${strategyGuidance}${industryGuidance}${userGuidance}${websiteAuditContext}
-
-Generate ${wordsPerRound} NEW, UNEXPECTED, but SEARCHABLE keywords related to "${seedKeyword}" in ${targetLangName}.
-
-CRITICAL: Return ONLY a valid JSON array. Do NOT include any explanations, thoughts, or markdown formatting. Return ONLY the JSON array.
-
-Return a JSON array with objects containing:
-- keyword: The keyword in ${targetLangName}
-- translation: Meaning in ${translationLang} (must be in ${translationLang} language)
-- intent: One of "Informational", "Transactional", "Local", "Commercial"
-- volume: Estimated monthly searches (number)`;
-  }
+  // Use unified prompt configuration from services/prompts/index.ts
+  const promptContext = getKeywordMiningPrompt(uiLanguage, {
+    industry,
+    seedKeyword,
+    targetLangName,
+    translationLang,
+    uiLanguage,
+    roundIndex,
+    wordsPerRound,
+    miningStrategy,
+    userSuggestion,
+    additionalSuggestions: isWebsiteAuditMode ? undefined : additionalSuggestions,
+    existingKeywords,
+    isWebsiteAuditMode,
+    websiteAuditReport
+  });
 
   try {
-    onProgress?.(uiLanguage === 'zh' 
-      ? `🤖 正在调用 AI 进行关键词启发式挖掘...` 
+    onProgress?.(uiLanguage === 'zh'
+      ? `🤖 正在调用 AI 进行关键词启发式挖掘...`
       : `🤖 Calling AI for heuristic keyword mining...`);
 
     const response = await callGeminiAPI(promptContext, systemInstruction, {
@@ -373,10 +255,10 @@ Return a JSON array with objects containing:
       id: `kw-${Date.now()}-${index}`,
     }));
 
-    return { 
-      keywords, 
+    return {
+      keywords,
       rawResponse: originalResponse,
-      searchResults: response.searchResults 
+      searchResults: response.searchResults
     };
   } catch (error: any) {
     console.error("Generate Keywords Error:", error);

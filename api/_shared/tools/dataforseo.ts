@@ -162,7 +162,7 @@ async function fetchBatchWithRetry(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
     try {
       // 不同搜索引擎对应的端点
@@ -254,11 +254,10 @@ async function fetchBatchWithRetry(
       clearTimeout(timeoutId);
       lastError = error;
 
+      // 超时后直接返回空结果，不重试
       if (error.name === 'AbortError') {
-        console.warn(`[DataForSEO] API timeout (60s) for batch. Retry ${attempt}/${maxRetries}`);
-        if (attempt < maxRetries) {
-          continue;
-        }
+        console.warn(`[DataForSEO] API timeout (5s) for batch. Skipping without retry.`);
+        return keywords.map(kw => ({ keyword: kw, is_data_found: false }));
       }
 
       // 如果是速率限制错误且还有重试机会，继续重试
@@ -315,7 +314,7 @@ export async function fetchKeywordDifficulty(
     ];
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -346,7 +345,11 @@ export async function fetchKeywordDifficulty(
       competition_index: item.competition_index, // DataForSEO 返回的 KD 字段
     }));
   } catch (error: any) {
-    console.error('[DataForSEO] Failed to fetch keyword difficulty:', error.message);
+    if (error.name === 'AbortError') {
+      console.warn('[DataForSEO] Keyword difficulty API timeout (5s). Skipping without retry.');
+    } else {
+      console.error('[DataForSEO] Failed to fetch keyword difficulty:', error.message);
+    }
     return keywords.map(kw => ({ keyword: kw }));
   }
 }
@@ -400,38 +403,22 @@ export async function fetchKeywordData(
   history_trend?: { [date: string]: number };
 }>> {
   try {
-    // 并行调用两个 API：search_volume 和 bulk_keyword_difficulty (返回 competition_index 作为 KD)
-    const [volumeResults, difficultyResults] = await Promise.all([
-      fetchDataForSEOData(keywords, locationCode, languageCode, engine).catch(err => {
-        console.warn(`[DataForSEO] Search volume API failed for ${engine}:`, err.message);
-        return keywords.map(kw => ({ keyword: kw, is_data_found: false }));
-      }),
-      fetchKeywordDifficulty(keywords, locationCode, languageCode, engine).catch(err => {
-        console.warn(`[DataForSEO] Keyword difficulty API failed for ${engine}:`, err.message);
-        return keywords.map(kw => ({ keyword: kw }));
-      })
-    ]);
-
-    // 创建难度映射表 (使用 competition_index 作为 KD)
-    const difficultyMap = new Map<string, number>();
-    difficultyResults.forEach(item => {
-      if (item.keyword && item.competition_index !== undefined) {
-        difficultyMap.set(item.keyword.toLowerCase(), item.competition_index);
-      }
+    // 只调用 search_volume API，用 competition 作为 difficulty 的近似值
+    // 这样只需要一个 API 调用，更快
+    const volumeResults = await fetchDataForSEOData(keywords, locationCode, languageCode, engine).catch(err => {
+      console.warn(`[DataForSEO] Search volume API failed for ${engine}:`, err.message);
+      return keywords.map(kw => ({ keyword: kw, is_data_found: false }));
     });
 
-    // 合并数据
+    // 转换数据，直接用 competition_index 作为 difficulty
     return volumeResults.map(data => {
-      const keywordLower = data.keyword.toLowerCase();
-      const difficulty = difficultyMap.get(keywordLower);
-
       return {
         keyword: data.keyword,
         is_data_found: data.is_data_found || false,
         volume: data.search_volume, // search_volume -> volume
         cpc: data.cpc,
         competition: data.competition,
-        difficulty: difficulty !== undefined ? difficulty : data.competition_index, // 优先使用 competition_index 作为 KD
+        difficulty: data.competition_index, // 直接使用 competition_index 作为 difficulty
         history_trend: data.history_trend,
       };
     });

@@ -1459,13 +1459,18 @@ const ThinkingIndicator = ({
   startTime,
   isDarkTheme = true,
   uiLanguage = "en",
+  subPhase,
+  phaseStartTime,
 }: {
   message: string;
   startTime: number;
   isDarkTheme?: boolean;
   uiLanguage?: "zh" | "en";
+  subPhase?: "ai-generating" | "keyword-research-api" | "ai-analyzing";
+  phaseStartTime?: number;
 }) => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [phaseElapsedSeconds, setPhaseElapsedSeconds] = useState(0);
 
   useEffect(() => {
     if (!startTime) return;
@@ -1483,6 +1488,54 @@ const ThinkingIndicator = ({
     return () => clearInterval(interval);
   }, [startTime]);
 
+  // Track phase elapsed time separately
+  useEffect(() => {
+    if (!phaseStartTime) return;
+
+    const initialPhaseElapsed = Math.floor(
+      (Date.now() - phaseStartTime) / 1000
+    );
+    setPhaseElapsedSeconds(initialPhaseElapsed);
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - phaseStartTime) / 1000);
+      setPhaseElapsedSeconds(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [phaseStartTime]);
+
+  // Get sub-phase label
+  const getSubPhaseLabel = () => {
+    if (!subPhase) return null;
+    const labels: Record<string, { zh: string; en: string; color: string }> = {
+      "ai-generating": {
+        zh: "🧠 AI 生成",
+        en: "🧠 AI Gen",
+        color: isDarkTheme
+          ? "bg-purple-500/20 text-purple-300"
+          : "bg-purple-100 text-purple-700",
+      },
+      "keyword-research-api": {
+        zh: "🔍 Keyword Research",
+        en: "🔍 Keyword Research",
+        color: isDarkTheme
+          ? "bg-blue-500/20 text-blue-300"
+          : "bg-blue-100 text-blue-700",
+      },
+      "ai-analyzing": {
+        zh: "🤖 AI 分析",
+        en: "🤖 AI Analyze",
+        color: isDarkTheme
+          ? "bg-amber-500/20 text-amber-300"
+          : "bg-amber-100 text-amber-700",
+      },
+    };
+    return labels[subPhase];
+  };
+
+  const subPhaseInfo = getSubPhaseLabel();
+
   return (
     <div
       className={`flex items-center gap-3 p-3 rounded-lg border animate-pulse ${
@@ -1491,25 +1544,42 @@ const ThinkingIndicator = ({
           : "bg-emerald-50 border-emerald-200"
       }`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-1">
         <BrainCircuit
           className={`w-4 h-4 ${
             isDarkTheme ? "text-emerald-400" : "text-emerald-600"
           } animate-pulse`}
         />
+        {/* Sub-phase badge */}
+        {subPhaseInfo && (
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full font-medium ${subPhaseInfo.color}`}
+          >
+            {uiLanguage === "zh" ? subPhaseInfo.zh : subPhaseInfo.en}
+          </span>
+        )}
         <span
           className={`text-sm ${isDarkTheme ? "text-white" : "text-gray-800"}`}
         >
           {message}
         </span>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-3">
+        {/* Phase-specific timer */}
+        {phaseStartTime && subPhaseInfo && (
+          <span
+            className={`text-xs font-mono px-1.5 py-0.5 rounded ${subPhaseInfo.color}`}
+          >
+            {phaseElapsedSeconds}s
+          </span>
+        )}
+        {/* Total timer */}
         <span
           className={`text-xs font-mono font-bold ${
             isDarkTheme ? "text-emerald-400" : "text-emerald-600"
           }`}
         >
-          {elapsedSeconds}s
+          {uiLanguage === "zh" ? "总计" : "Total"}: {elapsedSeconds}s
         </span>
         <div className="flex space-x-1">
           <span
@@ -1552,6 +1622,8 @@ const AgentStream = ({
     message: string;
     startTime: number;
     phase: "generating" | "analyzing" | "searching" | "idle";
+    subPhase?: "ai-generating" | "keyword-research-api" | "ai-analyzing";
+    phaseStartTime?: number;
   };
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1947,6 +2019,8 @@ const AgentStream = ({
             startTime={thinkingStatus.startTime}
             isDarkTheme={isDarkTheme}
             uiLanguage={uiLanguage}
+            subPhase={thinkingStatus.subPhase}
+            phaseStartTime={thinkingStatus.phaseStartTime}
           />
         )}
       </div>
@@ -1970,6 +2044,8 @@ const BatchAnalysisStream = ({
     message: string;
     startTime: number;
     phase: "generating" | "analyzing" | "searching" | "idle";
+    subPhase?: "ai-generating" | "keyword-research-api" | "ai-analyzing";
+    phaseStartTime?: number;
   };
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -2439,6 +2515,8 @@ const BatchAnalysisStream = ({
             startTime={thinkingStatus.startTime}
             isDarkTheme={isDarkTheme}
             uiLanguage={uiLanguage}
+            subPhase={thinkingStatus.subPhase}
+            phaseStartTime={thinkingStatus.phaseStartTime}
           />
         )}
       </div>
@@ -5480,17 +5558,28 @@ export default function App() {
   const setThinkingStatus = (
     isThinking: boolean,
     message: string = "",
-    phase: "generating" | "analyzing" | "searching" | "idle" = "idle"
+    phase: "generating" | "analyzing" | "searching" | "idle" = "idle",
+    subPhase?: "ai-generating" | "keyword-research-api" | "ai-analyzing"
   ) => {
-    setState((prev) => ({
-      ...prev,
-      thinkingStatus: {
-        isThinking,
-        message,
-        startTime: isThinking ? Date.now() : prev.thinkingStatus.startTime,
-        phase,
-      },
-    }));
+    setState((prev) => {
+      const now = Date.now();
+      const isNewPhase = subPhase !== prev.thinkingStatus.subPhase;
+      return {
+        ...prev,
+        thinkingStatus: {
+          isThinking,
+          message,
+          startTime: isThinking
+            ? isNewPhase
+              ? now
+              : prev.thinkingStatus.startTime
+            : prev.thinkingStatus.startTime,
+          phase,
+          subPhase,
+          phaseStartTime: isNewPhase ? now : prev.thinkingStatus.phaseStartTime,
+        },
+      };
+    });
   };
 
   // Counter for generating unique thought IDs
@@ -6565,7 +6654,8 @@ export default function App() {
           state.uiLanguage === "zh"
             ? `🧠 AI 正在挖掘 "${state.seedKeyword}" 相关的词`
             : `🧠 AI is mining keywords related to "${state.seedKeyword}"`,
-          "generating"
+          "generating",
+          "ai-generating"
         );
 
         addLog(
@@ -6659,13 +6749,14 @@ export default function App() {
           taskId
         );
 
-        // Clear generating status and switch to analyzing
+        // Clear generating status and switch to keyword research API
         setThinkingStatus(
           true,
           state.uiLanguage === "zh"
-            ? `🔍 AI 正在分析 ${generatedKeywords.length} 个关键词的排名概率`
-            : `🔍 AI is analyzing ranking probability for ${generatedKeywords.length} keywords`,
-          "analyzing"
+            ? `🔍 Keyword Research API 正在获取 ${generatedKeywords.length} 个关键词的数据`
+            : `🔍 Keyword Research API fetching data for ${generatedKeywords.length} keywords`,
+          "analyzing",
+          "keyword-research-api"
         );
 
         addLog(
@@ -6701,17 +6792,18 @@ export default function App() {
 
           const keyword = generatedKeywords[i];
 
-          // Update thinking status for current keyword
+          // Update thinking status for current keyword - Keyword Research API
           setThinkingStatus(
             true,
             state.uiLanguage === "zh"
-              ? `🔍 AI 正在分析 "${keyword.keyword}" (${i + 1}/${
-                  generatedKeywords.length
-                })`
-              : `🔍 AI is analyzing "${keyword.keyword}" (${i + 1}/${
-                  generatedKeywords.length
-                })`,
-            "analyzing"
+              ? `🔍 Keyword Research API 正在获取 "${keyword.keyword}" (${
+                  i + 1
+                }/${generatedKeywords.length})`
+              : `🔍 Keyword Research API fetching "${keyword.keyword}" (${
+                  i + 1
+                }/${generatedKeywords.length})`,
+            "analyzing",
+            "keyword-research-api"
           );
 
           addLog(

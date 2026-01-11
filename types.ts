@@ -434,6 +434,8 @@ export interface AppState {
     message: string; // e.g. "AI正在挖掘manus相关的词" or "AI正在分析keyword难度"
     startTime: number; // timestamp when thinking started
     phase: 'generating' | 'analyzing' | 'searching' | 'idle';
+    subPhase?: 'ai-generating' | 'keyword-research-api' | 'ai-analyzing'; // 细分子阶段: AI生成 vs Keyword Research API
+    phaseStartTime?: number; // 当前子阶段开始时间
   };
 
   // Archives
