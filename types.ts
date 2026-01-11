@@ -237,6 +237,15 @@ export interface WorkflowConfig {
   createdAt: number;
   updatedAt: number;
   nodes: WorkflowNode[]; // Customized nodes
+  // Mining-specific settings (only for mining workflow)
+  miningSettings?: {
+    wordsPerRound?: number;
+    miningStrategy?: 'horizontal' | 'vertical';
+    miningConfig?: {
+      industry?: string;
+      additionalSuggestions?: string;
+    };
+  };
 }
 
 // Old AgentConfig - keeping for backward compatibility

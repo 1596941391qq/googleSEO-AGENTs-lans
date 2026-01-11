@@ -24,10 +24,16 @@ const DATAFORSEO_BASE_URL = 'https://api.dataforseo.com/v3';
 /**
  * 将目标语言代码转换为 DataForSEO 的 location_code 和 language_code
  * 
+ * 默认使用全球地区（美国 2840），不根据语言代码自动选择地区
+ * 
  * @param targetLanguage - 目标语言代码
+ * @param useGlobal - 是否使用全球地区（默认 true）
  * @returns { locationCode: number, languageCode: string }
  */
-export function getDataForSEOLocationAndLanguage(targetLanguage: string): { locationCode: number; languageCode: string } {
+export function getDataForSEOLocationAndLanguage(
+  targetLanguage: string,
+  useGlobal: boolean = true // 默认使用全球地区
+): { locationCode: number; languageCode: string } {
   // 语言代码映射
   const languageMap: { [key: string]: string } = {
     'en': 'en',
@@ -58,7 +64,8 @@ export function getDataForSEOLocationAndLanguage(targetLanguage: string): { loca
   };
 
   const languageCode = languageMap[targetLanguage] || 'en';
-  const locationCode = locationMap[targetLanguage] || 2840; // 默认美国
+  // 默认使用全球地区（美国 2840），不根据语言代码自动选择
+  const locationCode = useGlobal ? 2840 : (locationMap[targetLanguage] || 2840);
 
   return { locationCode, languageCode };
 }
@@ -108,6 +115,10 @@ function getAuthHeader(): string {
 
 /**
  * 批量获取关键词数据（使用 DataForSEO Labs Keyword Ideas API）
+ * 
+ * 重要：DataForSEO API 本身支持批量传入关键词数组（通过 keywords 字段）
+ * 所有关键词一次性批量传入，API 会自动处理，不需要手动循环
+ * 如果关键词超过建议的单次请求限制，会分批处理（但每批都是批量调用）
  *
  * @param keywords - 关键词数组
  * @param locationCode - 地区代码，默认 2840 (美国)，参考：https://docs.dataforseo.com/v3/appendix/locations
@@ -123,27 +134,47 @@ export async function fetchDataForSEOData(
   engine: SearchEngine = 'google',
   retryCount: number = 3
 ): Promise<DataForSEOKeywordData[]> {
-  const BATCH_SIZE = engine === 'google' ? 100 : 50; // 不同引擎限制不同
+  // 过滤空关键词
+  const validKeywords = keywords.filter(kw => kw && kw.trim().length > 0);
+  if (validKeywords.length === 0) {
+    console.warn('[DataForSEO] No valid keywords provided');
+    return [];
+  }
+
+  // DataForSEO API 本身支持批量传入关键词数组（通过 keywords 字段）
+  // 根据 API 文档和经验，Google 引擎建议单次请求不超过 100 个关键词
+  // 其他引擎建议不超过 50 个，以避免响应超时或限速
+  const BATCH_SIZE = engine === 'google' ? 100 : 50;
   const DELAY_BETWEEN_BATCHES = 1000;
 
   try {
-    console.log(`[DataForSEO] Fetching ${engine} data for ${keywords.length} keywords`);
+    console.log(`[DataForSEO] Fetching ${engine} data for ${validKeywords.length} keywords`);
 
-    if (keywords.length <= BATCH_SIZE) {
-      return await fetchBatchWithRetry(keywords, locationCode, languageCode, engine, retryCount);
+    // 如果关键词数量在建议的单次请求限制内，直接一次性批量调用（API 本身支持批量）
+    if (validKeywords.length <= BATCH_SIZE) {
+      return await fetchBatchWithRetry(validKeywords, locationCode, languageCode, engine, retryCount);
     }
 
+    // 如果关键词数量超过建议限制，分批处理（但每批都是批量调用，API 本身支持批量）
+    console.log(`[DataForSEO] Processing ${validKeywords.length} keywords in batches of ${BATCH_SIZE} (API supports batch, but splitting for better performance)`);
     const results: DataForSEOKeywordData[] = [];
-    for (let i = 0; i < keywords.length; i += BATCH_SIZE) {
-      const batch = keywords.slice(i, i + BATCH_SIZE);
+    
+    // 分批处理，每批都是批量调用（API 本身支持批量传入关键词数组）
+    for (let i = 0; i < validKeywords.length; i += BATCH_SIZE) {
+      const batch = validKeywords.slice(i, i + BATCH_SIZE);
+      console.log(`[DataForSEO] Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(validKeywords.length / BATCH_SIZE)} (${batch.length} keywords)`);
+      
+      // 批量调用这一批关键词（API 本身支持批量，通过 keywords 数组传入）
       const batchResults = await fetchBatchWithRetry(batch, locationCode, languageCode, engine, retryCount);
       results.push(...batchResults);
 
-      if (i + BATCH_SIZE < keywords.length) {
+      // 批次间延迟，避免限速
+      if (i + BATCH_SIZE < validKeywords.length) {
         await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
       }
     }
 
+    console.log(`[DataForSEO] Completed batch processing: ${results.length} total results`);
     return results;
   } catch (error: any) {
     console.error(`[DataForSEO] ${engine} API call failed:`, error);
@@ -152,7 +183,9 @@ export async function fetchDataForSEOData(
 }
 
 /**
- * 获取一批关键词数据（带重试逻辑）
+ * 单次批量请求（内部函数，处理单批关键词）
+ * 
+ * 重要：所有关键词一次性批量传入 API，不是逐个调用
  */
 async function fetchBatchWithRetry(
   keywords: string[],
@@ -161,6 +194,10 @@ async function fetchBatchWithRetry(
   engine: SearchEngine,
   maxRetries: number
 ): Promise<DataForSEOKeywordData[]> {
+  if (keywords.length === 0) {
+    return [];
+  }
+
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -176,13 +213,16 @@ async function fetchBatchWithRetry(
         endpoint = `${DATAFORSEO_BASE_URL}/keywords_data/${engine}/search_volume/live`;
       }
 
+      // 构建请求体 - 所有关键词一次性传入（批量调用）
       const requestBody = [
         {
-          keywords: keywords,
+          keywords: keywords, // 关键词数组，一次性传入
           location_code: locationCode,
           language_code: languageCode,
         }
       ];
+
+      console.log(`[DataForSEO] Batch request: ${keywords.length} keywords (${engine}, location: ${locationCode}, language: ${languageCode})`);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -252,6 +292,9 @@ async function fetchBatchWithRetry(
         };
       });
 
+      const foundCount = results.filter(r => r.is_data_found).length;
+      console.log(`[DataForSEO] Batch returned ${foundCount}/${results.length} keywords with data`);
+
       return results;
     } catch (error: any) {
       clearTimeout(timeoutId);
@@ -285,6 +328,8 @@ async function fetchBatchWithRetry(
 
 /**
  * 批量获取关键词难度（使用 DataForSEO Labs Bulk Keyword Difficulty API）
+ * 
+ * 重要：所有关键词一次性批量传入，避免限速问题
  *
  * @param keywords - 关键词数组（最多1000个）
  * @param locationCode - 地区代码，默认 2840 (美国)
@@ -303,14 +348,22 @@ export async function fetchKeywordDifficulty(
     return keywords.map(kw => ({ keyword: kw }));
   }
 
+  // 过滤空关键词
+  const validKeywords = keywords.filter(kw => kw && kw.trim().length > 0);
+  if (validKeywords.length === 0) {
+    console.warn('[DataForSEO] No valid keywords provided for difficulty check');
+    return [];
+  }
+
   try {
-    console.log(`[DataForSEO] Fetching ${engine} keyword difficulty for ${keywords.length} keywords`);
+    console.log(`[DataForSEO] Fetching ${engine} keyword difficulty for ${validKeywords.length} keywords (batch mode)`);
 
     const endpoint = `${DATAFORSEO_BASE_URL}/dataforseo_labs/${engine}/bulk_keyword_difficulty/live`;
 
+    // 构建请求体 - 所有关键词一次性传入（批量调用，最多1000个）
     const requestBody = [
       {
-        keywords: keywords.slice(0, 1000), // 限制最多1000个
+        keywords: validKeywords.slice(0, 1000), // 限制最多1000个，一次性批量传入
         location_code: locationCode,
         language_code: languageCode,
       }
@@ -318,6 +371,8 @@ export async function fetchKeywordDifficulty(
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+    console.log(`[DataForSEO] Batch request: ${requestBody[0].keywords.length} keywords for difficulty check`);
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -340,20 +395,23 @@ export async function fetchKeywordDifficulty(
 
     if (!data.tasks || !data.tasks[0] || !data.tasks[0].result) {
       console.warn('[DataForSEO] No keyword difficulty results');
-      return keywords.map(kw => ({ keyword: kw }));
+      return validKeywords.map(kw => ({ keyword: kw }));
     }
 
-    return data.tasks[0].result.map((item: any) => ({
+    const results = data.tasks[0].result.map((item: any) => ({
       keyword: item.keyword || '',
       competition_index: item.competition_index, // DataForSEO 返回的 KD 字段
     }));
+
+    console.log(`[DataForSEO] Batch returned ${results.length} keyword difficulty results`);
+    return results;
   } catch (error: any) {
     if (error.name === 'AbortError') {
       console.warn('[DataForSEO] Keyword difficulty API timeout (5s). Skipping without retry.');
     } else {
-    console.error('[DataForSEO] Failed to fetch keyword difficulty:', error.message);
+      console.error('[DataForSEO] Failed to fetch keyword difficulty:', error.message);
     }
-    return keywords.map(kw => ({ keyword: kw }));
+    return validKeywords.map(kw => ({ keyword: kw }));
   }
 }
 

@@ -41,6 +41,16 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
   // 跟踪哪个关键词的蓝海分数详细分解是展开的（默认折叠）
   const [expandedScoreBreakdownId, setExpandedScoreBreakdownId] =
     React.useState<string | null>(null);
+
+  // 检查是否所有关键词都已完成分析（Analysis Complete）
+  const isAnalysisComplete = React.useMemo(() => {
+    if (keywords.length === 0) return false;
+    // 所有关键词都有reasoning或probability，表示分析完成
+    return keywords.every(
+      (kw) => (kw.reasoning && kw.reasoning.trim() !== "") || kw.probability
+    );
+  }, [keywords]);
+
   return (
     <div className="overflow-x-auto custom-scrollbar">
       <table
@@ -59,10 +69,6 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
             <th className="px-4 py-4 w-10"></th>
             <th className="px-4 py-4">{t.colKw}</th>
             <th className="px-4 py-4">{t.colTrans}</th>
-            <th className="px-4 py-4">
-              {t.keywordDifficulty || (uiLanguage === "zh" ? "难度" : "KD")}
-            </th>
-            <th className="px-4 py-4">CPC</th>
             {showDRComparison && (
               <th className="px-4 py-4">
                 {t.drComparison || (uiLanguage === "zh" ? "DR对比" : "DR Comp")}
@@ -108,52 +114,6 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                     }`}
                   >
                     {item.translation}
-                  </td>
-                  <td
-                    className={`px-4 py-4 font-bold ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {item.dataForSEOData?.difficulty !== undefined ? (
-                      <span
-                        className={cn(
-                          item.dataForSEOData.difficulty <= 40
-                            ? "text-emerald-400"
-                            : item.dataForSEOData.difficulty <= 60
-                            ? "text-yellow-400"
-                            : "text-red-400"
-                        )}
-                      >
-                        {item.dataForSEOData.difficulty}
-                      </span>
-                    ) : item.serankingData?.difficulty !== undefined ? (
-                      <span
-                        className={cn(
-                          item.serankingData.difficulty <= 40
-                            ? "text-emerald-400"
-                            : item.serankingData.difficulty <= 60
-                            ? "text-yellow-400"
-                            : "text-red-400"
-                        )}
-                      >
-                        {item.serankingData.difficulty}
-                      </span>
-                    ) : (
-                      <span className="text-slate-500">-</span>
-                    )}
-                  </td>
-                  <td
-                    className={`px-4 py-4 ${
-                      isDarkTheme ? "text-slate-300" : "text-gray-700"
-                    }`}
-                  >
-                    {item.dataForSEOData?.cpc !== undefined ? (
-                      <span>${item.dataForSEOData.cpc.toFixed(2)}</span>
-                    ) : item.serankingData?.cpc !== undefined ? (
-                      <span>${item.serankingData.cpc.toFixed(2)}</span>
-                    ) : (
-                      <span className="text-slate-500">-</span>
-                    )}
                   </td>
                   {showDRComparison && (
                     <td
@@ -262,7 +222,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                     }`}
                   >
                     <td
-                      colSpan={showDRComparison ? 10 : 9}
+                      colSpan={showDRComparison ? 8 : 7}
                       className="px-4 py-6"
                     >
                       <div className="flex flex-col md:flex-row gap-6">
@@ -1003,6 +963,8 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                               </CardContent>
                             </Card>
                           ) : (
+                            // 分析完成后不再显示Google搜索结果
+                            !isAnalysisComplete &&
                             item.topSerpSnippets &&
                             item.topSerpSnippets.length > 0 && (
                               <Card

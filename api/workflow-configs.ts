@@ -146,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
  */
 async function createConfig(req: VercelRequest, res: VercelResponse, userId: string) {
   const body = parseRequestBody(req);
-  const { workflowId, name, nodes } = body;
+  const { workflowId, name, nodes, miningSettings } = body;
 
   // Validate required fields
   if (!workflowId || !name || !nodes) {
@@ -199,7 +199,14 @@ async function createConfig(req: VercelRequest, res: VercelResponse, userId: str
     }));
 
     // Create config in database
-    const dbConfig = await createWorkflowConfig(userId, workflowId, name, preparedNodes);
+    // Store miningSettings as part of nodes JSONB (as metadata) for backward compatibility
+    const nodesWithSettings: any = miningSettings ? { _nodes: preparedNodes, _miningSettings: miningSettings } : preparedNodes;
+    // @ts-ignore - nodes parameter can be array or object (for backward compatibility with miningSettings)
+    const dbConfig = await createWorkflowConfig(userId, workflowId, name, nodesWithSettings);
+
+    // Extract miningSettings from nodes if present
+    const extractedNodes = Array.isArray(dbConfig.nodes) ? dbConfig.nodes : (dbConfig.nodes as any)?._nodes || [];
+    const extractedMiningSettings = (dbConfig.nodes as any)?._miningSettings;
 
     // Convert to API response format
     const config: WorkflowConfig = {
@@ -208,7 +215,8 @@ async function createConfig(req: VercelRequest, res: VercelResponse, userId: str
       name: dbConfig.name,
       createdAt: dbConfig.created_at.getTime(),
       updatedAt: dbConfig.updated_at.getTime(),
-      nodes: dbConfig.nodes
+      nodes: extractedNodes,
+      ...(extractedMiningSettings && { miningSettings: extractedMiningSettings })
     };
 
     return res.status(201).json({
@@ -243,14 +251,21 @@ async function listConfigs(req: VercelRequest, res: VercelResponse, userId: stri
     );
 
     // Convert to API response format
-    const configs: WorkflowConfig[] = dbConfigs.map((dbConfig) => ({
-      id: dbConfig.id,
-      workflowId: dbConfig.workflow_id,
-      name: dbConfig.name,
-      createdAt: dbConfig.created_at.getTime(),
-      updatedAt: dbConfig.updated_at.getTime(),
-      nodes: dbConfig.nodes
-    }));
+    const configs: WorkflowConfig[] = dbConfigs.map((dbConfig) => {
+      // Extract miningSettings from nodes if present
+      const extractedNodes = Array.isArray(dbConfig.nodes) ? dbConfig.nodes : (dbConfig.nodes as any)?._nodes || [];
+      const extractedMiningSettings = (dbConfig.nodes as any)?._miningSettings;
+
+      return {
+        id: dbConfig.id,
+        workflowId: dbConfig.workflow_id,
+        name: dbConfig.name,
+        createdAt: dbConfig.created_at.getTime(),
+        updatedAt: dbConfig.updated_at.getTime(),
+        nodes: extractedNodes,
+        ...(extractedMiningSettings && { miningSettings: extractedMiningSettings })
+      };
+    });
 
     return res.json({
       success: true,
@@ -278,6 +293,10 @@ async function getConfig(req: VercelRequest, res: VercelResponse, configId: stri
       });
     }
 
+    // Extract miningSettings from nodes if present
+    const extractedNodes = Array.isArray(dbConfig.nodes) ? dbConfig.nodes : (dbConfig.nodes as any)?._nodes || [];
+    const extractedMiningSettings = (dbConfig.nodes as any)?._miningSettings;
+
     // Convert to API response format
     const config: WorkflowConfig = {
       id: dbConfig.id,
@@ -285,7 +304,8 @@ async function getConfig(req: VercelRequest, res: VercelResponse, configId: stri
       name: dbConfig.name,
       createdAt: dbConfig.created_at.getTime(),
       updatedAt: dbConfig.updated_at.getTime(),
-      nodes: dbConfig.nodes
+      nodes: extractedNodes,
+      ...(extractedMiningSettings && { miningSettings: extractedMiningSettings })
     };
 
     return res.json({
@@ -304,11 +324,15 @@ async function getConfig(req: VercelRequest, res: VercelResponse, configId: stri
  */
 async function updateConfig(req: VercelRequest, res: VercelResponse, configId: string, userId: string) {
   const body = parseRequestBody(req);
-  const { name, nodes } = body;
+  const { name, nodes, miningSettings } = body;
 
   try {
+    // Get existing config to preserve miningSettings if not provided
+    const existingConfig = await getWorkflowConfigById(configId, userId);
+    const existingMiningSettings = existingConfig && (existingConfig.nodes as any)?._miningSettings;
+
     // Prepare updates
-    const updates: { name?: string; nodes?: any[] } = {};
+    const updates: { name?: string; nodes?: any } = {};
 
     if (name !== undefined) {
       updates.name = name;
@@ -321,7 +345,7 @@ async function updateConfig(req: VercelRequest, res: VercelResponse, configId: s
           message: 'nodes must be an array'
         });
       }
-      updates.nodes = nodes.map((node: any) => ({
+      const preparedNodes = nodes.map((node: any) => ({
         ...node,
         id: node.id || `node-${Date.now()}`,
         type: node.type || 'agent',
@@ -329,6 +353,14 @@ async function updateConfig(req: VercelRequest, res: VercelResponse, configId: s
         prompt: node.prompt || node.defaultPrompt || '',
         defaultPrompt: node.defaultPrompt || node.prompt || ''
       }));
+
+      // Store miningSettings as part of nodes JSONB (preserve existing if not provided, use new if provided)
+      const finalMiningSettings = miningSettings !== undefined ? miningSettings : existingMiningSettings;
+      updates.nodes = finalMiningSettings ? { _nodes: preparedNodes, _miningSettings: finalMiningSettings } : preparedNodes;
+    } else if (miningSettings !== undefined) {
+      // Update miningSettings only, preserve existing nodes
+      const existingNodes = Array.isArray(existingConfig?.nodes) ? existingConfig!.nodes : (existingConfig?.nodes as any)?._nodes || [];
+      updates.nodes = { _nodes: existingNodes, _miningSettings: miningSettings };
     }
 
     if (Object.keys(updates).length === 0) {
@@ -348,6 +380,10 @@ async function updateConfig(req: VercelRequest, res: VercelResponse, configId: s
       });
     }
 
+    // Extract miningSettings from nodes if present
+    const extractedNodes = Array.isArray(dbConfig.nodes) ? dbConfig.nodes : (dbConfig.nodes as any)?._nodes || [];
+    const extractedMiningSettings = (dbConfig.nodes as any)?._miningSettings;
+
     // Convert to API response format
     const updatedConfig: WorkflowConfig = {
       id: dbConfig.id,
@@ -355,7 +391,8 @@ async function updateConfig(req: VercelRequest, res: VercelResponse, configId: s
       name: dbConfig.name,
       createdAt: dbConfig.created_at.getTime(),
       updatedAt: dbConfig.updated_at.getTime(),
-      nodes: dbConfig.nodes
+      nodes: extractedNodes,
+      ...(extractedMiningSettings && { miningSettings: extractedMiningSettings })
     };
 
     return res.json({

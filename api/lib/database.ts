@@ -206,7 +206,7 @@ export async function createWorkflowConfig(
   userId: string,
   workflowId: string,
   name: string,
-  nodes: any[]
+  nodes: any // Support both array and object (for miningSettings storage)
 ): Promise<WorkflowConfig> {
   try {
     await initWorkflowConfigsTable();

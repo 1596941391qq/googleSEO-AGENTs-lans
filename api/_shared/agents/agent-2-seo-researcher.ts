@@ -7,7 +7,7 @@
 
 import { callGeminiAPI } from '../gemini.js';
 import { fetchSerpResults, fetchSerpResultsBatch, type SerpData } from '../tools/serp-search.js';
-import { getSEOResearcherPrompt } from '../../../services/prompts/index.js';
+import { getSEOResearcherPrompt, DEFAULT_SERP_ANALYSIS } from '../../../services/prompts/index.js';
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
 import { fetchKeywordData, SearchEngine } from '../tools/dataforseo.js';
 import { getDomainOverview, getBatchDomainOverview } from '../tools/dataforseo-domain.js';
@@ -945,6 +945,23 @@ export const analyzeRankingProbability = async (
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const engineName = searchEngine.charAt(0).toUpperCase() + searchEngine.slice(1);
 
+  // OPTIMIZED: Automatically select language-appropriate system instruction
+  // If the provided systemInstruction matches the default English version, replace it with the appropriate language version
+  // This ensures AI outputs in the correct language (Chinese or English) based on UI language setting
+  let finalSystemInstruction = systemInstruction;
+  const defaultEnPrompt = DEFAULT_SERP_ANALYSIS.en.trim();
+  const isDefaultPrompt = systemInstruction.trim() === defaultEnPrompt ||
+    systemInstruction.includes('You are a Google SERP Analysis AI Expert');
+
+  if (isDefaultPrompt && uiLanguage === 'zh') {
+    // Use Chinese version of the prompt for Chinese UI
+    finalSystemInstruction = DEFAULT_SERP_ANALYSIS.zh.trim();
+  } else if (isDefaultPrompt && uiLanguage === 'en') {
+    // Ensure English version is used for English UI
+    finalSystemInstruction = defaultEnPrompt;
+  }
+  // If it's a custom prompt, keep it as-is (user may have customized it in English)
+
   // 如果提供了网站URL但没提供DR，尝试获取网站自身的DR
   let siteDR = websiteDR;
   if (websiteUrl && siteDR === undefined) {
@@ -1082,20 +1099,27 @@ export const analyzeRankingProbability = async (
     // OPTIMIZED: Removed topSerpSnippets and serpResultCount from AI output
     // These fields are populated from real SERP data after AI response (see lines 1520-1533)
     // This reduces token consumption, improves response speed, and eliminates potential inconsistencies
+    // OPTIMIZED: Use language-appropriate system instruction and enforce language-specific output
+    const outputLanguageInstruction = uiLanguage === 'zh'
+      ? '重要：所有输出内容必须使用中文。包括 intentAssessment 和 reasoning 字段的内容都必须用中文编写。'
+      : 'IMPORTANT: All output content must be in English. Both intentAssessment and reasoning fields must be written in English.';
+
     const fullSystemInstruction = `
-${systemInstruction}
+${finalSystemInstruction}
 
 TASK: Analyze ${engineName} SERP for "${keywordData.keyword}"
 ${serpContext}
 ${dataForSEOContext}
 
+${outputLanguageInstruction}
+
 OUTPUT (${uiLangName}, JSON only):
 {
-  "intentAssessment": "Intent: [type] | SERP Match: [analysis]",
-  "topDomainType": "Big Brand" | "Niche Site" | "Forum/Social" | "Weak Page" | "Gov/Edu" | "Unknown",
-  "probability": "High" | "Medium" | "Low",
+  "intentAssessment": "${uiLanguage === 'zh' ? '用户意图：[类型] | SERP匹配：[分析]' : 'Intent: [type] | SERP Match: [analysis]'}",
+  "topDomainType": "${uiLanguage === 'zh' ? '大品牌 | 利基网站 | 论坛/社交 | 弱页面 | 政府/教育 | 未知' : 'Big Brand | Niche Site | Forum/Social | Weak Page | Gov/Edu | Unknown'}",
+  "probability": "${uiLanguage === 'zh' ? '高 | 中 | 低' : 'High | Medium | Low'}",
   "relevanceScore": 0-1,
-  "reasoning": "Brief analysis (2-3 sentences)"
+  "reasoning": "${uiLanguage === 'zh' ? '简要分析（2-3句话）' : 'Brief analysis (2-3 sentences)'}"
 }`;
 
     try {

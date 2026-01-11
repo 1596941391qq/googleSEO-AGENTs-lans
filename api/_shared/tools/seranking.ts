@@ -11,7 +11,7 @@
 const SERANKING_API_KEY = process.env.SERANKING_API_KEY || '';
 const SE_RANKING_BASE_URL = 'https://api.seranking.com/v1';
 const SE_RANKING_TIMEOUT_MS = 5000; // 5秒超时
-const SE_RANKING_MAX_KEYWORDS = 100; // 单次请求最大关键词数
+const SE_RANKING_MAX_KEYWORDS = 5000; // 单次请求最大关键词数（根据 API 文档，最多支持 5000 个）
 
 // SE-Ranking source 参数映射（语言/地区 -> source）
 const SOURCE_MAP: { [key: string]: string } = {
@@ -46,13 +46,21 @@ export function isSERankingAvailable(): boolean {
 
 /**
  * 获取 SE-Ranking source 参数
+ * 
+ * 默认使用 'us'（美国/全球），不根据语言代码自动选择地区
+ * 如果需要特定地区，可以通过参数传入
  */
-function getSource(languageCode: string): string {
-  return SOURCE_MAP[languageCode] || 'us';
+function getSource(languageCode?: string): string {
+  // 默认使用 'us'（美国/全球），不根据语言代码自动选择
+  // 这样可以获取全球数据，而不是特定地区的数据
+  return 'us';
 }
 
 /**
  * 批量获取关键词数据（使用 SE-Ranking Keyword Research API）
+ * 
+ * 重要：SE-Ranking API 本身支持批量传入关键词列表（最多 5000 个）
+ * 所有关键词一次性批量传入，API 会自动处理，不需要手动分批
  *
  * @param keywords - 关键词数组
  * @param languageCode - 语言代码，默认 'en'
@@ -60,11 +68,9 @@ function getSource(languageCode: string): string {
  */
 export async function fetchSERankingData(
   keywords: string[],
-  languageCode: string = 'en'
+  languageCode: string = 'en',
+  useGlobal: boolean = true // 默认使用全球地区
 ): Promise<SERankingKeywordData[]> {
-  // 前置检查
-
-
   // 过滤空关键词
   const validKeywords = keywords.filter(kw => kw && kw.trim().length > 0);
   if (validKeywords.length === 0) {
@@ -72,22 +78,66 @@ export async function fetchSERankingData(
     return [];
   }
 
-  // 限制关键词数量（取前100个）
-  const keywordsToFetch = validKeywords.slice(0, SE_RANKING_MAX_KEYWORDS);
+  // SE-Ranking API 支持最多 5000 个关键词，如果超过则分批处理
   if (validKeywords.length > SE_RANKING_MAX_KEYWORDS) {
-    console.warn(`[SE-Ranking] Truncated keywords from ${validKeywords.length} to ${SE_RANKING_MAX_KEYWORDS}`);
+    console.log(`[SE-Ranking] Processing ${validKeywords.length} keywords in batches of ${SE_RANKING_MAX_KEYWORDS} (API limit)`);
+    const allResults: SERankingKeywordData[] = [];
+
+    // 分批处理（仅在超过 API 限制时）
+    for (let i = 0; i < validKeywords.length; i += SE_RANKING_MAX_KEYWORDS) {
+      const batch = validKeywords.slice(i, i + SE_RANKING_MAX_KEYWORDS);
+      console.log(`[SE-Ranking] Processing batch ${Math.floor(i / SE_RANKING_MAX_KEYWORDS) + 1}/${Math.ceil(validKeywords.length / SE_RANKING_MAX_KEYWORDS)} (${batch.length} keywords)`);
+
+      // 批量调用这一批关键词（API 本身支持批量）
+      const batchResults = await fetchSERankingDataBatch(batch, languageCode, useGlobal);
+      allResults.push(...batchResults);
+
+      // 批次间小延迟，避免限速
+      if (i + SE_RANKING_MAX_KEYWORDS < validKeywords.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log(`[SE-Ranking] Completed batch processing: ${allResults.length} total results`);
+    return allResults;
   }
 
-  const source = getSource(languageCode);
+  // 关键词数量在 API 限制内，直接一次性批量调用（API 本身支持批量）
+  return await fetchSERankingDataBatch(validKeywords, languageCode, useGlobal);
+}
+
+/**
+ * 单次批量请求（内部函数）
+ * 
+ * SE-Ranking API 本身支持批量传入关键词列表，通过 keywords[] 参数
+ * 不需要手动循环，直接一次性传入所有关键词即可
+ */
+async function fetchSERankingDataBatch(
+  keywords: string[],
+  languageCode: string = 'en',
+  useGlobal: boolean = true // 默认使用全球地区
+): Promise<SERankingKeywordData[]> {
+  if (keywords.length === 0) {
+    return [];
+  }
+
+  // API 支持最多 5000 个关键词，这里确保不超过限制
+  const keywordsToFetch = keywords.slice(0, SE_RANKING_MAX_KEYWORDS);
+  if (keywords.length > SE_RANKING_MAX_KEYWORDS) {
+    console.warn(`[SE-Ranking] Batch truncated from ${keywords.length} to ${SE_RANKING_MAX_KEYWORDS}`);
+  }
+
+  // 默认使用 'us'（美国/全球），不根据语言代码自动选择地区
+  const source = useGlobal ? 'us' : getSource(languageCode);
   const endpoint = `${SE_RANKING_BASE_URL}/keywords/export?source=${source}`;
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SE_RANKING_TIMEOUT_MS);
 
   try {
-    console.log(`[SE-Ranking] Fetching data for ${keywordsToFetch.length} keywords (source: ${source})`);
+    console.log(`[SE-Ranking] Batch request: ${keywordsToFetch.length} keywords (source: ${source})`);
 
-    // 构建 FormData
+    // 构建 FormData - 所有关键词一次性传入
     const formData = new FormData();
     keywordsToFetch.forEach(kw => {
       formData.append('keywords[]', kw.trim());
@@ -162,7 +212,7 @@ export async function fetchSERankingData(
     });
 
     const foundCount = results.filter((r: SERankingKeywordData) => r.is_data_found).length;
-    console.log(`[SE-Ranking] Returned ${foundCount}/${results.length} keywords with data`);
+    console.log(`[SE-Ranking] Batch returned ${foundCount}/${results.length} keywords with data`);
 
     return results;
 

@@ -165,7 +165,7 @@ const TEXT = {
     archivesTitle: "Archives",
     noArchives: "No saved reports yet.",
     filterAll: "All Probabilities",
-    filterHigh: "High Only",
+    filterHigh: "Medium & Above",
     downloadCSV: "Export CSV",
     deepDive: "Deep Dive Strategy",
     btnGenerateArticle: "Generate Article",
@@ -334,7 +334,7 @@ const TEXT = {
     archivesTitle: "历史存档",
     noArchives: "暂无存档记录",
     filterAll: "所有概率",
-    filterHigh: "仅看 HIGH (推荐)",
+    filterHigh: "中概率及以上",
     downloadCSV: "下载表格",
     deepDive: "深度挖掘",
     btnGenerateArticle: "生成图文",
@@ -759,7 +759,8 @@ const renderAgentDataTable = (
     | "dataforseo-keywords"
     | "google-search-results",
   isDarkTheme: boolean = true,
-  uiLanguage: string = "zh"
+  uiLanguage: string = "zh",
+  t: any = { analysisReasoning: "Analysis Reasoning" }
 ) => {
   // 对于这些 cardType，使用 AgentStreamFeed 组件渲染（在 AgentStream 中处理）
   // 这里只处理需要特殊渲染的 dataType
@@ -1208,7 +1209,8 @@ const renderAgentDataTable = (
                           isDarkTheme ? "text-white/70" : "text-gray-600"
                         }`}
                       >
-                        ANALYSIS REASONING
+                        {t.analysisReasoning?.toUpperCase() ||
+                          "ANALYSIS REASONING"}
                       </div>
                       <div
                         className={`text-xs leading-relaxed ${
@@ -1606,8 +1608,11 @@ const AgentStream = ({
               {thought.type === "analysis" && thought.analyzedKeywords && (
                 <div className="mt-2 space-y-2">
                   {thought.analyzedKeywords
-                    .filter((kw) => kw.serankingData?.is_data_found)
-                    .slice(0, 5) // Show top 5 keywords with research data
+                    .filter(
+                      (kw) =>
+                        kw.serankingData?.is_data_found ||
+                        kw.dataForSEOData?.is_data_found
+                    )
                     .map((kw) => (
                       <div
                         key={kw.id}
@@ -1647,8 +1652,11 @@ const AgentStream = ({
                                   : "text-emerald-600"
                               }`}
                             >
-                              {kw.serankingData?.volume?.toLocaleString() ||
-                                "N/A"}
+                              {(
+                                kw.serankingData?.volume ??
+                                kw.dataForSEOData?.search_volume ??
+                                kw.volume
+                              )?.toLocaleString() || "N/A"}
                             </div>
                           </div>
                           <div
@@ -1669,11 +1677,17 @@ const AgentStream = ({
                             </div>
                             <div
                               className={`text-sm font-bold ${
-                                (kw.serankingData?.difficulty || 0) <= 40
+                                ((kw.serankingData?.difficulty ??
+                                  kw.dataForSEOData?.competition_index ??
+                                  0) ||
+                                  0) <= 40
                                   ? isDarkTheme
                                     ? "text-emerald-400"
                                     : "text-emerald-600"
-                                  : (kw.serankingData?.difficulty || 0) <= 60
+                                  : ((kw.serankingData?.difficulty ??
+                                      kw.dataForSEOData?.competition_index ??
+                                      0) ||
+                                      0) <= 60
                                   ? isDarkTheme
                                     ? "text-yellow-400"
                                     : "text-yellow-600"
@@ -1682,7 +1696,9 @@ const AgentStream = ({
                                   : "text-red-600"
                               }`}
                             >
-                              {kw.serankingData?.difficulty || "N/A"}
+                              {kw.serankingData?.difficulty ??
+                                kw.dataForSEOData?.competition_index ??
+                                "N/A"}
                             </div>
                           </div>
                           <div
@@ -1708,7 +1724,10 @@ const AgentStream = ({
                                   : "text-emerald-600"
                               }`}
                             >
-                              ${kw.serankingData?.cpc?.toFixed(2) || "N/A"}
+                              $
+                              {(
+                                kw.serankingData?.cpc ?? kw.dataForSEOData?.cpc
+                              )?.toFixed(2) || "N/A"}
                             </div>
                           </div>
                           <div
@@ -1734,8 +1753,10 @@ const AgentStream = ({
                                   : "text-emerald-600"
                               }`}
                             >
-                              {kw.serankingData?.competition?.toFixed(2) ||
-                                "N/A"}
+                              {(
+                                kw.serankingData?.competition ??
+                                kw.dataForSEOData?.competition
+                              )?.toFixed(2) || "N/A"}
                             </div>
                           </div>
                         </div>
@@ -1836,7 +1857,8 @@ const AgentStream = ({
                       thought.data,
                       dataType,
                       isDarkTheme,
-                      uiLanguage
+                      uiLanguage,
+                      t
                     );
                   })()}
                 </div>
@@ -4222,6 +4244,12 @@ export default function App() {
             ? state.analyzePrompt
             : node.prompt,
       })),
+      // Include mining settings
+      miningSettings: {
+        wordsPerRound: state.wordsPerRound,
+        miningStrategy: state.miningStrategy,
+        miningConfig: state.miningConfig,
+      },
     };
 
     try {
@@ -4277,6 +4305,14 @@ export default function App() {
         ...prev,
         genPrompt: genNode?.prompt || DEFAULT_GEN_PROMPT_EN,
         analyzePrompt: analyzeNode?.prompt || DEFAULT_ANALYZE_PROMPT_EN,
+        // Restore mining settings if available
+        ...(config.miningSettings && {
+          wordsPerRound:
+            config.miningSettings.wordsPerRound ?? prev.wordsPerRound,
+          miningStrategy:
+            config.miningSettings.miningStrategy ?? prev.miningStrategy,
+          miningConfig: config.miningSettings.miningConfig ?? prev.miningConfig,
+        }),
         currentWorkflowConfigIds: {
           ...prev.currentWorkflowConfigIds,
           mining: config.id,
@@ -4332,6 +4368,12 @@ export default function App() {
           method: "PUT",
           body: JSON.stringify({
             nodes: updatedNodes,
+            // Include mining settings when updating
+            miningSettings: {
+              wordsPerRound: state.wordsPerRound,
+              miningStrategy: state.miningStrategy,
+              miningConfig: state.miningConfig,
+            },
           }),
         }
       );
@@ -6459,6 +6501,24 @@ export default function App() {
         taskId
       );
 
+      // Get latest state values for this round (settings may have been changed in UI)
+      let latestWordsPerRound = state.wordsPerRound;
+      let latestMiningStrategy = state.miningStrategy;
+      let latestUserSuggestion = state.userSuggestion;
+      let latestMiningConfig = state.miningConfig;
+
+      // Get latest state through setState callback to ensure we have the most recent values
+      await new Promise<void>((resolve) => {
+        setState((prev) => {
+          latestWordsPerRound = prev.wordsPerRound;
+          latestMiningStrategy = prev.miningStrategy;
+          latestUserSuggestion = prev.userSuggestion;
+          latestMiningConfig = prev.miningConfig;
+          resolve();
+          return prev; // Don't actually change state, just read latest values
+        });
+      });
+
       // Dynamic thought message based on mining strategy
       let thoughtMessage = "";
       if (currentRound === 1) {
@@ -6466,7 +6526,7 @@ export default function App() {
           state.seedKeyword
         }" in ${state.targetLanguage.toUpperCase()}.`;
       } else {
-        if (state.miningStrategy === "horizontal") {
+        if (latestMiningStrategy === "horizontal") {
           thoughtMessage = `Round ${currentRound}: Lateral thinking mode. Exploring semantically distant concepts.`;
         } else {
           thoughtMessage = `Round ${currentRound}: Vertical deep dive mode. Exploring long-tail variations and specific use cases.`;
@@ -6501,12 +6561,12 @@ export default function App() {
           getWorkflowPrompt("mining", "mining-gen", state.genPrompt),
           allKeywordsRef.current,
           currentRound,
-          state.wordsPerRound,
-          state.miningStrategy,
-          state.userSuggestion,
+          latestWordsPerRound,
+          latestMiningStrategy,
+          latestUserSuggestion,
           state.uiLanguage,
-          state.miningConfig?.industry,
-          state.miningConfig?.additionalSuggestions
+          latestMiningConfig?.industry,
+          latestMiningConfig?.additionalSuggestions
         );
 
         const generatedKeywords = result.keywords;
@@ -6582,8 +6642,8 @@ export default function App() {
         setThinkingStatus(
           true,
           state.uiLanguage === "zh"
-            ? `🔍 Keyword Research API 正在获取 ${generatedKeywords.length} 个关键词的数据`
-            : `🔍 Keyword Research API fetching data for ${generatedKeywords.length} keywords`,
+            ? `🔍 AI正在分析 ${generatedKeywords.length} 个关键词的数据`
+            : `🔍 AI is analyzing data for ${generatedKeywords.length} keywords`,
           "analyzing",
           "keyword-research-api"
         );
@@ -6603,127 +6663,104 @@ export default function App() {
           taskId
         );
 
-        // Real-time streaming: Analyze keywords one by one for real-time display
-        const analyzedBatch: KeywordData[] = [];
-
+        // Batch analyze all keywords at once (API will batch fetch keyword research data internally)
         addLog(
-          `[Round ${currentRound}] Analyzing ${generatedKeywords.length} keywords one by one (real-time streaming)...`,
+          state.uiLanguage === "zh"
+            ? `🔍 批量分析 ${generatedKeywords.length} 个关键词（API 将批量获取研究数据）...`
+            : `🔍 Batch analyzing ${generatedKeywords.length} keywords (API will batch fetch research data)...`,
           "info",
           taskId
         );
 
-        // Process keywords one by one for real-time streaming
-        for (let i = 0; i < generatedKeywords.length; i++) {
-          if (stopMiningRef.current) {
-            addLog("Mining stopped by user.", "warning", taskId);
-            break;
+        setThinkingStatus(
+          true,
+          state.uiLanguage === "zh"
+            ? `🔍 AI正在分析 ${generatedKeywords.length} 个关键词...`
+            : `🔍 AI is analyzing ${generatedKeywords.length} keywords...`,
+          "analyzing",
+          "keyword-research-api"
+        );
+
+        let analyzedBatch: KeywordData[] = [];
+        try {
+          // 获取网站DR (如果有选择网站)
+          let websiteDRValue: number | undefined = undefined;
+          if (selectedWebsite?.metrics?.domain_rating) {
+            websiteDRValue = selectedWebsite.metrics.domain_rating;
           }
 
-          const keyword = generatedKeywords[i];
-
-          // Update thinking status for current keyword - Keyword Research API
-          setThinkingStatus(
-            true,
-            state.uiLanguage === "zh"
-              ? `🔍 Keyword Research API 正在获取 "${keyword.keyword}" (${
-                  i + 1
-                }/${generatedKeywords.length})`
-              : `🔍 Keyword Research API fetching "${keyword.keyword}" (${
-                  i + 1
-                }/${generatedKeywords.length})`,
-            "analyzing",
-            "keyword-research-api"
+          // Batch analyze all keywords at once - API will batch fetch keyword research data
+          analyzedBatch = await analyzeRankingProbability(
+            generatedKeywords, // Pass all keywords at once
+            getWorkflowPrompt("mining", "mining-analyze", state.analyzePrompt),
+            state.uiLanguage,
+            state.targetLanguage,
+            selectedWebsite?.domain || undefined,
+            websiteDRValue,
+            state.targetSearchEngine,
+            undefined, // onRetry - 前端 HTTP 重试回调
+            // onProgressLogs - 显示后端 AI 分析过程中的重试/回退信息
+            (logs) => {
+              logs.forEach((log) => {
+                addLog(log.message, "warning", taskId);
+              });
+            }
           );
 
-          addLog(
-            `[${i + 1}/${generatedKeywords.length}] Analyzing: "${
-              keyword.keyword
-            }"...`,
-            "info",
-            taskId
+          // Add a single thought with all keyword research results
+          const keywordsWithResearch = analyzedBatch.filter(
+            (kw) =>
+              kw.serankingData?.is_data_found ||
+              kw.dataForSEOData?.is_data_found
           );
 
-          try {
-            // Analyze single keyword (real-time)
-            // 获取网站DR (如果有选择网站)
-            let websiteDRValue: number | undefined = undefined;
-            if (selectedWebsite?.metrics?.domain_rating) {
-              websiteDRValue = selectedWebsite.metrics.domain_rating;
-            }
-
-            const singleAnalysis = await analyzeRankingProbability(
-              [keyword],
-              getWorkflowPrompt(
-                "mining",
-                "mining-analyze",
-                state.analyzePrompt
-              ),
-              state.uiLanguage,
-              state.targetLanguage,
-              selectedWebsite?.domain || undefined,
-              websiteDRValue,
-              state.targetSearchEngine,
-              undefined, // onRetry - 前端 HTTP 重试回调
-              // onProgressLogs - 显示后端 AI 分析过程中的重试/回退信息
-              (logs) => {
-                logs.forEach((log) => {
-                  addLog(log.message, "warning", taskId);
-                });
-              }
-            );
-
-            if (singleAnalysis.length > 0) {
-              const analyzedKeyword = singleAnalysis[0];
-              analyzedBatch.push(analyzedKeyword);
-
-              // Real-time display: Add keyword research data thought if available
-              if (analyzedKeyword.serankingData?.is_data_found) {
-                addThought(
-                  "analysis",
-                  `Keyword Research: "${analyzedKeyword.keyword}"`,
-                  {
-                    analyzedKeywords: [analyzedKeyword],
-                    data: [analyzedKeyword],
-                    dataType: "analysis",
-                  },
-                  taskId
-                );
-              }
-
-              // Real-time display: Add analysis result thought
-              addThought(
-                "analysis",
-                `Analyzed "${analyzedKeyword.keyword}": ${analyzedKeyword.probability} probability`,
-                {
-                  analyzedKeywords: [analyzedKeyword],
-                  data: [analyzedKeyword],
-                  dataType: "analysis",
-                },
-                taskId
-              );
-
-              addLog(
-                `[${i + 1}/${generatedKeywords.length}] ✅ "${
-                  analyzedKeyword.keyword
-                }": ${analyzedKeyword.probability}`,
-                "success",
-                taskId
-              );
-            }
-          } catch (error: any) {
-            console.error(
-              `Error analyzing keyword "${keyword.keyword}":`,
-              error
-            );
-            addLog(
-              `[${i + 1}/${generatedKeywords.length}] ❌ Error analyzing "${
-                keyword.keyword
-              }": ${error.message}`,
-              "error",
+          if (keywordsWithResearch.length > 0) {
+            addThought(
+              "analysis",
+              state.uiLanguage === "zh"
+                ? `🔍 Keyword Research 完成：获取到 ${keywordsWithResearch.length} 个关键词的研究数据`
+                : `🔍 Keyword Research Complete: Retrieved data for ${keywordsWithResearch.length} keywords`,
+              {
+                analyzedKeywords: keywordsWithResearch,
+                data: keywordsWithResearch,
+                dataType: "analysis",
+              },
               taskId
             );
-            // Continue with next keyword even if one fails
           }
+
+          // Add individual analysis thoughts for real-time display
+          analyzedBatch.forEach((analyzedKeyword) => {
+            addThought(
+              "analysis",
+              `Analyzed "${analyzedKeyword.keyword}": ${analyzedKeyword.probability} probability`,
+              {
+                analyzedKeywords: [analyzedKeyword],
+                data: [analyzedKeyword],
+                dataType: "analysis",
+              },
+              taskId
+            );
+          });
+
+          addLog(
+            state.uiLanguage === "zh"
+              ? `✅ 批量分析完成：${analyzedBatch.length} 个关键词已分析`
+              : `✅ Batch analysis complete: ${analyzedBatch.length} keywords analyzed`,
+            "success",
+            taskId
+          );
+        } catch (error: any) {
+          console.error(`Error batch analyzing keywords:`, error);
+          addLog(
+            state.uiLanguage === "zh"
+              ? `❌ 批量分析失败：${error.message}`
+              : `❌ Batch analysis failed: ${error.message}`,
+            "error",
+            taskId
+          );
+          // Continue with empty batch
+          analyzedBatch = [];
         }
 
         // Consume credits on first successful round (after getting keywords)
@@ -7167,6 +7204,33 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         taskId
       );
 
+      // Get latest state values for this round (settings may have been changed in UI)
+      let latestWordsPerRound = state.wordsPerRound || 10;
+      let latestMiningStrategy = state.miningStrategy || "horizontal";
+      let latestUserSuggestion = state.userSuggestion || "";
+      let latestMiningConfig = state.miningConfig;
+
+      // Get latest state through setState callback to ensure we have the most recent values
+      await new Promise<void>((resolve) => {
+        setState((prev) => {
+          latestWordsPerRound = prev.wordsPerRound || 10;
+          latestMiningStrategy = prev.miningStrategy || "horizontal";
+          latestUserSuggestion = prev.userSuggestion || "";
+          latestMiningConfig = prev.miningConfig;
+          resolve();
+          return prev; // Don't actually change state, just read latest values
+        });
+      });
+
+      // Update combinedAdditionalSuggestions with latest miningConfig if available
+      if (
+        latestMiningConfig?.additionalSuggestions &&
+        !isFirstRoundWithReport
+      ) {
+        combinedAdditionalSuggestions =
+          latestMiningConfig.additionalSuggestions;
+      }
+
       try {
         addLog(
           state.uiLanguage === "zh"
@@ -7182,11 +7246,11 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           getWorkflowPrompt("mining", "mining-gen", state.genPrompt),
           allKeywords.map((k) => k.keyword),
           currentRound,
-          state.wordsPerRound || 10,
-          state.miningStrategy || "horizontal",
-          state.userSuggestion || "",
+          latestWordsPerRound,
+          latestMiningStrategy,
+          latestUserSuggestion,
           state.uiLanguage,
-          state.miningConfig?.industry,
+          latestMiningConfig?.industry,
           combinedAdditionalSuggestions
         );
 
@@ -8428,11 +8492,35 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       );
 
       const allKeywords: KeywordData[] = [];
-      const systemInstruction = getWorkflowPrompt(
+      let systemInstruction = getWorkflowPrompt(
         "batch",
         "batch-analyze",
         state.analyzePrompt
       );
+
+      // 如果是跨市场洞察模式且存在精确行业配置，将其添加到 systemInstruction
+      if (miningMode === "existing-website-audit" && state.miningConfig) {
+        const industryInfo: string[] = [];
+        if (state.miningConfig.industry) {
+          industryInfo.push(
+            state.uiLanguage === "zh"
+              ? `目标行业: ${state.miningConfig.industry}`
+              : `Target Industry: ${state.miningConfig.industry}`
+          );
+        }
+        if (state.miningConfig.additionalSuggestions) {
+          industryInfo.push(
+            state.uiLanguage === "zh"
+              ? `额外建议: ${state.miningConfig.additionalSuggestions}`
+              : `Additional Suggestions: ${state.miningConfig.additionalSuggestions}`
+          );
+        }
+        if (industryInfo.length > 0) {
+          systemInstruction = `${systemInstruction}\n\n--- Industry Context ---\n${industryInfo.join(
+            "\n"
+          )}\n\nPlease consider the above industry context when analyzing keywords.`;
+        }
+      }
 
       // Process each keyword one by one (real-time streaming)
       for (let i = 0; i < keywordList.length; i++) {
@@ -8763,7 +8851,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         const isActiveTask = taskId === prev.taskManager.activeTaskId;
 
         console.log(
-          `[Batch Analysis] Completing task ${taskId}, activeTaskId: ${prev.taskManager.activeTaskId}, hasResults: ${hasResults}, isActiveTask: ${isActiveTask}`
+          `[Batch Analysis] Completing task ${taskId}, activeTaskId: ${prev.taskManager.activeTaskId}, hasResults: ${hasResults}, isActiveTask: ${isActiveTask}, currentStep: ${prev.step}`
         );
 
         if (hasResults && isActiveTask) {
@@ -8805,31 +8893,46 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       setTimeout(() => {
         setState((prev) => {
           // Double-check: if we're still on batch-analyzing step but have results, force navigation
-          if (
-            prev.step === "batch-analyzing" &&
-            prev.taskManager.activeTaskId === taskId
-          ) {
-            const activeTask = prev.taskManager.tasks.find(
-              (t) => t.id === taskId
+          const currentTask = prev.taskManager.tasks.find(
+            (t) => t.id === taskId
+          );
+          const hasResultsInTask =
+            currentTask?.batchState?.batchKeywords &&
+            currentTask.batchState.batchKeywords.length > 0;
+          const isStillActive = prev.taskManager.activeTaskId === taskId;
+          const isStillAnalyzing = prev.step === "batch-analyzing";
+
+          if (hasResultsInTask && isStillActive && isStillAnalyzing) {
+            console.log(
+              `[Batch Analysis] 🔄 Force navigation to batch-results (step was still batch-analyzing, hasResults: ${hasResultsInTask}, isActive: ${isStillActive})`
             );
-            if (
-              activeTask?.batchState?.batchKeywords &&
-              activeTask.batchState.batchKeywords.length > 0
-            ) {
-              console.log(
-                `[Batch Analysis] 🔄 Force navigation to batch-results (step was still batch-analyzing)`
-              );
-              return {
-                ...prev,
-                step: "batch-results",
-                batchKeywords: activeTask.batchState.batchKeywords,
-                batchThoughts: activeTask.batchState.batchThoughts || [],
-              };
-            }
+            return {
+              ...prev,
+              step: "batch-results",
+              batchKeywords: currentTask.batchState.batchKeywords,
+              batchThoughts: currentTask.batchState.batchThoughts || [],
+            };
           }
+
+          // Also check if we have results in global state but step is still analyzing
+          if (
+            prev.batchKeywords &&
+            prev.batchKeywords.length > 0 &&
+            prev.step === "batch-analyzing" &&
+            isStillActive
+          ) {
+            console.log(
+              `[Batch Analysis] 🔄 Force navigation to batch-results (using global batchKeywords)`
+            );
+            return {
+              ...prev,
+              step: "batch-results",
+            };
+          }
+
           return prev;
         });
-      }, 100);
+      }, 200); // 增加延迟时间，确保状态更新完成
     } catch (error: any) {
       console.error("Batch analysis error:", error);
       addLog(`Batch analysis failed: ${error.message}`, "error", taskId);
@@ -8889,7 +8992,19 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     let filtered = state.keywords;
 
     if (state.filterLevel !== "ALL") {
-      filtered = filtered.filter((k) => k.probability === state.filterLevel);
+      // OPTIMIZED: Default filter (HIGH) now shows Medium and High probability keywords
+      // This provides more actionable keywords while still filtering out Low probability ones
+      if (state.filterLevel === ProbabilityLevel.HIGH) {
+        // Show Medium and High (Medium and above)
+        filtered = filtered.filter(
+          (k) =>
+            k.probability === ProbabilityLevel.HIGH ||
+            k.probability === ProbabilityLevel.MEDIUM
+        );
+      } else {
+        // For MEDIUM or LOW, use exact match
+        filtered = filtered.filter((k) => k.probability === state.filterLevel);
+      }
     }
 
     return filtered.sort((a, b) => {
@@ -12962,7 +13077,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                 : "text-slate-900"
                                             )}
                                           >
-                                            Analysis Reasoning
+                                            {t.analysisReasoning ||
+                                              "Analysis Reasoning"}
                                           </CardTitle>
                                         </CardHeader>
                                         <CardContent>
@@ -14063,6 +14179,20 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         className={isDarkTheme ? "bg-black" : "bg-white"}
                       >
                         {t.filterHigh}
+                      </option>
+                      <option
+                        value={ProbabilityLevel.MEDIUM}
+                        className={isDarkTheme ? "bg-black" : "bg-white"}
+                      >
+                        {state.uiLanguage === "zh"
+                          ? "仅看 中概率"
+                          : "Medium Only"}
+                      </option>
+                      <option
+                        value={ProbabilityLevel.LOW}
+                        className={isDarkTheme ? "bg-black" : "bg-white"}
+                      >
+                        {state.uiLanguage === "zh" ? "仅看 低概率" : "Low Only"}
                       </option>
                       <option
                         value="ALL"
