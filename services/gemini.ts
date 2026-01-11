@@ -147,7 +147,8 @@ export const analyzeRankingProbability = async (
   websiteUrl?: string,
   websiteDR?: number,
   targetSearchEngine: string = 'google',
-  onRetry?: (attempt: number, error: string, delay: number) => void
+  onRetry?: (attempt: number, error: string, delay: number) => void,
+  onProgressLogs?: (logs: Array<{ message: string; timestamp: number }>) => void
 ): Promise<KeywordData[]> => {
   const result = await apiCall('/api/analyze-ranking', {
     keywords,
@@ -158,6 +159,12 @@ export const analyzeRankingProbability = async (
     websiteDR,
     targetSearchEngine
   }, { retries: 3, onRetry });
+  
+  // 如果有进度日志，通过回调返回
+  if (result.progressLogs && onProgressLogs) {
+    onProgressLogs(result.progressLogs);
+  }
+  
   return result.keywords;
 };
 
@@ -209,7 +216,8 @@ export const translateAndAnalyzeSingle = async (
   websiteUrl?: string,
   websiteDR?: number,
   skipTranslation: boolean = false,
-  onRetry?: (attempt: number, error: string, delay: number) => void
+  onRetry?: (attempt: number, error: string, delay: number) => void,
+  onProgressLogs?: (logs: Array<{ message: string; timestamp: number }>) => void
 ): Promise<{
   success: boolean;
   original: string;
@@ -226,6 +234,12 @@ export const translateAndAnalyzeSingle = async (
     websiteDR,
     skipTranslation
   }, { retries: 3, onRetry });
+  
+  // 如果有进度日志，通过回调返回
+  if (result.progressLogs && onProgressLogs) {
+    onProgressLogs(result.progressLogs);
+  }
+  
   return result;
 };
 

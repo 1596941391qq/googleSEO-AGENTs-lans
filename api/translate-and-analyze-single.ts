@@ -6,6 +6,9 @@ import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } fr
 import { KeywordData, IntentType, ProbabilityLevel } from './_shared/types.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // 收集进度日志，用于返回给前端（包括重试、回退模型等信息）
+  const progressLogs: Array<{ message: string; timestamp: number }> = [];
+  
   try {
     setCorsHeaders(res);
 
@@ -105,7 +108,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       targetLanguage,
       websiteUrl,
       websiteDR,
-      targetSearchEngine
+      targetSearchEngine,
+      // 收集进度日志，包括重试和回退模型信息
+      (message: string) => {
+        progressLogs.push({ message, timestamp: Date.now() });
+        console.log(`[translate-and-analyze-single] Progress: ${message}`);
+      }
     );
 
     const result = analyzed[0];
@@ -115,6 +123,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       original: translationResult.original,
       translated: translationResult.translated,
       keyword: result,
+      // 返回进度日志（如有重试/回退信息）
+      progressLogs: progressLogs.length > 0 ? progressLogs : undefined
     });
 
   } catch (error: any) {

@@ -1398,24 +1398,175 @@ const renderAgentDataTable = (
   return null;
 };
 
+// Typing effect component for smooth text reveal
+const TypingTextEffect = ({
+  text,
+  speed = 25,
+  onComplete,
+  isDarkTheme = true,
+}: {
+  text: string;
+  speed?: number;
+  onComplete?: () => void;
+  isDarkTheme?: boolean;
+}) => {
+  const [displayedText, setDisplayedText] = useState("");
+  const [isComplete, setIsComplete] = useState(false);
+
+  useEffect(() => {
+    if (!text || text.length === 0) {
+      setDisplayedText(text || "");
+      setIsComplete(true);
+      onComplete?.();
+      return;
+    }
+
+    setDisplayedText("");
+    setIsComplete(false);
+    let currentIndex = 0;
+
+    const interval = setInterval(() => {
+      if (currentIndex < text.length) {
+        setDisplayedText(text.slice(0, currentIndex + 1));
+        currentIndex++;
+      } else {
+        setIsComplete(true);
+        onComplete?.();
+        clearInterval(interval);
+      }
+    }, speed);
+
+    return () => clearInterval(interval);
+  }, [text, speed]);
+
+  return (
+    <span>
+      {displayedText}
+      {!isComplete && (
+        <span
+          className={`inline-block w-1.5 h-3.5 ml-0.5 animate-pulse ${
+            isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
+          }`}
+        />
+      )}
+    </span>
+  );
+};
+
+// Thinking Indicator component - shows what AI is currently doing with timer
+const ThinkingIndicator = ({
+  message,
+  startTime,
+  isDarkTheme = true,
+  uiLanguage = "en",
+}: {
+  message: string;
+  startTime: number;
+  isDarkTheme?: boolean;
+  uiLanguage?: "zh" | "en";
+}) => {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    if (!startTime) return;
+
+    // Calculate initial elapsed time
+    const initialElapsed = Math.floor((Date.now() - startTime) / 1000);
+    setElapsedSeconds(initialElapsed);
+
+    // Update every second
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedSeconds(elapsed);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  return (
+    <div
+      className={`flex items-center gap-3 p-3 rounded-lg border animate-pulse ${
+        isDarkTheme
+          ? "bg-emerald-500/5 border-emerald-500/20"
+          : "bg-emerald-50 border-emerald-200"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <BrainCircuit
+          className={`w-4 h-4 ${
+            isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+          } animate-pulse`}
+        />
+        <span
+          className={`text-sm ${isDarkTheme ? "text-white" : "text-gray-800"}`}
+        >
+          {message}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span
+          className={`text-xs font-mono font-bold ${
+            isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+          }`}
+        >
+          {elapsedSeconds}s
+        </span>
+        <div className="flex space-x-1">
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
+            } animate-bounce`}
+            style={{ animationDelay: "0ms" }}
+          />
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
+            } animate-bounce`}
+            style={{ animationDelay: "150ms" }}
+          />
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
+            } animate-bounce`}
+            style={{ animationDelay: "300ms" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const AgentStream = ({
   thoughts,
   t,
   isDarkTheme = true,
   uiLanguage = "en",
+  thinkingStatus,
 }: {
   thoughts: AgentThought[];
   t: any;
   isDarkTheme?: boolean;
   uiLanguage?: "zh" | "en";
+  thinkingStatus?: {
+    isThinking: boolean;
+    message: string;
+    startTime: number;
+    phase: "generating" | "analyzing" | "searching" | "idle";
+  };
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Track which thoughts have completed typing animation
+  const [typedThoughts, setTypedThoughts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [thoughts]);
+  }, [thoughts, thinkingStatus]);
+
+  const handleTypingComplete = (thoughtId: string) => {
+    setTypedThoughts((prev) => new Set(prev).add(thoughtId));
+  };
 
   return (
     <div
@@ -1485,7 +1636,16 @@ const AgentStream = ({
                     isDarkTheme ? "text-white" : "text-gray-700"
                   }`}
                 >
-                  {thought.content}
+                  {typedThoughts.has(thought.id) ? (
+                    thought.content
+                  ) : (
+                    <TypingTextEffect
+                      text={thought.content}
+                      speed={15}
+                      onComplete={() => handleTypingComplete(thought.id)}
+                      isDarkTheme={isDarkTheme}
+                    />
+                  )}
                 </p>
               )}
 
@@ -1779,6 +1939,16 @@ const AgentStream = ({
               )}
             </div>
           ))}
+
+        {/* Thinking Indicator - shows when AI is actively processing */}
+        {thinkingStatus?.isThinking && thinkingStatus.message && (
+          <ThinkingIndicator
+            message={thinkingStatus.message}
+            startTime={thinkingStatus.startTime}
+            isDarkTheme={isDarkTheme}
+            uiLanguage={uiLanguage}
+          />
+        )}
       </div>
     </div>
   );
@@ -1788,18 +1958,33 @@ const BatchAnalysisStream = ({
   thoughts,
   t,
   isDarkTheme = true,
+  uiLanguage = "en",
+  thinkingStatus,
 }: {
   thoughts: BatchAnalysisThought[];
   t: any;
   isDarkTheme?: boolean;
+  uiLanguage?: "zh" | "en";
+  thinkingStatus?: {
+    isThinking: boolean;
+    message: string;
+    startTime: number;
+    phase: "generating" | "analyzing" | "searching" | "idle";
+  };
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Track which thoughts have completed typing animation
+  const [typedThoughts, setTypedThoughts] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [thoughts]);
+  }, [thoughts, thinkingStatus]);
+
+  const handleTypingComplete = (thoughtId: string) => {
+    setTypedThoughts((prev) => new Set(prev).add(thoughtId));
+  };
 
   return (
     <div
@@ -1866,7 +2051,16 @@ const BatchAnalysisStream = ({
                 isDarkTheme ? "text-white" : "text-gray-700"
               }`}
             >
-              {thought.content}
+              {typedThoughts.has(thought.id) ? (
+                thought.content
+              ) : (
+                <TypingTextEffect
+                  text={thought.content}
+                  speed={15}
+                  onComplete={() => handleTypingComplete(thought.id)}
+                  isDarkTheme={isDarkTheme}
+                />
+              )}
             </p>
 
             {/* SE Ranking Data Display */}
@@ -2237,6 +2431,16 @@ const BatchAnalysisStream = ({
             )}
           </div>
         ))}
+
+        {/* Thinking Indicator - shows when AI is actively processing */}
+        {thinkingStatus?.isThinking && thinkingStatus.message && (
+          <ThinkingIndicator
+            message={thinkingStatus.message}
+            startTime={thinkingStatus.startTime}
+            isDarkTheme={isDarkTheme}
+            uiLanguage={uiLanguage}
+          />
+        )}
       </div>
     </div>
   );
@@ -2995,6 +3199,12 @@ export default function App() {
     wordsPerRound: 10,
     miningStrategy: "horizontal",
     userSuggestion: "",
+    thinkingStatus: {
+      isThinking: false,
+      message: "",
+      startTime: 0,
+      phase: "idle" as const,
+    },
     archives: [],
     batchArchives: [],
     deepDiveArchives: [],
@@ -5266,6 +5476,23 @@ export default function App() {
     }
   };
 
+  // Helper function to update thinking status (shows what AI is currently doing)
+  const setThinkingStatus = (
+    isThinking: boolean,
+    message: string = "",
+    phase: "generating" | "analyzing" | "searching" | "idle" = "idle"
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      thinkingStatus: {
+        isThinking,
+        message,
+        startTime: isThinking ? Date.now() : prev.thinkingStatus.startTime,
+        phase,
+      },
+    }));
+  };
+
   // Counter for generating unique thought IDs
   const thoughtIdCounter = useRef(0);
 
@@ -6332,6 +6559,15 @@ export default function App() {
       addLog(`💭 ${thoughtMessage}`, "info", taskId);
 
       try {
+        // Update thinking status - AI is generating keywords
+        setThinkingStatus(
+          true,
+          state.uiLanguage === "zh"
+            ? `🧠 AI 正在挖掘 "${state.seedKeyword}" 相关的词`
+            : `🧠 AI is mining keywords related to "${state.seedKeyword}"`,
+          "generating"
+        );
+
         addLog(
           `🤖 ${
             state.uiLanguage === "zh" ? "AI 正在思考..." : "AI is thinking..."
@@ -6423,6 +6659,15 @@ export default function App() {
           taskId
         );
 
+        // Clear generating status and switch to analyzing
+        setThinkingStatus(
+          true,
+          state.uiLanguage === "zh"
+            ? `🔍 AI 正在分析 ${generatedKeywords.length} 个关键词的排名概率`
+            : `🔍 AI is analyzing ranking probability for ${generatedKeywords.length} keywords`,
+          "analyzing"
+        );
+
         addLog(
           `[Round ${currentRound}] Analyzing SERP probability (Google)...`,
           "api",
@@ -6456,6 +6701,19 @@ export default function App() {
 
           const keyword = generatedKeywords[i];
 
+          // Update thinking status for current keyword
+          setThinkingStatus(
+            true,
+            state.uiLanguage === "zh"
+              ? `🔍 AI 正在分析 "${keyword.keyword}" (${i + 1}/${
+                  generatedKeywords.length
+                })`
+              : `🔍 AI is analyzing "${keyword.keyword}" (${i + 1}/${
+                  generatedKeywords.length
+                })`,
+            "analyzing"
+          );
+
           addLog(
             `[${i + 1}/${generatedKeywords.length}] Analyzing: "${
               keyword.keyword
@@ -6483,7 +6741,14 @@ export default function App() {
               state.targetLanguage,
               selectedWebsite?.domain || undefined,
               websiteDRValue,
-              state.targetSearchEngine
+              state.targetSearchEngine,
+              undefined, // onRetry - 前端 HTTP 重试回调
+              // onProgressLogs - 显示后端 AI 分析过程中的重试/回退信息
+              (logs) => {
+                logs.forEach((log) => {
+                  addLog(log.message, "warning", taskId);
+                });
+              }
             );
 
             if (singleAnalysis.length > 0) {
@@ -6721,6 +6986,9 @@ export default function App() {
               };
             }
           });
+
+          // Clear thinking status when mining is complete
+          setThinkingStatus(false, "", "idle");
 
           playCompletionSound(); // Play sound on mining completion
 
@@ -7048,7 +7316,17 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           generatedKeywords,
           getWorkflowPrompt("mining", "mining-analyze", state.analyzePrompt),
           state.uiLanguage,
-          state.targetLanguage
+          state.targetLanguage,
+          undefined, // websiteUrl
+          undefined, // websiteDR
+          state.targetSearchEngine,
+          undefined, // onRetry - 前端 HTTP 重试回调
+          // onProgressLogs - 显示后端 AI 分析过程中的重试/回退信息
+          (logs) => {
+            logs.forEach((log) => {
+              addLog(log.message, "warning", taskId);
+            });
+          }
         );
 
         // 更新关键词列表
@@ -7317,6 +7595,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
     stopMiningRef.current = true;
     addLog("User requested stop.", "warning", currentTaskId || undefined);
+
+    // Clear thinking status when user stops mining
+    setThinkingStatus(false, "", "idle");
 
     // Show success window even when manually stopped, so user can view results
     setState((prev) => {
@@ -8240,10 +8521,25 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       for (let i = 0; i < keywordList.length; i++) {
         if (stopBatchRef.current) {
           addLog("Batch analysis stopped by user.", "warning", taskId);
+          // Clear thinking status when stopped
+          setThinkingStatus(false, "", "idle");
           break;
         }
 
         const originalKeyword = keywordList[i];
+
+        // Update thinking status for current keyword
+        setThinkingStatus(
+          true,
+          state.uiLanguage === "zh"
+            ? `🌍 AI 正在分析 "${originalKeyword}" (${i + 1}/${
+                keywordList.length
+              })`
+            : `🌍 AI is analyzing "${originalKeyword}" (${i + 1}/${
+                keywordList.length
+              })`,
+          "analyzing"
+        );
 
         // Update batchCurrentIndex with task isolation
         setState((prev) => {
@@ -8313,7 +8609,14 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             state.targetSearchEngine,
             batchSelectedWebsite?.domain || undefined,
             batchWebsiteDR,
-            miningMode === "existing-website-audit"
+            miningMode === "existing-website-audit",
+            undefined, // onRetry - 前端 HTTP 重试回调
+            // onProgressLogs - 显示后端 AI 分析过程中的重试/回退信息
+            (logs) => {
+              logs.forEach((log) => {
+                addLog(log.message, "warning", taskId);
+              });
+            }
           );
 
           if (!singleResult.success) {
@@ -8502,6 +8805,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         "success",
         taskId
       );
+
+      // Clear thinking status when batch analysis is complete
+      setThinkingStatus(false, "", "idle");
+
       playCompletionSound();
 
       // Save to batch archives and update state with task isolation
@@ -8609,6 +8916,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     } catch (error: any) {
       console.error("Batch analysis error:", error);
       addLog(`Batch analysis failed: ${error.message}`, "error", taskId);
+      // Clear thinking status on error
+      setThinkingStatus(false, "", "idle");
       setState((prev) => ({
         ...prev,
         error: `Batch analysis failed: ${error.message}`,
@@ -8619,6 +8928,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
   const stopBatchAnalysis = () => {
     stopBatchRef.current = true;
+    // Clear thinking status when user stops batch analysis
+    setThinkingStatus(false, "", "idle");
     addLog("Stopping batch analysis...", "warning");
   };
 
@@ -11873,6 +12184,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     t={t}
                     isDarkTheme={isDarkTheme}
                     uiLanguage={state.uiLanguage}
+                    thinkingStatus={state.thinkingStatus}
                   />
                 </div>
               </div>
@@ -11915,6 +12227,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     thoughts={state.batchThoughts}
                     t={t}
                     isDarkTheme={isDarkTheme}
+                    uiLanguage={state.uiLanguage}
+                    thinkingStatus={state.thinkingStatus}
                   />
                 </div>
               </div>

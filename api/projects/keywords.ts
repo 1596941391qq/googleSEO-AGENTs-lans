@@ -42,14 +42,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       
       if (task) {
         // 如果是任务，根据类型提取关键词
-        let keywords_list = [];
+        let keywords_list: any[] = [];
+        const state = task.state || {};
+        const miningState = state.miningState || state;
+        const batchState = state.batchState || state;
+        const articleState = state.articleGeneratorState || state;
         
-        if (task.type === 'mining' || task.type === 'batch') {
-          // 挖掘或批量任务通常在 state.keywords 中存储结果
-          keywords_list = task.state?.keywords || task.state?.batchKeywords || [];
+        if (task.type === 'mining') {
+          // 挖掘任务：关键词可能在 miningState.keywords 或直接在 state.keywords
+          keywords_list = miningState.keywords || state.keywords || [];
+        } else if (task.type === 'batch') {
+          // 批量任务：关键词在 batchState.batchKeywords 或直接在 state.batchKeywords
+          keywords_list = batchState.batchKeywords || state.batchKeywords || [];
         } else if (task.type === 'article-generator') {
-          // 文章生成任务通常在 params 或 state 中有主关键词
-          const mainKeyword = task.params?.keyword || task.state?.keyword;
+          // 文章生成任务：主关键词
+          const mainKeyword = task.params?.keyword || articleState.keyword || state.keyword;
           if (mainKeyword) {
             keywords_list = [typeof mainKeyword === 'string' ? { keyword: mainKeyword } : mainKeyword];
           }
@@ -59,14 +66,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         keywords = keywords_list.map((kw: any, index: number) => ({
           id: kw.id || `task-kw-${index}`,
           project_id: task.id,
-          keyword: kw.keyword || kw.toString(),
-          translation: kw.translation || '',
-          intent: kw.intent || 'Informational',
-          volume: kw.volume || 0,
+          keyword: typeof kw === 'string' ? kw : (kw.keyword || kw.toString()),
+          translation: kw.translation || kw.chineseKeyword || '',
+          intent: kw.intent || kw.searchIntent || 'Informational',
+          volume: kw.volume || kw.searchVolume || 0,
+          difficulty: kw.difficulty || kw.kd || null,
+          cpc: kw.cpc || null,
           probability: kw.probability || 'Medium',
-          is_selected: true,
+          is_selected: kw.isSelected !== false,
           status: task.status === 'completed' ? 'completed' : 'generating',
-          created_at: task.created_at
+          created_at: task.created_at,
+          // 保留原始数据供前端使用
+          serankingData: kw.serankingData,
+          dataForSEOData: kw.dataForSEOData
         }));
       } else {
         return sendErrorResponse(res, null, 'Project or Task not found or access denied', 404);

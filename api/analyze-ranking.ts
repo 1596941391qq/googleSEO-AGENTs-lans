@@ -5,6 +5,9 @@ import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } fr
 import { ProbabilityLevel } from './_shared/types.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // 收集进度日志，用于返回给前端
+  const progressLogs: Array<{ message: string; timestamp: number }> = [];
+  
   try {
     setCorsHeaders(res);
 
@@ -118,7 +121,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         targetLanguage || 'en',
         websiteUrl,
         websiteDR,
-        targetSearchEngine
+        targetSearchEngine,
+        // 收集进度日志，包括重试和回退模型信息
+        (message: string) => {
+          progressLogs.push({ message, timestamp: Date.now() });
+          console.log(`[analyze-ranking] Progress: ${message}`);
+        }
       );
     }
 
@@ -127,7 +135,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[analyze-ranking] Analysis completed for ${analyzedKeywords.length} keywords. Total keywords: ${allKeywords.length}`);
 
-    return res.json({ keywords: allKeywords });
+    // 返回结果，包含进度日志（如有重试/回退信息）
+    return res.json({ 
+      keywords: allKeywords,
+      progressLogs: progressLogs.length > 0 ? progressLogs : undefined
+    });
   } catch (error: any) {
     console.error('Handler error in /api/analyze-ranking:', error);
     if (error.stack) {
