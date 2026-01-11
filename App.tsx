@@ -70,7 +70,6 @@ import { TaskTab } from "./components/layout/TaskTab";
 import { ArticleGeneratorLayout } from "./components/article-generator/ArticleGeneratorLayout";
 import { KeywordTable } from "./components/mining/KeywordTable";
 import { MarkdownContent } from "./components/ui/MarkdownContent";
-import { TestAgentPanel } from "./components/TestAgentPanel";
 import { ContentGenerationView } from "./components/ContentGenerationView";
 import { WebsiteSelector } from "./components/WebsiteSelector";
 import { getUserId } from "./components/website-data/utils";
@@ -295,6 +294,7 @@ const TEXT = {
     tabArticleRankings: "Projects",
     tabProjects: "Projects",
     tabPublish: "Publish",
+    contentStrategy: "Content Strategy",
   },
   zh: {
     title: "Mine Hidden Alpha",
@@ -461,6 +461,7 @@ const TEXT = {
     tabArticleRankings: "内容项目",
     tabProjects: "内容项目",
     tabPublish: "发布",
+    contentStrategy: "内容策略",
   },
 };
 
@@ -1052,15 +1053,15 @@ const renderAgentDataTable = (
     return (
       <div className="space-y-3 mt-2">
         {items.map((data, idx) => {
-          // 蓝海模式判断：没有用户网站时为蓝海模式，隐藏 KD 和 DR
+          // 蓝海模式判断：没有用户网站时为蓝海模式，隐藏 DR（但保留 KD）
           const isBlueOceanMode = data.websiteDR === undefined;
 
           return (
             <div key={idx} className="space-y-3">
-              {/* Analysis Result Cards - 蓝海模式显示3列，存量模式显示4列 */}
+              {/* Analysis Result Cards - 蓝海模式显示5列（无DR），存量模式显示6列 */}
               <div
                 className={`grid grid-cols-2 ${
-                  isBlueOceanMode ? "md:grid-cols-3" : "md:grid-cols-4"
+                  isBlueOceanMode ? "md:grid-cols-5" : "md:grid-cols-6"
                 } gap-2`}
               >
                 <div
@@ -1096,47 +1097,52 @@ const renderAgentDataTable = (
                   </div>
                 </div>
 
-                {/* KD Card - 蓝海模式下隐藏 */}
-                {!isBlueOceanMode && (
+                {/* KD Card - 始终显示 */}
+                <div
+                  className={`p-3 rounded-lg border ${
+                    isDarkTheme
+                      ? "bg-black border-emerald-500/30"
+                      : "bg-gray-50 border-gray-200"
+                  }`}
+                >
                   <div
-                    className={`p-3 rounded-lg border ${
-                      isDarkTheme
-                        ? "bg-black border-emerald-500/30"
-                        : "bg-gray-50 border-gray-200"
+                    className={`text-[10px] font-bold mb-1 ${
+                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
                     }`}
                   >
-                    <div
-                      className={`text-[10px] font-bold mb-1 ${
-                        isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                      }`}
-                    >
-                      {uiLanguage === "zh"
-                        ? "关键词难度"
-                        : "KEYWORD DIFFICULTY"}
-                    </div>
-                    <div
-                      className={`text-lg font-bold ${
-                        (data.serankingData?.difficulty || 0) <= 40
-                          ? isDarkTheme
-                            ? "text-emerald-400"
-                            : "text-emerald-600"
-                          : (data.serankingData?.difficulty || 0) <= 60
-                          ? isDarkTheme
-                            ? "text-yellow-400"
-                            : "text-yellow-600"
-                          : isDarkTheme
-                          ? "text-red-400"
-                          : "text-red-600"
-                      }`}
-                    >
-                      {data.serankingData?.difficulty !== undefined
-                        ? data.serankingData.difficulty
-                        : data.dataForSEOData?.difficulty !== undefined
-                        ? data.dataForSEOData.difficulty
-                        : "N/A"}
-                    </div>
+                    {uiLanguage === "zh" ? "关键词难度" : "KEYWORD DIFFICULTY"}
                   </div>
-                )}
+                  <div
+                    className={`text-lg font-bold ${
+                      ((data.serankingData?.difficulty ??
+                        data.dataForSEOData?.difficulty ??
+                        (data.dataForSEOData as any)?.competition_index) ||
+                        0) <= 40
+                        ? isDarkTheme
+                          ? "text-emerald-400"
+                          : "text-emerald-600"
+                        : ((data.serankingData?.difficulty ??
+                            data.dataForSEOData?.difficulty ??
+                            (data.dataForSEOData as any)?.competition_index) ||
+                            0) <= 60
+                        ? isDarkTheme
+                          ? "text-yellow-400"
+                          : "text-yellow-600"
+                        : isDarkTheme
+                        ? "text-red-400"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {data.serankingData?.difficulty !== undefined
+                      ? data.serankingData.difficulty
+                      : data.dataForSEOData?.difficulty !== undefined
+                      ? data.dataForSEOData.difficulty
+                      : (data.dataForSEOData as any)?.competition_index !==
+                        undefined
+                      ? (data.dataForSEOData as any).competition_index
+                      : "N/A"}
+                  </div>
+                </div>
 
                 {/* CPC Card */}
                 <div
@@ -1220,45 +1226,47 @@ const renderAgentDataTable = (
                   </div>
                 </div>
 
-                {/* DR Comparison Card */}
-                <div
-                  className={`p-3 rounded-lg border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
-                >
+                {/* DR Comparison Card - 蓝海模式下隐藏 */}
+                {!isBlueOceanMode && (
                   <div
-                    className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                    className={`p-3 rounded-lg border ${
+                      isDarkTheme
+                        ? "bg-black border-emerald-500/30"
+                        : "bg-gray-50 border-gray-200"
                     }`}
                   >
-                    DR (YOU vs AVG)
+                    <div
+                      className={`text-[10px] font-bold mb-1 ${
+                        isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                      }`}
+                    >
+                      DR (YOU vs AVG)
+                    </div>
+                    <div
+                      className={`text-lg font-bold ${
+                        isDarkTheme ? "text-white" : "text-gray-900"
+                      }`}
+                    >
+                      {data.websiteDR !== undefined
+                        ? Math.round(data.websiteDR)
+                        : "-"}
+                      <span className="text-[10px] font-normal text-white/40 mx-1">
+                        vs
+                      </span>
+                      {data.competitorDRs &&
+                      data.competitorDRs.length > 0 &&
+                      data.competitorDRs.some((dr: number) => dr > 0)
+                        ? Math.round(
+                            data.competitorDRs
+                              .filter((dr: number) => dr > 0)
+                              .reduce((a: number, b: number) => a + b, 0) /
+                              data.competitorDRs.filter((dr: number) => dr > 0)
+                                .length
+                          )
+                        : "-"}
+                    </div>
                   </div>
-                  <div
-                    className={`text-lg font-bold ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    {data.websiteDR !== undefined
-                      ? Math.round(data.websiteDR)
-                      : "-"}
-                    <span className="text-[10px] font-normal text-white/40 mx-1">
-                      vs
-                    </span>
-                    {data.competitorDRs &&
-                    data.competitorDRs.length > 0 &&
-                    data.competitorDRs.some((dr: number) => dr > 0)
-                      ? Math.round(
-                          data.competitorDRs
-                            .filter((dr: number) => dr > 0)
-                            .reduce((a: number, b: number) => a + b, 0) /
-                            data.competitorDRs.filter((dr: number) => dr > 0)
-                              .length
-                        )
-                      : "-"}
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* SERP Results */}
@@ -3703,6 +3711,16 @@ export default function App() {
           isActive: false,
         }));
 
+        // 先获取当前本地任务列表
+        const currentLocalTasks = state.taskManager.tasks;
+
+        // 找出本地未同步的任务（ID 以 "task-" 开头，且不存在于后端）
+        const unsyncedLocalTasks = currentLocalTasks.filter(
+          (lt) =>
+            lt.id.startsWith("task-") &&
+            !backendTasks.find((bt) => bt.id === lt.id)
+        );
+
         setState((prev) => {
           const localTasks = prev.taskManager.tasks;
           const mergedTasks = [...localTasks];
@@ -3716,59 +3734,6 @@ export default function App() {
             }
           });
 
-          // 同步本地未保存到后端的任务（ID 以 "task-" 开头的）
-          const unsyncedLocalTasks = localTasks.filter(
-            (lt) => lt.id.startsWith("task-") && !backendTasks.find((bt) => bt.id === lt.id)
-          );
-          
-          // 异步同步未保存的任务到后端
-          unsyncedLocalTasks.forEach(async (localTask) => {
-            try {
-              const saveResponse = await postWithAuth("/api/tasks/save", {
-                type: localTask.type,
-                name: localTask.name,
-                params: {
-                  seedKeyword: localTask.miningState?.seedKeyword,
-                  batchInput: localTask.batchState?.batchInputKeywords,
-                },
-              });
-              const saveResult = await saveResponse.json();
-              if (saveResult.success && saveResult.data.task.id) {
-                const backendId = saveResult.data.task.id;
-                // 更新本地任务ID为后端ID
-                setState((innerPrev) => ({
-                  ...innerPrev,
-                  taskManager: {
-                    ...innerPrev.taskManager,
-                    tasks: innerPrev.taskManager.tasks.map((t) =>
-                      t.id === localTask.id ? { ...t, id: backendId } : t
-                    ),
-                    activeTaskId:
-                      innerPrev.taskManager.activeTaskId === localTask.id
-                        ? backendId
-                        : innerPrev.taskManager.activeTaskId,
-                  },
-                }));
-                // 同步完整任务状态
-                const updatedTask = { ...localTask, id: backendId };
-                await postWithAuth("/api/tasks/update", {
-                  id: backendId,
-                  name: updatedTask.name,
-                  status:
-                    updatedTask.miningState?.miningSuccess ||
-                    (updatedTask.batchState?.batchKeywords &&
-                      updatedTask.batchState.batchKeywords.length > 0)
-                      ? "completed"
-                      : "in_progress",
-                  state: updatedTask,
-                });
-                console.log(`[Tasks] Synced local task ${localTask.id} to backend as ${backendId}`);
-              }
-            } catch (syncErr) {
-              console.error(`[Tasks] Failed to sync local task ${localTask.id} to backend:`, syncErr);
-            }
-          });
-
           return {
             ...prev,
             taskManager: {
@@ -3777,6 +3742,59 @@ export default function App() {
             },
           };
         });
+
+        // 在 setState 之外异步同步未保存的任务到后端
+        for (const localTask of unsyncedLocalTasks) {
+          try {
+            const saveResponse = await postWithAuth("/api/tasks/save", {
+              type: localTask.type,
+              name: localTask.name,
+              params: {
+                seedKeyword: localTask.miningState?.seedKeyword,
+                batchInput: localTask.batchState?.batchInputKeywords,
+              },
+            });
+            const saveResult = await saveResponse.json();
+            if (saveResult.success && saveResult.data.task.id) {
+              const backendId = saveResult.data.task.id;
+              // 更新本地任务ID为后端ID
+              setState((innerPrev) => ({
+                ...innerPrev,
+                taskManager: {
+                  ...innerPrev.taskManager,
+                  tasks: innerPrev.taskManager.tasks.map((t) =>
+                    t.id === localTask.id ? { ...t, id: backendId } : t
+                  ),
+                  activeTaskId:
+                    innerPrev.taskManager.activeTaskId === localTask.id
+                      ? backendId
+                      : innerPrev.taskManager.activeTaskId,
+                },
+              }));
+              // 同步完整任务状态
+              const updatedTask = { ...localTask, id: backendId };
+              await postWithAuth("/api/tasks/update", {
+                id: backendId,
+                name: updatedTask.name,
+                status:
+                  updatedTask.miningState?.miningSuccess ||
+                  (updatedTask.batchState?.batchKeywords &&
+                    updatedTask.batchState.batchKeywords.length > 0)
+                    ? "completed"
+                    : "in_progress",
+                state: updatedTask,
+              });
+              console.log(
+                `[Tasks] Synced local task ${localTask.id} to backend as ${backendId}`
+              );
+            }
+          } catch (syncErr) {
+            console.error(
+              `[Tasks] Failed to sync local task ${localTask.id} to backend:`,
+              syncErr
+            );
+          }
+        }
       }
     } catch (err) {
       console.error("Failed to load tasks from backend:", err);
@@ -3914,6 +3932,7 @@ export default function App() {
           mining: "mining",
           batch: "batch",
           "article-generator": "articleGenerator",
+          "deep-dive": "mining", // deep-dive maps to mining tab
         };
         setActiveTab(tabMap[activeTask.type]);
       }
@@ -4443,7 +4462,7 @@ export default function App() {
             uk: "en",
             ca: "en",
             au: "en",
-            de: "de",
+            de: "en", // German market defaults to English
             fr: "fr",
             jp: "ja",
             cn: "zh",
@@ -9077,7 +9096,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           ...task,
                           articleGeneratorState: {
                             ...prev.articleGeneratorState,
-                            currentStage: "input",
+                            currentStage: "input" as const,
                           },
                         };
                       }
@@ -9087,7 +9106,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       ...prev,
                       taskManager: {
                         ...prev.taskManager,
-                        tasks: updatedTasks,
+                        tasks: updatedTasks as TaskState[],
                       },
                     };
                   });
@@ -9098,7 +9117,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               uiLanguage={state.uiLanguage}
               isDarkTheme={isDarkTheme}
               token={token}
-              userId={user?.id || 1}
+              userId={user?.userId || "1"}
               articleGeneratorState={{
                 keyword: state.articleGeneratorState.keyword,
                 tone: state.articleGeneratorState.tone,
@@ -9190,7 +9209,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   console.log("[App.tsx] setState called with function form");
                   setState((prev) => {
                     const updatedContentGeneration = update(
-                      prev.contentGeneration
+                      prev.contentGeneration as any
                     );
                     console.log("[App.tsx] Updated contentGeneration:", {
                       onboardingStep: updatedContentGeneration?.onboardingStep,
@@ -9202,7 +9221,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     });
                     return {
                       ...prev,
-                      contentGeneration: updatedContentGeneration,
+                      contentGeneration:
+                        updatedContentGeneration as AppState["contentGeneration"],
                     };
                   });
                 } else {
@@ -11609,14 +11629,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 </div>
               </div>
             </div>
-          )}
-
-          {/* Test Agent Mode */}
-          {state.step === "test-agents" && (
-            <TestAgentPanel
-              isDarkTheme={isDarkTheme}
-              onClose={() => switchStepWithTaskPreservation("input")}
-            />
           )}
 
           {/* STEP 2: MINING */}

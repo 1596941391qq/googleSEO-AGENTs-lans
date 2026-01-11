@@ -852,8 +852,8 @@ export async function getDomainKeywords(
         // 竞争度
         const competition = keywordInfo.competition || 0;
         
-        // 关键词难度
-        const difficulty = keywordProperties.keyword_difficulty || 0;
+        // 关键词难度 (competition_index)
+        const difficulty = keywordProperties.competition_index || 0;
         
         // 排名信息 - 新 API 不直接提供排名，需要通过 SERP 信息推断
         // 如果 serp_info 中有排名信息，使用它；否则设为 0
@@ -1437,10 +1437,10 @@ export async function getRankedKeywords(
           });
         }
         
-        // 提取搜索量、CPC、难度
+        // 提取搜索量、CPC、难度 (competition_index)
         const searchVolume = keywordInfo.search_volume || 0;
         const cpc = keywordInfo.cpc || undefined;
-        const difficulty = keywordProperties.keyword_difficulty || undefined;
+        const difficulty = keywordProperties.competition_index || undefined;
         const etv = serpItem.etv || 0;
         
         // 提取 URL

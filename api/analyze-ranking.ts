@@ -72,7 +72,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (dataForSEOApiSucceeded && dataForSEOData) {
           // Only attach DataForSEO data if API succeeded
           // This distinguishes between "API failure" vs "API returned data (which might have is_data_found=false)"
-          keyword.dataForSEOData = dataForSEOData;
+          // fetchKeywordData already returns 'volume' and 'difficulty' fields (mapped from search_volume and competition_index)
+          keyword.dataForSEOData = {
+            is_data_found: dataForSEOData.is_data_found,
+            volume: dataForSEOData.volume,
+            cpc: dataForSEOData.cpc,
+            competition: dataForSEOData.competition,
+            difficulty: dataForSEOData.difficulty,
+            history_trend: dataForSEOData.history_trend,
+          };
           keyword.serankingData = {
             is_data_found: dataForSEOData.is_data_found,
             volume: dataForSEOData.volume,

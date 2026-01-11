@@ -34,6 +34,10 @@ interface GeminiConfig {
    * 重试时的回调函数
    */
   onRetry?: (attempt: number, error: string, delay: number) => void;
+  /**
+   * 使用回退模型时的回调函数
+   */
+  onFallback?: (originalModel: string, fallbackModel: string) => void;
 }
 
 /**
@@ -90,6 +94,10 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
   // After all retries failed, try fallback model if different from current model
   if (currentModel !== FALLBACK_MODEL) {
     console.warn(`[Gemini API] All retries failed with model ${currentModel}. Falling back to ${FALLBACK_MODEL}...`);
+    // 通知调用者正在使用回退模型
+    if (config?.onFallback) {
+      config.onFallback(currentModel, FALLBACK_MODEL);
+    }
     try {
       const fallbackConfig = { ...config, model: FALLBACK_MODEL };
       return await _callGeminiInternal(prompt, systemInstruction, fallbackConfig);

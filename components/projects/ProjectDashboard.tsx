@@ -6,7 +6,7 @@ import { ProjectListTable } from './ProjectListTable';
 import { ProjectKeywordTable } from './ProjectKeywordTable';
 import { RichTextEditor } from './RichTextEditor';
 import { Button } from '../ui/button';
-import { ArrowLeft, Loader2, Plus, RefreshCw, X, Search, Sparkles, Languages, CheckCircle2, CircleDashed, AlertCircle, Clock, Trash2, Folder } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, RefreshCw, X, Search, Sparkles, Languages, CheckCircle2, CircleDashed, AlertCircle, Clock, Trash2, Folder, Circle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserId } from '../website-data/utils';
@@ -225,6 +225,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
 
   const getStatusColor = (status?: string) => {
     switch (status) {
+      case 'pending': return 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20';
       case 'in_progress': return 'text-amber-500 bg-amber-500/10 border-amber-500/20';
       case 'completed': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
       case 'failed': return 'text-red-500 bg-red-500/10 border-red-500/20';
@@ -235,6 +236,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   const getStatusLabel = (status?: string) => {
     if (uiLanguage === 'zh') {
       switch (status) {
+        case 'pending': return '未开始';
         case 'in_progress': return '进行中';
         case 'completed': return '已完成';
         case 'failed': return '已失败';
@@ -242,6 +244,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
       }
     } else {
       switch (status) {
+        case 'pending': return 'Pending';
         case 'in_progress': return 'In Progress';
         case 'completed': return 'Completed';
         case 'failed': return 'Failed';
@@ -252,13 +255,14 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
 
   const renderKanban = () => {
     const columns = [
+      { id: 'pending', title: uiLanguage === 'zh' ? '未开始' : 'Pending', icon: <Circle className="w-4 h-4" /> },
       { id: 'in_progress', title: uiLanguage === 'zh' ? '进行中' : 'In Progress', icon: <CircleDashed className="w-4 h-4 animate-spin" /> },
       { id: 'completed', title: uiLanguage === 'zh' ? '已完成' : 'Completed', icon: <CheckCircle2 className="w-4 h-4" /> },
       { id: 'failed', title: uiLanguage === 'zh' ? '已失败' : 'Failed', icon: <AlertCircle className="w-4 h-4" /> },
     ];
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {columns.map(column => {
           const columnProjects = projects.filter(p => (p.status || 'completed') === column.id);
           return (
@@ -269,6 +273,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
               )}>
                 <div className="flex items-center gap-2">
                   <span className={cn(
+                    column.id === 'pending' ? "text-zinc-400" :
                     column.id === 'in_progress' ? "text-amber-500" : 
                     column.id === 'completed' ? "text-emerald-500" : "text-red-500"
                   )}>

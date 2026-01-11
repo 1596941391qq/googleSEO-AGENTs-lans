@@ -1227,6 +1227,11 @@ CRITICAL: Return ONLY a valid JSON object in the exact format specified. No mark
               onProgress?.(uiLanguage === 'zh'
                 ? `⚠️ [${keywordData.keyword}] AI 分析连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
                 : `⚠️ [${keywordData.keyword}] AI analysis connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+            },
+            onFallback: (originalModel, fallbackModel) => {
+              onProgress?.(uiLanguage === 'zh'
+                ? `🔄 [${keywordData.keyword}] 主模型 ${originalModel} 失败，切换到备用模型 ${fallbackModel}...`
+                : `🔄 [${keywordData.keyword}] Primary model ${originalModel} failed, switching to fallback ${fallbackModel}...`);
             }
           }
         );

@@ -80,8 +80,8 @@ export interface DataForSEOKeywordData {
   competition?: number; // 0-1 scale
   competition_level?: string; // 'LOW', 'MEDIUM', 'HIGH'
 
-  // DataForSEO 独有：关键词难度
-  keyword_difficulty?: number; // 0-100
+  // DataForSEO 独有：关键词难度 (competition_index, 0-100)
+  competition_index?: number; // 0-100, 实际的 KD 字段
 
   // 历史数据 - DataForSEO 提供12个月历史数据
   monthly_searches?: MonthlySearchData[];
@@ -240,8 +240,8 @@ async function fetchBatchWithRetry(
           search_volume: item.search_volume || undefined,
           cpc: item.cpc || undefined,
           competition: item.competition !== undefined ? item.competition : undefined,
-          competition_level: item.competition_level || undefined,
-          keyword_difficulty: item.keyword_difficulty || undefined,
+          competition_level: item.competition || undefined,
+          competition_index: item.competition_index || undefined, // KD 字段
           monthly_searches: item.monthly_searches || undefined,
           low_top_of_page_bid: item.low_top_of_page_bid || undefined,
           high_top_of_page_bid: item.high_top_of_page_bid || undefined,
@@ -295,7 +295,7 @@ export async function fetchKeywordDifficulty(
   locationCode: number = 2840,
   languageCode: string = 'en',
   engine: SearchEngine = 'google'
-): Promise<{ keyword: string; keyword_difficulty?: number }[]> {
+): Promise<{ keyword: string; competition_index?: number }[]> {
   // Baidu 和 Yandex 不支持 Bulk Keyword Difficulty API
   if (engine === 'baidu' || engine === 'yandex') {
     return keywords.map(kw => ({ keyword: kw }));
@@ -343,7 +343,7 @@ export async function fetchKeywordDifficulty(
 
     return data.tasks[0].result.map((item: any) => ({
       keyword: item.keyword || '',
-      keyword_difficulty: item.keyword_difficulty,
+      competition_index: item.competition_index, // DataForSEO 返回的 KD 字段
     }));
   } catch (error: any) {
     console.error('[DataForSEO] Failed to fetch keyword difficulty:', error.message);
@@ -400,7 +400,7 @@ export async function fetchKeywordData(
   history_trend?: { [date: string]: number };
 }>> {
   try {
-    // 并行调用两个 API：search_volume 和 keyword_difficulty
+    // 并行调用两个 API：search_volume 和 bulk_keyword_difficulty (返回 competition_index 作为 KD)
     const [volumeResults, difficultyResults] = await Promise.all([
       fetchDataForSEOData(keywords, locationCode, languageCode, engine).catch(err => {
         console.warn(`[DataForSEO] Search volume API failed for ${engine}:`, err.message);
@@ -412,11 +412,11 @@ export async function fetchKeywordData(
       })
     ]);
 
-    // 创建难度映射表
+    // 创建难度映射表 (使用 competition_index 作为 KD)
     const difficultyMap = new Map<string, number>();
     difficultyResults.forEach(item => {
-      if (item.keyword && item.keyword_difficulty !== undefined) {
-        difficultyMap.set(item.keyword.toLowerCase(), item.keyword_difficulty);
+      if (item.keyword && item.competition_index !== undefined) {
+        difficultyMap.set(item.keyword.toLowerCase(), item.competition_index);
       }
     });
 
@@ -431,7 +431,7 @@ export async function fetchKeywordData(
         volume: data.search_volume, // search_volume -> volume
         cpc: data.cpc,
         competition: data.competition,
-        difficulty: difficulty !== undefined ? difficulty : data.keyword_difficulty, // 优先使用 bulk_keyword_difficulty 的结果
+        difficulty: difficulty !== undefined ? difficulty : data.competition_index, // 优先使用 competition_index 作为 KD
         history_trend: data.history_trend,
       };
     });

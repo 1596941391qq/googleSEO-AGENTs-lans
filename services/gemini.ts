@@ -21,7 +21,19 @@ const getApiBaseUrl = (): string => {
 
 const API_BASE_URL = getApiBaseUrl();
 
-const apiCall = async (endpoint: string, body: any, retries: number = 3) => {
+interface ApiCallOptions {
+  retries?: number;
+  onRetry?: (attempt: number, error: string, delay: number) => void;
+}
+
+const apiCall = async (endpoint: string, body: any, options: ApiCallOptions | number = 3) => {
+  // 兼容旧的调用方式（直接传递 retries 数字）
+  const opts: ApiCallOptions = typeof options === 'number' 
+    ? { retries: options } 
+    : options;
+  const retries = opts.retries ?? 3;
+  const onRetry = opts.onRetry;
+  
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 300000); // 5分钟超时
 
@@ -70,6 +82,12 @@ const apiCall = async (endpoint: string, body: any, retries: number = 3) => {
       // 等待后重试（指数退避）
       const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
       console.warn(`API调用失败 (尝试 ${attempt}/${retries})，${delay}ms 后重试:`, error.message);
+      
+      // 调用重试回调，通知调用者
+      if (onRetry) {
+        onRetry(attempt, error.message, delay);
+      }
+      
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -98,7 +116,8 @@ export const generateKeywords = async (
   userSuggestion: string = '',
   uiLanguage: 'zh' | 'en' = 'en',
   industry?: string,
-  additionalSuggestions?: string
+  additionalSuggestions?: string,
+  onRetry?: (attempt: number, error: string, delay: number) => void
 ): Promise<{ keywords: KeywordData[]; rawResponse: string; searchResults?: Array<{ title: string; url: string; snippet?: string }> }> => {
   const result = await apiCall('/api/generate-keywords', {
     seedKeyword,
@@ -112,7 +131,7 @@ export const generateKeywords = async (
     uiLanguage,
     industry,
     additionalSuggestions,
-  });
+  }, { retries: 3, onRetry });
   return {
     keywords: result.keywords,
     rawResponse: result.rawResponse || '',
@@ -127,7 +146,8 @@ export const analyzeRankingProbability = async (
   targetLanguage: TargetLanguage = 'en',
   websiteUrl?: string,
   websiteDR?: number,
-  targetSearchEngine: string = 'google'
+  targetSearchEngine: string = 'google',
+  onRetry?: (attempt: number, error: string, delay: number) => void
 ): Promise<KeywordData[]> => {
   const result = await apiCall('/api/analyze-ranking', {
     keywords,
@@ -137,7 +157,7 @@ export const analyzeRankingProbability = async (
     websiteUrl,
     websiteDR,
     targetSearchEngine
-  });
+  }, { retries: 3, onRetry });
   return result.keywords;
 };
 
@@ -188,7 +208,8 @@ export const translateAndAnalyzeSingle = async (
   targetSearchEngine: string = 'google',
   websiteUrl?: string,
   websiteDR?: number,
-  skipTranslation: boolean = false
+  skipTranslation: boolean = false,
+  onRetry?: (attempt: number, error: string, delay: number) => void
 ): Promise<{
   success: boolean;
   original: string;
@@ -204,7 +225,7 @@ export const translateAndAnalyzeSingle = async (
     websiteUrl,
     websiteDR,
     skipTranslation
-  });
+  }, { retries: 3, onRetry });
   return result;
 };
 

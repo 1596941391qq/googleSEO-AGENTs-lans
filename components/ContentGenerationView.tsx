@@ -81,6 +81,8 @@ const REGION_OPTIONS: {
 interface ContentGenerationState {
   activeTab: "my-website" | "website-data" | "projects" | "publish";
   website: WebsiteBinding | null;
+  onboardingStep: number;
+  websiteData: any | null;
   [key: string]: any;
 }
 import {
@@ -1217,7 +1219,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
 
 interface ContentGenerationViewProps {
   state: ContentGenerationState;
-  setState: (update: Partial<ContentGenerationState>) => void;
+  setState: (update: Partial<ContentGenerationState> | ((prev: ContentGenerationState) => ContentGenerationState)) => void;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
   onGenerateArticle?: (keyword: KeywordData) => void;

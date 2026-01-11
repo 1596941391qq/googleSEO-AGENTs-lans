@@ -312,7 +312,7 @@ export interface BatchAnalysisThought {
 
 // === Task Management System ===
 
-export type TaskType = 'mining' | 'batch' | 'article-generator';
+export type TaskType = 'mining' | 'batch' | 'article-generator' | 'deep-dive';
 
 export interface TaskState {
   // Common fields
@@ -407,7 +407,7 @@ export interface AppState {
   // Task Management
   taskManager: TaskManagerState;
 
-  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'test-agents' | 'article-generator' | 'content-generation';
+  step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'article-generator' | 'content-generation';
   seedKeyword: string;
   targetLanguage: TargetLanguage;
   targetSearchEngine: 'google' | 'baidu' | 'bing' | 'yandex';
@@ -426,6 +426,14 @@ export interface AppState {
   miningConfig?: {
     industry?: string;
     additionalSuggestions?: string; // User's additional suggestions for AI
+  };
+  
+  // Thinking Status - tracks what the AI is currently doing
+  thinkingStatus: {
+    isThinking: boolean;
+    message: string; // e.g. "AI正在挖掘manus相关的词" or "AI正在分析keyword难度"
+    startTime: number; // timestamp when thinking started
+    phase: 'generating' | 'analyzing' | 'searching' | 'idle';
   };
 
   // Archives
