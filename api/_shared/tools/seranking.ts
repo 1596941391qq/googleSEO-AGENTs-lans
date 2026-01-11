@@ -76,21 +76,21 @@ export async function fetchSERankingData(
   // - 为了一致性，也应用 10 个单词的限制（参考 DataForSEO）
   const MAX_WORDS_PER_KEYWORD = 10;
   const MAX_CHARS_PER_KEYWORD = 255;
-  
+
   // 过滤空关键词并检查限制
   const validKeywords: string[] = [];
   const skippedKeywords: string[] = [];
   const skippedKeywordsMap = new Map<string, { wordCount?: number; charCount?: number; reason: string }>();
-  
+
   keywords.forEach(kw => {
     if (!kw || !kw.trim()) {
       return; // 跳过空关键词
     }
-    
+
     const trimmed = kw.trim();
     const charCount = trimmed.length;
     const wordCount = trimmed.split(/\s+/).filter(w => w.length > 0).length;
-    
+
     // 检查字符长度限制（SE-Ranking API 限制：最多 255 个字符）
     if (charCount > MAX_CHARS_PER_KEYWORD) {
       skippedKeywords.push(trimmed);
@@ -112,7 +112,7 @@ export async function fetchSERankingData(
       validKeywords.push(trimmed);
     }
   });
-  
+
   if (validKeywords.length === 0) {
     console.warn('[SE-Ranking] No valid keywords provided after filtering');
     // 返回所有关键词的空数据（包括被跳过的）
@@ -124,14 +124,14 @@ export async function fetchSERankingData(
       };
     });
   }
-  
+
   if (skippedKeywords.length > 0) {
     console.log(`[SE-Ranking] Filtered ${skippedKeywords.length} keywords (too long or too many words), ${validKeywords.length} keywords will be sent to API`);
   }
 
   // SE-Ranking API 支持最多 5000 个关键词，如果超过则分批处理
   let apiResults: SERankingKeywordData[] = [];
-  
+
   if (validKeywords.length > SE_RANKING_MAX_KEYWORDS) {
     console.log(`[SE-Ranking] Processing ${validKeywords.length} keywords in batches of ${SE_RANKING_MAX_KEYWORDS} (API limit)`);
     const allResults: SERankingKeywordData[] = [];
@@ -157,17 +157,17 @@ export async function fetchSERankingData(
     // 关键词数量在 API 限制内，直接一次性批量调用（API 本身支持批量）
     apiResults = await fetchSERankingDataBatch(validKeywords, languageCode, useGlobal);
   }
-  
+
   // 为被跳过的关键词添加空数据
   const finalResults: SERankingKeywordData[] = [...apiResults];
-  
+
   skippedKeywords.forEach(skippedKw => {
     finalResults.push({
       keyword: skippedKw,
       is_data_found: false,
     });
   });
-  
+
   // 确保返回结果与输入关键词顺序一致
   const resultMap = new Map<string, SERankingKeywordData>();
   finalResults.forEach(r => {
@@ -175,7 +175,7 @@ export async function fetchSERankingData(
       resultMap.set(r.keyword.toLowerCase(), r);
     }
   });
-  
+
   const orderedResults: SERankingKeywordData[] = [];
   keywords.forEach(kw => {
     const trimmed = kw?.trim();
@@ -192,7 +192,7 @@ export async function fetchSERankingData(
       }
     }
   });
-  
+
   return orderedResults;
 }
 
@@ -234,6 +234,12 @@ async function fetchSERankingDataBatch(
     });
     formData.append('cols', 'keyword,volume,cpc,competition,difficulty,history_trend');
 
+    // 检查 API key 是否存在（不记录实际 key，只检查是否配置）
+    if (!SERANKING_API_KEY) {
+      console.error('[SE-Ranking] API key not configured. Please set SERANKING_API_KEY environment variable.');
+      return keywordsToFetch.map(kw => ({ keyword: kw, is_data_found: false }));
+    }
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -252,7 +258,10 @@ async function fetchSERankingDataBatch(
       } catch {
         errorText = 'Unknown error';
       }
-      console.error(`[SE-Ranking] API error: ${response.status} - ${errorText}`);
+
+      // 记录错误但不记录 API key
+      console.error(`[SE-Ranking] API error: ${response.status}`);
+      console.error(`[SE-Ranking] Error message: ${errorText}`);
 
       // 401/403 表示认证问题，可能 API key 无效或过期
       if (response.status === 401 || response.status === 403) {
@@ -276,17 +285,31 @@ async function fetchSERankingDataBatch(
     let data: any;
     try {
       const responseText = await response.text();
-      console.log(`[SE-Ranking] Raw response: ${responseText.substring(0, 500)}`);
+      console.log(`[SE-Ranking] Raw response length: ${responseText.length} chars`);
+      console.log(`[SE-Ranking] Raw response preview: ${responseText.substring(0, 500)}`);
       data = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error('[SE-Ranking] Failed to parse JSON response');
+    } catch (parseError: any) {
+      console.error('[SE-Ranking] Failed to parse JSON response:', parseError.message);
+      const responseText = await response.text().catch(() => 'Unable to read response');
+      console.error('[SE-Ranking] Response text:', responseText.substring(0, 500));
       return keywordsToFetch.map(kw => ({ keyword: kw, is_data_found: false }));
     }
 
     // SE-Ranking 直接返回数组
     if (!Array.isArray(data)) {
       console.warn(`[SE-Ranking] Unexpected response format: ${typeof data}`);
-      console.log(`[SE-Ranking] Response data: ${JSON.stringify(data).substring(0, 500)}`);
+      console.log(`[SE-Ranking] Response structure:`, JSON.stringify({
+        type: typeof data,
+        is_array: Array.isArray(data),
+        keys: typeof data === 'object' && data !== null ? Object.keys(data) : 'N/A',
+        preview: JSON.stringify(data).substring(0, 500),
+      }, null, 2));
+
+      // 如果是错误对象，提取错误信息
+      if (data && typeof data === 'object' && data.message) {
+        console.error(`[SE-Ranking] API returned error: ${data.message}`);
+      }
+
       return keywordsToFetch.map(kw => ({ keyword: kw, is_data_found: false }));
     }
 
@@ -313,10 +336,10 @@ async function fetchSERankingDataBatch(
 
     const foundCount = results.filter((r: SERankingKeywordData) => r.is_data_found).length;
     console.log(`[SE-Ranking] Batch returned ${foundCount}/${results.length} keywords with data`);
-    
+
     // 详细日志：显示前几个结果的详细信息
     if (results.length > 0) {
-      console.log(`[SE-Ranking] Sample results (first ${Math.min(3, results.length)}):`, 
+      console.log(`[SE-Ranking] Sample results (first ${Math.min(3, results.length)}):`,
         JSON.stringify(results.slice(0, 3).map(r => ({
           keyword: r.keyword,
           is_data_found: r.is_data_found,
@@ -326,7 +349,7 @@ async function fetchSERankingDataBatch(
         })), null, 2)
       );
     }
-    
+
     // 创建一个映射，以便快速查找（但在这个函数中，我们直接返回 results，顺序已经在外部函数中处理）
     return results;
 

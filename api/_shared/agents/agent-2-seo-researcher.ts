@@ -9,7 +9,7 @@ import { callGeminiAPI } from '../gemini.js';
 import { fetchSerpResults, fetchSerpResultsBatch, type SerpData } from '../tools/serp-search.js';
 import { getSEOResearcherPrompt, DEFAULT_SERP_ANALYSIS } from '../../../services/prompts/index.js';
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
-import { fetchKeywordData, SearchEngine } from '../tools/dataforseo.js';
+import { SearchEngine } from '../tools/dataforseo.js';
 import { getDomainOverview, getBatchDomainOverview } from '../tools/dataforseo-domain.js';
 
 /**
@@ -1109,7 +1109,7 @@ ${finalSystemInstruction}
 
 TASK: Analyze ${engineName} SERP for "${keywordData.keyword}"
 ${serpContext}
-${dataForSEOContext}
+keyword Research data:${dataForSEOContext}
 
 ${outputLanguageInstruction}
 
@@ -1492,40 +1492,27 @@ CRITICAL:
         analysis.topDomainType = 'Weak Page';
       }
 
-      // 计算蓝海评分 - 作为统一评估指标
+      // 计算蓝海评分 - 作为评估指标（用于blueOceanScore字段，但不用于覆盖AI返回的probability）
       const blueOceanScoreData = calculateBlueOceanScore({
         ...keywordData,
         ...analysis
       });
 
-      // 通过蓝海分数计算排名概率（统一评估体系）
-      // 蓝海分数 >= 70 → HIGH, 40-69 → MEDIUM, < 40 → LOW
-      let calculatedProbability: ProbabilityLevel;
-      if (blueOceanScoreData.totalScore >= 70) {
-        calculatedProbability = ProbabilityLevel.HIGH;
-      } else if (blueOceanScoreData.totalScore >= 40) {
-        calculatedProbability = ProbabilityLevel.MEDIUM;
-      } else {
-        calculatedProbability = ProbabilityLevel.LOW;
-      }
-
       // 计算大鱼吃小鱼概率 (Workflow 3) - 仅在存量拓新模式（有siteDR）下计算
+      // 注意：outrankData的finalProbability仅用于参考，不会覆盖AI返回的probability
       let outrankData = {
         canOutrankPositions: [] as number[],
         top3Probability: ProbabilityLevel.LOW,
         top10Probability: ProbabilityLevel.LOW,
-        finalProbability: calculatedProbability
+        finalProbability: analysis.probability || ProbabilityLevel.MEDIUM
       };
 
-      // 存量拓新模式：如果有 DR 数据，使用"大鱼吃小鱼"算法；否则使用蓝海分数
+      // 存量拓新模式：如果有 DR 数据，使用"大鱼吃小鱼"算法计算outrank相关指标
       if (!isBlueOceanMode && siteDR !== undefined && competitorDRs.length > 0) {
         outrankData = calculateOutrankProbability(siteDR, competitorDRs, analysis.relevanceScore || 0.5);
-        // 使用"大鱼吃小鱼"算法得出的概率（更精确）
-        calculatedProbability = outrankData.finalProbability;
       }
 
-      // 更新 analysis.probability 为基于蓝海分数的计算结果
-      analysis.probability = calculatedProbability;
+      // 直接使用AI返回的probability，不再重新计算
 
       console.log(`[Agent 2] Total analysis for "${keywordData.keyword}" took ${Date.now() - keywordStartTime}ms`);
 
@@ -1560,11 +1547,7 @@ CRITICAL:
   };
 
   const results: KeywordData[] = [];
-  // 优化批处理参数以提升效率：
-  // - BATCH_SIZE: 从 2 提升到 6，充分利用 API 并发能力
-  // - BATCH_DELAY: 从 1000ms 降低到 300ms，减少不必要的等待时间
-  // - 新增：批次层面的批量并行处理（先批量获取 SERP，再批量获取 DR，最后批量调用 Gemini）
-  // 预期性能提升：20个关键词从 159-309秒 降低到 40-80秒（约3-4倍提升）
+
   const BATCH_SIZE = 6; // 提升批处理大小，充分利用 API 并发能力
   const BATCH_DELAY = 300; // 减少批次间延迟，避免过度等待
   const startTime = Date.now();

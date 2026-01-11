@@ -3307,6 +3307,23 @@ export default function App() {
         const normalizedUrl = normalizeUrl(trimmed);
         const urlObj = new URL(normalizedUrl);
 
+        // Validate hostname: must contain a dot and have a valid domain format
+        const hostname = urlObj.hostname;
+        if (
+          !hostname ||
+          !hostname.includes(".") ||
+          hostname.endsWith(".") ||
+          hostname.startsWith(".")
+        ) {
+          throw new Error("Invalid hostname");
+        }
+
+        // Check if hostname has at least one character before the dot
+        const parts = hostname.split(".");
+        if (parts.length < 2 || parts.some((part) => part.length === 0)) {
+          throw new Error("Invalid domain format");
+        }
+
         // URL is valid, automatically set as selected website
         setSelectedWebsite({
           id: `manual-${Date.now()}`,
@@ -3393,6 +3410,23 @@ export default function App() {
       try {
         const normalizedUrl = normalizeUrl(trimmed);
         const urlObj = new URL(normalizedUrl);
+
+        // Validate hostname: must contain a dot and have a valid domain format
+        const hostname = urlObj.hostname;
+        if (
+          !hostname ||
+          !hostname.includes(".") ||
+          hostname.endsWith(".") ||
+          hostname.startsWith(".")
+        ) {
+          throw new Error("Invalid hostname");
+        }
+
+        // Check if hostname has at least one character before the dot
+        const parts = hostname.split(".");
+        if (parts.length < 2 || parts.some((part) => part.length === 0)) {
+          throw new Error("Invalid domain format");
+        }
 
         // URL is valid, automatically set as selected website
         setBatchSelectedWebsite({
