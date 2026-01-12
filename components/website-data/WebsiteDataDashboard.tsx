@@ -168,11 +168,16 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     };
     setData(initialData);
 
-    const baseRequest = {
+    const baseRequest: any = {
       websiteId,
       userId: getUserId(user),
       region: selectedRegion,
     };
+    
+    // 如果是手动输入的临时网站，需要传递域名
+    if (websiteId && websiteId.startsWith('manual-') && websiteDomain) {
+      baseRequest.websiteDomain = websiteDomain;
+    }
 
     // 使用sessionStorage防止重复调用
     const apiFetchKey = `api_fetch_${websiteId}_${selectedRegion}`;

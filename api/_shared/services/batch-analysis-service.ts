@@ -56,7 +56,7 @@ export interface TranslationResult {
  */
 export function parseKeywords(keywords: string | string[]): string[] {
   const keywordList = typeof keywords === 'string'
-    ? keywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+    ? keywords.split(/[,，]/).map(k => k.trim()).filter(k => k.length > 0) // 支持英文逗号和中文逗号
     : Array.isArray(keywords)
       ? keywords.filter(k => k && typeof k === 'string' && k.trim().length > 0)
       : [];

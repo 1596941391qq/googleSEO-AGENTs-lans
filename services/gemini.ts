@@ -182,13 +182,14 @@ export const generateDeepDiveStrategy = async (
 };
 
 export const batchTranslateAndAnalyze = async (
-  keywords: string, // comma-separated keywords
+  keywords: string | undefined, // comma-separated keywords (for blue ocean mode)
   targetLanguage: TargetLanguage,
   systemInstruction: string,
   uiLanguage: 'zh' | 'en' = 'en',
   targetSearchEngine: string = 'google',
   websiteUrl?: string,
-  websiteDR?: number
+  websiteDR?: number,
+  keywordsFromAudit?: Array<string | { keyword: string;[key: string]: any }> // for existing-website-audit mode
 ): Promise<{
   success: boolean;
   total: number;
@@ -196,7 +197,7 @@ export const batchTranslateAndAnalyze = async (
   translationResults: Array<{ original: string; translated: string; translationBack: string }>;
 }> => {
   const result = await apiCall('/api/batch-translate-analyze', {
-    keywords,
+    ...(keywordsFromAudit ? { keywordsFromAudit } : { keywords }),
     targetLanguage,
     systemInstruction,
     uiLanguage,

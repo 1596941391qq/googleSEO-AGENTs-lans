@@ -311,6 +311,7 @@ export interface ExistingWebsiteAuditResult {
   analysisReport: string; // AI 分析报告（文本格式）
   keywords: KeywordData[]; // 从分析报告中提取的关键词列表
   rawResponse: string;
+  competitorKeywordsPool?: string[]; // 所有竞争对手关键词池（用于后续轮次优先使用）
   analysis: {
     websiteContentSummary: string;
     competitorKeywordsCount: number;
@@ -619,10 +620,12 @@ export async function auditWebsiteForKeywords(
           systemInstruction,
           uiLanguage,
           targetLanguage,
-          undefined,
-          undefined,
+          websiteUrl, // 传递 websiteUrl 以获取网站 DR 值
+          undefined, // websiteDR 先传 undefined，函数内部会根据 websiteUrl 自动获取
           searchEngine,
-          (msg) => emit('strategist', 'log', msg)
+          (msg) => emit('strategist', 'log', msg),
+          options.websiteId, // 传递 websiteId 以便检查缓存，避免重复分析
+          industry // 传递industry参数，用于行业过滤
         );
         
         const highProbCount = analyzedKeywords.filter(k => k.probability === 'High').length;
@@ -729,10 +732,24 @@ export async function auditWebsiteForKeywords(
       ? `✓ 分析报告已生成（${analysisReport.length} 字符，提取了 ${analyzedKeywords.length} 个关键词，已完成 SERP 分析）`
       : `✓ Analysis report generated (${analysisReport.length} chars, extracted ${analyzedKeywords.length} keywords, SERP analysis completed)`);
 
+    // 构建竞争对手关键词池（用于后续轮次优先使用）
+    // 去重并过滤掉已经提取的关键词
+    const extractedKeywordSet = new Set(analyzedKeywords.map(k => k.keyword.toLowerCase()));
+    const competitorKeywordsPool = Array.from(new Set(competitorKeywords))
+      .filter(kw => kw && kw.trim() !== '' && !extractedKeywordSet.has(kw.toLowerCase()))
+      .slice(0, 200); // 限制数量，避免过大
+
+    if (competitorKeywordsPool.length > 0) {
+      emit('strategist', 'log', uiLanguage === 'zh'
+        ? `💾 已缓存 ${competitorKeywordsPool.length} 个竞争对手关键词，将在后续轮次优先使用`
+        : `💾 Cached ${competitorKeywordsPool.length} competitor keywords for subsequent rounds`);
+    }
+
     return {
       analysisReport,
       keywords: analyzedKeywords, // 返回分析后的关键词列表
       rawResponse: aiResponse.text,
+      competitorKeywordsPool, // 返回竞争对手关键词池
       analysis: {
         websiteContentSummary: websiteContent.substring(0, 500),
         competitorKeywordsCount: competitorKeywords.length,

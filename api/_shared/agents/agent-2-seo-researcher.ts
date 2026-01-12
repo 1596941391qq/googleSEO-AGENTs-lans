@@ -132,52 +132,29 @@ export function calculateOutrankProbability(
 } {
   const canOutrankPositions: number[] = [];
 
-  // 1. 判断可超越的位置
+  // competitorDRs格式：[第1名DR, 第5名DR, 第10名DR]
+  // 对应的位置：[1, 5, 10]
+  const positions = [1, 5, 10];
+
+  // 分别对比第1名、第5名、第10名，判断哪些位置可以超越
   competitorDRs.forEach((dr, index) => {
-    // 权威优势: websiteDR > competitorDR
-    // 或者相关性优势 (relevanceScore > 0.8) 且差距不在巨大范围内 (差距 <= 40)
-    // 如果差距极大 (如 10 vs 90)，高相关性也难以超越
+    if (dr === 0) return; // 跳过未获取到DR的值
+
+    const position = positions[index];
     const drGap = dr - websiteDR;
 
     // 只要 DR 差距在一定范围内，且网站 DR 较高或内容相关性极高，就有机会
     if (websiteDR >= dr - 5 || (relevanceScore > 0.85 && drGap <= 35) || (relevanceScore > 0.95 && drGap <= 50)) {
-      canOutrankPositions.push(index + 1);
+      canOutrankPositions.push(position);
     }
   });
 
-  // 2. Top 3 概率计算
-  let top3Probability = ProbabilityLevel.LOW;
-  const top3AvgDR = competitorDRs.slice(0, 3).reduce((a, b) => a + b, 0) / Math.max(1, Math.min(3, competitorDRs.length));
-  const canOutrankTop3 = canOutrankPositions.some(p => p <= 3);
-
-  if (canOutrankTop3 && websiteDR >= top3AvgDR - 3) {
-    top3Probability = ProbabilityLevel.HIGH;
-  } else if (canOutrankTop3) {
-    top3Probability = ProbabilityLevel.MEDIUM;
-  }
-
-  // 3. Top 10 概率计算
-  let top10Probability = ProbabilityLevel.LOW;
-  const top10AvgDR = competitorDRs.reduce((a, b) => a + b, 0) / Math.max(1, competitorDRs.length);
-  const canOutrankTop10Count = canOutrankPositions.filter(p => p <= 10).length;
-
-  if (canOutrankTop10Count >= 3 || websiteDR >= top10AvgDR) {
-    top10Probability = ProbabilityLevel.HIGH;
-  } else if (canOutrankTop10Count >= 1) {
-    top10Probability = ProbabilityLevel.MEDIUM;
-  }
-
-  // 4. 最终概率判定
-  let finalProbability = top10Probability;
-  if (top3Probability === ProbabilityLevel.HIGH) {
-    finalProbability = ProbabilityLevel.HIGH; // 这里的 HIGH 在 UI 上可以显示为 "HIGH (Top 3)"
-  }
-
+  // 不计算概率，只返回对比结果（保留字段以保持向后兼容）
   return {
     canOutrankPositions,
-    top3Probability,
-    top10Probability,
-    finalProbability
+    top3Probability: ProbabilityLevel.LOW, // 不再使用，保留仅为兼容
+    top10Probability: ProbabilityLevel.LOW, // 不再使用，保留仅为兼容
+    finalProbability: ProbabilityLevel.LOW // 不再使用，保留仅为兼容
   };
 }
 
@@ -940,10 +917,107 @@ export const analyzeRankingProbability = async (
   websiteUrl?: string,
   websiteDR?: number,
   searchEngine: SearchEngine = 'google',
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  websiteId?: string, // 可选：用于查询缓存
+  industry?: string // 可选：用户选择的精确行业，用于过滤SERP结果
 ): Promise<KeywordData[]> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const engineName = searchEngine.charAt(0).toUpperCase() + searchEngine.slice(1);
+
+  // 如果有 websiteId，先检查缓存（优化：避免重复分析已在审计中分析过的关键词）
+  let keywordsFromCache: KeywordData[] = [];
+  let keywordsToAnalyze: KeywordData[] = [];
+
+  if (websiteId && keywords.length > 0) {
+    try {
+      const { getDataForSEOLocationAndLanguage } = await import('../tools/dataforseo.js');
+      const { locationCode } = getDataForSEOLocationAndLanguage(targetLanguage);
+      const { getKeywordAnalysisCacheBatch } = await import('../../lib/database.js');
+
+      const cacheMap = await getKeywordAnalysisCacheBatch(
+        keywords.map(k => k.keyword),
+        locationCode,
+        searchEngine,
+        websiteId
+      );
+
+      console.log(`[Agent 2] Found ${cacheMap.size} cached analysis results for ${keywords.length} keywords`);
+
+      // 分离有缓存和没有缓存的关键词
+      for (const keyword of keywords) {
+        const cached = cacheMap.get(keyword.keyword.toLowerCase());
+
+        // 如果缓存中有完整的 Agent 2 分析结果（相同市场/引擎），直接使用
+        if (cached && cached.agent2_probability && cached.agent2_reasoning) {
+          // 使用缓存中的 DataForSEO 数据
+          if (cached.dataforseo_is_data_found) {
+            keyword.dataForSEOData = {
+              volume: cached.dataforseo_volume || 0,
+              difficulty: cached.dataforseo_difficulty || null,
+              cpc: cached.dataforseo_cpc || null,
+              competition: cached.dataforseo_competition || null,
+              history_trend: cached.dataforseo_history_trend || null,
+              is_data_found: cached.dataforseo_is_data_found,
+            };
+            keyword.serankingData = {
+              is_data_found: cached.dataforseo_is_data_found,
+              volume: cached.dataforseo_volume || 0,
+              cpc: cached.dataforseo_cpc || null,
+              competition: cached.dataforseo_competition || null,
+              difficulty: cached.dataforseo_difficulty || null,
+              history_trend: cached.dataforseo_history_trend || null,
+            };
+            keyword.volume = cached.dataforseo_volume || keyword.volume || 0;
+          }
+
+          // 使用缓存中的分析结果
+          keyword.probability = cached.agent2_probability as any;
+          keyword.searchIntent = cached.agent2_search_intent;
+          keyword.intentAnalysis = cached.agent2_intent_analysis;
+          keyword.reasoning = cached.agent2_reasoning;
+          keyword.topDomainType = cached.agent2_top_domain_type as any;
+          keyword.serpResultCount = cached.agent2_serp_result_count;
+          keyword.topSerpSnippets = cached.agent2_top_serp_snippets || [];
+          (keyword as any).blueOceanScore = cached.agent2_blue_ocean_score;
+          (keyword as any).blueOceanScoreBreakdown = cached.agent2_blue_ocean_breakdown;
+          (keyword as any).websiteDR = cached.website_dr;
+          (keyword as any).competitorDRs = cached.competitor_drs;
+          (keyword as any).top3Probability = cached.top3_probability;
+          (keyword as any).top10Probability = cached.top10_probability;
+          (keyword as any).canOutrankPositions = cached.can_outrank_positions;
+
+          keywordsFromCache.push(keyword);
+          console.log(`[Agent 2] Using cached analysis for "${keyword.keyword}" (probability: ${cached.agent2_probability})`);
+        } else {
+          keywordsToAnalyze.push(keyword);
+        }
+      }
+
+      // 如果所有关键词都来自缓存，直接返回
+      if (keywordsFromCache.length === keywords.length) {
+        onProgress?.(uiLanguage === 'zh'
+          ? `✅ 所有 ${keywords.length} 个关键词都使用了缓存的分析结果（无需重新分析）`
+          : `✅ All ${keywords.length} keywords used cached analysis results (no re-analysis needed)`);
+        return keywordsFromCache;
+      }
+
+      // 如果有部分关键词来自缓存，记录日志
+      if (keywordsFromCache.length > 0) {
+        onProgress?.(uiLanguage === 'zh'
+          ? `✅ ${keywordsFromCache.length} 个关键词使用了缓存结果，${keywordsToAnalyze.length} 个需要重新分析`
+          : `✅ ${keywordsFromCache.length} keywords used cached results, ${keywordsToAnalyze.length} need re-analysis`);
+        // 使用剩余的关键词继续分析
+        keywords = keywordsToAnalyze;
+      }
+    } catch (cacheError: any) {
+      console.warn(`[Agent 2] Cache check failed: ${cacheError.message}, proceeding with full analysis`);
+      // 缓存检查失败，继续正常分析所有关键词
+      keywordsToAnalyze = keywords;
+    }
+  } else {
+    // 没有 websiteId，正常分析所有关键词
+    keywordsToAnalyze = keywords;
+  }
 
   // OPTIMIZED: Automatically select language-appropriate system instruction
   // If the provided systemInstruction matches the default English version, replace it with the appropriate language version
@@ -994,18 +1068,34 @@ export const analyzeRankingProbability = async (
       serpResultCount = serpData.totalResults || -1;
     }
 
-    // 从预获取的 DR Map 中提取竞争对手 DR 值
+    // 从预获取的 DR Map 中提取竞争对手 DR 值（优化：只取第1名、第5名、第10名）
+    // competitorDRs数组格式：[第1名DR, 第5名DR, 第10名DR]
     let competitorDRs: number[] = [];
     if (serpResults.length > 0) {
-      competitorDRs = serpResults.slice(0, 10).map(r => {
-        if (!r.url) return 0;
-        const domain = r.url.replace(/^https?:\/\//, '').split('/')[0];
-        return allDomainsDRMap.get(domain) || 0;
-      });
+      const drValues: number[] = [];
+      // 提取第1名、第5名、第10名的DR值
+      if (serpResults.length > 0 && serpResults[0]?.url) {
+        const domain = serpResults[0].url.replace(/^https?:\/\//, '').split('/')[0];
+        const dr = allDomainsDRMap.get(domain) || 0;
+        if (dr > 0) drValues.push(dr);
+      }
+      if (serpResults.length >= 5 && serpResults[4]?.url) {
+        const domain = serpResults[4].url.replace(/^https?:\/\//, '').split('/')[0];
+        const dr = allDomainsDRMap.get(domain) || 0;
+        if (dr > 0) drValues.push(dr);
+      }
+      if (serpResults.length >= 10 && serpResults[9]?.url) {
+        const domain = serpResults[9].url.replace(/^https?:\/\//, '').split('/')[0];
+        const dr = allDomainsDRMap.get(domain) || 0;
+        if (dr > 0) drValues.push(dr);
+      }
+
+      // 存储第1名、第5名、第10名的DR值
+      competitorDRs = drValues;
     }
 
     // 继续使用原有的分析逻辑...
-    return await continueAnalysisWithSerpAndDR(keywordData, serpResults, serpResultCount, competitorDRs);
+    return await continueAnalysisWithSerpAndDR(keywordData, serpResults, serpResultCount, competitorDRs, industry);
   };
 
   // 原有版本：串行获取 SERP 和 DR（保留作为备用）
@@ -1035,22 +1125,38 @@ export const analyzeRankingProbability = async (
       console.warn(`[Agent 2] Failed to fetch ${searchEngine} SERP for ${keywordData.keyword}:`, error.message);
     }
 
-    // Step 1.5: Fetch DR for Top 10 competitors
+    // Step 1.5: Fetch DR for Top competitors (优化：只获取第1名、第5名、第10名，节省70%成本)
     let competitorDRs: number[] = [];
     if (serpResults.length > 0) {
       try {
         onProgress?.(uiLanguage === 'zh'
-          ? `🛡️ [${keywordData.keyword}] 正在评估前 ${Math.min(10, serpResults.length)} 名竞争对手的域名权威度 (DR)...`
-          : `🛡️ [${keywordData.keyword}] Assessing Domain Rating (DR) for top competitors...`);
+          ? `🛡️ [${keywordData.keyword}] 正在评估竞争对手的域名权威度 (DR)...`
+          : `🛡️ [${keywordData.keyword}] Assessing Domain Rating (DR) for competitors...`);
 
         const drFetchStart = Date.now();
-        const topDomains = serpResults.slice(0, 10).map(r => r.url).filter(Boolean);
-        if (topDomains.length > 0) {
-          const domainMap = await getBatchDomainOverview(topDomains);
-          competitorDRs = topDomains.map(url => {
+        // 优化：只获取第1名、第5名、第10名（如果存在）的域名
+        const domainsToFetch: string[] = [];
+        if (serpResults.length > 0 && serpResults[0]?.url) {
+          domainsToFetch.push(serpResults[0].url);
+        }
+        if (serpResults.length >= 5 && serpResults[4]?.url) {
+          domainsToFetch.push(serpResults[4].url);
+        }
+        if (serpResults.length >= 10 && serpResults[9]?.url) {
+          domainsToFetch.push(serpResults[9].url);
+        }
+
+        if (domainsToFetch.length > 0) {
+          const domainMap = await getBatchDomainOverview(domainsToFetch);
+          const drValues: number[] = [];
+          domainsToFetch.forEach(url => {
             const domain = url.replace(/^https?:\/\//, '').split('/')[0];
-            return (domainMap.get(domain) as any)?.dr || 0;
+            const dr = (domainMap.get(domain) as any)?.dr || 0;
+            if (dr > 0) drValues.push(dr);
           });
+
+          // 存储第1名、第5名、第10名的DR值
+          competitorDRs = drValues;
         }
 
         onProgress?.(uiLanguage === 'zh'
@@ -1061,7 +1167,7 @@ export const analyzeRankingProbability = async (
       }
     }
 
-    return await continueAnalysisWithSerpAndDR(keywordData, serpResults, serpResultCount, competitorDRs);
+    return await continueAnalysisWithSerpAndDR(keywordData, serpResults, serpResultCount, competitorDRs, industry);
   };
 
   // 提取共同的分析逻辑
@@ -1069,7 +1175,8 @@ export const analyzeRankingProbability = async (
     keywordData: KeywordData,
     serpResults: any[],
     serpResultCount: number,
-    competitorDRs: number[]
+    competitorDRs: number[],
+    industry?: string
   ): Promise<KeywordData> => {
     // 记录分析开始时间，用于性能统计
     const keywordStartTime = Date.now();
@@ -1104,8 +1211,38 @@ export const analyzeRankingProbability = async (
       ? '重要：所有输出内容必须使用中文。包括 intentAssessment 和 reasoning 字段的内容都必须用中文编写。'
       : 'IMPORTANT: All output content must be in English. Both intentAssessment and reasoning fields must be written in English.';
 
+    // 如果提供了精确行业，添加行业过滤指导
+    const industryFilterInstruction = industry
+      ? (uiLanguage === 'zh'
+        ? `\n\n# 精确行业过滤
+用户选择的精确行业是：**${industry}**。
+
+**关键要求**：在分析SERP结果时，**只关注与"${industry}"相关的结果**，忽略其他行业的权威网站（如电商网站的商品页、其他行业的专业网站等）。
+
+**分析原则**：
+1. 即使其他行业有高权威网站（如电商、新闻、其他专业网站），也不应影响目标行业"${industry}"的上首页概率评估
+2. 只评估与"${industry}"行业相关的SERP结果的竞争强度
+3. 如果SERP结果主要是其他行业的内容（即使这些网站权威性很高），这实际上是**高概率上首页的机会**（因为目标行业竞争较弱）
+4. 示例：如果关键词是"S16霸王龙95"，行业是"云顶之弈游戏"，即使SERP中有电商网站的霸王龙商品页，也不应影响"游戏相关内容高概率上首页"的判断
+
+**输出要求**：在reasoning中明确说明你是基于"${industry}"行业进行的分析，并说明其他行业的结果已被忽略。`
+        : `\n\n# Industry Filtering
+User's selected precise industry: **${industry}**.
+
+**CRITICAL REQUIREMENT**: When analyzing SERP results, **focus ONLY on results related to "${industry}"**, ignore authoritative sites from other industries (e.g., e-commerce product pages, other industry professional sites, etc.).
+
+**Analysis Principles**:
+1. Even if other industries have high-authority sites (e.g., e-commerce, news, other professional sites), this should NOT affect the ranking probability assessment for the target industry "${industry}"
+2. Only evaluate the competition strength of SERP results related to the "${industry}" industry
+3. If SERP results are primarily from other industries (even if these sites have high authority), this is actually a **HIGH probability opportunity** (because the target industry has weaker competition)
+4. Example: If the keyword is "S16霸王龙95" and the industry is "云顶之弈游戏" (TFT game), even if SERP has e-commerce product pages about dinosaurs, this should NOT affect the judgment that "game-related content has high probability to rank on page 1"
+
+**Output Requirement**: In your reasoning, clearly state that you analyzed based on the "${industry}" industry, and explain that results from other industries have been ignored.`)
+      : '';
+
     const fullSystemInstruction = `
 ${finalSystemInstruction}
+${industryFilterInstruction}
 
 TASK: Analyze ${engineName} SERP for "${keywordData.keyword}"
 ${serpContext}
@@ -1498,8 +1635,8 @@ CRITICAL:
         ...analysis
       });
 
-      // 计算大鱼吃小鱼概率 (Workflow 3) - 仅在存量拓新模式（有siteDR）下计算
-      // 注意：outrankData的finalProbability仅用于参考，不会覆盖AI返回的probability
+      // 计算大鱼吃小鱼对比结果 (Workflow 3) - 仅在存量拓新模式（有siteDR）下计算
+      // 只返回对比结果（canOutrankPositions），供分析agent作为参考，不计算概率
       let outrankData = {
         canOutrankPositions: [] as number[],
         top3Probability: ProbabilityLevel.LOW,
@@ -1597,18 +1734,31 @@ CRITICAL:
         ? `🛡️ [批次 ${currentBatchNum}] 正在批量并行获取竞争对手 DR 值...`
         : `🛡️ [Batch ${currentBatchNum}] Batch fetching competitor DR values in parallel...`);
 
+      // 优化：只获取每个关键词的第1名、第5名、第10名域名（节省70%成本）
       const allDomains = new Set<string>();
       batch.forEach(k => {
         const serpData = serpResultsMap.get(k.keyword.toLowerCase());
         if (serpData?.results) {
-          serpData.results.slice(0, 10).forEach(r => {
-            if (r.url) {
-              const domain = r.url.replace(/^https?:\/\//, '').split('/')[0];
-              if (domain && domain.includes('.')) {
-                allDomains.add(domain);
-              }
+          const results = serpData.results;
+          // 只添加第1名、第5名、第10名的域名
+          if (results.length > 0 && results[0]?.url) {
+            const domain = results[0].url.replace(/^https?:\/\//, '').split('/')[0];
+            if (domain && domain.includes('.')) {
+              allDomains.add(domain);
             }
-          });
+          }
+          if (results.length >= 5 && results[4]?.url) {
+            const domain = results[4].url.replace(/^https?:\/\//, '').split('/')[0];
+            if (domain && domain.includes('.')) {
+              allDomains.add(domain);
+            }
+          }
+          if (results.length >= 10 && results[9]?.url) {
+            const domain = results[9].url.replace(/^https?:\/\//, '').split('/')[0];
+            if (domain && domain.includes('.')) {
+              allDomains.add(domain);
+            }
+          }
         }
       });
 
@@ -1661,7 +1811,8 @@ CRITICAL:
     }
   }
 
-  return results;
+  // 合并缓存的关键词和新分析的关键词
+  return [...keywordsFromCache, ...results];
 };
 
 export const extractCoreKeywords = async (

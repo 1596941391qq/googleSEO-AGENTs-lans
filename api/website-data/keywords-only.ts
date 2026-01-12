@@ -14,6 +14,7 @@ import { authenticateRequest } from '../_shared/auth.js';
 
 interface KeywordsOnlyRequestBody {
   websiteId: string;
+  websiteDomain?: string; // 可选：当 websiteId 是临时ID（manual-开头）时，必须提供域名
   userId?: string | number; // 向后兼容，但优先使用 JWT 认证
   limit?: number;
   region?: string;
@@ -57,28 +58,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sortBy = body.sortBy || 'searchVolume';
     const sortOrder = body.sortOrder || 'desc';
 
-    await initWebsiteDataTables();
+    // 检查是否是临时手动网站（manual- 开头）
+    const isManualWebsite = body.websiteId && body.websiteId.startsWith('manual-');
+    let domain: string;
+    let cacheWebsiteId: string; // 用于缓存键的网站ID
 
-    // 获取网站信息
-    const websiteResult = await sql`
-      SELECT website_domain, user_id
-      FROM user_websites
-      WHERE id = ${body.websiteId}
-    `;
+    if (isManualWebsite) {
+      // 临时手动网站：需要提供域名
+      if (!body.websiteDomain) {
+        return res.status(400).json({ 
+          error: 'websiteDomain is required for manual websites',
+          message: 'When using a temporary website ID (manual-*), you must provide the websiteDomain parameter'
+        });
+      }
+      domain = body.websiteDomain;
+      cacheWebsiteId = body.websiteId; // 使用临时ID作为缓存键
+    } else {
+      // 数据库中的网站：从数据库查询
+      await initWebsiteDataTables();
 
-    if (websiteResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Website not found' });
+      // 获取网站信息
+      const websiteResult = await sql`
+        SELECT website_domain, user_id
+        FROM user_websites
+        WHERE id = ${body.websiteId}
+      `;
+
+      if (websiteResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Website not found' });
+      }
+
+      const website = websiteResult.rows[0];
+
+      // 验证权限 - 使用字符串比较以确保兼容性
+      if (String(website.user_id) !== String(userId)) {
+        return res.status(403).json({ error: 'Website does not belong to user' });
+      }
+
+      // 使用实际的网站域名
+      domain = website.website_domain;
+      cacheWebsiteId = body.websiteId;
     }
-
-    const website = websiteResult.rows[0];
-
-    // 验证权限 - 使用字符串比较以确保兼容性
-    if (String(website.user_id) !== String(userId)) {
-      return res.status(403).json({ error: 'Website does not belong to user' });
-    }
-
-    // 使用实际的网站域名
-    const domain = website.website_domain;
 
     // 将地区代码转换为 locationCode
     const region = body.region || '';
@@ -89,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const locationCode = regionToLocationCode[region] || 2840;
 
     // 检查是否有正在进行的 API 调用
-    const cacheKey = `keywords_${body.websiteId}_${locationCode}`;
+    const cacheKey = `keywords_${cacheWebsiteId}_${locationCode}`;
     const cachedCall = apiCallCache.get(cacheKey);
     
     let keywords: any[] = [];
@@ -104,59 +124,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           if (data && data.length > 0) {
             // 只缓存前20个关键词
             const keywordsToCache = data.slice(0, 20);
-            await Promise.all(
-              keywordsToCache.map(kw => sql`
-                INSERT INTO domain_keywords_cache (
-                  website_id,
-                  location_code,
-                  keyword,
-                  current_position,
-                  previous_position,
-                  position_change,
-                  search_volume,
-                  cpc,
-                  competition,
-                  difficulty,
-                  traffic_percentage,
-                  ranking_url,
-                  data_updated_at,
-                  cache_expires_at
-                ) VALUES (
-                  ${body.websiteId},
-                  ${locationCode},
-                  ${kw.keyword},
-                  ${kw.currentPosition},
-                  ${kw.previousPosition},
-                  ${kw.positionChange},
-                  ${kw.searchVolume},
-                  ${kw.cpc},
-                  ${kw.competition !== null && kw.competition !== undefined ? Math.min(Math.max(Number(kw.competition) || 0, 0), 99999999.99) : null},
-                  ${kw.difficulty},
-                  ${kw.trafficPercentage !== null && kw.trafficPercentage !== undefined ? Math.min(Math.max(Number(kw.trafficPercentage) || 0, 0), 99999999.99) : null},
-                  ${kw.url || ''},
-                  NOW(),
-                  NOW() + INTERVAL '24 hours'
-                )
-                ON CONFLICT (website_id, keyword, location_code) DO UPDATE SET
-                  current_position = EXCLUDED.current_position,
-                  previous_position = EXCLUDED.previous_position,
-                  position_change = EXCLUDED.position_change,
-                  search_volume = EXCLUDED.search_volume,
-                  cpc = EXCLUDED.cpc,
-                  competition = CASE 
-                    WHEN EXCLUDED.competition IS NULL THEN NULL
-                    ELSE LEAST(GREATEST(EXCLUDED.competition, 0), 99999999.99)
-                  END,
-                  difficulty = EXCLUDED.difficulty,
-                  traffic_percentage = CASE 
-                    WHEN EXCLUDED.traffic_percentage IS NULL THEN NULL
-                    ELSE LEAST(GREATEST(EXCLUDED.traffic_percentage, 0), 99999999.99)
-                  END,
-                  ranking_url = EXCLUDED.ranking_url,
-                  data_updated_at = NOW(),
-                  cache_expires_at = EXCLUDED.cache_expires_at
-              `)
-            );
+            
+            // 只有非临时网站才保存到数据库缓存
+            if (!isManualWebsite) {
+              await initWebsiteDataTables();
+              await Promise.all(
+                keywordsToCache.map(kw => sql`
+                  INSERT INTO domain_keywords_cache (
+                    website_id,
+                    location_code,
+                    keyword,
+                    current_position,
+                    previous_position,
+                    position_change,
+                    search_volume,
+                    cpc,
+                    competition,
+                    difficulty,
+                    traffic_percentage,
+                    ranking_url,
+                    data_updated_at,
+                    cache_expires_at
+                  ) VALUES (
+                    ${cacheWebsiteId},
+                    ${locationCode},
+                    ${kw.keyword},
+                    ${kw.currentPosition},
+                    ${kw.previousPosition},
+                    ${kw.positionChange},
+                    ${kw.searchVolume},
+                    ${kw.cpc},
+                    ${kw.competition !== null && kw.competition !== undefined ? Math.min(Math.max(Number(kw.competition) || 0, 0), 99999999.99) : null},
+                    ${kw.difficulty},
+                    ${kw.trafficPercentage !== null && kw.trafficPercentage !== undefined ? Math.min(Math.max(Number(kw.trafficPercentage) || 0, 0), 99999999.99) : null},
+                    ${kw.url || ''},
+                    NOW(),
+                    NOW() + INTERVAL '24 hours'
+                  )
+                  ON CONFLICT (website_id, keyword, location_code) DO UPDATE SET
+                    current_position = EXCLUDED.current_position,
+                    previous_position = EXCLUDED.previous_position,
+                    position_change = EXCLUDED.position_change,
+                    search_volume = EXCLUDED.search_volume,
+                    cpc = EXCLUDED.cpc,
+                    competition = CASE 
+                      WHEN EXCLUDED.competition IS NULL THEN NULL
+                      ELSE LEAST(GREATEST(EXCLUDED.competition, 0), 99999999.99)
+                    END,
+                    difficulty = EXCLUDED.difficulty,
+                    traffic_percentage = CASE 
+                      WHEN EXCLUDED.traffic_percentage IS NULL THEN NULL
+                      ELSE LEAST(GREATEST(EXCLUDED.traffic_percentage, 0), 99999999.99)
+                    END,
+                    ranking_url = EXCLUDED.ranking_url,
+                    data_updated_at = NOW(),
+                    cache_expires_at = EXCLUDED.cache_expires_at
+                `)
+              );
+            }
+            
             const cleanedCount = keywordsToCache.length;
             console.log(`[keywords-only] ✅ Successfully fetched and cached ${cleanedCount} keywords from API (cleaned from ${data.length} raw keywords)`);
             // 返回清理后的关键词（已经限制数量）
@@ -219,9 +245,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 添加二级排序：如果主排序字段相同，按更新时间排序
     orderByClause += ', data_updated_at DESC';
 
-    // 如果 API 调用失败或返回空数据，从数据库缓存读取
-    if (keywords.length === 0) {
+    // 如果 API 调用失败或返回空数据，从数据库缓存读取（仅适用于非临时网站）
+    if (keywords.length === 0 && !isManualWebsite) {
       console.log('[keywords-only] 📦 Falling back to database cache');
+      await initWebsiteDataTables();
       const cacheResult = await sql`
         SELECT
           keyword,
@@ -235,7 +262,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           traffic_percentage,
           ranking_url
         FROM domain_keywords_cache
-        WHERE website_id = ${body.websiteId}
+        WHERE website_id = ${cacheWebsiteId}
           AND location_code = ${locationCode}
         ${raw(orderByClause)}
         LIMIT ${limit}

@@ -184,31 +184,31 @@ function getAuthHeader(): string {
  */
 function cleanKeyword(rawKeyword: string): string {
   if (!rawKeyword) return '';
-  
+
   let cleaned = rawKeyword.trim();
-  
+
   // 1. 移除类似 "001-qk7yulqsx9esalil5mxjkg-3342555957" 的完整ID格式
   // 匹配：数字-字母数字-数字 格式（更宽松的匹配）
   cleaned = cleaned.replace(/^\d{1,3}-[a-z0-9-]+-\d+(\s+|$)/i, '');
-  
+
   // 2. 移除开头的数字编号（如 "051 "、"0 "、"09 "、"08 "）
   // 匹配：开头的数字（1-3位）+ 空格，后面跟着字母或中文
   cleaned = cleaned.replace(/^\d{1,3}\s+(?=[a-zA-Z\u4e00-\u9fa5])/, '');
-  
+
   // 3. 移除纯数字开头的项（如果后面有文本，移除数字部分）
   // 匹配：开头的数字（任意长度）+ 空格
   cleaned = cleaned.replace(/^\d+\s+/, '');
-  
+
   // 4. 如果清理后只剩下纯数字（如 "050"、"069"），返回空字符串
   // 因为这些不是有效的关键词
   if (/^\d+$/.test(cleaned)) {
     return '';
   }
-  
+
   // 5. 移除末尾的数字后缀（如果存在）
   // 例如 "keyword 001" -> "keyword"
   cleaned = cleaned.replace(/\s+\d{1,3}$/, '');
-  
+
   return cleaned.trim();
 }
 
@@ -265,10 +265,10 @@ export async function getBatchDomainOverview(
       })
       .filter(d => d.length > 0 && d.includes('.')) // 确保是有效的域名格式
   ));
-  
+
   // DataForSEO API 通常限制一次 100 个任务
   const BATCH_SIZE = 50;
-  
+
   for (let i = 0; i < uniqueDomains.length; i += BATCH_SIZE) {
     const chunk = uniqueDomains.slice(i, i + BATCH_SIZE);
     const requestBodies = chunk.map(domain => ({
@@ -338,7 +338,7 @@ export async function getBatchDomainOverview(
               backlinks: Number(item.backlinks_info?.backlinks) || 0,
             }
           } as any);
-          
+
           // 给对象手动添加计算好的 dr
           const entry = domainMap.get(chunk[index]);
           if (entry) (entry as any).dr = dr;
@@ -365,7 +365,7 @@ async function fetchWithRetry(
     // 为每个尝试添加 60s 超时
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
-    
+
     try {
       const response = await fetch(url, {
         ...options,
@@ -385,7 +385,7 @@ async function fetchWithRetry(
       return response;
     } catch (error: any) {
       clearTimeout(timeoutId);
-      
+
       if (error.name === 'AbortError') {
         console.warn(`[DataForSEO Domain] API timeout (60s) for ${url}. Attempt ${attempt + 1}/${maxRetries}`);
         if (attempt < maxRetries - 1) {
@@ -420,9 +420,9 @@ async function getDomainOverviewFromLabs(
 ): Promise<DomainOverview | null> {
   try {
     console.log(`[DataForSEO Domain] 🔄 Trying Labs Domain Metrics API for ${domain}`);
-    
+
     const endpoint = `${DATAFORSEO_BASE_URL}/dataforseo_labs/google/domain_metrics/live`;
-    
+
     const requestBody = [
       {
         target: domain,
@@ -462,7 +462,7 @@ async function getDomainOverviewFromLabs(
       }
 
       const resultData = data.tasks[0].result[0];
-      
+
       // Labs API 可能返回不同的数据结构
       if (!resultData.metrics) {
         console.warn('[DataForSEO Domain] No metrics in Labs API response');
@@ -491,14 +491,14 @@ async function getDomainOverviewFromLabs(
         top3: pos1 + pos2_3,
         top10: pos1 + pos2_3 + pos4_10,
         top50: pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50,
-        top100: pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + 
-                pos41_50 + pos51_60 + pos61_70 + pos71_80 + pos81_90 + pos91_100,
+        top100: pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 +
+          pos41_50 + pos51_60 + pos61_70 + pos71_80 + pos81_90 + pos91_100,
       };
 
       const totalKeywords = Number(organic.count) || 0;
       let avgPosition = 0;
       if (totalKeywords > 0) {
-        const weightedSum = 
+        const weightedSum =
           pos1 * 1 +
           pos2_3 * 2.5 +
           pos4_10 * 7 +
@@ -608,7 +608,7 @@ export async function getDomainOverview(
         }
       );
       clearTimeout(timeoutId);
-      
+
       if (!response.ok) {
         if (response.status === 404) {
           return null;
@@ -629,12 +629,12 @@ export async function getDomainOverview(
       }
 
       const resultData = data.tasks[0].result[0];
-      
+
       // 检查是否有 items 数组
       // items 可能为 null、undefined、空数组，或不是数组
       if (!resultData.items || !Array.isArray(resultData.items) || resultData.items.length === 0) {
         console.log(`[DataForSEO Domain] ℹ️ Domain ${cleanDomain} not found in database. This is common for new or untracked sites.`);
-        
+
         // 尝试使用 DataForSEO Labs Domain Metrics API 作为回退
         try {
           console.log(`[DataForSEO Domain] 🔄 Trying Labs Domain Metrics API for ${cleanDomain}...`);
@@ -676,8 +676,8 @@ export async function getDomainOverview(
         top3: pos1 + pos2_3, // pos_1 + pos_2_3 = top 3
         top10: pos1 + pos2_3 + pos4_10,
         top50: pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + pos41_50,
-        top100: pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 + 
-                pos41_50 + pos51_60 + pos61_70 + pos71_80 + pos81_90 + pos91_100,
+        top100: pos1 + pos2_3 + pos4_10 + pos11_20 + pos21_30 + pos31_40 +
+          pos41_50 + pos51_60 + pos61_70 + pos71_80 + pos81_90 + pos91_100,
       };
 
       // 计算平均排名（加权平均）
@@ -685,7 +685,7 @@ export async function getDomainOverview(
       const totalKeywords = Number(organic.count) || 0;
       let avgPosition = 0;
       if (totalKeywords > 0) {
-        const weightedSum = 
+        const weightedSum =
           pos1 * 1 +                                    // 第1名
           pos2_3 * 2.5 +                                // 第2-3名，中位数2.5
           pos4_10 * 7 +                                 // 第4-10名，中位数7
@@ -842,40 +842,40 @@ export async function getDomainKeywords(
         const keywordInfo = item.keyword_info || {};
         const keywordProperties = item.keyword_properties || {};
         const serpInfo = item.serp_info || {};
-        
+
         // 搜索量
         const searchVolume = keywordInfo.search_volume || 0;
-        
+
         // CPC
         const cpc = keywordInfo.cpc || 0;
-        
+
         // 竞争度
         const competition = keywordInfo.competition || 0;
-        
-        // 关键词难度 (competition_index)
-        const difficulty = keywordProperties.competition_index || 0;
-        
+
+        // 关键词难度 (competition * 100，因为 competition 是 0-1，需要转换为 0-100)
+        const difficulty = (competition || 0) * 100;
+
         // 排名信息 - 新 API 不直接提供排名，需要通过 SERP 信息推断
         // 如果 serp_info 中有排名信息，使用它；否则设为 0
-        const currentPosition = item.rank_absolute || 
-                               item.rank || 
-                               serpInfo.rank ||
-                               0;
-        
-        const previousPosition = item.previous_rank_absolute || 
-                                item.previous_rank ||
-                                0;
-        
+        const currentPosition = item.rank_absolute ||
+          item.rank ||
+          serpInfo.rank ||
+          0;
+
+        const previousPosition = item.previous_rank_absolute ||
+          item.previous_rank ||
+          0;
+
         // 预估流量值 (ETV) - 新 API 可能不直接提供，使用搜索量作为近似
-        const trafficPercentage = item.etv || 
-                                 item.estimated_traffic_value ||
-                                 searchVolume * 0.1; // 简单估算
-        
+        const trafficPercentage = item.etv ||
+          item.estimated_traffic_value ||
+          searchVolume * 0.1; // 简单估算
+
         // URL - 新 API 可能不直接提供排名 URL
-        const url = item.url || 
-                   item.ranked_serp_element?.url ||
-                   serpInfo.check_url ||
-                   '';
+        const url = item.url ||
+          item.ranked_serp_element?.url ||
+          serpInfo.check_url ||
+          '';
 
         return {
           keyword: keyword,
@@ -896,7 +896,7 @@ export async function getDomainKeywords(
       });
 
       console.log(`[DataForSEO Domain] ✅ Parsed ${keywords.length} keywords (filtered from ${items.length} items)`);
-      
+
       if (keywords.length > 0) {
         console.log(`[DataForSEO Domain] Sample keyword:`, {
           keyword: keywords[0].keyword,
@@ -1037,12 +1037,12 @@ export async function discoverCompetitorsByBacklinks(
       // 解析响应：result[0].items[]
       const resultData = data.tasks[0].result[0] || {};
       const items = resultData.items || [];
-      
+
       if (!Array.isArray(items) || items.length === 0) {
         console.warn('[DataForSEO Domain] No items in backlinks competitors response');
         return [];
       }
-      
+
       const competitors = items.map((item: any) => {
         return item.target || item.domain || '';
       }).filter((domain: string) => domain && domain !== cleanDomain); // 过滤掉空值和目标域名本身
@@ -1147,7 +1147,7 @@ export async function getDomainCompetitors(
       // 解析响应：result[0].items[]
       const resultData = data.tasks[0].result[0] || {};
       const items = resultData.items || [];
-      
+
       if (!Array.isArray(items) || items.length === 0) {
         console.warn('[DataForSEO Domain] No items in backlinks competitors response');
         return [];
@@ -1162,12 +1162,12 @@ export async function getDomainCompetitors(
       // - referring_domains: 引用域名数
       const competitors: DomainCompetitor[] = items.map((item: any, index: number) => {
         const competitorDomain = item.target || item.domain || '';
-        
+
         // backlinks API 返回的数据结构
         const intersections = Number(item.intersections) || 0; // 共同反向链接数
         const backlinks = Number(item.backlinks) || 0; // 反向链接总数
         const referringDomains = Number(item.referring_domains) || 0; // 引用域名数
-        
+
         // 调试日志：打印第一个竞争对手的详细数据
         if (index === 0) {
           console.log('[DataForSEO Domain] 📊 Sample backlinks competitor data:', {
@@ -1180,7 +1180,7 @@ export async function getDomainCompetitors(
             itemKeys: Object.keys(item),
           });
         }
-        
+
         // 由于 backlinks API 不提供关键词和流量数据，我们使用反向链接数据作为替代指标
         return {
           domain: competitorDomain,
@@ -1383,7 +1383,7 @@ export async function getRankedKeywords(
 
       // 新接口返回格式：result[0].items 数组
       const items = data.tasks[0].result[0].items || [];
-      
+
       // 调试：检查第一个 item 的结构
       if (items.length > 0) {
         console.log('[DataForSEO Domain] 📊 Sample item structure:', {
@@ -1398,7 +1398,7 @@ export async function getRankedKeywords(
           hasRankChanges: !!items[0].ranked_serp_element?.serp_item?.rank_changes,
         });
       }
-      
+
       const keywords: RankedKeyword[] = items.map((item: any, index: number) => {
         const keywordData = item.keyword_data || {};
         const rawKeyword = keywordData.keyword || '';
@@ -1408,24 +1408,24 @@ export async function getRankedKeywords(
         const rankedSerpElement = item.ranked_serp_element || {};
         const serpItem = rankedSerpElement.serp_item || {};
         const rankChanges = serpItem.rank_changes || {};
-        
+
         // 尝试提取排名信息（如果 API 提供）
         // 检查多个可能的路径
-        const currentPosition = serpItem.rank_absolute 
-          || rankedSerpElement.rank_absolute 
-          || item.rank_absolute 
+        const currentPosition = serpItem.rank_absolute
+          || rankedSerpElement.rank_absolute
+          || item.rank_absolute
           || null;
-        
+
         const previousPosition = rankChanges.previous_rank_absolute !== null && rankChanges.previous_rank_absolute !== undefined
           ? rankChanges.previous_rank_absolute
           : (rankedSerpElement.previous_rank_absolute !== null && rankedSerpElement.previous_rank_absolute !== undefined
             ? rankedSerpElement.previous_rank_absolute
             : null);
-        
-        const positionChange = (currentPosition !== null && previousPosition !== null) 
-          ? previousPosition - currentPosition 
+
+        const positionChange = (currentPosition !== null && previousPosition !== null)
+          ? previousPosition - currentPosition
           : null;
-        
+
         // 调试：打印第一个关键词的排名信息
         if (index === 0) {
           console.log('[DataForSEO Domain] 📊 Sample keyword ranking data:', {
@@ -1436,16 +1436,17 @@ export async function getRankedKeywords(
             hasRankData: currentPosition !== null || previousPosition !== null,
           });
         }
-        
-        // 提取搜索量、CPC、难度 (competition_index)
+
+        // 提取搜索量、CPC、难度 (competition * 100，因为 competition 是 0-1，需要转换为 0-100)
         const searchVolume = keywordInfo.search_volume || 0;
         const cpc = keywordInfo.cpc || undefined;
-        const difficulty = keywordProperties.competition_index || undefined;
+        const competition = keywordInfo.competition;
+        const difficulty = competition !== undefined ? competition * 100 : undefined;
         const etv = serpItem.etv || 0;
-        
+
         // 提取 URL
         const url = serpItem.url || '';
-        
+
         // 提取 SERP 特性
         const serpItemTypes = rankedSerpElement.serp_item_types || [];
         const serpFeatures = {
@@ -1456,7 +1457,7 @@ export async function getRankedKeywords(
           video: serpItem.is_video || serpItemTypes.includes('video'),
           image: serpItem.is_image || serpItemTypes.includes('images'),
         };
-        
+
         return {
           keyword: keyword || '',
           currentPosition: currentPosition || 0, // 如果没有排名数据，设为 0
@@ -1565,7 +1566,7 @@ export async function getSerpCompetitors(
       const batchSize = 10;
       for (let i = 0; i < keywords.length; i += batchSize) {
         const batch = keywords.slice(i, i + batchSize);
-        
+
         const requestBody = batch.map(keyword => ({
           keyword: keyword,
           location_code: locationCode,
@@ -1700,7 +1701,7 @@ export async function getDomainIntersection(
       }
 
       const resultData = data.tasks[0].result[0] || {};
-      
+
       // 解析共同关键词
       const commonKeywords = (resultData.common_keywords || []).map((item: any) => ({
         keyword: item.keyword || '',
@@ -1813,12 +1814,12 @@ export async function getRelevantPages(
           // 如果 Relevant Pages API 不可用，从 ranked_keywords 中提取页面数据
           console.log('[DataForSEO Domain] Relevant Pages API not available, extracting from ranked keywords');
           const keywords = await getRankedKeywords(domain, locationCode, 500, false);
-          
+
           // 按 URL 分组统计
           const pageMap = new Map<string, RelevantPage>();
           keywords.forEach(kw => {
             if (!kw.url) return;
-            
+
             const existing = pageMap.get(kw.url) || {
               url: kw.url,
               organicTraffic: 0,
@@ -1826,11 +1827,11 @@ export async function getRelevantPages(
               avgPosition: 0,
               topKeywords: [],
             };
-            
+
             existing.organicTraffic += kw.etv;
             existing.keywordsCount += 1;
             existing.avgPosition = (existing.avgPosition * (existing.keywordsCount - 1) + kw.currentPosition) / existing.keywordsCount;
-            
+
             if (existing.topKeywords.length < 5) {
               existing.topKeywords.push({
                 keyword: kw.keyword,
@@ -1838,10 +1839,10 @@ export async function getRelevantPages(
                 searchVolume: kw.searchVolume,
               });
             }
-            
+
             pageMap.set(kw.url, existing);
           });
-          
+
           return Array.from(pageMap.values())
             .sort((a, b) => b.organicTraffic - a.organicTraffic)
             .slice(0, limit);
@@ -1859,7 +1860,7 @@ export async function getRelevantPages(
       // Labs API 返回格式：result[0].items[]
       const resultData = data.tasks[0].result[0] || {};
       const items = resultData.items || resultData || [];
-      
+
       const pages: RelevantPage[] = (Array.isArray(items) ? items : []).map((item: any) => ({
         url: item.url || item.page || '',
         organicTraffic: Number(item.organic_traffic) || Number(item.etv) || Number(item.metrics?.organic?.etv) || 0,

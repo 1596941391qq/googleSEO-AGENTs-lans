@@ -30,7 +30,7 @@ export interface DataForSEOData {
 
   // DataForSEO 独有：关键词难度
   difficulty?: number; // Keyword Difficulty (0-100)
-
+  search_volume?: number;
   // 历史数据 - DataForSEO 提供12个月历史数据
   monthly_searches?: Array<{
     year: number;
@@ -363,6 +363,8 @@ export interface TaskState {
     };
     // 网站审计分析报告（文本格式）
     websiteAuditReport?: string;
+    // 竞争对手关键词池（用于后续轮次优先使用，避免重复调用AI）
+    competitorKeywordsPool?: string[];
   };
 
   // Batch-specific state
@@ -436,7 +438,7 @@ export interface AppState {
     industry?: string;
     additionalSuggestions?: string; // User's additional suggestions for AI
   };
-  
+
   // Thinking Status - tracks what the AI is currently doing
   thinkingStatus: {
     isThinking: boolean;

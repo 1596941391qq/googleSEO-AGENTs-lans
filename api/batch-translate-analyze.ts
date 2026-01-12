@@ -47,8 +47,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`[Batch Translate-Analyze] Processing ${keywordList.length} keywords from website audit (already in target language, skipping translation)`);
     } else if (keywords && typeof keywords === 'string') {
       // 方式2：手动输入的关键词（需要翻译）
+      // 支持英文逗号和中文逗号
       keywordList = keywords
-        .split(',')
+        .split(/[,，]/)
         .map((k: string) => k.trim())
         .filter((k: string) => k.length > 0);
       source = 'manual';
@@ -124,14 +125,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }));
     }
 
-    // Step 2: 优先使用缓存，仅补充缺失的 DataForSEO 数据
-    console.log(`[Batch Translate-Analyze] Step 2: Checking cache and fetching DataForSEO data for ${keywordsForAnalysis.length} keywords`);
+    // Step 2: 跨市场洞察跳过 DataForSEO API 调用（因为很多语种没有数据）
+    // 只检查缓存中是否有完整的 Agent 2 分析结果，如果有则直接使用，否则进行 SERP 分析
+    console.log(`[Batch Translate-Analyze] Step 2: Checking cache for complete analysis results (skipping DataForSEO API call for cross-market insight)`);
     
-    // 将语言代码转换为 DataForSEO 的 location_code 和 language_code
+    // 将语言代码转换为 DataForSEO 的 location_code 和 language_code（仅用于缓存查询）
     const { getDataForSEOLocationAndLanguage } = await import('./_shared/tools/dataforseo.js');
     const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage);
     
-    // 优化：先从缓存查询
+    // 只检查缓存中是否有完整的 Agent 2 分析结果
     const { getKeywordAnalysisCacheBatch } = await import('./lib/database.js');
     const cacheMap = await getKeywordAnalysisCacheBatch(
       keywordsForAnalysis.map(k => k.keyword),
@@ -142,114 +144,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     console.log(`[Cache] Found ${cacheMap.size} cached keyword analysis results`);
     
-    let dataForSEODataMap = new Map<string, any>();
     const keywordsToAnalyze: KeywordData[] = [];
-    const skippedKeywords: KeywordData[] = [];
-    const keywordsNeedingDataForSEO: string[] = [];
     const keywordsFromCache: KeywordData[] = [];
 
-    // 处理缓存中的数据
+    // 处理缓存中的数据（只使用完整的 Agent 2 分析结果）
     for (const keyword of keywordsForAnalysis) {
       const cached = cacheMap.get(keyword.keyword.toLowerCase());
       
-      if (cached && cached.dataforseo_is_data_found) {
-        // 使用缓存中的 DataForSEO 数据
-        keyword.dataForSEOData = {
-          volume: cached.dataforseo_volume || 0,
-          difficulty: cached.dataforseo_difficulty || null,
-          cpc: cached.dataforseo_cpc || null,
-          competition: cached.dataforseo_competition || null,
-          history_trend: cached.dataforseo_history_trend || null,
-          is_data_found: cached.dataforseo_is_data_found,
-        };
-        keyword.serankingData = {
-          is_data_found: cached.dataforseo_is_data_found,
-          volume: cached.dataforseo_volume || 0,
-          cpc: cached.dataforseo_cpc || null,
-          competition: cached.dataforseo_competition || null,
-          difficulty: cached.dataforseo_difficulty || null,
-          history_trend: cached.dataforseo_history_trend || null,
-        };
-        keyword.volume = cached.dataforseo_volume || keyword.volume || 0;
+      // 如果缓存中有完整的 Agent 2 分析结果（相同市场/引擎），直接使用
+      if (cached && cached.agent2_probability && cached.agent2_reasoning) {
+        keyword.probability = cached.agent2_probability as any;
+        keyword.searchIntent = cached.agent2_search_intent;
+        keyword.intentAnalysis = cached.agent2_intent_analysis;
+        keyword.reasoning = cached.agent2_reasoning;
+        keyword.topDomainType = cached.agent2_top_domain_type as any;
+        keyword.serpResultCount = cached.agent2_serp_result_count;
+        keyword.topSerpSnippets = cached.agent2_top_serp_snippets || [];
+        (keyword as any).blueOceanScore = cached.agent2_blue_ocean_score;
+        (keyword as any).blueOceanScoreBreakdown = cached.agent2_blue_ocean_breakdown;
+        (keyword as any).websiteDR = cached.website_dr;
+        (keyword as any).competitorDRs = cached.competitor_drs;
+        (keyword as any).top3Probability = cached.top3_probability;
+        (keyword as any).top10Probability = cached.top10_probability;
+        (keyword as any).canOutrankPositions = cached.can_outrank_positions;
         
-        // 如果缓存中有完整的 Agent 2 分析结果（相同市场/引擎），直接使用
-        if (cached.agent2_probability && cached.agent2_reasoning) {
-          keyword.probability = cached.agent2_probability as any;
-          keyword.searchIntent = cached.agent2_search_intent;
-          keyword.intentAnalysis = cached.agent2_intent_analysis;
-          keyword.reasoning = cached.agent2_reasoning;
-          keyword.topDomainType = cached.agent2_top_domain_type as any;
-          keyword.serpResultCount = cached.agent2_serp_result_count;
-          keyword.topSerpSnippets = cached.agent2_top_serp_snippets || [];
-          (keyword as any).blueOceanScore = cached.agent2_blue_ocean_score;
-          (keyword as any).blueOceanScoreBreakdown = cached.agent2_blue_ocean_breakdown;
-          (keyword as any).websiteDR = cached.website_dr;
-          (keyword as any).competitorDRs = cached.competitor_drs;
-          (keyword as any).top3Probability = cached.top3_probability;
-          (keyword as any).top10Probability = cached.top10_probability;
-          (keyword as any).canOutrankPositions = cached.can_outrank_positions;
-          
-          keywordsFromCache.push(keyword);
-          console.log(`[Cache] Using cached analysis for "${keyword.keyword}"`);
-          continue; // 跳过后续的 DataForSEO 和 Agent 2 分析
-        }
-        
-        keywordsToAnalyze.push(keyword);
-      } else {
-        // 缓存中没有，需要调用 DataForSEO API
-        keywordsNeedingDataForSEO.push(keyword.keyword);
-        keywordsToAnalyze.push(keyword);
+        keywordsFromCache.push(keyword);
+        console.log(`[Cache] Using cached analysis for "${keyword.keyword}"`);
+        continue; // 跳过后续的 SERP 分析
       }
+      
+      keywordsToAnalyze.push(keyword);
     }
     
-    console.log(`[Cache] ${keywordsFromCache.length} keywords loaded from cache, ${keywordsNeedingDataForSEO.length} keywords need DataForSEO API call`);
-
-    // 只对缓存中没有的关键词调用 DataForSEO API
-    if (keywordsNeedingDataForSEO.length > 0) {
-      try {
-        console.log(`[DataForSEO] Fetching data for ${keywordsNeedingDataForSEO.length} keywords (location: ${locationCode}, language: ${languageCode}, engine: ${targetSearchEngine})`);
-        
-        const dataForSEOResults = await fetchKeywordData(keywordsNeedingDataForSEO, locationCode, languageCode, targetSearchEngine);
-
-        // Create a map for quick lookup
-        dataForSEOResults.forEach(data => {
-          if (data.keyword) {
-            dataForSEODataMap.set(data.keyword.toLowerCase(), data);
-          }
-        });
-
-        (dataForSEODataMap as any).apiSucceeded = true;
-        console.log(`[DataForSEO] Successfully fetched data for ${dataForSEOResults.length}/${keywordsNeedingDataForSEO.length} keywords`);
-
-        // Process keywords that needed DataForSEO data
-        for (const keyword of keywordsToAnalyze) {
-          if (keywordsNeedingDataForSEO.includes(keyword.keyword)) {
-            const dataForSEOData = dataForSEODataMap.get(keyword.keyword.toLowerCase());
-
-            if ((dataForSEODataMap as any).apiSucceeded && dataForSEOData) {
-              keyword.dataForSEOData = dataForSEOData;
-              keyword.serankingData = {
-                is_data_found: dataForSEOData.is_data_found,
-                volume: dataForSEOData.volume,
-                cpc: dataForSEOData.cpc,
-                competition: dataForSEOData.competition,
-                difficulty: dataForSEOData.difficulty,
-                history_trend: dataForSEOData.history_trend,
-              };
-
-              if (dataForSEOData.volume) {
-                keyword.volume = dataForSEOData.volume;
-              }
-            }
-          }
-        }
-
-      } catch (dataForSEOError: any) {
-        console.warn(`[DataForSEO] API call failed: ${dataForSEOError.message}. Proceeding with SERP analysis for keywords without cached data.`);
-      }
-    }
-
-    console.log(`[DataForSEO] ${keywordsToAnalyze.length} keywords will proceed to SERP analysis (${keywordsFromCache.length} already completed from cache)`);
+    console.log(`[Cache] ${keywordsFromCache.length} keywords loaded from cache, ${keywordsToAnalyze.length} keywords need SERP analysis`);
 
     // Step 3: 排名概率分析（仅对缓存中没有完整分析结果的关键词）
     console.log(`[Batch Translate-Analyze] Step 3: Starting ranking probability analysis for ${keywordsToAnalyze.length} keywords (${keywordsFromCache.length} already completed from cache)`);
@@ -268,6 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
       
       // 保存新分析的结果到缓存（优化：供后续使用）
+      // 注意：跨市场洞察不保存 DataForSEO 数据，因为跳过了 DataForSEO API 调用
       try {
         const { saveKeywordAnalysisCache } = await import('./lib/database.js');
         const savePromises = analyzedKeywords.map(async (keyword) => {
@@ -276,12 +204,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             keyword: keyword.keyword,
             location_code: locationCode,
             search_engine: targetSearchEngine,
-            dataforseo_volume: keyword.volume || keyword.dataForSEOData?.volume,
-            dataforseo_difficulty: keyword.dataForSEOData?.difficulty,
-            dataforseo_cpc: keyword.dataForSEOData?.cpc,
-            dataforseo_competition: keyword.dataForSEOData?.competition,
-            dataforseo_history_trend: keyword.serankingData?.history_trend || keyword.dataForSEOData?.history_trend,
-            dataforseo_is_data_found: keyword.dataForSEOData?.is_data_found || keyword.serankingData?.is_data_found || false,
+            // 跨市场洞察不保存 DataForSEO 数据（跳过 keyword research）
+            dataforseo_volume: null,
+            dataforseo_difficulty: null,
+            dataforseo_cpc: null,
+            dataforseo_competition: null,
+            dataforseo_history_trend: null,
+            dataforseo_is_data_found: false,
             agent2_probability: keyword.probability,
             agent2_search_intent: keyword.searchIntent,
             agent2_intent_analysis: keyword.intentAnalysis,

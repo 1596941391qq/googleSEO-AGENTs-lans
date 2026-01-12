@@ -59,7 +59,7 @@ export interface WebsitesListData {
 }
 
 interface WebsiteManagerProps {
-  userId?: number;
+  userId?: string;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
   onWebsiteSelect?: (website: Website) => void;

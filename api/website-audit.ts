@@ -188,6 +188,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           analysisReport: result.analysisReport,
           keywords: result.keywords, // 添加关键词列表
           rawResponse: result.rawResponse,
+          competitorKeywordsPool: result.competitorKeywordsPool, // 添加竞争对手关键词池
           analysis: result.analysis,
         }
       });

@@ -24,6 +24,7 @@ interface KeywordMiningGuideProps {
   onStart: (config: MiningConfig) => void;
   onCancel: () => void;
   uiLanguage: 'zh' | 'en';
+  isDarkTheme?: boolean;
 }
 
 const INDUSTRIES = [
@@ -77,7 +78,7 @@ const INDUSTRY_ADVICE: Record<string, { zh: string; en: string }> = {
   },
 };
 
-export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMiningGuideProps) {
+export function KeywordMiningGuide({ onStart, onCancel, uiLanguage, isDarkTheme = true }: KeywordMiningGuideProps) {
   const [selectedIndustry, setSelectedIndustry] = useState<string>('');
   const [customIndustry, setCustomIndustry] = useState<string>('');
   const [additionalSuggestions, setAdditionalSuggestions] = useState<string>('');
@@ -99,29 +100,29 @@ export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMin
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar">
+    <div className={`fixed inset-0 ${isDarkTheme ? 'bg-black/80' : 'bg-black/50'} backdrop-blur-sm flex items-center justify-center z-50 p-4`}>
+      <div className={`${isDarkTheme ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'} border rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto custom-scrollbar`}>
         {/* Header */}
-        <div className="sticky top-0 bg-zinc-900 border-b border-zinc-800 p-6 rounded-t-2xl z-10">
+        <div className={`sticky top-0 ${isDarkTheme ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'} border-b p-6 rounded-t-2xl z-10`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center">
                 <Target className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className={`text-xl font-bold ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
                   {t('精确您的行业', 'Refine Your Industry')}
                 </h2>
-                <p className="text-sm text-zinc-400 mt-0.5">
+                <p className={`text-sm ${isDarkTheme ? 'text-zinc-400' : 'text-gray-600'} mt-0.5`}>
                   {t('选择行业并添加建议以获得更精准的关键词', 'Select industry and add suggestions for targeted keywords')}
                 </p>
               </div>
             </div>
             <button
               onClick={onCancel}
-              className="p-2 hover:bg-zinc-800 rounded-lg transition-colors"
+              className={`p-2 ${isDarkTheme ? 'hover:bg-zinc-800' : 'hover:bg-gray-100'} rounded-lg transition-colors`}
             >
-              <X className="w-5 h-5 text-zinc-400" />
+              <X className={`w-5 h-5 ${isDarkTheme ? 'text-zinc-400' : 'text-gray-600'}`} />
             </button>
           </div>
         </div>
@@ -133,7 +134,7 @@ export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMin
               <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center text-sm font-bold">
                 1
               </div>
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className={`text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
                 {t('选择您的行业', 'Choose Your Industry')}
               </h3>
             </div>
@@ -150,13 +151,15 @@ export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMin
                     p-4 rounded-xl border-2 text-left transition-all duration-200 group
                     ${selectedIndustry === industry.id
                       ? 'border-emerald-500 bg-emerald-500/10'
-                      : 'border-zinc-700 hover:border-zinc-600 bg-zinc-800/50'
+                      : isDarkTheme
+                        ? 'border-zinc-700 hover:border-zinc-600 bg-zinc-800/50'
+                        : 'border-gray-300 hover:border-gray-400 bg-gray-50'
                     }
                   `}
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">{industry.icon}</span>
-                    <span className="text-sm font-medium text-zinc-100 group-hover:text-white">
+                    <span className={`text-sm font-medium ${isDarkTheme ? 'text-zinc-100 group-hover:text-white' : 'text-gray-700 group-hover:text-gray-900'}`}>
                       {getIndustryLabel(industry)}
                     </span>
                   </div>
@@ -177,7 +180,7 @@ export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMin
                   setCustomIndustry(e.target.value);
                   setSelectedIndustry('');
                 }}
-                className="w-full px-4 py-3 bg-zinc-800 border border-zinc-700 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className={`w-full px-4 py-3 ${isDarkTheme ? 'bg-zinc-800 border-zinc-700 text-white placeholder-zinc-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent`}
               />
             </div>
           </div>
@@ -188,16 +191,16 @@ export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMin
               <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center text-sm font-bold">
                 2
               </div>
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className={`text-lg font-semibold ${isDarkTheme ? 'text-white' : 'text-gray-900'}`}>
                 {t('其他建议（可选）', 'Additional Suggestions (Optional)')}
               </h3>
             </div>
 
-            <div className="p-4 bg-zinc-800/50 border border-zinc-700 rounded-lg">
+            <div className={`p-4 ${isDarkTheme ? 'bg-zinc-800/50 border-zinc-700' : 'bg-gray-50 border-gray-200'} border rounded-lg`}>
               <div className="flex items-start gap-3 mb-3">
                 <MessageSquare className="w-5 h-5 text-emerald-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <p className="text-sm text-zinc-300 mb-2">
+                  <p className={`text-sm ${isDarkTheme ? 'text-zinc-300' : 'text-gray-700'} mb-2`}>
                     {t(
                       '给AI的其他建议或要求，例如：关注哪些类型的关键词、避免什么、目标受众等。',
                       'Add any specific suggestions for AI, such as: focus on certain keyword types, what to avoid, target audience, etc.'
@@ -211,7 +214,7 @@ export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMin
                     value={additionalSuggestions}
                     onChange={(e) => setAdditionalSuggestions(e.target.value)}
                     rows={4}
-                    className="w-full px-4 py-3 bg-zinc-900 border border-zinc-600 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm resize-none"
+                    className={`w-full px-4 py-3 ${isDarkTheme ? 'bg-zinc-900 border-zinc-600 text-white placeholder-zinc-500' : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400'} border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm resize-none`}
                   />
                 </div>
               </div>
@@ -227,7 +230,7 @@ export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMin
                   <p className="font-semibold text-emerald-400 mb-2">
                     💡 {t('AI行业建议', 'AI Industry Insights')}
                   </p>
-                  <p className="text-sm text-zinc-300 leading-relaxed">
+                  <p className={`text-sm ${isDarkTheme ? 'text-zinc-300' : 'text-gray-700'} leading-relaxed`}>
                     {selectedIndustry && INDUSTRY_ADVICE[selectedIndustry]
                       ? INDUSTRY_ADVICE[selectedIndustry][uiLanguage]
                       : t(
@@ -252,7 +255,7 @@ export function KeywordMiningGuide({ onStart, onCancel, uiLanguage }: KeywordMin
             </button>
             <button
               onClick={onCancel}
-              className="px-6 py-3 border border-zinc-700 rounded-lg text-zinc-300 hover:bg-zinc-800 transition-colors"
+              className={`px-6 py-3 border ${isDarkTheme ? 'border-zinc-700 text-zinc-300 hover:bg-zinc-800' : 'border-gray-300 text-gray-700 hover:bg-gray-100'} rounded-lg transition-colors`}
             >
               {t('取消', 'Cancel')}
             </button>

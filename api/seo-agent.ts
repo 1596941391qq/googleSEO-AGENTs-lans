@@ -193,7 +193,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!skipCreditsCheck) {
       try {
         const credits = await checkCreditsBalance(token);
-        const requiredCredits = getCreditsCost(mode, body.keywords?.split(',').length || body.seedKeyword ? 10 : undefined);
+        // 支持英文逗号和中文逗号计算关键词数量
+        const keywordCount = body.keywords 
+          ? (typeof body.keywords === 'string' ? body.keywords.split(/[,，]/).filter((k: string) => k.trim().length > 0).length : body.keywords.length)
+          : undefined;
+        const requiredCredits = getCreditsCost(mode, keywordCount || (body.seedKeyword ? 10 : undefined));
 
         if (credits.remaining < requiredCredits) {
           return res.status(402).json({
@@ -505,9 +509,9 @@ async function handleBatchTranslation(
     ? getPromptFromConfig(activeConfig, 'batch-analyze', systemInstruction || 'Analyze SEO ranking opportunities.')
     : systemInstruction || 'Analyze SEO ranking opportunities.';
 
-  // Parse keywords if it's a string
+  // Parse keywords if it's a string (支持英文逗号和中文逗号)
   const keywordList = typeof keywords === 'string'
-    ? keywords.split(',').map((k: string) => k.trim()).filter((k: string) => k.length > 0)
+    ? keywords.split(/[,，]/).map((k: string) => k.trim()).filter((k: string) => k.length > 0)
     : Array.isArray(keywords)
       ? keywords.filter((k: any) => k && k.trim && k.trim().length > 0)
       : [];
@@ -594,7 +598,10 @@ async function handleBatchTranslation(
         targetLanguage,
         websiteUrl,
         websiteDR,
-        searchEngine
+        searchEngine,
+        undefined, // onProgress
+        undefined, // websiteId
+        industry // 传递industry参数，用于行业过滤
       );
     }
 

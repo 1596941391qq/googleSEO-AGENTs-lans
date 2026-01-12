@@ -24,12 +24,20 @@ import {
   Link2,
   Edit3,
   X,
+  Type,
+  Settings,
 } from "lucide-react";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "./ui/card";
 import { Badge } from "./ui/badge";
 import {
   Select,
@@ -961,12 +969,20 @@ interface PublishTabProps {
 const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const { user } = useAuth();
   const currentUserId = getUserId(user);
+  const userId = user?.userId || currentUserId;
   const [articles, setArticles] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [updatingStatus, setUpdatingStatus] = React.useState<string | null>(
-    null
-  );
+  const [publishingId, setPublishingId] = React.useState<string | null>(null);
   const [editingArticle, setEditingArticle] = React.useState<any | null>(null);
+  const [platform, setPlatform] = React.useState<
+    "platform" | "wordpress" | "medium"
+  >("platform");
+  const [config, setConfig] = React.useState({
+    wpUrl: "",
+    wpUsername: "",
+    wpPassword: "",
+    mediumToken: "",
+  });
 
   const loadArticles = React.useCallback(async () => {
     try {
@@ -990,11 +1006,11 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
     }
   }, []);
 
-  const updateArticleStatus = React.useCallback(
-    async (articleId: string, newStatus: "draft" | "published") => {
-      setUpdatingStatus(articleId);
+  const handlePublish = React.useCallback(
+    async (articleId: string) => {
+      setPublishingId(articleId);
       try {
-        const response = await fetch("/api/articles/update-status", {
+        const response = await fetch("/api/articles/publish", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1002,29 +1018,53 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
           },
           body: JSON.stringify({
             articleId,
-            status: newStatus,
-            userId: currentUserId,
+            platform,
+            config: platform === "platform" ? {} : config,
           }),
         });
 
         if (!response.ok) {
-          throw new Error("Failed to update article status");
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to publish article");
+        }
+
+        const result = await response.json();
+        if (result.success) {
+          // Update local state with published URL
+          setArticles((prev) =>
+            prev.map((a) =>
+              a.id === articleId
+                ? {
+                    ...a,
+                    status: "published",
+                    publishedAt: result.data.publishedAt,
+                    urlSlug: result.data.liveUrl || result.data.urlSlug || null,
+                  }
+                : a
+            )
+          );
+
+          if (result.data.liveUrl) {
+            window.open(result.data.liveUrl, "_blank");
+          }
+        } else {
+          throw new Error(result.error || "Publishing failed");
         }
 
         // 刷新列表
         await loadArticles();
-      } catch (error) {
-        console.error("Error updating article status:", error);
+      } catch (error: any) {
+        console.error("Error publishing article:", error);
         alert(
           uiLanguage === "zh"
-            ? "更新状态失败，请重试"
-            : "Failed to update status. Please try again."
+            ? `发布失败: ${error.message || "请重试"}`
+            : `Publishing failed: ${error.message || "Please try again"}`
         );
       } finally {
-        setUpdatingStatus(null);
+        setPublishingId(null);
       }
     },
-    [loadArticles, uiLanguage]
+    [loadArticles, uiLanguage, platform, config]
   );
 
   React.useEffect(() => {
@@ -1070,178 +1110,432 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold mb-2">
-          {uiLanguage === "zh" ? "已保存的文章" : "Saved Articles"}
-        </h2>
-        <p
-          className={cn(
-            "text-sm",
-            isDarkTheme ? "text-zinc-400" : "text-gray-600"
-          )}
-        >
-          {uiLanguage === "zh"
-            ? `共 ${articles.length} 篇文章`
-            : `${articles.length} article${articles.length > 1 ? "s" : ""}`}
-        </p>
+    <div className="max-w-6xl mx-auto py-8 px-4 space-y-8">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="space-y-1">
+          <h2
+            className={cn(
+              "text-3xl font-black tracking-tight",
+              isDarkTheme ? "text-white" : "text-zinc-900"
+            )}
+          >
+            {uiLanguage === "zh" ? "内容发布中心" : "Content Publishing"}
+          </h2>
+          <p
+            className={cn(
+              "text-sm font-medium opacity-60",
+              isDarkTheme ? "text-zinc-400" : "text-zinc-600"
+            )}
+          >
+            {uiLanguage === "zh"
+              ? "一键分发内容到您的 PSEO 站、WordPress 或 Medium"
+              : "One-click distribute content to your PSEO site, WordPress or Medium"}
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {articles.map((article) => (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Settings */}
+        <div className="space-y-6">
           <Card
-            key={article.id}
             className={cn(
-              "hover:shadow-lg transition-all cursor-pointer group",
-              isDarkTheme
-                ? "bg-zinc-900 border-zinc-800 hover:border-emerald-500/50"
-                : "bg-white border-gray-200 hover:border-emerald-500"
+              "border-none rounded-[32px] overflow-hidden",
+              isDarkTheme ? "bg-zinc-900/50" : "bg-white shadow-sm"
             )}
-            onClick={() => setEditingArticle(article)}
           >
             <CardHeader>
-              <div className="flex items-start justify-between mb-2">
-                <CardTitle className="text-lg line-clamp-2 group-hover:text-emerald-500 transition-colors">
-                  {article.title}
+              <div className="flex items-center gap-2 mb-2">
+                <Settings className="w-4 h-4 text-emerald-500" />
+                <CardTitle className="text-lg font-bold">
+                  {uiLanguage === "zh" ? "发布配置" : "Publishing Config"}
                 </CardTitle>
               </div>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {article.keyword && (
-                  <Badge variant="outline" className="text-xs">
-                    <Hash className="w-3 h-3 mr-1" />
-                    {article.keyword}
-                  </Badge>
-                )}
-                {article.tone && (
-                  <Badge variant="outline" className="text-xs">
-                    {article.tone}
-                  </Badge>
-                )}
-              </div>
+              <CardDescription
+                className={cn(isDarkTheme ? "text-zinc-400" : "text-zinc-600")}
+              >
+                {uiLanguage === "zh"
+                  ? "选择目标平台并配置 API 信息"
+                  : "Select target platform and configure API"}
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {article.images && article.images.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2">
-                    {article.images.slice(0, 2).map((img: any, idx: number) => (
-                      <div
-                        key={idx}
-                        className="aspect-video rounded-lg overflow-hidden bg-zinc-800"
-                      >
-                        <img
-                          src={img.url}
-                          alt={img.prompt || "Article image"}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <p
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <label
                   className={cn(
-                    "text-sm line-clamp-3",
-                    isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                    "text-xs font-black uppercase tracking-widest",
+                    isDarkTheme ? "text-zinc-300" : "text-zinc-600 opacity-60"
                   )}
-                  dangerouslySetInnerHTML={{
-                    __html: article.content.substring(0, 150) + "...",
-                  }}
-                />
-                <div className="space-y-2 pt-2 border-t border-zinc-800">
-                  <div className="flex items-center justify-between text-xs">
-                    <span
+                >
+                  {uiLanguage === "zh" ? "目标平台" : "Target Platform"}
+                </label>
+                <Select
+                  value={platform}
+                  onValueChange={(v: any) => setPlatform(v)}
+                >
+                  <SelectTrigger className="rounded-2xl border-2 font-bold bg-transparent">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent
+                    className={
+                      isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white"
+                    }
+                  >
+                    <SelectItem
+                      value="platform"
                       className={cn(
-                        isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                        isDarkTheme
+                          ? "text-zinc-200 focus:text-emerald-400"
+                          : "text-gray-900"
                       )}
                     >
-                      {new Date(article.createdAt).toLocaleDateString(
-                        uiLanguage === "zh" ? "zh-CN" : "en-US"
-                      )}
-                    </span>
-                    <Badge
+                      <div className="flex items-center gap-2">
+                        <Layout className="w-4 h-4" />
+                        <span>
+                          {uiLanguage === "zh"
+                            ? "平台托管站 (PSEO)"
+                            : "Platform Hosted (PSEO)"}
+                        </span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem
+                      value="wordpress"
                       className={cn(
-                        article.status === "draft"
-                          ? "bg-yellow-500/20 text-yellow-400"
-                          : "bg-emerald-500/20 text-emerald-400"
+                        isDarkTheme
+                          ? "text-zinc-200 focus:text-emerald-400"
+                          : "text-gray-900"
                       )}
                     >
-                      {article.status === "draft"
-                        ? uiLanguage === "zh"
-                          ? "草稿"
-                          : "Draft"
-                        : uiLanguage === "zh"
-                        ? "已发布"
-                        : "Published"}
-                    </Badge>
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4" />
+                        <span>WordPress</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem
+                      value="medium"
+                      className={cn(
+                        isDarkTheme
+                          ? "text-zinc-200 focus:text-emerald-400"
+                          : "text-gray-900"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Type className="w-4 h-4" />
+                        <span>Medium</span>
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {platform === "wordpress" && (
+                <div className="space-y-4 animate-in slide-in-from-top-2">
+                  <div className="space-y-2">
+                    <label
+                      className={cn(
+                        "text-xs font-bold",
+                        isDarkTheme
+                          ? "text-zinc-300"
+                          : "text-zinc-600 opacity-60"
+                      )}
+                    >
+                      Site URL
+                    </label>
+                    <Input
+                      placeholder="https://example.com"
+                      value={config.wpUrl}
+                      onChange={(e) =>
+                        setConfig({ ...config, wpUrl: e.target.value })
+                      }
+                      className="rounded-xl border-zinc-200 dark:border-zinc-800"
+                    />
                   </div>
-                  <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 text-xs h-7"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingArticle(article);
-                      }}
+                  <div className="space-y-2">
+                    <label
+                      className={cn(
+                        "text-xs font-bold",
+                        isDarkTheme
+                          ? "text-zinc-300"
+                          : "text-zinc-600 opacity-60"
+                      )}
                     >
-                      <Edit3 className="w-3 h-3 mr-1" />
-                      {uiLanguage === "zh" ? "编辑" : "Edit"}
-                    </Button>
-                    {article.status === "draft" ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 text-xs h-7"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateArticleStatus(article.id, "published");
-                        }}
-                        disabled={updatingStatus === article.id}
-                      >
-                        {updatingStatus === article.id ? (
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        ) : (
-                          <Send className="w-3 h-3 mr-1" />
-                        )}
-                        {uiLanguage === "zh" ? "发布" : "Publish"}
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 text-xs h-7"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          updateArticleStatus(article.id, "draft");
-                        }}
-                        disabled={updatingStatus === article.id}
-                      >
-                        {updatingStatus === article.id ? (
-                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                        ) : (
-                          <FileText className="w-3 h-3 mr-1" />
-                        )}
-                        {uiLanguage === "zh" ? "取消发布" : "Unpublish"}
-                      </Button>
-                    )}
+                      Username
+                    </label>
+                    <Input
+                      placeholder="admin"
+                      value={config.wpUsername}
+                      onChange={(e) =>
+                        setConfig({ ...config, wpUsername: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      className={cn(
+                        "text-xs font-bold",
+                        isDarkTheme
+                          ? "text-zinc-300"
+                          : "text-zinc-600 opacity-60"
+                      )}
+                    >
+                      Application Password
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="xxxx xxxx xxxx xxxx"
+                      value={config.wpPassword}
+                      onChange={(e) =>
+                        setConfig({ ...config, wpPassword: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
                   </div>
                 </div>
-              </div>
+              )}
+
+              {platform === "medium" && (
+                <div className="space-y-4 animate-in slide-in-from-top-2">
+                  <div className="space-y-2">
+                    <label
+                      className={cn(
+                        "text-xs font-bold",
+                        isDarkTheme
+                          ? "text-zinc-300"
+                          : "text-zinc-600 opacity-60"
+                      )}
+                    >
+                      Integration Token
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="Enter Medium API token"
+                      value={config.mediumToken}
+                      onChange={(e) =>
+                        setConfig({ ...config, mediumToken: e.target.value })
+                      }
+                      className="rounded-xl"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {platform === "platform" && (
+                <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-500">
+                    <CheckCircle className="w-4 h-4" />
+                    <span className="text-xs font-bold">
+                      {uiLanguage === "zh"
+                        ? "平台代管模式已就绪"
+                        : "Platform Managed Mode Ready"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] leading-relaxed opacity-60 font-medium">
+                    {uiLanguage === "zh"
+                      ? "文章将自动部署到您的子域名，并通过 Google Indexing API 秒级推送索引。"
+                      : "Articles will be automatically deployed to your subdomain and indexed via Google Indexing API in seconds."}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
-        ))}
+        </div>
+
+        {/* Right Column: Article List */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex items-center gap-2">
+            <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+            <span className="text-xs font-black uppercase tracking-widest opacity-60">
+              {uiLanguage === "zh" ? "待发布文章" : "Pending Articles"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {articles.map((article) => (
+              <Card
+                key={article.id}
+                className={cn(
+                  "hover:shadow-lg transition-all cursor-pointer group",
+                  isDarkTheme
+                    ? "bg-zinc-900 border-zinc-800 hover:border-emerald-500/50"
+                    : "bg-white border-gray-200 hover:border-emerald-500"
+                )}
+                onClick={() => setEditingArticle(article)}
+              >
+                <CardHeader>
+                  <div className="flex items-start justify-between mb-2">
+                    <CardTitle className="text-lg line-clamp-2 group-hover:text-emerald-500 transition-colors">
+                      {article.title}
+                    </CardTitle>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {article.keyword && (
+                      <Badge variant="outline" className="text-xs">
+                        <Hash className="w-3 h-3 mr-1" />
+                        {article.keyword}
+                      </Badge>
+                    )}
+                    {article.tone && (
+                      <Badge variant="outline" className="text-xs">
+                        {article.tone}
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {article.images && article.images.length > 0 && (
+                      <div className="grid grid-cols-2 gap-2">
+                        {article.images
+                          .slice(0, 2)
+                          .map((img: any, idx: number) => (
+                            <div
+                              key={idx}
+                              className="aspect-video rounded-lg overflow-hidden bg-zinc-800"
+                            >
+                              <img
+                                src={img.url}
+                                alt={img.prompt || "Article image"}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                    <p
+                      className={cn(
+                        "text-sm line-clamp-3",
+                        isDarkTheme ? "text-zinc-400" : "text-gray-600"
+                      )}
+                      dangerouslySetInnerHTML={{
+                        __html: article.content.substring(0, 150) + "...",
+                      }}
+                    />
+                    <div className="space-y-2 pt-2 border-t border-zinc-800">
+                      <div className="flex items-center justify-between text-xs">
+                        <span
+                          className={cn(
+                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
+                          )}
+                        >
+                          {new Date(article.createdAt).toLocaleDateString(
+                            uiLanguage === "zh" ? "zh-CN" : "en-US"
+                          )}
+                        </span>
+                        <Badge
+                          className={cn(
+                            article.status === "draft"
+                              ? "bg-yellow-500/20 text-yellow-400"
+                              : "bg-emerald-500/20 text-emerald-400"
+                          )}
+                        >
+                          {article.status === "draft"
+                            ? uiLanguage === "zh"
+                              ? "草稿"
+                              : "Draft"
+                            : uiLanguage === "zh"
+                            ? "已发布"
+                            : "Published"}
+                        </Badge>
+                      </div>
+                      <div
+                        className="flex gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1 text-xs h-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingArticle(article);
+                          }}
+                        >
+                          <Edit3 className="w-3 h-3 mr-1" />
+                          {uiLanguage === "zh" ? "编辑" : "Edit"}
+                        </Button>
+                        {article.status === "draft" ? (
+                          <Button
+                            size="sm"
+                            className="flex-1 text-xs h-7 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handlePublish(article.id);
+                            }}
+                            disabled={publishingId === article.id}
+                          >
+                            {publishingId === article.id ? (
+                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                            ) : (
+                              <Send className="w-3 h-3 mr-1" />
+                            )}
+                            {uiLanguage === "zh" ? "立即发布" : "Publish"}
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="flex-1 text-xs h-7 border-emerald-500/20 text-emerald-500 font-bold rounded-xl"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Try to open published URL if available
+                              const url =
+                                (article as any).urlSlug ||
+                                (article as any).url_slug;
+                              if (url && typeof url === "string") {
+                                // If it's already a full URL, use it directly
+                                if (url.startsWith("http")) {
+                                  window.open(url, "_blank");
+                                } else {
+                                  // If it's just a slug, construct platform URL
+                                  const baseDomain =
+                                    process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ||
+                                    "seo-factory.com";
+                                  const userSubdomain = (
+                                    userId?.toString() || ""
+                                  ).substring(0, 8);
+                                  window.open(
+                                    `https://${userSubdomain}.${baseDomain}/p/${url}`,
+                                    "_blank"
+                                  );
+                                }
+                              }
+                            }}
+                            disabled={
+                              !(article as any).urlSlug &&
+                              !(article as any).url_slug
+                            }
+                          >
+                            <ExternalLink className="w-3 h-3 mr-1" />
+                            {uiLanguage === "zh" ? "查看" : "View"}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Rich Text Editor Modal */}
       {editingArticle && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 md:p-8">
-          <div className={cn(
-            "relative w-full max-w-6xl h-full max-h-[90vh] rounded-2xl border overflow-hidden flex flex-col shadow-2xl",
-            isDarkTheme ? "bg-[#0a0a0a] border-zinc-800" : "bg-white border-gray-200"
-          )}>
-            <div className={cn(
-              "flex items-center justify-between p-4 border-b",
-              isDarkTheme ? "border-zinc-800" : "border-gray-200"
-            )}>
+          <div
+            className={cn(
+              "relative w-full max-w-6xl h-full max-h-[90vh] rounded-2xl border overflow-hidden flex flex-col shadow-2xl",
+              isDarkTheme
+                ? "bg-[#0a0a0a] border-zinc-800"
+                : "bg-white border-gray-200"
+            )}
+          >
+            <div
+              className={cn(
+                "flex items-center justify-between p-4 border-b",
+                isDarkTheme ? "border-zinc-800" : "border-gray-200"
+              )}
+            >
               <div className="flex items-center gap-3">
                 <Badge
                   className={cn(
@@ -1252,14 +1546,27 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                   )}
                 >
                   {editingArticle.status === "published"
-                    ? (uiLanguage === "zh" ? "已发布" : "Published")
-                    : (uiLanguage === "zh" ? "草稿" : "Draft")}
+                    ? uiLanguage === "zh"
+                      ? "已发布"
+                      : "Published"
+                    : uiLanguage === "zh"
+                    ? "草稿"
+                    : "Draft"}
                 </Badge>
-                <h2 className={cn("text-lg font-bold truncate max-w-xl", isDarkTheme ? "text-white" : "text-gray-900")}>
+                <h2
+                  className={cn(
+                    "text-lg font-bold truncate max-w-xl",
+                    isDarkTheme ? "text-white" : "text-gray-900"
+                  )}
+                >
                   {editingArticle.title}
                 </h2>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setEditingArticle(null)}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setEditingArticle(null)}
+              >
                 <X className="w-5 h-5" />
               </Button>
             </div>
@@ -1272,15 +1579,17 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                 onSave={async (newContent) => {
                   try {
                     let response;
-                    const source = editingArticle.source || 'published';
-                    
-                    if (source === 'published') {
+                    const source = editingArticle.source || "published";
+
+                    if (source === "published") {
                       // 更新 published_articles 表中的文章
                       response = await fetch("/api/articles/update", {
                         method: "POST",
                         headers: {
                           "Content-Type": "application/json",
-                          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+                          Authorization: `Bearer ${
+                            localStorage.getItem("auth_token") || ""
+                          }`,
                         },
                         body: JSON.stringify({
                           articleId: editingArticle.id,
@@ -1288,7 +1597,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                           content: newContent,
                         }),
                       });
-                    } else if (source === 'draft') {
+                    } else if (source === "draft") {
                       // 更新 content_drafts 表中的文章
                       // 注意：需要 projectId 和 keywordId，但文章列表中可能没有这些字段
                       // 暂时尝试使用 save-draft API
@@ -1296,7 +1605,9 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         method: "POST",
                         headers: {
                           "Content-Type": "application/json",
-                          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+                          Authorization: `Bearer ${
+                            localStorage.getItem("auth_token") || ""
+                          }`,
                         },
                         body: JSON.stringify({
                           articleId: editingArticle.id,
@@ -1306,17 +1617,25 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                       });
                     } else {
                       // task 来源的文章，暂时不支持编辑
-                      alert(uiLanguage === "zh" ? "此文章类型暂不支持编辑" : "This article type is not editable");
+                      alert(
+                        uiLanguage === "zh"
+                          ? "此文章类型暂不支持编辑"
+                          : "This article type is not editable"
+                      );
                       return;
                     }
-                    
+
                     const result = await response.json();
                     if (result.success) {
                       // Update local article list
                       setArticles((prev) =>
                         prev.map((a) =>
                           a.id === editingArticle.id
-                            ? { ...a, content: newContent, updatedAt: new Date().toISOString() }
+                            ? {
+                                ...a,
+                                content: newContent,
+                                updatedAt: new Date().toISOString(),
+                              }
                             : a
                         )
                       );
@@ -1326,11 +1645,18 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                       // Reload articles to get fresh data
                       loadArticles();
                     } else {
-                      alert(result.error || (uiLanguage === "zh" ? "保存失败" : "Failed to save"));
+                      alert(
+                        result.error ||
+                          (uiLanguage === "zh" ? "保存失败" : "Failed to save")
+                      );
                     }
                   } catch (err) {
                     console.error("Error saving article:", err);
-                    alert(uiLanguage === "zh" ? "保存失败" : "Failed to save article");
+                    alert(
+                      uiLanguage === "zh"
+                        ? "保存失败"
+                        : "Failed to save article"
+                    );
                   }
                 }}
               />
@@ -1344,7 +1670,11 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
 
 interface ContentGenerationViewProps {
   state: ContentGenerationState;
-  setState: (update: Partial<ContentGenerationState> | ((prev: ContentGenerationState) => ContentGenerationState)) => void;
+  setState: (
+    update:
+      | Partial<ContentGenerationState>
+      | ((prev: ContentGenerationState) => ContentGenerationState)
+  ) => void;
   isDarkTheme: boolean;
   uiLanguage: "en" | "zh";
   onGenerateArticle?: (keyword: KeywordData) => void;

@@ -30,6 +30,7 @@ export interface KeywordMiningOptions {
   analyzePrompt?: string;
   websiteUrl?: string;
   websiteDR?: number;
+  websiteId?: string; // 可选：用于查询缓存（存量拓新模式）
   searchEngine?: 'google' | 'baidu' | 'bing' | 'yandex';
   onProgress?: (message: string) => void;
 }
@@ -96,7 +97,7 @@ export async function enrichKeywordsWithDataForSEOForMining(
   try {
     const keywordStrings = keywords.map(k => k.keyword);
     onProgress?.(uiLanguage === 'zh' ? `📊 正在从 DataForSEO 获取 ${keywords.length} 个关键词的搜索量和难度数据...` : `📊 Fetching volume and difficulty for ${keywords.length} keywords from DataForSEO...`);
-    
+
     const dataForSEOResults = await fetchKeywordData(keywordStrings, 2840, 'en');
 
     // 创建 DataForSEO 数据映射
@@ -138,7 +139,9 @@ export async function analyzeKeywordsRanking(
   websiteUrl?: string,
   websiteDR?: number,
   searchEngine: 'google' | 'baidu' | 'bing' | 'yandex' = 'google',
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  websiteId?: string, // 可选：用于查询缓存（存量拓新模式）
+  industry?: string // 可选：用户选择的精确行业，用于过滤SERP结果
 ): Promise<KeywordData[]> {
   return await analyzeRankingProbability(
     keywords,
@@ -148,7 +151,9 @@ export async function analyzeKeywordsRanking(
     websiteUrl,
     websiteDR,
     searchEngine,
-    onProgress
+    onProgress,
+    websiteId, // 传递 websiteId 以便检查缓存
+    industry // 传递industry参数，用于行业过滤
   );
 }
 
@@ -181,6 +186,7 @@ export async function executeKeywordMining(
     analyzePrompt,
     websiteUrl,
     websiteDR,
+    websiteId,
     searchEngine = 'google',
     onProgress
   } = options;
@@ -225,7 +231,10 @@ export async function executeKeywordMining(
           targetLanguage,
           websiteUrl,
           websiteDR,
-          searchEngine
+          searchEngine,
+          onProgress,
+          websiteId, // 传递 websiteId 以便检查缓存
+          industry // 传递industry参数，用于行业过滤
         );
         console.log(`[Keyword Mining Service] Completed ranking analysis for ${finalKeywords.length} keywords`);
       } catch (analysisError: any) {

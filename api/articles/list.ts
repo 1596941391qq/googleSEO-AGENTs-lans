@@ -31,7 +31,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       SELECT 
         id, title, content, images,
         keyword, tone, visual_style, target_audience, target_market,
-        status, created_at, updated_at
+        status, created_at, updated_at, published_at, url_slug
       FROM published_articles
       WHERE user_id::text = ${userId.toString()}
       ORDER BY created_at DESC
@@ -50,6 +50,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+      publishedAt: row.published_at,
+      urlSlug: row.url_slug,
       source: 'published'
     }));
 
