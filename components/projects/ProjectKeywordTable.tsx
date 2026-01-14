@@ -11,6 +11,7 @@ interface ProjectKeywordTableProps {
   onViewDraft: (keyword: KeywordWithStatus) => void;
   isDarkTheme: boolean;
   uiLanguage: 'en' | 'zh';
+  readOnly?: boolean;
 }
 
 export const ProjectKeywordTable: React.FC<ProjectKeywordTableProps> = ({
@@ -19,6 +20,7 @@ export const ProjectKeywordTable: React.FC<ProjectKeywordTableProps> = ({
   onViewDraft,
   isDarkTheme,
   uiLanguage,
+  readOnly = false,
 }) => {
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -61,7 +63,7 @@ export const ProjectKeywordTable: React.FC<ProjectKeywordTableProps> = ({
             <th className="text-center py-3 px-4 font-medium">{uiLanguage === 'zh' ? '搜索量' : 'Volume'}</th>
             <th className="text-center py-3 px-4 font-medium">{uiLanguage === 'zh' ? '难度' : 'Difficulty'}</th>
             <th className="text-center py-3 px-4 font-medium">{uiLanguage === 'zh' ? '状态' : 'Status'}</th>
-            <th className="text-right py-3 px-4 font-medium">{uiLanguage === 'zh' ? '操作' : 'Actions'}</th>
+            {!readOnly && <th className="text-right py-3 px-4 font-medium">{uiLanguage === 'zh' ? '操作' : 'Actions'}</th>}
           </tr>
         </thead>
         <tbody>
@@ -98,35 +100,37 @@ export const ProjectKeywordTable: React.FC<ProjectKeywordTableProps> = ({
               <td className="text-center py-3 px-4">
                 {getStatusBadge(kw.status)}
               </td>
-              <td className="text-right py-3 px-4">
-                <div className="flex items-center justify-end gap-2">
-                  {(kw.status === 'completed' || kw.content_status === 'draft') ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 text-xs gap-1.5"
-                      onClick={() => onViewDraft(kw)}
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      {uiLanguage === 'zh' ? '查看草稿' : 'View Draft'}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        "h-8 text-xs gap-1.5",
-                        isDarkTheme ? "border-zinc-800 hover:bg-zinc-800" : "border-gray-200 hover:bg-gray-100"
-                      )}
-                      onClick={() => onGenerate(kw)}
-                      disabled={kw.status === 'generating'}
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-                      {uiLanguage === 'zh' ? '一键生成' : 'Generate'}
-                    </Button>
-                  )}
-                </div>
-              </td>
+              {!readOnly && (
+                <td className="text-right py-3 px-4">
+                  <div className="flex items-center justify-end gap-2">
+                    {(kw.status === 'completed' || kw.content_status === 'draft') ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs gap-1.5"
+                        onClick={() => onViewDraft(kw)}
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        {uiLanguage === 'zh' ? '查看草稿' : 'View Draft'}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "h-8 text-xs gap-1.5",
+                          isDarkTheme ? "border-zinc-800 hover:bg-zinc-800" : "border-gray-200 hover:bg-gray-100"
+                        )}
+                        onClick={() => onGenerate(kw)}
+                        disabled={kw.status === 'generating'}
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                        {uiLanguage === 'zh' ? '一键生成' : 'Generate'}
+                      </Button>
+                    )}
+                  </div>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>

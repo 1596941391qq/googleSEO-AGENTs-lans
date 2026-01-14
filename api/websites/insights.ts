@@ -95,30 +95,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 4. 构建提示词
     const isChinese = uiLanguage === 'zh';
     const prompt = `
-      You are an elite SEO Growth Hacker. Analyze the strictly provided SEO data for website "${url || websiteData?.website_url}" and provide 5-6 high-impact "terminal-style" insights.
+      You are an elite SEO Growth Hacker. Analyze the provided SEO data for website "${url || websiteData?.website_url}" and provide 5-6 high-impact "terminal-style" insights.
       
       CRITICAL CONSTRAINTS:
-      1. LANGUAGE: You MUST respond ENTIRELY in ${isChinese ? 'Simplified Chinese' : 'English'}. DO NOT mix languages.
+      1. LANGUAGE: You MUST respond ENTIRELY in ${isChinese ? 'Simplified Chinese' : 'English'}. 
+         - If ${isChinese ? 'Simplified Chinese' : 'English'} is selected, DO NOT use any other language in your explanations.
+         - Professional terms like "LSI", "SERP", "E-E-A-T" are allowed but should be explained in the target language.
       2. ACCURACY: DO NOT hallucinate. Use ONLY the data provided below.
       3. STRUCTURE: Each insight must follow this exact format:
-         > [TAG] Professional/Aggressive/Technical Statement. (Simplified/Actionable/Human explanation).
-      4. STYLE: The first part should be "cool" using SEO terms like LSI, SERP, E-E-A-T, etc. The second part (in parentheses) must be "human-speak", explaining what to actually do in simple terms.
+         > [TAG] Professional Statement. (Actionable explanation).
+      4. STYLE: The first part should be technical. The second part (in parentheses) must be simple, actionable advice.
       
       DATA:
       - Organic Traffic: ${overview.organic_traffic || '0'}
       - Total Keywords: ${overview.total_keywords || '0'}
       - Avg Position: ${overview.avg_position || 'N/A'}
-      - Top Keywords (Volume): ${keywords.slice(0, 10).map(k => `${k.keyword}(Vol:${k.search_volume})`).join(', ')}
-      - Major Competitors: ${competitors.slice(0, 5).map(c => c.competitor_domain).join(', ')}
+      - Top Keywords: ${keywords.slice(0, 10).map(k => `${k.keyword}(Vol:${k.search_volume})`).join(', ')}
+      - Competitors: ${competitors.slice(0, 5).map(c => c.competitor_domain).join(', ')}
       
       ${isChinese ? `
-      示例 (Chinese):
-      > [威胁] 竞对 ${competitors[0]?.competitor_domain || '某站点'} 正在通过 LSI 关键词渗透你的核心 SERP。 (对手正在通过你没注意到的关键词群抢夺流量，建议针对这些词进行内容覆盖)。
-      > [机会] 发现语义饱和度缺口，尤其在 "${keywords[0]?.keyword || '核心领域'}" 聚类中。 (用户对该主题仍有未满足的需求，建议深入创作该主题的长文以占领市场)。
+      示例:
+      > [威胁] 竞对正在通过核心关键词群侵蚀你的排名。 (对手在这些词上做得更好，你需要优化相关内容以夺回流量)。
+      > [机会] 发现语义缺口，尤其在关键主题聚类中。 (用户对该主题有搜索需求但结果不佳，建议创作深度长文占领该领域)。
       ` : `
-      Example (English):
-      > [THREAT] Competitor ${competitors[0]?.competitor_domain || 'Site X'} is infiltrating your core SERP via LSI clusters. (They are stealing your traffic with keywords you missed, start writing content around these topics).
-      > [OPPORTUNITY] Discovered a semantic saturation gap in the "${keywords[0]?.keyword || 'Niche'}" cluster. (People are searching for this but finding no good answers; create high-quality content here for easy wins).
+      Example:
+      > [THREAT] Competitors are infiltrating your core SERP rankings. (They are ranking better for your target keywords; optimize your content to regain traffic).
+      > [OPPORTUNITY] Discovered a semantic gap in key topic clusters. (There is high search intent but low-quality results; create authoritative content to dominate this niche).
       `}
     `;
 

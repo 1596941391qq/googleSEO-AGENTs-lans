@@ -11,6 +11,7 @@ import { getSEOResearcherPrompt, DEFAULT_SERP_ANALYSIS } from '../../../services
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
 import { SearchEngine } from '../tools/dataforseo.js';
 import { getDomainOverview, getBatchDomainOverview } from '../tools/dataforseo-domain.js';
+import { sql } from '../../lib/database.js';
 
 /**
  * 辅助函数：计算蓝海信号分值 (Workflow 1)
@@ -1036,20 +1037,38 @@ export const analyzeRankingProbability = async (
   }
   // If it's a custom prompt, keep it as-is (user may have customized it in English)
 
-  // 如果提供了网站URL但没提供DR，尝试获取网站自身的DR
+  // 如果提供了网站URL但没提供DR，尝试从缓存获取网站自身的DR，不再自动调用 API
   let siteDR = websiteDR;
   if (websiteUrl && siteDR === undefined) {
     try {
-      console.log(`[Agent 2] Fetching DR for target website: ${websiteUrl}`);
-      const overview = await getDomainOverview(websiteUrl);
-      if (overview) {
-        // 使用之前定义的估算公式
-        const referringDomains = overview.backlinksInfo?.referringDomains || 0;
-        siteDR = Math.min(Math.round(Math.log10(referringDomains + 1) * 15), 100);
-        console.log(`[Agent 2] Estimated site DR: ${siteDR}`);
+      if (websiteId) {
+        console.log(`[Agent 2] Checking cache for target website DR: ${websiteId}`);
+        const cacheResult = await sql`
+          SELECT backlinks_info
+          FROM domain_overview_cache
+          WHERE website_id = ${websiteId}
+          ORDER BY data_date DESC
+          LIMIT 1
+        `;
+
+        if (cacheResult.rows.length > 0) {
+          const row = cacheResult.rows[0];
+          // 如果 backlinks_info 是字符串，解析它
+          const backlinksInfo = typeof row.backlinks_info === 'string'
+            ? JSON.parse(row.backlinks_info)
+            : row.backlinks_info;
+
+          const referringDomains = backlinksInfo?.referringDomains || 0;
+          siteDR = Math.min(Math.round(Math.log10(referringDomains + 1) * 15), 100);
+          console.log(`[Agent 2] Loaded site DR from cache: ${siteDR}`);
+        } else {
+          console.log(`[Agent 2] No cached domain overview found for ${websiteId}, skipping DR estimation.`);
+        }
+      } else {
+        console.log(`[Agent 2] No websiteId provided, cannot check cache for DR.`);
       }
     } catch (e) {
-      console.warn(`[Agent 2] Failed to fetch site DR:`, e);
+      console.warn(`[Agent 2] Failed to get site DR from cache:`, e);
     }
   }
 

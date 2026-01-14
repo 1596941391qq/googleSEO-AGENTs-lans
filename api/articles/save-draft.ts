@@ -1,7 +1,7 @@
 // Save content draft to project management system
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
-import { saveContentDraft } from '../lib/database.js';
+import { saveContentDraft, sql, initProjectsTable } from '../lib/database.js';
 import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -21,6 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResult) {
       return sendErrorResponse(res, null, 'Unauthorized', 401);
     }
+    const userId = authResult.userId;
 
     const body = parseRequestBody(req);
     const {
@@ -36,6 +37,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 验证必需字段
     if (!projectId || !title || !content) {
       return sendErrorResponse(res, null, 'projectId, title, and content are required', 400);
+    }
+
+    // 验证项目归属
+    await initProjectsTable();
+    const projectCheck = await sql`
+      SELECT id FROM projects 
+      WHERE id = ${projectId} AND user_id::text = ${userId.toString()}
+    `;
+    if (projectCheck.rows.length === 0) {
+      return sendErrorResponse(res, null, 'Project not found or access denied', 404);
     }
 
     // Save draft

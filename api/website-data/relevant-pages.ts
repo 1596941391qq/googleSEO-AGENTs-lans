@@ -101,85 +101,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       LIMIT ${limit}
     `;
 
-    let pages: any[] = [];
-    let fromApi = false;
-
-    // 如果缓存过期或不存在，从 API 获取
+    // 仅从缓存读取，不自动调用 DataForSEO API
     if (cacheResult.rows.length === 0) {
-      console.log('[relevant-pages] 🔍 Fetching from DataForSEO API...');
-      
-      try {
-        const apiPages = await getRelevantPages(domain, locationCode, limit);
-        
-        if (apiPages.length > 0) {
-          // 保存到缓存
-          await Promise.all(
-            apiPages.map(page => sql`
-              INSERT INTO relevant_pages_cache (
-                website_id,
-                location_code,
-                page_url,
-                organic_traffic,
-                keywords_count,
-                avg_position,
-                top_keywords,
-                data_updated_at,
-                cache_expires_at
-              ) VALUES (
-                ${body.websiteId},
-                ${locationCode},
-                ${page.url},
-                ${page.organicTraffic},
-                ${page.keywordsCount},
-                ${page.avgPosition},
-                ${JSON.stringify(page.topKeywords)},
-                NOW(),
-                NOW() + INTERVAL '24 hours'
-              )
-              ON CONFLICT (website_id, page_url, location_code) DO UPDATE SET
-                organic_traffic = EXCLUDED.organic_traffic,
-                keywords_count = EXCLUDED.keywords_count,
-                avg_position = EXCLUDED.avg_position,
-                top_keywords = EXCLUDED.top_keywords,
-                data_updated_at = NOW(),
-                cache_expires_at = EXCLUDED.cache_expires_at
-            `)
-          );
-          
-          pages = apiPages;
-          fromApi = true;
-          console.log(`[relevant-pages] ✅ Successfully fetched and cached ${pages.length} pages from API`);
-        }
-      } catch (error: any) {
-        console.error('[relevant-pages] ❌ API call failed:', error.message);
-      }
+      console.log('[relevant-pages] ℹ️ No cached data found, returning empty list');
+      return res.status(200).json({
+        success: true,
+        data: [],
+        cached: true,
+        message: 'No cached data. Please sync metrics first.'
+      });
     }
 
-    // 如果 API 调用失败或返回空数据，从数据库缓存读取
-    if (pages.length === 0 && cacheResult.rows.length > 0) {
-      console.log('[relevant-pages] 📦 Using database cache');
-      pages = cacheResult.rows.map((row: any) => ({
-        url: row.page_url,
-        organicTraffic: Number(row.organic_traffic) || 0,
-        keywordsCount: row.keywords_count,
-        avgPosition: Number(row.avg_position) || 0,
-        topKeywords: row.top_keywords || [],
-      }));
-    } else if (pages.length > 0) {
-      // 如果 API 调用成功，转换数据格式
-      pages = pages.map(page => ({
-        url: page.url,
-        organicTraffic: page.organicTraffic,
-        keywordsCount: page.keywordsCount,
-        avgPosition: page.avgPosition,
-        topKeywords: page.topKeywords,
-      }));
-    }
+    // 从数据库缓存读取
+    console.log('[relevant-pages] 📦 Using database cache');
+    pages = cacheResult.rows.map((row: any) => ({
+      url: row.page_url,
+      organicTraffic: Number(row.organic_traffic) || 0,
+      keywordsCount: row.keywords_count,
+      avgPosition: Number(row.avg_position) || 0,
+      topKeywords: typeof row.top_keywords === 'string' ? JSON.parse(row.top_keywords) : row.top_keywords || [],
+    }));
 
     return res.status(200).json({
       success: true,
       data: pages,
-      cached: !fromApi,
+      cached: true,
     });
 
   } catch (error: any) {

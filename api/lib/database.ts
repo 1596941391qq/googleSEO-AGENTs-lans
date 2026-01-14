@@ -251,6 +251,230 @@ export async function createWorkflowConfig(
   }
 }
 
+let paymentTablesInitialized = false;
+let paymentTablesInitPromise: Promise<void> | null = null;
+
+export async function initPaymentTables() {
+  if (paymentTablesInitialized) {
+    return;
+  }
+
+  if (paymentTablesInitPromise) {
+    await paymentTablesInitPromise;
+    return;
+  }
+
+  paymentTablesInitPromise = (async () => {
+    try {
+      await sql`
+        CREATE TABLE IF NOT EXISTS subscription_plans (
+          plan_id VARCHAR(50) PRIMARY KEY,
+          name_en VARCHAR(100) NOT NULL,
+          name_cn VARCHAR(100) NOT NULL,
+          name_zh TEXT,
+          price DECIMAL(10,2) NOT NULL DEFAULT 0,
+          currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+          credits_monthly INTEGER NOT NULL DEFAULT 0,
+          credits_rollover BOOLEAN NOT NULL DEFAULT FALSE,
+          api_keys_limit INTEGER NOT NULL DEFAULT 0,
+          team_members_limit INTEGER NOT NULL DEFAULT 0,
+          features JSONB DEFAULT '{}'::jsonb,
+          description TEXT,
+          is_active BOOLEAN NOT NULL DEFAULT TRUE,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS name_zh TEXT
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS price NUMERIC(10,2) NOT NULL DEFAULT 0
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS credits_monthly INTEGER NOT NULL DEFAULT 0
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS currency VARCHAR(3) NOT NULL DEFAULT 'USD'
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS credits_rollover BOOLEAN NOT NULL DEFAULT FALSE
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS api_keys_limit INTEGER NOT NULL DEFAULT 0
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS team_members_limit INTEGER NOT NULL DEFAULT 0
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS features JSONB DEFAULT '{}'::jsonb
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS description TEXT
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE
+      `;
+      await sql`
+        ALTER TABLE subscription_plans
+        ADD COLUMN IF NOT EXISTS sort_order INTEGER NOT NULL DEFAULT 0
+      `;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS payment_orders (
+          checkout_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          plan_id TEXT REFERENCES subscription_plans(plan_id) ON DELETE SET NULL,
+          amount NUMERIC(10,2) NOT NULL,
+          request_id TEXT UNIQUE NOT NULL,
+          metadata JSONB DEFAULT '{}'::jsonb,
+          payment_url TEXT,
+          status VARCHAR(50) NOT NULL DEFAULT 'pending',
+          paid_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_payment_orders_user_id ON payment_orders(user_id)`;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS user_subscriptions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id TEXT NOT NULL,
+          plan_id TEXT REFERENCES subscription_plans(plan_id),
+          status VARCHAR(50) NOT NULL DEFAULT 'active',
+          billing_period VARCHAR(50) NOT NULL DEFAULT 'monthly',
+          current_period_start TIMESTAMP,
+          current_period_end TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS user_credits (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id TEXT UNIQUE NOT NULL,
+          total_credits INTEGER NOT NULL DEFAULT 0,
+          used_credits INTEGER NOT NULL DEFAULT 0,
+          bonus_credits INTEGER NOT NULL DEFAULT 0,
+          last_reset_at TIMESTAMP,
+          next_reset_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      await sql`CREATE INDEX IF NOT EXISTS idx_user_credits_user_id ON user_credits(user_id)`;
+
+      await sql`
+        CREATE TABLE IF NOT EXISTS credits_transactions (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id TEXT NOT NULL,
+          type VARCHAR(50) NOT NULL,
+          credits_delta INTEGER NOT NULL,
+          credits_before INTEGER,
+          credits_after INTEGER,
+          description TEXT,
+          related_entity VARCHAR(100),
+          related_entity_id TEXT,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `;
+
+      // Remove hardcoded plan insertion to prevent "dirty data"
+      /*
+      await sql`
+        INSERT INTO subscription_plans (
+          plan_id, name_en, name_cn, name_zh, price, currency,
+          credits_monthly, credits_rollover, api_keys_limit, team_members_limit,
+          features, description, is_active, sort_order
+        )
+        VALUES
+          (
+            'domination',
+            'Domination',
+            '统治者',
+            '统治者',
+            30,
+            'USD',
+            2000,
+            FALSE,
+            4,
+            5,
+            ${JSON.stringify([
+              'Priority queue',
+              'AIO/GEO optimization',
+              'Visual fingerprint',
+              'Priority support',
+            ])}::jsonb,
+            'Priority queue, AIO/GEO optimization, visual fingerprint, priority support.',
+            TRUE,
+            1
+          ),
+          (
+            'professional',
+            'Professional',
+            '专业版',
+            '专业版',
+            150,
+            'USD',
+            10000,
+            FALSE,
+            10,
+            10,
+            ${JSON.stringify([
+              'Dedicated compute lane',
+              'Deep market scan',
+              'Unlimited assets',
+              'One-on-one expert',
+            ])}::jsonb,
+            'Dedicated compute lane, deep-market scanning, unlimited assets, white-glove consultants.',
+            TRUE,
+            2
+          )
+        ON CONFLICT (plan_id) DO UPDATE SET
+          name_en = EXCLUDED.name_en,
+          name_cn = EXCLUDED.name_cn,
+          name_zh = EXCLUDED.name_zh,
+          price = EXCLUDED.price,
+          currency = EXCLUDED.currency,
+          credits_monthly = EXCLUDED.credits_monthly,
+          credits_rollover = EXCLUDED.credits_rollover,
+          api_keys_limit = EXCLUDED.api_keys_limit,
+          team_members_limit = EXCLUDED.team_members_limit,
+          features = EXCLUDED.features,
+          description = EXCLUDED.description,
+          is_active = EXCLUDED.is_active,
+          sort_order = EXCLUDED.sort_order,
+          updated_at = NOW()
+      `;
+      */
+
+      paymentTablesInitialized = true;
+    } catch (error) {
+      console.error('[initPaymentTables] Error initializing payment tables:', error);
+      paymentTablesInitPromise = null;
+      throw error;
+    }
+  })();
+
+  await paymentTablesInitPromise;
+}
+
 /**
  * 验证字符串是否是有效的 UUID 格式
  */

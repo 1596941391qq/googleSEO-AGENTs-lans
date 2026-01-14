@@ -6,7 +6,6 @@ import { Folder, Hash, FileText, Send } from 'lucide-react';
 interface ProjectMetricsCardsProps {
   stats: {
     totalProjects: number;
-    totalKeywords: number;
     totalDrafts: number;
     totalPublished: number;
   };
@@ -26,11 +25,6 @@ export const ProjectMetricsCards: React.FC<ProjectMetricsCardsProps> = ({
       icon: <Folder className="w-4 h-4 text-blue-500" />,
     },
     {
-      label: uiLanguage === 'zh' ? '总关键词' : 'Total Keywords',
-      value: stats.totalKeywords,
-      icon: <Hash className="w-4 h-4 text-emerald-500" />,
-    },
-    {
       label: uiLanguage === 'zh' ? '内容草稿' : 'Content Drafts',
       value: stats.totalDrafts,
       icon: <FileText className="w-4 h-4 text-purple-500" />,
@@ -43,7 +37,7 @@ export const ProjectMetricsCards: React.FC<ProjectMetricsCardsProps> = ({
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {metrics.map((metric, index) => (
         <Card
           key={index}

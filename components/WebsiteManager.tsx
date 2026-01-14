@@ -259,15 +259,7 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
         throw new Error("Invalid save response");
       }
 
-      // Step 3: Trigger metrics update in background (don't await)
-      postWithAuth("/api/website-data/update-metrics", {
-        websiteId: saveData.data.websiteId,
-        userId,
-      }).catch((err) =>
-        console.warn("[WebsiteManager] Failed to trigger initial metrics:", err)
-      );
-
-      // If onAddWebsite callback is provided, trigger the demo flow with scraped data
+      // Step 3: If onAddWebsite callback is provided, trigger the demo flow with scraped data
       if (onAddWebsite) {
         onAddWebsite(processedUrl, {
           title: scrapeData.data.title,

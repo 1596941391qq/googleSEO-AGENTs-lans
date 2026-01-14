@@ -100,13 +100,14 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
   const [selectedRegion, setSelectedRegion] = useState<string>("us");
   const [data, setData] = useState<WebsiteData | null>(null);
-  const [loading, setLoading] = useState(true); // 初始为 true，显示加载状态
+  const [loading, setLoading] = useState(false); // 改为初始不加载
   const [error, setError] = useState<string | null>(null);
   const [loadingParts, setLoadingParts] = useState({
-    overview: true,
-    keywords: true,
+    overview: false,
+    keywords: false,
   });
   const [websiteDomain, setWebsiteDomain] = useState<string | null>(null);
+  const [hasInitiatedLoad, setHasInitiatedLoad] = useState(false); // 追踪是否已启动加载
 
   // localStorage 缓存工具函数
   const getCacheKey = (key: string) => `website_data_${websiteId}_${selectedRegion}_${key}`;
@@ -152,7 +153,7 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     }
   }, [websiteUrl]);
 
-  // 优先从缓存获取，如果缓存过期或不存在，才从API获取（只获取一次）
+  // 仅从数据库缓存加载数据，不主动触发 DataForSEO API 调用
   const loadDataParallel = async () => {
     setLoading(true);
     setError(null);
@@ -179,82 +180,19 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
       baseRequest.websiteDomain = websiteDomain;
     }
 
-    // 使用sessionStorage防止重复调用
-    const apiFetchKey = `api_fetch_${websiteId}_${selectedRegion}`;
-    const lastFetchTime = sessionStorage.getItem(apiFetchKey);
-    const now = Date.now();
-    const FIVE_MINUTES = 5 * 60 * 1000; // 5分钟内不重复调用API
-
-    // 总是先执行 update-metrics（即使缓存没过期），只有在失败时才使用缓存
-    let useCacheAsFallback = false;
-    let cachedOverviewResult: any = null;
-    
-    // 如果5分钟内已经调用过API，跳过以避免重复调用
-    if (lastFetchTime && (now - parseInt(lastFetchTime)) < FIVE_MINUTES) {
-      console.log("[Dashboard] ⏭️ API was called recently, skipping to avoid duplicate calls");
-      useCacheAsFallback = true; // 使用缓存，先读取缓存
-    } else {
-      // 记录本次API调用时间（在调用前记录，防止重复调用）
-      sessionStorage.setItem(apiFetchKey, now.toString());
-      
-      console.log("[Dashboard] 🔄 Always calling update-metrics first (even if cache is valid)...");
-      
-      try {
-        // 同步调用API更新，等待完成（这是第一个调用，优先于所有其他请求）
-        const updateResponse = await postWithAuth("/api/website-data/update-metrics", baseRequest);
-
-        if (updateResponse.ok) {
-          const updateResult = await updateResponse.json();
-          console.log("[Dashboard] ✅ Successfully updated metrics from DataForSEO API:", updateResult);
-          // API更新成功，不设置 useCacheAsFallback，强制重新读取最新数据
-        } else {
-          const errorText = await updateResponse.text();
-          console.error("[Dashboard] ❌ update-metrics API failed:", updateResponse.status, errorText);
-          // API更新失败，使用缓存作为后备（稍后读取）
-          useCacheAsFallback = true;
-        }
-      } catch (error: any) {
-        console.error("[Dashboard] ❌ update-metrics API error:", error.message);
-        // API调用出错，使用缓存作为后备（稍后读取）
-        useCacheAsFallback = true;
-      }
-    }
-
-    // 只有在 update-metrics 失败时才读取缓存作为后备
-    if (useCacheAsFallback) {
-    try {
-      const cacheResponse = await postWithAuth("/api/website-data/overview-only", baseRequest);
-
-      if (cacheResponse.ok) {
-          const cacheResult = await cacheResponse.json();
-          cachedOverviewResult = cacheResult; // 保存缓存结果作为后备
-        }
-      } catch (error: any) {
-        // 静默失败，使用空缓存
-      }
-    }
-
-    // 并行发起所有请求（从缓存读取）
-    // 如果 update-metrics 失败且缓存可用，使用缓存；否则重新读取（可能包含最新数据）
+    // 只从缓存读取，不再在此处自动调用 update-metrics
     const requests = {
-      overview: (useCacheAsFallback && cachedOverviewResult)
-        ? Promise.resolve(new Response(JSON.stringify(cachedOverviewResult), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          }))
-        : postWithAuth("/api/website-data/overview-only", baseRequest),
+      overview: postWithAuth("/api/website-data/overview-only", baseRequest),
       keywords: postWithAuth("/api/website-data/keywords-only", { ...baseRequest, limit: 20 }),
     };
 
-    // 处理每个请求，哪个先返回就先更新
+    // 处理每个响应
     const handleResponse = async (
       key: 'overview' | 'keywords',
       responsePromise: Promise<Response>
     ) => {
       try {
-        const startTime = Date.now();
         const response = await responsePromise;
-        const loadTime = Date.now() - startTime;
 
         if (response.ok) {
           const result = await response.json();
@@ -273,12 +211,15 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
               
               // 提取 overview 数据（排除 domain 字段）
               const { domain, ...overviewData } = result.data;
-              updated.overview = overviewData as WebsiteOverview;
-              updated.hasData = true;
-            } else if (key === 'keywords' && Array.isArray(result.data)) {
+              
+              // 检查是否真的有有效数据（不是只有域名）
+              if (overviewData && (overviewData.totalKeywords > 0 || overviewData.organicTraffic > 0)) {
+                updated.overview = overviewData as WebsiteOverview;
+                updated.hasData = true;
+              }
+            } else if (key === 'keywords' && Array.isArray(result.data) && result.data.length > 0) {
               updated.topKeywords = result.data;
-            } else if (key === 'competitors' && Array.isArray(result.data)) {
-              updated.competitors = result.data;
+              updated.hasData = true;
             }
 
             return updated;
@@ -286,7 +227,6 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
 
           setLoadingParts((prev) => ({ ...prev, [key]: false }));
         } else {
-          console.error(`[Dashboard] ❌ ${key} API error:`, response.status);
           setLoadingParts((prev) => ({ ...prev, [key]: false }));
         }
       } catch (error: any) {
@@ -304,27 +244,24 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     // 等待所有请求完成
     await new Promise((resolve) => setTimeout(resolve, 100));
 
-    // 检查数据状态（不自动触发更新，只在用户访问时显示提示）
+    // 检查是否完全没有数据
     setData((currentData) => {
-      const hasAnyData = currentData?.overview || (currentData?.topKeywords?.length ?? 0) > 0 || (currentData?.competitors?.length ?? 0) > 0;
+      if (!currentData) return null;
+      
+      const hasAnyData = !!(currentData.overview || currentData.topKeywords?.length > 0);
 
       if (!hasAnyData) {
-        // 不自动触发更新，只标记需要刷新
         return {
           ...currentData,
-          needsRefresh: true,
+          hasData: false,
+          needsRefresh: true, // 标记需要刷新
         };
       }
 
-      // 保存到localStorage缓存
-      if (currentData && hasAnyData) {
-        setCachedData('overview', {
-          ...currentData,
-          websiteDomain: websiteDomain || currentData.websiteDomain,
-        });
-      }
-
-      return currentData;
+      return {
+        ...currentData,
+        hasData: true,
+      };
     });
 
     setLoading(false);
@@ -333,122 +270,69 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
   // 保持向后兼容的 loadData 方法
   const loadData = loadDataParallel;
 
-  // 刷新数据：清除缓存记录，强制重新获取最新数据
+  // 刷新数据：由用户点击触发，调用 update-metrics 接口获取最新数据
   const handleRefresh = async () => {
     console.log("[Dashboard] 🔄 Manual refresh triggered for region:", selectedRegion);
+    setLoading(true);
+    setError(null);
     
-    // 清除 sessionStorage 中的 API 调用记录
-    const apiFetchKey = `api_fetch_${websiteId}_${selectedRegion}`;
-    sessionStorage.removeItem(apiFetchKey);
-    
-    // 清除 localStorage 缓存
     try {
-      Object.keys(localStorage).forEach(key => {
-        if (key.startsWith(`website_data_${websiteId}_${selectedRegion}_`)) {
-          localStorage.removeItem(key);
-        }
-      });
-    } catch (error) {
-      console.warn('[Dashboard] Failed to clear localStorage cache:', error);
+      const baseRequest: any = {
+        websiteId,
+        userId: getUserId(user),
+        region: selectedRegion,
+      };
+
+      // 显式调用 update-metrics 接口（这会调用 DataForSEO API）
+      const updateResponse = await postWithAuth("/api/website-data/update-metrics", baseRequest);
+      
+      if (!updateResponse.ok) {
+        throw new Error(`Update failed: ${updateResponse.status}`);
+      }
+      
+      console.log("[Dashboard] ✅ Update metrics completed, reloading UI data...");
+      
+      // 更新完成后，重新从数据库加载最新数据到 UI
+      await loadDataParallel();
+    } catch (err: any) {
+      console.error("[Dashboard] ❌ Failed to refresh data:", err.message);
+      setError(uiLanguage === 'zh' ? '同步数据失败，请重试' : 'Failed to sync data, please try again');
+      setLoading(false);
     }
-    
-    // 强制重新加载数据
-    await loadDataParallel();
   };
 
   // 从 overview API 获取网站信息（如果需要的话，可以从其他API获取）
   // 暂时从 overview 数据中获取，如果没有则留空
 
-  // 监听地区变化，重新加载数据
+  // 监听地区变化
   useEffect(() => {
     if (websiteId) {
-      // 切换地区时，重置状态并加载新地区数据
+      // 切换地区时，重置数据状态
       setData(null);
       setError(null);
-      setLoading(true);
-      setLoadingParts({ overview: true, keywords: true });
       
       const cachedData = getCachedData<WebsiteData>('overview');
       if (cachedData) {
         console.log(`[Dashboard] 📦 Loading from localStorage cache for region: ${selectedRegion}`);
         setData(cachedData);
-        setLoading(false);
-        setLoadingParts({ overview: false, keywords: false });
+        setHasInitiatedLoad(true);
         if (cachedData.websiteDomain) {
           setWebsiteDomain(cachedData.websiteDomain);
         }
       } else {
-        loadData();
+        setHasInitiatedLoad(false);
       }
     }
   }, [selectedRegion, websiteId]);
 
-  // 首次加载数据（只在websiteId变化时）
+  // 当切换到overview视图时
   useEffect(() => {
-    // 这个 useEffect 已经被上面的 selectedRegion 监听覆盖了
-    // 除非我们需要特定的初始化逻辑，否则可以保持空或者合并
-  }, [websiteId]); // 只在websiteId变化时加载
+    // 逻辑已合并到上方的 region 监听中
+  }, [viewMode]);
 
-  // 当切换到overview视图时，如果没有数据则加载
+  // 自动轮询已禁用，改为由用户手动触发同步
   useEffect(() => {
-    if (websiteId && viewMode === "overview" && !data) {
-      const cachedData = getCachedData<WebsiteData>('overview');
-      if (!cachedData) {
-        loadData();
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode]); // 只在viewMode变化时检查
-
-  // 自动轮询：当检测到没有数据时，自动定期检查数据是否已更新
-  useEffect(() => {
-    // 只在有 websiteId 且没有数据时启动轮询
-    if (!websiteId || !data || data.hasData) {
-      return; // 有数据或没有 websiteId，不需要轮询
-    }
-
-    console.log("[Dashboard] 🔄 Starting auto-polling for website data...");
-    
-    const pollInterval = setInterval(async () => {
-      try {
-        const baseRequest = {
-          websiteId,
-          userId: getUserId(user),
-          region: selectedRegion,
-        };
-
-        const response = await postWithAuth("/api/website-data/overview-only", baseRequest);
-
-        if (response.ok) {
-          const result = await response.json();
-          if (result.data && (result.data.totalKeywords > 0 || result.data.organicTraffic > 0)) {
-            console.log("[Dashboard] ✅ Data updated, refreshing...");
-            // 重新加载所有数据
-            await loadDataParallel();
-            clearInterval(pollInterval); // 数据已更新，停止轮询
-          }
-        }
-      } catch (error) {
-        console.error("[Dashboard] Polling error:", error);
-      }
-    }, 3000); // 每3秒检查一次
-
-    // 最多轮询30次（90秒），避免无限轮询
-    const maxPolls = 30;
-    let pollCount = 0;
-    const countInterval = setInterval(() => {
-      pollCount++;
-      if (pollCount >= maxPolls) {
-        console.log("[Dashboard] ⏱️ Auto-polling timeout, stopping");
-        clearInterval(pollInterval);
-        clearInterval(countInterval);
-      }
-    }, 3000);
-
-    return () => {
-      clearInterval(pollInterval);
-      clearInterval(countInterval);
-    };
+    // 数据获取逻辑统一由 loadDataParallel 处理
   }, [websiteId, data?.hasData, selectedRegion, user]);
 
   // 如果没有 websiteId，显示错误
@@ -512,13 +396,13 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
                   : "bg-gray-100 text-gray-600"
               )}>
                 <span className="text-xs">
-                  {uiLanguage === "zh" ? "最后更新" : "Last updated"}: {new Date(data.overview.updatedAt).toLocaleString('zh-CN', { 
+                  {uiLanguage === "zh" ? "最后更新" : "Last updated"}: {data.overview.updatedAt && !isNaN(new Date(data.overview.updatedAt).getTime()) ? new Date(data.overview.updatedAt).toLocaleString('zh-CN', { 
                     year: 'numeric', 
                     month: '2-digit', 
                     day: '2-digit',
                     hour: '2-digit',
                     minute: '2-digit'
-                  })}
+                  }) : (uiLanguage === 'zh' ? '暂无数据' : 'No data')}
                 </span>
                 <button
                   onClick={handleRefresh}
@@ -727,73 +611,131 @@ export const WebsiteDataDashboard: React.FC<WebsiteDataDashboardProps> = ({
     {/* Content based on view mode */}
       {viewMode === "overview" ? (
         <>
-      {/* Overview Cards - 始终显示，加载时显示骨架屏 */}
-      <OverviewCards
-        metrics={data?.overview ? {
-          organicTraffic: data.overview.organicTraffic,
-          paidTraffic: data.overview.paidTraffic,
-          totalTraffic: data.overview.totalTraffic,
-          totalKeywords: data.overview.totalKeywords,
-          avgPosition: data.overview.avgPosition,
-          trafficCost: data.overview.trafficCost,
-        } : undefined}
-        isLoading={loading || !data}
-        isDarkTheme={isDarkTheme}
-        uiLanguage={uiLanguage}
-      />
-
-      {/* Top Keywords Table - 始终显示，加载时显示加载状态 */}
-      <TopKeywordsTable
-        keywords={data?.topKeywords || []}
-        isLoading={loading || !data}
-        isDarkTheme={isDarkTheme}
-        uiLanguage={uiLanguage}
-        websiteId={websiteId}
-        totalKeywordsCount={data?.overview?.totalKeywords}
-        onViewAll={() => setViewMode("ranked-keywords")}
-      />
-
-      {/* 错误提示 - 显示在底部，不阻塞页面 */}
-      {error && (
-        <div
-          className={cn(
-            "p-4 rounded-lg border",
-            isDarkTheme
-              ? "bg-red-500/10 border-red-500/20 text-red-400"
-              : "bg-red-50 border-red-200 text-red-600"
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
-            <span className="text-sm">{error}</span>
-          </div>
-        </div>
-      )}
-
-          {/* 无数据提示 - 只在没有数据且不在加载时显示 */}
-          {!loading && (!data || !data.hasData) && (
+          {/* 未初始化加载时的提示 */}
+          {!hasInitiatedLoad && !loading && (
             <div
               className={cn(
-                "text-center py-8 rounded-lg border",
+                "text-center py-20 rounded-2xl border flex flex-col items-center justify-center gap-6",
                 isDarkTheme
-                  ? "bg-zinc-900/50 border-zinc-800 text-zinc-400"
+                  ? "bg-zinc-900/30 border-zinc-800 text-zinc-400"
                   : "bg-gray-50 border-gray-200 text-gray-500"
               )}
             >
-              <p className="text-sm">
-                {uiLanguage === "zh"
-                  ? "正在从 DataForSEO 获取数据，请稍候..."
-                  : "Fetching data from DataForSEO, please wait..."}
-              </p>
-              {error && (
-                <p className={cn(
-                  "text-xs mt-3",
-                  isDarkTheme ? "text-red-400" : "text-red-600"
-                )}>
-                  {error}
+              <div className="w-20 h-20 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                <BarChart3 className="w-10 h-10 text-emerald-500 opacity-50" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-xl font-bold text-white">
+                  {uiLanguage === "zh" ? "准备深度数据透视" : "Ready for Deep Insights"}
                 </p>
-              )}
+                <p className="text-sm opacity-60 max-w-sm mx-auto">
+                  {uiLanguage === "zh" 
+                    ? "点击下方按钮开始分析该站点的实时 SEO 指标、流量趋势及关键词分布。" 
+                    : "Click the button below to start analyzing real-time SEO metrics, traffic trends, and keyword distribution."}
+                </p>
+              </div>
+              
+              <Button 
+                onClick={() => {
+                  setHasInitiatedLoad(true);
+                  loadData();
+                }}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl px-10 py-6 h-auto transition-all hover:scale-105"
+              >
+                <RefreshCw className="w-5 h-5 mr-2" />
+                {uiLanguage === "zh" ? "开始加载站点数据" : "Start Loading Data"}
+              </Button>
             </div>
+          )}
+
+          {hasInitiatedLoad && (
+            <>
+              {/* Overview Cards - 始终显示，加载时显示骨架屏 */}
+              <OverviewCards
+                metrics={data?.overview ? {
+                  organicTraffic: data.overview.organicTraffic,
+                  paidTraffic: data.overview.paidTraffic,
+                  totalTraffic: data.overview.totalTraffic,
+                  totalKeywords: data.overview.totalKeywords,
+                  avgPosition: data.overview.avgPosition,
+                  trafficCost: data.overview.trafficCost,
+                } : undefined}
+                isLoading={loading || !data}
+                isDarkTheme={isDarkTheme}
+                uiLanguage={uiLanguage}
+              />
+
+              {/* Top Keywords Table - 始终显示，加载时显示加载状态 */}
+              <TopKeywordsTable
+                keywords={data?.topKeywords || []}
+                isLoading={loading || !data}
+                isDarkTheme={isDarkTheme}
+                uiLanguage={uiLanguage}
+                websiteId={websiteId}
+                totalKeywordsCount={data?.overview?.totalKeywords}
+                onViewAll={() => setViewMode("ranked-keywords")}
+              />
+
+              {/* 错误提示 - 显示在底部，不阻塞页面 */}
+              {error && (
+                <div
+                  className={cn(
+                    "p-4 rounded-lg border",
+                    isDarkTheme
+                      ? "bg-red-500/10 border-red-500/20 text-red-400"
+                      : "bg-red-50 border-red-200 text-red-600"
+                  )}
+                >
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm">{error}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* 无数据提示 - 只在没有数据且不在加载时显示 */}
+              {!loading && (!data || !data.hasData) && (
+                <div
+                  className={cn(
+                    "text-center py-12 rounded-2xl border flex flex-col items-center justify-center gap-4",
+                    isDarkTheme
+                      ? "bg-zinc-900/30 border-zinc-800 text-zinc-400"
+                      : "bg-gray-50 border-gray-200 text-gray-500"
+                  )}
+                >
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-2">
+                    <Globe className="w-8 h-8 text-emerald-500 opacity-50" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-lg font-bold text-white">
+                      {uiLanguage === "zh" ? "暂无站点深度数据" : "No Deep SEO Data"}
+                    </p>
+                    <p className="text-sm opacity-60 max-w-xs mx-auto">
+                      {uiLanguage === "zh" 
+                        ? "由于 DataForSEO API 会产生费用，系统不会自动同步。请点击下方按钮手动同步该站点的实时 SEO 数据。" 
+                        : "To optimize costs, data is not synced automatically. Click the button below to fetch real-time SEO metrics for this site."}
+                    </p>
+                  </div>
+                  
+                  <Button 
+                    onClick={handleRefresh}
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl px-8 py-6 h-auto"
+                  >
+                    <RefreshCw className="w-5 h-5 mr-2" />
+                    {uiLanguage === "zh" ? "立即同步数据" : "Sync Data Now"}
+                  </Button>
+
+                  {error && (
+                    <p className={cn(
+                      "text-xs mt-2",
+                      isDarkTheme ? "text-red-400" : "text-red-600"
+                    )}>
+                      {error}
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </>
       ) : viewMode === "ranked-keywords" ? (

@@ -8,7 +8,7 @@ import { getCurrentProxyInfo } from './_shared/gemini.js';
  * 
  * Response:
  * {
- *   providers: [{ id: '302', name: '302.ai', ... }, ...],
+ *   providers: [{ id: '302', name: '302', ... }, ...],
  *   models: [{ id: 'gemini-2.5-flash', name: '...', ... }, ...],
  *   current: { provider, model },
  *   currentInfo: { ... }
@@ -33,9 +33,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       providers: [
         {
           id: '302',
-          name: '302.ai',
+          name: '302',
           baseUrl: 'https://api.302.ai',
-          description: '302.ai 中转站',
+          description: '302 中转站',
           hasApiKey: !!process.env.GEMINI_API_KEY,
         },
         {

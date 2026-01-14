@@ -165,7 +165,7 @@ export function ProxySwitcher({ isDarkTheme = true, compact = false }: ProxySwit
                     ? 'text-slate-500 hover:text-slate-300'
                     : 'text-gray-400 hover:text-gray-600'
               }`}
-              title={id === '302' ? '302.ai 代理' : 'Tu-Zi 代理'}
+              title={id === '302' ? '302 代理' : 'Tu-Zi 代理'}
             >
               {id === '302' ? '302' : 'TZ'}
             </button>

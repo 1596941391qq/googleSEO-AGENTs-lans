@@ -167,6 +167,9 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   }, [user]);
 
   const handleSelectProject = (project: ProjectWithStats) => {
+    // Only allow selecting projects and mining tasks for now
+    if (project.task_type === 'article-generator') return;
+    
     setSelectedProject(project);
     fetchKeywords(project.id);
   };
@@ -208,7 +211,6 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
 
   const stats = {
     totalProjects: projects.length,
-    totalKeywords: projects.reduce((acc, p) => acc + (parseInt(p.keyword_count as any) || 0), 0),
     totalDrafts: projects.reduce((acc, p) => acc + (parseInt(p.draft_count as any) || 0), 0),
     totalPublished: projects.reduce((acc, p) => acc + (parseInt(p.published_count as any) || 0), 0),
   };
@@ -292,15 +294,21 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
               </div>
 
               <div className="space-y-3">
-                {columnProjects.map(project => (
-                  <Card 
-                    key={project.id} 
-                    className={cn(
-                      "cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]",
-                      isDarkTheme ? "bg-zinc-900 border-zinc-800 hover:border-emerald-500/50" : "bg-white border-gray-200 hover:border-emerald-500/50 shadow-sm"
-                    )}
-                    onClick={() => handleSelectProject(project)}
-                  >
+                {columnProjects.map(project => {
+                  const isUnclickable = project.task_type === 'article-generator';
+                  return (
+                    <Card 
+                      key={project.id} 
+                      className={cn(
+                        "transition-all",
+                        isUnclickable 
+                          ? "cursor-default opacity-80" 
+                          : "cursor-pointer hover:scale-[1.02] active:scale-[0.98]",
+                        isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white border-gray-200 shadow-sm",
+                        !isUnclickable && "hover:border-emerald-500/50"
+                      )}
+                      onClick={() => !isUnclickable && handleSelectProject(project)}
+                    >
                     <CardContent className="p-4 space-y-3">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-2">
@@ -370,7 +378,8 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
 
                 {columnProjects.length === 0 && (
                   <div className={cn(
@@ -472,6 +481,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                 onViewDraft={handleViewDraft}
                 isDarkTheme={isDarkTheme}
                 uiLanguage={uiLanguage}
+                readOnly={true}
               />
             </CardContent>
           </Card>

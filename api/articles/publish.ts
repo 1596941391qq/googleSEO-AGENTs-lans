@@ -85,14 +85,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       liveUrl = publishResult.url;
     }
 
-    // 4. 更新数据库状态
+    // 4. 更新数据库状态（添加 user_id 条件确保数据隔离）
     await sql`
       UPDATE published_articles
       SET status = 'published',
           published_at = NOW(),
           url_slug = ${finalSlug},
           updated_at = NOW()
-      WHERE id = ${articleId}
+      WHERE id = ${articleId} AND user_id::text = ${authResult.userId.toString()}
     `;
 
     return res.json({

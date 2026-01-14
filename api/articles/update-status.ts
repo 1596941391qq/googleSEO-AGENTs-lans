@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { initPublishedArticlesTable, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -15,15 +16,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return sendErrorResponse(res, null, 'Unauthorized', 401);
+    }
+    const userId = authResult.userId;
+
     // Initialize tables
     await initPublishedArticlesTable();
 
     const body = parseRequestBody(req);
-    const { articleId, status, userId } = body;
+    const { articleId, status } = body;
 
     // 验证必需字段
-    if (!articleId || !status || !userId) {
-      return sendErrorResponse(res, null, 'articleId, status, and userId are required', 400);
+    if (!articleId || !status) {
+      return sendErrorResponse(res, null, 'articleId and status are required', 400);
     }
 
     // 验证状态值
@@ -43,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ELSE published_at
         END
       WHERE id = ${articleId}::uuid
-        AND user_id = ${userId}
+        AND user_id::text = ${userId.toString()}
       RETURNING id, status, published_at, updated_at
     `;
 

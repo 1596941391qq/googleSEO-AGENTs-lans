@@ -2,9 +2,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse } from '../_shared/request-handler.js';
 import { 
-  getContentDraftById, 
   getContentDraftVersions, 
-  getContentDraftImages 
+  getContentDraftImages,
+  sql,
+  initContentDraftsTable
 } from '../lib/database.js';
 import { authenticateRequest } from '../_shared/auth.js';
 
@@ -31,11 +32,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResult) {
       return sendErrorResponse(res, null, 'Unauthorized', 401);
     }
+    const userId = authResult.userId;
 
-    const draft = await getContentDraftById(id);
-    if (!draft) {
-      return sendErrorResponse(res, null, 'Draft not found', 404);
+    await initContentDraftsTable();
+
+    // 获取草稿并验证用户归属（通过 JOIN projects 表）
+    const result = await sql`
+      SELECT cd.* 
+      FROM content_drafts cd
+      INNER JOIN projects p ON cd.project_id = p.id
+      WHERE cd.id = ${id} AND p.user_id::text = ${userId.toString()}
+    `;
+
+    if (result.rows.length === 0) {
+      return sendErrorResponse(res, null, 'Draft not found or access denied', 404);
     }
+
+    const draft = result.rows[0];
 
     // Get versions and images in parallel
     const [versions, images] = await Promise.all([

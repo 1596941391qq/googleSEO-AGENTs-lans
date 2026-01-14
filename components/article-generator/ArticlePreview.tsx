@@ -88,9 +88,9 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("auth_token") || ""}`,
         },
         body: JSON.stringify({
-          userId: currentUserId,
           title: finalArticle.title,
           content: finalArticle.content,
           images: finalArticle.images || [],

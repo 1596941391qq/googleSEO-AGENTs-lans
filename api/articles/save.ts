@@ -2,6 +2,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { initPublishedArticlesTable, sql } from '../lib/database.js';
+import { authenticateRequest } from '../_shared/auth.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
@@ -15,6 +16,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    // 权限校验
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return sendErrorResponse(res, null, 'Unauthorized', 401);
+    }
+    const userId = authResult.userId;
+
     // Initialize tables
     try {
       await initPublishedArticlesTable();
@@ -31,7 +39,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const body = parseRequestBody(req);
 
     const {
-      userId,
       title,
       content,
       images,
@@ -43,8 +50,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } = body;
 
     // 验证必需字段
-    if (!userId || !title || !content) {
-      return sendErrorResponse(res, null, 'userId, title, and content are required', 400);
+    if (!title || !content) {
+      return sendErrorResponse(res, null, 'title and content are required', 400);
     }
 
     // 验证并清理 images 数组

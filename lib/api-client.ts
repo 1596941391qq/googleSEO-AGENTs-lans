@@ -108,3 +108,28 @@ export async function postWithAuth(url: string, data: any, options: RequestInit 
     body: JSON.stringify(data),
   });
 }
+
+/**
+ * API Client object for convenient API calls
+ * Provides get and post methods that automatically handle auth and return JSON
+ */
+export const apiClient = {
+  /**
+   * GET request with auth
+   */
+  async get(url: string, options: RequestInit = {}): Promise<any> {
+    const response = await fetchWithAuth(url, {
+      ...options,
+      method: 'GET',
+    });
+    return response.json();
+  },
+
+  /**
+   * POST request with auth
+   */
+  async post(url: string, data: any, options: RequestInit = {}): Promise<any> {
+    const response = await postWithAuth(url, data, options);
+    return response.json();
+  },
+};

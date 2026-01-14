@@ -3112,6 +3112,74 @@ const WorkflowConfigPanel = ({
   );
 };
 
+interface PaymentPlan {
+  plan_id: string;
+  name_en: string;
+  name_zh?: string | null;
+  price: number;
+  credits_monthly: number;
+  description: string;
+}
+
+interface PaymentPlanTheme {
+  titleZh: string;
+  titleEn: string;
+  bullets: string[];
+  cta: string;
+  gradient: string;
+  border: string;
+  accentColor: string;
+}
+
+const PAYMENT_PLAN_THEMES: Record<string, PaymentPlanTheme> = {
+  pro: {
+    titleZh: "入门版",
+    titleEn: "PRO",
+    bullets: [
+      "优先队列生产",
+      "高级 AIO/GEO 优化",
+      "视觉指纹合成系统",
+      "优先技术支持",
+    ],
+    cta: "立即升级",
+    gradient: "from-orange-600/20 to-orange-900/40",
+    border: "border-orange-500",
+    accentColor: "text-orange-400",
+  },
+  professional: {
+    titleZh: "专业版",
+    titleEn: "PROFESSIONAL",
+    bullets: [
+      "独占计算通道",
+      "深度市场真实扫描",
+      "无限资产级配图",
+      "1对1专家咨询",
+    ],
+    cta: "立即购买",
+    gradient: "from-emerald-600/20 to-emerald-900/40",
+    border: "border-emerald-500",
+    accentColor: "text-emerald-400",
+  },
+  free: {
+    titleZh: "免费版",
+    titleEn: "FREE",
+    bullets: ["基础功能访问", "标准 AIO 优化", "AI 辅助配图", "社区支持"],
+    cta: "免费开始",
+    gradient: "from-blue-600/20 to-blue-900/40",
+    border: "border-blue-500",
+    accentColor: "text-blue-400",
+  },
+  default: {
+    titleZh: "标准版",
+    titleEn: "STANDARD",
+    bullets: ["全功能访问", "标准 AIO 优化", "AI 辅助配图", "社区支持"],
+    cta: "立即购买",
+    gradient: "from-slate-600/20 to-slate-900/40",
+    border: "border-slate-500",
+    accentColor: "text-slate-400",
+  },
+};
+
 export default function App() {
   const [state, setState] = useState<AppState>({
     // Task Management
@@ -3235,6 +3303,7 @@ export default function App() {
   const [miningMode, setMiningMode] = useState<
     "blue-ocean" | "existing-website-audit"
   >("blue-ocean"); // 挖掘模式
+  const miningModeInitializedRef = useRef(false); // 标记挖掘模式是否已初始化
   const urlValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showWebsiteDropdown, setShowWebsiteDropdown] = useState(false); // Website dropdown visibility
   const [websiteListData, setWebsiteListData] = useState<{
@@ -3261,7 +3330,7 @@ export default function App() {
     useState(false); // Website dropdown visibility for batch mode
   const batchUrlValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Helper function to normalize URL (support formats like "302.ai" or "www.302.ai")
+  // Helper function to normalize URL (support formats like "example.com" or "www.example.com")
   const normalizeUrl = (input: string): string => {
     const trimmed = input.trim();
     if (!trimmed) return trimmed;
@@ -3355,6 +3424,11 @@ export default function App() {
       if (response.ok) {
         const result = await response.json();
         setWebsiteListData(result.data);
+        // 如果用户已绑定网站且挖掘模式还未初始化，默认设置为存量拓新模式
+        if (result.data?.currentWebsite && !miningModeInitializedRef.current) {
+          setMiningMode("existing-website-audit");
+          miningModeInitializedRef.current = true;
+        }
         // Auto-select current website if available and no selection yet AND user is not typing
         // Only auto-select if there's no manual input and no existing selection
         if (mode === "batch") {
@@ -3486,6 +3560,19 @@ export default function App() {
 
   // Auth and Credits
   const { user, authenticated, loading: authLoading, logout } = useAuth();
+
+  // 初始化时检查用户是否已绑定网站，如果已绑定则默认设置为存量拓新模式
+  useEffect(() => {
+    if (
+      authenticated &&
+      !websiteListData &&
+      !miningModeInitializedRef.current
+    ) {
+      loadWebsiteList();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authenticated]);
+
   const token = localStorage.getItem("auth_token");
   const [credits, setCredits] = useState<{
     total: number;
@@ -3494,6 +3581,16 @@ export default function App() {
     bonus: number;
   } | null>(null);
   const [creditsLoading, setCreditsLoading] = useState(false);
+  const [paymentPlans, setPaymentPlans] = useState<PaymentPlan[]>([]);
+  const [paymentPlansLoading, setPaymentPlansLoading] = useState(false);
+  const [paymentPlansError, setPaymentPlansError] = useState<string | null>(
+    null
+  );
+  const [selectedPaymentPlanId, setSelectedPaymentPlanId] =
+    useState<string>("pro");
+  const [creatingCheckout, setCreatingCheckout] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Main App URL
   const MAIN_APP_URL =
@@ -3645,6 +3742,122 @@ export default function App() {
     }
 
     return credits.remaining >= requiredCredits;
+  };
+
+  const fetchPaymentPlans = async () => {
+    setPaymentPlansLoading(true);
+    setPaymentPlansError(null);
+
+    try {
+      const response = await fetch("/api/payment/plans");
+      const payload = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          payload?.details || payload?.error || "Unable to load plans"
+        );
+      }
+
+      const plans: PaymentPlan[] = payload.plans || [];
+      setPaymentPlans(plans);
+
+      if (
+        plans.length > 0 &&
+        !plans.some((plan) => plan.plan_id === selectedPaymentPlanId)
+      ) {
+        setSelectedPaymentPlanId(plans[0].plan_id);
+      }
+
+      if (plans.length === 0) {
+        setPaymentPlansError("No payment plans available at the moment");
+      }
+    } catch (error: any) {
+      console.error("[Payment] fetchPaymentPlans error:", error);
+      setPaymentPlansError(
+        error?.message || "Failed to load payment plans. Please try again."
+      );
+    } finally {
+      setPaymentPlansLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showPaymentModal) return;
+    if (paymentPlans.length === 0 && !paymentPlansLoading) {
+      fetchPaymentPlans();
+    }
+  }, [showPaymentModal, paymentPlans.length]);
+
+  useEffect(() => {
+    if (
+      paymentPlans.length > 0 &&
+      !paymentPlans.some((plan) => plan.plan_id === selectedPaymentPlanId)
+    ) {
+      setSelectedPaymentPlanId(paymentPlans[0].plan_id);
+    }
+  }, [paymentPlans, selectedPaymentPlanId]);
+
+  useEffect(() => {
+    if (!showPaymentModal) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowPaymentModal(false);
+        setPaymentMessage(null);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [showPaymentModal]);
+
+  const closePaymentModal = () => {
+    setShowPaymentModal(false);
+    setPaymentMessage(null);
+  };
+
+  const handleCreateCheckout = async () => {
+    if (!selectedPaymentPlanId || creatingCheckout) {
+      return;
+    }
+
+    if (!authenticated) {
+      setPaymentMessage(
+        state.uiLanguage === "zh"
+          ? "请先登录主应用以完成支付。"
+          : "Please log in to the main app before completing payment."
+      );
+      return;
+    }
+
+    setCreatingCheckout(true);
+    setPaymentMessage(null);
+
+    try {
+      const response = await postWithAuth("/api/payment/create-checkout", {
+        plan_id: selectedPaymentPlanId,
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data?.details || data?.error || "Unable to create checkout"
+        );
+      }
+
+      const checkoutUrl = data.checkout_url;
+      if (checkoutUrl) {
+        window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+        closePaymentModal();
+      } else {
+        setPaymentMessage("Payment provider did not return a checkout link.");
+      }
+    } catch (error: any) {
+      console.error("[Payment] create checkout failed:", error);
+      setPaymentMessage(
+        error?.message || "Failed to initiate payment. Please try again."
+      );
+    } finally {
+      setCreatingCheckout(false);
+    }
   };
 
   // Fetch credits when authenticated
@@ -8491,10 +8704,17 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           limit: 20,
         };
         // 如果是手动输入的临时网站，需要传递域名
-        if (batchSelectedWebsite.id && batchSelectedWebsite.id.startsWith('manual-') && batchSelectedWebsite.domain) {
+        if (
+          batchSelectedWebsite.id &&
+          batchSelectedWebsite.id.startsWith("manual-") &&
+          batchSelectedWebsite.domain
+        ) {
           requestBody.websiteDomain = batchSelectedWebsite.domain;
         }
-        const response = await postWithAuth("/api/website-data/keywords-only", requestBody);
+        const response = await postWithAuth(
+          "/api/website-data/keywords-only",
+          requestBody
+        );
 
         const result = await response.json();
         if (result.success && result.data) {
@@ -9670,7 +9890,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                             ? "text-neutral-400 hover:text-white"
                             : "text-gray-600 hover:text-gray-900"
                         }`}
-                        onClick={() => window.open(MAIN_APP_URL, "_blank")}
+                        onClick={() => setShowPaymentModal(true)}
                       >
                         {state.uiLanguage === "zh" ? "充值" : "Recharge"}
                       </button>
@@ -10626,8 +10846,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                               }}
                               placeholder={
                                 state.uiLanguage === "zh"
-                                  ? "例如: 302.ai 或 https://example.com"
-                                  : "e.g., 302.ai or https://example.com"
+                                  ? "例如: example.com 或 https://example.com"
+                                  : "e.g., example.com or https://example.com"
                               }
                               className={cn(
                                 "bg-transparent border-none outline-none w-full text-sm font-medium flex-1",
@@ -11456,8 +11676,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                             }}
                             placeholder={
                               state.uiLanguage === "zh"
-                                ? "例如: 302.ai 或 https://example.com"
-                                : "e.g., 302.ai or https://example.com"
+                                ? "例如: example.com 或 https://example.com"
+                                : "e.g., example.com or https://example.com"
                             }
                             className={cn(
                               "bg-transparent border-none outline-none w-full text-sm font-medium flex-1",
@@ -14625,6 +14845,266 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             onCancel={() => setShowMiningGuide(false)}
             isDarkTheme={isDarkTheme}
           />
+        )}
+
+        {/* Payment Modal */}
+        {showPaymentModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/70 backdrop-blur-sm"
+            onClick={closePaymentModal}
+          >
+            <div
+              className="w-full max-w-5xl rounded-[32px] border border-white/10 bg-[#050505] shadow-[0_0_60px_rgba(0,0,0,0.7)] text-white overflow-hidden"
+              role="dialog"
+              aria-modal="true"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">
+                    {state.uiLanguage === "zh" ? "充值方案" : "Payment Plans"}
+                  </p>
+                  <h3 className="text-2xl font-black">
+                    {state.uiLanguage === "zh"
+                      ? "按定价购买点数"
+                      : "Unlock production power"}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePaymentModal}
+                  className="text-white/70 hover:text-white transition"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="px-6 py-6 space-y-6">
+                {paymentPlansLoading && (
+                  <div className="text-sm text-slate-400">
+                    {state.uiLanguage === "zh"
+                      ? "加载中..."
+                      : "Loading plans..."}
+                  </div>
+                )}
+                {paymentPlansError && (
+                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">
+                    {paymentPlansError}
+                  </div>
+                )}
+
+                <div className="grid gap-6 sm:grid-cols-2">
+                  {paymentPlans.filter((p) => p.price > 0).length === 0 &&
+                  !paymentPlansLoading ? (
+                    <div className="text-sm text-slate-400">
+                      {state.uiLanguage === "zh"
+                        ? "暂无可用套餐"
+                        : "No plans available right now."}
+                    </div>
+                  ) : (
+                    paymentPlans
+                      .filter((p) => p.price > 0)
+                      .map((plan) => {
+                        const theme =
+                          PAYMENT_PLAN_THEMES[plan.plan_id] ||
+                          PAYMENT_PLAN_THEMES["default"];
+                        const isSelected =
+                          selectedPaymentPlanId === plan.plan_id;
+                        const priceLabel = Number.isFinite(plan.price)
+                          ? `$${plan.price.toLocaleString(undefined, {
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 2,
+                            })}`
+                          : "$-";
+
+                        return (
+                          <button
+                            key={plan.plan_id}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                if (!creatingCheckout && authenticated) {
+                                  handleCreateCheckout();
+                                }
+                              } else {
+                                setSelectedPaymentPlanId(plan.plan_id);
+                              }
+                            }}
+                            className={`relative group flex flex-col rounded-[24px] border p-6 text-left transition-all duration-500 focus:outline-none ${
+                              isSelected
+                                ? `bg-gradient-to-br ${theme.gradient} ${theme.border} shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] scale-[1.02] z-10`
+                                : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between mb-6">
+                              <div>
+                                <p
+                                  className={`text-[11px] font-bold uppercase tracking-[0.2em] ${
+                                    isSelected ? "text-white" : "text-slate-400"
+                                  }`}
+                                >
+                                  {state.uiLanguage === "zh"
+                                    ? theme.titleZh
+                                    : theme.titleEn}
+                                </p>
+                              </div>
+                              {isSelected && (
+                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-[10px] font-black uppercase tracking-wider text-white">
+                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                                  {state.uiLanguage === "zh"
+                                    ? "当前选择"
+                                    : "Selected"}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="mb-6">
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-4xl font-black tracking-tighter italic">
+                                  {priceLabel}
+                                </span>
+                                <span
+                                  className={`text-xs font-medium ${
+                                    isSelected
+                                      ? "text-white/60"
+                                      : "text-slate-500"
+                                  }`}
+                                >
+                                  {state.uiLanguage === "zh"
+                                    ? "/ 一次性"
+                                    : "/ one-time"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div
+                              className={`inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-xl text-xs font-bold ${
+                                isSelected
+                                  ? "bg-white/10 text-white"
+                                  : "bg-white/5 text-slate-300"
+                              }`}
+                            >
+                              <span className={theme.accentColor}>
+                                {plan.credits_monthly.toLocaleString()}
+                              </span>
+                              <span className="opacity-70">
+                                {state.uiLanguage === "zh"
+                                  ? "生产点数"
+                                  : "Credits"}
+                              </span>
+                            </div>
+
+                            <div className="flex-grow space-y-3 mb-8">
+                              {theme.bullets.map((bullet) => (
+                                <div
+                                  key={bullet}
+                                  className="flex items-start gap-2.5"
+                                >
+                                  <CheckCircle
+                                    className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
+                                      isSelected
+                                        ? "text-white/70"
+                                        : "text-slate-500"
+                                    }`}
+                                  />
+                                  <span
+                                    className={`text-xs leading-relaxed ${
+                                      isSelected
+                                        ? "text-white/90"
+                                        : "text-slate-400"
+                                    }`}
+                                  >
+                                    {bullet}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {plan.description && (
+                              <p
+                                className={`text-[10px] mb-4 italic ${
+                                  isSelected
+                                    ? "text-white/60"
+                                    : "text-slate-500"
+                                }`}
+                              >
+                                {plan.description}
+                              </p>
+                            )}
+
+                            <div
+                              className={`mt-auto w-full py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-center transition-all ${
+                                isSelected
+                                  ? "bg-white text-black shadow-lg shadow-black/20"
+                                  : "bg-white/5 text-white group-hover:bg-white/10"
+                              }`}
+                            >
+                              {theme.cta}
+                            </div>
+                          </button>
+                        );
+                      })
+                  )}
+                </div>
+
+                {paymentMessage && (
+                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
+                    {paymentMessage}
+                  </div>
+                )}
+
+                {!authenticated && (
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-yellow-300">
+                    <AlertCircle className="w-4 h-4 text-yellow-300" />
+                    <span>
+                      {state.uiLanguage === "zh"
+                        ? "请先登录主应用以完成支付，"
+                        : "Please log into the main app to proceed,"}
+                    </span>
+                    <a
+                      href={MAIN_APP_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      {state.uiLanguage === "zh" ? "点击前往" : "go log in"}
+                    </a>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <p className="text-xs text-slate-400">
+                    {state.uiLanguage === "zh"
+                      ? "点击“前往支付”会在新标签页打开 支付 结账页面。"
+                      : "Clicking Proceed to Checkout opens the 支付 payment page in a new tab."}
+                  </p>
+                  <Button
+                    onClick={handleCreateCheckout}
+                    disabled={
+                      creatingCheckout ||
+                      paymentPlansLoading ||
+                      paymentPlans.length === 0 ||
+                      !authenticated
+                    }
+                    className="h-12 px-8 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100 flex items-center gap-2"
+                  >
+                    {creatingCheckout ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        {state.uiLanguage === "zh"
+                          ? "跳转中..."
+                          : "Redirecting..."}
+                      </>
+                    ) : state.uiLanguage === "zh" ? (
+                      "立即前往支付"
+                    ) : (
+                      "Proceed to Checkout"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Proxy & Model Switcher - 开发环境浮动组件 */}

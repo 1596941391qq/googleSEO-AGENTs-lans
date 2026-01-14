@@ -137,167 +137,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `;
 
     let keywords: any[] = [];
-    let fromApi = false;
-
-    // 如果缓存过期或不存在，从 API 获取
+    // 仅从缓存读取，不自动调用 DataForSEO API
+    // 如果缓存为空，说明需要通过 update-metrics 同步数据
     if (cacheResult.rows.length === 0) {
-      console.log('[ranked-keywords] 🔍 Fetching from DataForSEO API...');
-      
-      try {
-        const apiKeywords = await getRankedKeywords(domain, locationCode, limit, includeSerpFeatures);
-        
-        if (apiKeywords.length > 0) {
-          // 保存到缓存
-          await Promise.all(
-            apiKeywords.map(kw => sql`
-              INSERT INTO ranked_keywords_cache (
-                website_id,
-                location_code,
-                keyword,
-                current_position,
-                previous_position,
-                search_volume,
-                etv,
-                serp_features,
-                ranking_url,
-                cpc,
-                competition,
-                difficulty,
-                data_updated_at,
-                cache_expires_at
-              ) VALUES (
-                ${body.websiteId},
-                ${locationCode},
-                ${kw.keyword},
-                ${kw.currentPosition},
-                ${kw.previousPosition},
-                ${kw.searchVolume},
-                ${kw.etv},
-                ${JSON.stringify(kw.serpFeatures)},
-                ${kw.url},
-                ${kw.cpc || null},
-                ${kw.competition || null},
-                ${kw.difficulty || null},
-                NOW(),
-                NOW() + INTERVAL '24 hours'
-              )
-              ON CONFLICT (website_id, keyword, location_code) DO UPDATE SET
-                current_position = EXCLUDED.current_position,
-                previous_position = EXCLUDED.previous_position,
-                search_volume = EXCLUDED.search_volume,
-                etv = EXCLUDED.etv,
-                serp_features = EXCLUDED.serp_features,
-                ranking_url = EXCLUDED.ranking_url,
-                cpc = EXCLUDED.cpc,
-                competition = EXCLUDED.competition,
-                difficulty = EXCLUDED.difficulty,
-                data_updated_at = NOW(),
-                cache_expires_at = EXCLUDED.cache_expires_at
-            `)
-          );
-          
-          keywords = apiKeywords;
-          fromApi = true;
-          console.log(`[ranked-keywords] ✅ Successfully fetched and cached ${keywords.length} keywords from API`);
-        }
-      } catch (error: any) {
-        console.error('[ranked-keywords] ❌ API call failed:', error.message);
-      }
+      console.log('[ranked-keywords] ℹ️ No cached data found, returning empty list');
+      return res.status(200).json({
+        success: true,
+        data: [],
+        cached: true,
+        message: 'No cached data. Please sync metrics first.'
+      });
     }
 
     // 如果 API 调用失败或返回空数据，从数据库缓存读取
-    if (keywords.length === 0 && cacheResult.rows.length > 0) {
-      console.log('[ranked-keywords] 📦 Using database cache');
-      // 清理关键词函数（与 dataforseo-domain.ts 中的逻辑一致）
-      const cleanKeyword = (rawKeyword: string): string => {
-        if (!rawKeyword) return '';
-        let cleaned = rawKeyword.trim();
-        // 1. 移除类似 "001-qk7yulqsx9esalil5mxjkg-3342555957" 的完整ID格式
-        cleaned = cleaned.replace(/^\d{1,3}-[a-z0-9-]+-\d+(\s+|$)/i, '');
-        // 2. 移除开头的数字编号（如 "051 "、"0 "、"09 "）
-        cleaned = cleaned.replace(/^\d{1,3}\s+(?=[a-zA-Z\u4e00-\u9fa5])/, '');
-        // 3. 移除纯数字开头的项
-        cleaned = cleaned.replace(/^\d+\s+/, '');
-        // 4. 如果清理后只剩下纯数字，返回空字符串
-        if (/^\d+$/.test(cleaned)) {
-          return '';
-        }
-        // 5. 移除末尾的数字后缀
-        cleaned = cleaned.replace(/\s+\d{1,3}$/, '');
-        return cleaned.trim();
-      };
+    console.log('[ranked-keywords] 📦 Using database cache');
+    // 清理关键词函数（与 dataforseo-domain.ts 中的逻辑一致）
+    const cleanKeyword = (rawKeyword: string): string => {
+      if (!rawKeyword) return '';
+      let cleaned = rawKeyword.trim();
+      // 1. 移除类似 "001-qk7yulqsx9esalil5mxjkg-3342555957" 的完整ID格式
+      cleaned = cleaned.replace(/^\d{1,3}-[a-z0-9-]+-\d+(\s+|$)/i, '');
+      // 2. 移除开头的数字编号（如 "051 "、"0 "、"09 "）
+      cleaned = cleaned.replace(/^\d{1,3}\s+(?=[a-zA-Z\u4e00-\u9fa5])/, '');
+      // 3. 移除纯数字开头的项
+      cleaned = cleaned.replace(/^\d+\s+/, '');
+      // 4. 如果清理后只剩下纯数字，返回空字符串
+      if (/^\d+$/.test(cleaned)) {
+        return '';
+      }
+      // 5. 移除末尾的数字后缀
+      cleaned = cleaned.replace(/\s+\d{1,3}$/, '');
+      return cleaned.trim();
+    };
 
-      // 清理关键词（读取时自动清理，确保显示的数据是干净的）
-      keywords = cacheResult.rows
-        .map((row: any) => ({
-          keyword: cleanKeyword(row.keyword || ''),
-          currentPosition: row.current_position,
-          previousPosition: row.previous_position,
-          positionChange: (row.previous_position || 0) - (row.current_position || 0),
-          searchVolume: row.search_volume,
-          etv: Number(row.etv) || 0,
-          serpFeatures: row.serp_features || {},
-          url: row.ranking_url,
-          cpc: row.cpc,
-          competition: row.competition,
-          difficulty: row.difficulty,
-        }))
-        .filter((kw: any) => kw.keyword && kw.keyword.length > 0 && !/^\d+$/.test(kw.keyword)); // 过滤空关键词和纯数字
-    } else if (keywords.length > 0) {
-      // 如果 API 调用成功，转换数据格式并应用排序
-      keywords = keywords.map(kw => ({
-        keyword: kw.keyword,
-        currentPosition: kw.currentPosition,
-        previousPosition: kw.previousPosition,
-        positionChange: kw.positionChange,
-        searchVolume: kw.searchVolume,
-        etv: kw.etv,
-        serpFeatures: kw.serpFeatures,
-        url: kw.url,
-        cpc: kw.cpc,
-        competition: kw.competition,
-        difficulty: kw.difficulty,
-      }));
-
-      // 应用排序（只支持 CPC、难度、搜索量）
-      keywords.sort((a, b) => {
-        let aValue: number | null = null;
-        let bValue: number | null = null;
-
-        switch (sortBy) {
-          case 'cpc':
-            aValue = a.cpc || 0;
-            bValue = b.cpc || 0;
-            break;
-          case 'difficulty':
-            aValue = a.difficulty || 0;
-            bValue = b.difficulty || 0;
-            break;
-          case 'searchVolume':
-            aValue = a.searchVolume || 0;
-            bValue = b.searchVolume || 0;
-            break;
-        }
-
-        if (aValue === null && bValue === null) return 0;
-        if (aValue === null) return 1;
-        if (bValue === null) return -1;
-
-        if (sortOrder === 'asc') {
-          return aValue - bValue;
-        } else {
-          return bValue - aValue;
-        }
-      });
-
-      // 限制数量
-      keywords = keywords.slice(0, limit);
-    }
+    // 清理关键词（读取时自动清理，确保显示的数据是干净的）
+    keywords = cacheResult.rows
+      .map((row: any) => ({
+        keyword: cleanKeyword(row.keyword || ''),
+        currentPosition: row.current_position,
+        previousPosition: row.previous_position,
+        positionChange: (row.previous_position || 0) - (row.current_position || 0),
+        searchVolume: row.search_volume,
+        etv: Number(row.etv) || 0,
+        serpFeatures: row.serp_features || {},
+        url: row.ranking_url,
+        cpc: row.cpc,
+        competition: row.competition,
+        difficulty: row.difficulty,
+      }))
+      .filter((kw: any) => kw.keyword && kw.keyword.length > 0 && !/^\d+$/.test(kw.keyword)); // 过滤空关键词和纯数字
 
     return res.status(200).json({
       success: true,
       data: keywords,
-      cached: !fromApi,
+      cached: true,
     });
 
   } catch (error: any) {

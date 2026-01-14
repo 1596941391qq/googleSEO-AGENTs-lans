@@ -123,100 +123,114 @@ const OpportunityTerminal: React.FC<{
   const [lines, setLines] = useState<string[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // 改为初始不加载
   const [fetchedInsights, setFetchedInsights] = useState<string[]>([]);
+  const [hasStartedScan, setHasStartedScan] = useState(false); // 追踪是否已启动扫描
+
+  const fetchInsights = async () => {
+    // 重置终端状态，准备显示新数据
+    setLines([]);
+    setCurrentLineIndex(0);
+    setCurrentCharIndex(0);
+    setLoading(true);
+    setHasStartedScan(true);
+
+    // 获取当前用户ID，用于缓存隔离
+    const currentUserId = user?.userId || "anonymous";
+
+    // 构建缓存键（包含用户ID和域名/网站ID，确保用户隔离和域名隔离）
+    const cacheKey = `website_insights_${currentUserId}_${
+      websiteId || url
+    }_${uiLanguage}`;
+    const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时（毫秒）
+
+    // 缓存不存在或已过期，调用 API
+    try {
+      const response = await postWithAuth("/api/websites/insights", {
+        websiteId,
+        url,
+        uiLanguage,
+      });
+      const result = await response.json();
+      if (result.success && result.data?.insights) {
+        const insights = result.data.insights;
+        setFetchedInsights(insights);
+
+        // 保存到缓存
+        try {
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              insights,
+              timestamp: Date.now(),
+            })
+          );
+        } catch (error) {
+          console.warn("[OpportunityTerminal] Failed to save cache:", error);
+        }
+      } else {
+        throw new Error("Failed to fetch insights");
+      }
+    } catch (error) {
+      console.error("[OpportunityTerminal] Error:", error);
+      setFetchedInsights(
+        uiLanguage === "zh"
+          ? [
+              "> 正在扫描全域流量特征...",
+              "> 无法获取实时洞察，请重试。",
+              "> 系统就绪。",
+            ]
+          : [
+              "> Scanning global traffic...",
+              "> Failed to fetch insights.",
+              "> System ready.",
+            ]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchInsights = async () => {
-      setLoading(true);
+    // 初始检查缓存，如果存在则自动加载缓存数据
+    const checkCache = () => {
+      if (!websiteId && !url) return;
 
-      // 获取当前用户ID，用于缓存隔离
       const currentUserId = user?.userId || "anonymous";
-
-      // 构建缓存键（包含用户ID和域名/网站ID，确保用户隔离和域名隔离）
       const cacheKey = `website_insights_${currentUserId}_${
         websiteId || url
       }_${uiLanguage}`;
-      const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时（毫秒）
 
-      // 检查缓存
       try {
         const cachedData = localStorage.getItem(cacheKey);
         if (cachedData) {
           const parsed = JSON.parse(cachedData);
-          const cacheAge = Date.now() - parsed.timestamp;
-
-          // 如果缓存未过期（24小时内）
-          if (cacheAge < CACHE_DURATION && parsed.insights) {
-            console.log(
-              "[OpportunityTerminal] Using cached insights (age:",
-              Math.round(cacheAge / 1000 / 60),
-              "minutes)"
+          const CACHE_DURATION = 24 * 60 * 60 * 1000;
+          if (
+            Date.now() - parsed.timestamp < CACHE_DURATION &&
+            parsed.insights
+          ) {
+            setLines(
+              uiLanguage === "zh"
+                ? ["> 正在从缓存加载资产分析..."]
+                : ["> Loading asset analysis from cache..."]
             );
-            setFetchedInsights(parsed.insights);
-            setLoading(false);
+            setTimeout(() => {
+              setFetchedInsights(parsed.insights);
+              setHasStartedScan(true);
+            }, 500);
             return;
-          } else {
-            console.log(
-              "[OpportunityTerminal] Cache expired, fetching fresh data"
-            );
           }
         }
-      } catch (error) {
-        console.warn("[OpportunityTerminal] Failed to read cache:", error);
-      }
+      } catch (e) {}
 
-      // 缓存不存在或已过期，调用 API
-      try {
-        const response = await postWithAuth("/api/websites/insights", {
-          websiteId,
-          url,
-          uiLanguage,
-        });
-        const result = await response.json();
-        if (result.success && result.data?.insights) {
-          const insights = result.data.insights;
-          setFetchedInsights(insights);
-
-          // 保存到缓存
-          try {
-            localStorage.setItem(
-              cacheKey,
-              JSON.stringify({
-                insights,
-                timestamp: Date.now(),
-              })
-            );
-            console.log("[OpportunityTerminal] Insights cached for 24 hours");
-          } catch (error) {
-            console.warn("[OpportunityTerminal] Failed to save cache:", error);
-          }
-        } else {
-          throw new Error("Failed to fetch insights");
-        }
-      } catch (error) {
-        console.error("[OpportunityTerminal] Error:", error);
-        setFetchedInsights(
-          uiLanguage === "zh"
-            ? [
-                "> 正在扫描全域流量特征...",
-                "> 无法获取实时洞察，请重试。",
-                "> 系统就绪。",
-              ]
-            : [
-                "> Scanning global traffic...",
-                "> Failed to fetch insights.",
-                "> System ready.",
-              ]
-        );
-      } finally {
-        setLoading(false);
-      }
+      // 如果没有缓存，则进入“待扫描”状态，不自动加载
+      setHasStartedScan(false);
+      setLines([]);
+      setFetchedInsights([]);
     };
 
-    if (websiteId || url) {
-      fetchInsights();
-    }
+    checkCache();
   }, [websiteId, url, uiLanguage, user?.userId]);
 
   useEffect(() => {
@@ -237,18 +251,18 @@ const OpportunityTerminal: React.FC<{
   return (
     <Card
       className={cn(
-        "h-[420px] border-none rounded-[32px] overflow-hidden font-mono text-[10px] lg:text-xs relative group",
+        "h-[420px] border-none rounded-[32px] overflow-hidden font-mono text-[10px] lg:text-xs relative group flex flex-col",
         isDarkTheme
           ? "bg-black text-emerald-500"
           : "bg-zinc-900 text-emerald-400"
       )}
     >
-      <div className="absolute top-4 left-6 flex gap-1.5">
+      <div className="absolute top-4 left-6 flex gap-1.5 z-30">
         <div className="w-2 h-2 rounded-full bg-red-500/50" />
         <div className="w-2 h-2 rounded-full bg-amber-500/50" />
         <div className="w-2 h-2 rounded-full bg-emerald-500/50" />
       </div>
-      <div className="absolute top-4 right-6 flex items-center gap-2">
+      <div className="absolute top-4 right-6 flex items-center gap-2 z-30">
         <div
           className={cn(
             "w-2 h-2 rounded-full bg-emerald-500",
@@ -259,29 +273,54 @@ const OpportunityTerminal: React.FC<{
           {loading ? "SCANNING..." : "LIVE TERMINAL"}
         </span>
       </div>
-      <CardContent className="p-8 pt-16 space-y-2 h-full overflow-y-auto visible-scrollbar">
-        {lines.map((line, idx) => (
-          <div key={idx} className="opacity-80 leading-relaxed">
-            {line}
-          </div>
-        ))}
-        {!loading && currentLineIndex < fetchedInsights.length && (
-          <div className="flex items-center">
-            <span>
-              {fetchedInsights[currentLineIndex].substring(0, currentCharIndex)}
-            </span>
-            <span className="w-1.5 h-3.5 bg-emerald-500 ml-1 animate-pulse" />
-          </div>
-        )}
-        {loading && (
-          <div className="flex items-center gap-2 animate-pulse opacity-50">
-            <span>
+      <CardContent className="p-8 pt-16 space-y-2 flex-1 overflow-y-auto visible-scrollbar relative z-10">
+        {!hasStartedScan && !loading ? (
+          <div className="h-full flex flex-col items-center justify-center space-y-4">
+            <div className="p-3 rounded-full bg-emerald-500/10 animate-pulse">
+              <Zap className="w-6 h-6 text-emerald-500" />
+            </div>
+            <p className="text-[10px] uppercase tracking-widest opacity-60 text-center max-w-[200px]">
               {uiLanguage === "zh"
-                ? "> 正在初始化全域扫描..."
-                : "> Initializing global scan..."}
-            </span>
-            <Loader2 className="w-3 h-3 animate-spin" />
+                ? "点击开始扫描全域流量特征并获取机会洞察"
+                : "Click to scan global traffic and get opportunity insights"}
+            </p>
+            <Button
+              size="sm"
+              onClick={fetchInsights}
+              className="bg-emerald-500 hover:bg-emerald-600 text-black font-bold rounded-lg px-4 py-2 h-auto text-[10px] uppercase tracking-wider"
+            >
+              {uiLanguage === "zh" ? "开始扫描" : "Start Scan"}
+            </Button>
           </div>
+        ) : (
+          <>
+            {lines.map((line, idx) => (
+              <div key={idx} className="opacity-80 leading-relaxed break-words">
+                {line}
+              </div>
+            ))}
+            {!loading && currentLineIndex < fetchedInsights.length && (
+              <div className="flex items-center">
+                <span>
+                  {fetchedInsights[currentLineIndex].substring(
+                    0,
+                    currentCharIndex
+                  )}
+                </span>
+                <span className="w-1.5 h-3.5 bg-emerald-500 ml-1 animate-pulse" />
+              </div>
+            )}
+            {loading && (
+              <div className="flex items-center gap-2 animate-pulse opacity-50">
+                <span>
+                  {uiLanguage === "zh"
+                    ? "> 正在初始化全域扫描..."
+                    : "> Initializing global scan..."}
+                </span>
+                <Loader2 className="w-3 h-3 animate-spin" />
+              </div>
+            )}
+          </>
         )}
       </CardContent>
       {/* Decorative Glow */}
@@ -3211,7 +3250,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                               ? "预估月流量"
                               : "Est. Monthly Traffic"}
                           </span>
-                          <p className="text-2xl lg:text-3xl font-black tracking-tighter text-white">
+                          <p
+                            className={cn(
+                              "text-2xl lg:text-3xl font-black tracking-tighter",
+                              isDarkTheme ? "text-white" : "text-zinc-900"
+                            )}
+                          >
                             {(() => {
                               const visits = state.website.monthlyVisits || 0;
                               if (visits >= 1000000000)
@@ -3230,7 +3274,12 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                               ? "索引关键词"
                               : "Indexed Keywords"}
                           </span>
-                          <p className="text-2xl lg:text-3xl font-black tracking-tighter text-white">
+                          <p
+                            className={cn(
+                              "text-2xl lg:text-3xl font-black tracking-tighter",
+                              isDarkTheme ? "text-white" : "text-zinc-900"
+                            )}
+                          >
                             {state.website.keywordsCount !== undefined &&
                             state.website.keywordsCount !== null ? (
                               state.website.keywordsCount >= 1000000 ? (
