@@ -2152,11 +2152,18 @@ export async function getKeywordAnalysisCacheBatch(
     const result = await query;
     
     // 对于每个关键词，优先使用 website_id 匹配的缓存，否则使用通用缓存
-    const processedKeywords = new Set<string>();
-    for (const row of result.rows) {
-      if (!processedKeywords.has(row.keyword) || (websiteId && row.website_id === websiteId)) {
-        cacheMap.set(row.keyword.toLowerCase(), row);
-        processedKeywords.add(row.keyword);
+    const sortedRows = result.rows.sort((a, b) => {
+      // website_id 不为 null 的优先级更高
+      if (a.website_id && !b.website_id) return -1;
+      if (!a.website_id && b.website_id) return 1;
+      // 都是或者都不是，则按更新时间排序，最新的优先
+      return new Date(b.data_updated_at || 0).getTime() - new Date(a.data_updated_at || 0).getTime();
+    });
+
+    for (const row of sortedRows) {
+      const key = row.keyword.toLowerCase();
+      if (!cacheMap.has(key)) {
+        cacheMap.set(key, row);
       }
     }
     
@@ -2178,12 +2185,16 @@ export async function saveKeywordAnalysisCache(
     
     // 先删除可能存在的旧记录（处理唯一约束）
     if (cache.keyword) {
+      const websiteId = cache.website_id || null;
       await sql`
         DELETE FROM keyword_analysis_cache
         WHERE keyword = ${cache.keyword}
           AND location_code = ${cache.location_code || 2840}
           AND search_engine = ${cache.search_engine || 'google'}
-          AND (website_id = ${cache.website_id || null} OR (website_id IS NULL AND ${cache.website_id || null} IS NULL))
+          AND (
+            (website_id IS NULL AND (${websiteId}::UUID IS NULL)) OR 
+            (website_id = ${websiteId}::UUID)
+          )
       `;
     }
     
@@ -2218,33 +2229,33 @@ export async function saveKeywordAnalysisCache(
         data_updated_at,
         cache_expires_at
       ) VALUES (
-        ${cache.website_id || null},
+        ${cache.website_id || null}::UUID,
         ${cache.keyword},
         ${cache.location_code || 2840},
         ${cache.search_engine || 'google'},
-        ${cache.dataforseo_volume || null},
-        ${cache.dataforseo_difficulty || null},
-        ${cache.dataforseo_cpc || null},
-        ${cache.dataforseo_competition || null},
-        ${cache.dataforseo_history_trend ? JSON.stringify(cache.dataforseo_history_trend) : null},
+        ${cache.dataforseo_volume !== undefined ? cache.dataforseo_volume : null}::INTEGER,
+        ${cache.dataforseo_difficulty !== undefined ? cache.dataforseo_difficulty : null}::INTEGER,
+        ${cache.dataforseo_cpc !== undefined ? cache.dataforseo_cpc : null}::DECIMAL,
+        ${cache.dataforseo_competition !== undefined ? cache.dataforseo_competition : null}::DECIMAL,
+        ${cache.dataforseo_history_trend ? JSON.stringify(cache.dataforseo_history_trend) : null}::JSONB,
         ${cache.dataforseo_is_data_found || false},
         ${cache.agent2_probability || null},
         ${cache.agent2_search_intent || null},
         ${cache.agent2_intent_analysis || null},
         ${cache.agent2_reasoning || null},
         ${cache.agent2_top_domain_type || null},
-        ${cache.agent2_serp_result_count || null},
-        ${cache.agent2_top_serp_snippets ? JSON.stringify(cache.agent2_top_serp_snippets) : null},
-        ${cache.agent2_blue_ocean_score || null},
-        ${cache.agent2_blue_ocean_breakdown ? JSON.stringify(cache.agent2_blue_ocean_breakdown) : null},
-        ${cache.website_dr || null},
-        ${cache.competitor_drs ? JSON.stringify(cache.competitor_drs) : null},
+        ${cache.agent2_serp_result_count !== undefined ? cache.agent2_serp_result_count : null}::INTEGER,
+        ${cache.agent2_top_serp_snippets ? JSON.stringify(cache.agent2_top_serp_snippets) : null}::JSONB,
+        ${cache.agent2_blue_ocean_score !== undefined ? cache.agent2_blue_ocean_score : null}::DECIMAL,
+        ${cache.agent2_blue_ocean_breakdown ? JSON.stringify(cache.agent2_blue_ocean_breakdown) : null}::JSONB,
+        ${cache.website_dr !== undefined ? cache.website_dr : null}::INTEGER,
+        ${cache.competitor_drs ? JSON.stringify(cache.competitor_drs) : null}::JSONB,
         ${cache.top3_probability || null},
         ${cache.top10_probability || null},
-        ${cache.can_outrank_positions ? JSON.stringify(cache.can_outrank_positions) : null},
+        ${cache.can_outrank_positions ? JSON.stringify(cache.can_outrank_positions) : null}::JSONB,
         ${cache.source || 'website-audit'},
         NOW(),
-        ${cache.cache_expires_at || sql`NOW() + INTERVAL '7 days'`}
+        ${cache.cache_expires_at ? cache.cache_expires_at : raw("NOW() + INTERVAL '7 days'")}
       )
     `;
   } catch (error) {

@@ -635,60 +635,6 @@ export async function auditWebsiteForKeywords(
         emit('strategist', 'log', uiLanguage === 'zh'
           ? `✓ SERP 分析完成：高概率 ${highProbCount} 个，中概率 ${mediumProbCount} 个，低概率 ${lowProbCount} 个`
           : `✓ SERP analysis complete: ${highProbCount} High, ${mediumProbCount} Medium, ${lowProbCount} Low probability`);
-        
-        // Step 7: 保存分析结果到缓存（优化：避免工作流4重复分析）
-        try {
-          const { getDataForSEOLocationAndLanguage } = await import('../tools/dataforseo.js');
-          const { locationCode } = getDataForSEOLocationAndLanguage(targetLanguage);
-          const { saveKeywordAnalysisCache } = await import('../../lib/database.js');
-          
-          emit('strategist', 'log', uiLanguage === 'zh'
-            ? `💾 正在保存分析结果到缓存...`
-            : `💾 Saving analysis results to cache...`);
-          
-          // 批量保存到缓存
-          const savePromises = analyzedKeywords.map(async (keyword) => {
-            await saveKeywordAnalysisCache({
-              website_id: options.websiteId,
-              keyword: keyword.keyword,
-              location_code: locationCode,
-              search_engine: searchEngine,
-              // DataForSEO 数据
-              dataforseo_volume: keyword.volume || keyword.dataForSEOData?.volume,
-              dataforseo_difficulty: keyword.dataForSEOData?.difficulty,
-              dataforseo_cpc: keyword.dataForSEOData?.cpc,
-              dataforseo_competition: keyword.dataForSEOData?.competition,
-              dataforseo_history_trend: keyword.serankingData?.history_trend || keyword.dataForSEOData?.history_trend,
-              dataforseo_is_data_found: keyword.dataForSEOData?.is_data_found || keyword.serankingData?.is_data_found || false,
-              // Agent 2 分析结果
-              agent2_probability: keyword.probability,
-              agent2_search_intent: keyword.searchIntent,
-              agent2_intent_analysis: keyword.intentAnalysis,
-              agent2_reasoning: keyword.reasoning,
-              agent2_top_domain_type: keyword.topDomainType,
-              agent2_serp_result_count: keyword.serpResultCount,
-              agent2_top_serp_snippets: keyword.topSerpSnippets,
-              agent2_blue_ocean_score: (keyword as any).blueOceanScore,
-              agent2_blue_ocean_breakdown: (keyword as any).blueOceanScoreBreakdown,
-              // DR 相关（如果有）
-              website_dr: (keyword as any).websiteDR,
-              competitor_drs: (keyword as any).competitorDRs,
-              top3_probability: (keyword as any).top3Probability,
-              top10_probability: (keyword as any).top10Probability,
-              can_outrank_positions: (keyword as any).canOutrankPositions,
-              source: 'website-audit',
-            });
-          });
-          
-          await Promise.all(savePromises);
-          
-          emit('strategist', 'log', uiLanguage === 'zh'
-            ? `✓ 已保存 ${analyzedKeywords.length} 个关键词的分析结果到缓存`
-            : `✓ Saved ${analyzedKeywords.length} keyword analysis results to cache`);
-        } catch (cacheError: any) {
-          console.warn(`[Website Audit] Cache save failed: ${cacheError.message}`);
-          // 不中断流程，缓存失败不影响主功能
-        }
       } catch (analysisError: any) {
         console.warn(`[Website Audit] SERP analysis failed: ${analysisError.message}`);
         emit('strategist', 'log', uiLanguage === 'zh'

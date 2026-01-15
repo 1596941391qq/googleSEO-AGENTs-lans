@@ -378,6 +378,7 @@ async function handleKeywordMining(
       analyzePrompt,
       websiteUrl,
       websiteDR,
+      websiteId: body.websiteId, // 确保传递 websiteId
       searchEngine
     });
 
@@ -600,7 +601,7 @@ async function handleBatchTranslation(
         websiteDR,
         searchEngine,
         undefined, // onProgress
-        undefined, // websiteId
+        body.websiteId, // 传递 websiteId 以便 Agent 2 内部处理缓存
         industry // 传递industry参数，用于行业过滤
       );
     }
@@ -795,7 +796,9 @@ async function handleDeepDive(
           targetLanguage,
           undefined,
           undefined,
-          searchEngine
+          searchEngine,
+          undefined, // onProgress
+          body.websiteId // 传递 websiteId 以便检查全局缓存
         );
       } catch (analysisError) {
         console.warn('Core keywords analysis failed:', analysisError);

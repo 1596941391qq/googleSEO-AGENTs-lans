@@ -925,11 +925,11 @@ export const analyzeRankingProbability = async (
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const engineName = searchEngine.charAt(0).toUpperCase() + searchEngine.slice(1);
 
-  // 如果有 websiteId，先检查缓存（优化：避免重复分析已在审计中分析过的关键词）
+  // 检查缓存（优化：避免重复分析已在系统中分析过的关键词，无论是否有 websiteId）
   let keywordsFromCache: KeywordData[] = [];
   let keywordsToAnalyze: KeywordData[] = [];
 
-  if (websiteId && keywords.length > 0) {
+  if (keywords.length > 0) {
     try {
       const { getDataForSEOLocationAndLanguage } = await import('../tools/dataforseo.js');
       const { locationCode } = getDataForSEOLocationAndLanguage(targetLanguage);
@@ -975,6 +975,7 @@ export const analyzeRankingProbability = async (
           keyword.probability = cached.agent2_probability as any;
           keyword.searchIntent = cached.agent2_search_intent;
           keyword.intentAnalysis = cached.agent2_intent_analysis;
+          keyword.intentAssessment = cached.agent2_intent_analysis || cached.agent2_search_intent; // 向后兼容
           keyword.reasoning = cached.agent2_reasoning;
           keyword.topDomainType = cached.agent2_top_domain_type as any;
           keyword.serpResultCount = cached.agent2_serp_result_count;
@@ -1016,7 +1017,7 @@ export const analyzeRankingProbability = async (
       keywordsToAnalyze = keywords;
     }
   } else {
-    // 没有 websiteId，正常分析所有关键词
+    // 没有 keywords，正常分析所有关键词
     keywordsToAnalyze = keywords;
   }
 
@@ -1827,6 +1828,79 @@ CRITICAL:
     // 批次间短暂延迟，避免 API 限流（仅在还有更多批次时延迟）
     if (i + BATCH_SIZE < keywords.length) {
       await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+    }
+  }
+
+  // 保存新分析的关键词到缓存
+  if (results.length > 0) {
+    try {
+      const { saveKeywordAnalysisCache } = await import('../../lib/database.js');
+      const { getDataForSEOLocationAndLanguage } = await import('../tools/dataforseo.js');
+      const { locationCode } = getDataForSEOLocationAndLanguage(targetLanguage);
+
+      console.log(`[Agent 2] Saving ${results.length} newly analyzed keywords to cache...`);
+
+      for (const keyword of results) {
+        // 1. 保存网站特定缓存（如果有 websiteId）
+        if (websiteId) {
+          await saveKeywordAnalysisCache({
+            website_id: websiteId as any,
+            keyword: keyword.keyword,
+            location_code: locationCode,
+            search_engine: searchEngine,
+            dataforseo_volume: keyword.dataForSEOData?.volume || keyword.serankingData?.volume || 0,
+            dataforseo_difficulty: keyword.dataForSEOData?.difficulty || keyword.serankingData?.difficulty || null,
+            dataforseo_cpc: keyword.dataForSEOData?.cpc || keyword.serankingData?.cpc || null,
+            dataforseo_competition: keyword.dataForSEOData?.competition || keyword.serankingData?.competition || null,
+            dataforseo_history_trend: keyword.dataForSEOData?.history_trend || keyword.serankingData?.history_trend || null,
+            dataforseo_is_data_found: !!(keyword.dataForSEOData?.is_data_found || keyword.serankingData?.is_data_found),
+            agent2_probability: keyword.probability,
+            agent2_search_intent: keyword.searchIntent || keyword.intentAssessment,
+            agent2_intent_analysis: keyword.intentAnalysis || keyword.intentAssessment,
+            agent2_reasoning: keyword.reasoning,
+            agent2_top_domain_type: keyword.topDomainType,
+            agent2_serp_result_count: keyword.serpResultCount,
+            agent2_top_serp_snippets: keyword.topSerpSnippets,
+            agent2_blue_ocean_score: (keyword as any).blueOceanScore,
+            agent2_blue_ocean_breakdown: (keyword as any).blueOceanScoreBreakdown,
+            website_dr: (keyword as any).websiteDR,
+            competitor_drs: (keyword as any).competitorDRs,
+            top3_probability: (keyword as any).top3Probability,
+            top10_probability: (keyword as any).top10Probability,
+            can_outrank_positions: (keyword as any).canOutrankPositions,
+            source: websiteId ? 'website-audit' : 'manual'
+          });
+        }
+
+        // 2. 始终保存/更新全局共享缓存（website_id 为 NULL）
+        // 这样其他模式（如蓝海模式）就能复用这些高价值的分析结果
+        await saveKeywordAnalysisCache({
+          website_id: null as any,
+          keyword: keyword.keyword,
+          location_code: locationCode,
+          search_engine: searchEngine,
+          dataforseo_volume: keyword.dataForSEOData?.volume || keyword.serankingData?.volume || 0,
+          dataforseo_difficulty: keyword.dataForSEOData?.difficulty || keyword.serankingData?.difficulty || null,
+          dataforseo_cpc: keyword.dataForSEOData?.cpc || keyword.serankingData?.cpc || null,
+          dataforseo_competition: keyword.dataForSEOData?.competition || keyword.serankingData?.competition || null,
+          dataforseo_history_trend: keyword.dataForSEOData?.history_trend || keyword.serankingData?.history_trend || null,
+          dataforseo_is_data_found: !!(keyword.dataForSEOData?.is_data_found || keyword.serankingData?.is_data_found),
+          agent2_probability: keyword.probability,
+          agent2_search_intent: keyword.searchIntent || keyword.intentAssessment,
+          agent2_intent_analysis: keyword.intentAnalysis || keyword.intentAssessment,
+          agent2_reasoning: keyword.reasoning,
+          agent2_top_domain_type: keyword.topDomainType,
+          agent2_serp_result_count: keyword.serpResultCount,
+          agent2_top_serp_snippets: keyword.topSerpSnippets,
+          agent2_blue_ocean_score: (keyword as any).blueOceanScore,
+          agent2_blue_ocean_breakdown: (keyword as any).blueOceanScoreBreakdown,
+          // 注意：全局缓存不保存特定网站的 DR 数据
+          source: 'manual'
+        });
+      }
+      console.log(`[Agent 2] Cache update completed.`);
+    } catch (saveError) {
+      console.warn(`[Agent 2] Failed to save analysis results to cache:`, saveError);
     }
   }
 

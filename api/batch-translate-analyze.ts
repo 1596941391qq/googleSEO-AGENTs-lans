@@ -191,53 +191,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         targetLanguage,
         websiteUrl,
         websiteDR,
-        targetSearchEngine
+        targetSearchEngine,
+        undefined, // onProgress
+        body.websiteId, // 传递 websiteId 以便 Agent 2 内部处理缓存
+        body.industry // 传递 industry
       );
-      
-      // 保存新分析的结果到缓存（优化：供后续使用）
-      // 注意：跨市场洞察不保存 DataForSEO 数据，因为跳过了 DataForSEO API 调用
-      try {
-        const { saveKeywordAnalysisCache } = await import('./lib/database.js');
-        const savePromises = analyzedKeywords.map(async (keyword) => {
-          await saveKeywordAnalysisCache({
-            website_id: body.websiteId,
-            keyword: keyword.keyword,
-            location_code: locationCode,
-            search_engine: targetSearchEngine,
-            // 跨市场洞察不保存 DataForSEO 数据（跳过 keyword research）
-            dataforseo_volume: null,
-            dataforseo_difficulty: null,
-            dataforseo_cpc: null,
-            dataforseo_competition: null,
-            dataforseo_history_trend: null,
-            dataforseo_is_data_found: false,
-            agent2_probability: keyword.probability,
-            agent2_search_intent: keyword.searchIntent,
-            agent2_intent_analysis: keyword.intentAnalysis,
-            agent2_reasoning: keyword.reasoning,
-            agent2_top_domain_type: keyword.topDomainType,
-            agent2_serp_result_count: keyword.serpResultCount,
-            agent2_top_serp_snippets: keyword.topSerpSnippets,
-            agent2_blue_ocean_score: (keyword as any).blueOceanScore,
-            agent2_blue_ocean_breakdown: (keyword as any).blueOceanScoreBreakdown,
-            website_dr: (keyword as any).websiteDR,
-            competitor_drs: (keyword as any).competitorDRs,
-            top3_probability: (keyword as any).top3Probability,
-            top10_probability: (keyword as any).top10Probability,
-            can_outrank_positions: (keyword as any).canOutrankPositions,
-            source: source,
-          });
-        });
-        await Promise.all(savePromises);
-        console.log(`[Cache] Saved ${analyzedKeywords.length} new analysis results to cache`);
-      } catch (cacheError: any) {
-        console.warn(`[Cache] Failed to save analysis results to cache: ${cacheError.message}`);
-        // 不中断流程
-      }
     }
 
-    // Combine: 缓存中的关键词 + 新分析的关键词 + 跳过的关键词
-    const allKeywords = [...keywordsFromCache, ...analyzedKeywords, ...skippedKeywords];
+    // Combine: 缓存中的关键词 + 新分析的关键词
+    const allKeywords = [...keywordsFromCache, ...analyzedKeywords];
 
     console.log(`[Batch Translate-Analyze] Analysis complete for ${allKeywords.length} keywords (${analyzedKeywords.length} analyzed, ${skippedKeywords.length} skipped)`);
     console.log(`[Batch Translate-Analyze] Source breakdown: ${allKeywords.filter(k => k.source === 'website-audit').length} from website-audit, ${allKeywords.filter(k => k.source === 'manual').length} from manual input`);
