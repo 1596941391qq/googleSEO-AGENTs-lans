@@ -4,26 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Google SEO Agent is a React-based AI-powered content creation platform that uses multi-agent system to generate SEO-optimized content. The system consists of 4 specialized AI agents that collaborate to research, write, review, and enhance content with images. The project is deployed on Vercel using serverless functions.
+**NicheDigger** (also known as **AI + PSEO Agent**) is a React-based AI-powered automated search traffic infrastructure platform designed for overseas SaaS and cross-border e-commerce. The system uses a multi-agent workshop approach to generate SEO-optimized content and implements a sophisticated "fast/slow knife" publication strategy to exploit legitimate indexing time gaps. The project is deployed on Vercel using serverless functions.
+
+**Product Positioning**: 面向出海 SaaS 与跨境电商的自动化搜索获客基础设施 (Automated search acquisition infrastructure for overseas SaaS and cross-border e-commerce)
+
+**Delivery Goal**: A high-conversion traffic domain with high-quality content, high trust, and commercial intent
 
 ### Core Features
 
-- **Multi-Agent AI System**: 4 specialized agents (SEO Researcher, Content Writer, Quality Reviewer, Image Creative Director)
-- **Complete Content Pipeline**: 8-step workflow from keyword research to publication
-- **Smart Keyword Mining**: Identify blue ocean keywords with AI analysis
-- **Competitor Analysis**: Deep SERP analysis and content gap identification
-- **GEO/AIO Optimization**: Geographic and AI-engineine specific content optimization
-- **Image Generation**: Nano Banana 2 integration for high-quality, low-cost images
-- **Platform Integration**: One-click publishing to multiple platforms
+- **Dual-Workflow Keyword Mining**: Two distinct modes - Blue Ocean (seed keyword expansion) and Website Audit (competitor gap analysis)
+- **4-Phase Workshop Content Generation**: Deep Research → Strategy → Visual (parallel) → Writing
+- **Multi-Agent AI System**: SEO Researcher, SEO Strategist, Content Writer, Image Artist
+- **Smart Keyword Mining**: SCAMPER循环挖掘 with probability scoring (High/Medium/Low)
+- **Competitor Analysis**: Deep SERP analysis with Top 10 domain authority comparison
+- **GEO/AIO Optimization**: Geographic and AI-engine specific content optimization
+- **Image Generation**: Nano Banana 2 integration for high-quality, low-cost 4K images
+- **Fast/Slow Knife Publication Strategy**: Experimental content → Winner selection → URL inheritance
+- **High-Trust Platform Carriers**: Read the Docs, GitHub Pages, GitLab Pages, Cloudflare Pages
 
 ## Architecture
 
 - **Frontend**: React + TypeScript + Vite (port 3000)
 - **Backend**: Vercel Serverless Functions (Node.js + TypeScript) in `/api` directory
 - **AI Integration**:
-  - Google Gemini API with proxy support (302.ai) - Primary AI engine
+  - Google Gemini API with proxy support (302.ai or tu-zi.com) - Primary AI engine
   - Nano Banana 2 API - High-quality image generation (4K, 5-10s, $0.05-0.08/image)
   - Multiple AI Search APIs - Google SERP, ChatGPT, Claude, Perplexity analysis
+- **Data Sources**:
+  - DataForSEO - Keyword research data (volume, difficulty, SERP analysis)
+  - SE-ranking - Alternative keyword research source
+  - Firecrawl - Website content crawling for Website Audit mode
 - **Database**: PostgreSQL (shared with niche-mining project)
   - User authentication (shared)
   - Keywords & projects
@@ -33,14 +43,60 @@ Google SEO Agent is a React-based AI-powered content creation platform that uses
 - **Authentication**: Cross-project auth with niche-mining (shared database + JWT)
 - **Deployment**: Vercel with automatic builds and environment variable management
 
-### Multi-Agent System Architecture
+### System Architecture: Three Layers
 
+**Layer 1: 挖词 (Keyword Mining) - COMPLETED**
+
+Two distinct workflows:
+
+**链路 A: 蓝海模式 (Blue Ocean Mode)**
 ```
-User Request → Keyword Mining → Agent Orchestration → Content Generation → Quality Review → Image Enhancement → Publication
-                  ↓                      ↓                    ↓                  ↓                    ↓              ↓
-           Blue Ocean          SEO Researcher       Content Writer    Quality Reviewer   Image Creative    Platform
-           Keywords            Agent (Agent 1)       Agent (Agent 2)  Agent (Agent 3)    Director (Ag 4)  Publisher
+User Input (Seed Keyword)
+  → Agent 1 (Gemini): Semantic expansion (SCAMPER)
+  → Get keyword data (DataForSEO/SE-ranking)
+  → Agent 2 (SEO Researcher): SERP audit (Top 10 domain analysis)
+  → Output: Ranking Probability (High/Medium/Low)
 ```
+
+**链路 B: 存量拓新 (Website Audit Mode)**
+```
+User Input (Domain URL)
+  → Firecrawl: Crawl user website content
+  → DataForSEO: Get competitor keywords
+  → Agent 1: Gap Analysis (identify missing high-value keywords)
+  → Agent 2 (SEO Researcher): SERP audit + authority comparison
+  → Output: Ranking Probability (High/Medium/Low)
+```
+
+**Layer 2: 图文 (Content Generation) - COMPLETED**
+
+4-Phase Workshop Approach:
+```
+Phase 1: Deep Research (SEO Researcher)
+  → SERP insights (Google Top 10)
+  → Search engine preference analysis (Google vs AI search)
+  → Data profiling (Volume, Difficulty via DataForSEO)
+
+Phase 2: Strategy (SEO Strategist)
+  → "Big fish eats small fish" strategy
+  → Content blueprint (H1, H2-H3 outline, Meta description)
+  → Reference source integration
+
+Phase 3: Visual (Image Artist) - PARALLEL with Phase 4
+  → Extract visual themes from strategy
+  → Generate Nano Banana 2 prompts
+  → Parallel image generation (4-6 images)
+
+Phase 4: Writing (Content Writer)
+  → Synthesize research + strategy + visuals
+  → Quality pre-control (not post-audit)
+  → 3D optimization injection (GEO, AIO, LSI)
+  → Auto-archive to database
+```
+
+**Layer 3: 发布 (Publication) - NOT COMPLETED**
+
+See detailed strategy in `docs/NICHEDIGGER内容发布策略(3).md` and `docs/Read the Docs 自动化发布 SOP.md`
 
 ## Key Commands
 
@@ -76,46 +132,34 @@ vercel
 
 All API endpoints are in `/api` directory and follow Vercel serverless function patterns:
 
-### Existing SEO 功能 (Current)
+### Existing SEO 功能 (Current - COMPLETED)
 
-- `/api/generate-keywords` - Generate SEO keywords using Gemini API
-- `/api/analyze-ranking` - Analyze keyword ranking probability
-- `/api/deep-dive-strategy` - Generate detailed content strategy
+- `/api/generate-keywords` - Generate SEO keywords using Gemini API (SCAMPER expansion)
+- `/api/analyze-ranking` - Analyze keyword ranking probability (SERP audit + authority comparison)
+- `/api/deep-dive-strategy` - Generate detailed content strategy (content blueprint)
 - `/api/translate-prompt` - Translate and optimize system instructions
 - `/api/translate-text` - Translate text between languages
 - `/api/seo-agent` - Unified SEO agent API (keyword_mining, batch_translation, deep_dive modes)
 
-### New AI Agent System (To Be Implemented)
-
-- `/api/agents/orchestrate` - Main orchestrator for multi-agent workflow
-- `/api/agents/seo-researcher` - Agent 1: SEO research & competitor analysis
-- `/api/agents/content-writer` - Agent 2: Content generation
-- `/api/agents/quality-reviewer` - Agent 3: Quality checks & scoring
-- `/api/agents/image-creative` - Agent 4: Image generation & integration
-
-### Content Pipeline APIs (To Be Implemented)
-
-- `/api/pipeline/search-preferences` - Step 1: Analyze search engine preferences
-- `/api/pipeline/competitor-analysis` - Step 2: Competitor structure analysis
-- `/api/pipeline/keyword-optimization` - Step 3: Keyword density & LSI optimization
-- `/api/pipeline/geo-optimization` - Step 4: Geographic content optimization
-- `/api/pipeline/aio-optimization` - Step 5: AI-engine optimization
-- `/api/pipeline/content-generation` - Step 6: Generate final article
-- `/api/pipeline/quality-check` - Step 7: Quality scoring & verification
-- `/api/pipeline/image-generation` - Step 8: Generate & integrate images
-
-### Publication & Tracking (To Be Implemented)
-
-- `/api/publish/configure` - Configure platform parameters
-- `/api/publish/execute` - Publish content to platform
-- `/api/track/rankings` - Track keyword rankings
-- `/api/publish/history` - Get publication history
-
-### 认证功能 (Existing)
+### 认证功能 (Existing - COMPLETED)
 
 - `/api/auth/verify-transfer` - Verify transfer token from main app
 - `/api/auth/session` - Validate JWT session
 - `/api/init-db` - Initialize database tables (run once)
+
+### To Be Implemented (NOT COMPLETED)
+
+The following features are described in documentation but not yet implemented:
+
+**Publication System** (See `docs/Read the Docs 自动化发布 SOP.md`):
+- Automated Read the Docs publishing workflow
+- Fast/Slow knife URL inheritance mechanism
+- Internal link structure automation
+- Ranking tracking and winner selection
+
+**Website Data & Task Dashboard** (Low priority, incomplete):
+- Website Data: Full metrics overview, ranking distribution, high-value keywords, AI opportunity insights
+- Task Dashboard: Multi-task management, parallel agent execution monitoring
 
 ## Environment Variables
 
@@ -133,6 +177,12 @@ GEMINI_PROXY_URL=https://api.302.ai  # 可选，自定义代理 URL
 # Nano Banana 2 API (Image Generation)
 NANO_BANANA_API_KEY=your_nano_banana_api_key
 NANO_BANANA_API_URL=https://api.nanobanana.com/v2/images
+
+# Data Sources (Required for keyword research)
+DATAFORSEO_LOGIN=your_dataforseo_login
+DATAFORSEO_PASSWORD=your_dataforseo_password
+SE_RANKING_API_KEY=your_se_ranking_api_key  # Alternative to DataForSEO
+FIRECRAWL_API_KEY=your_firecrawl_api_key  # For Website Audit mode
 
 # AI Search APIs (Optional - for enhanced analysis)
 OPENAI_API_KEY=your_openai_key  # For ChatGPT analysis
@@ -163,6 +213,8 @@ VITE_MAIN_APP_URL=http://localhost:3000
 **Important**:
 
 - `POSTGRES_URL` and `JWT_SECRET` must be identical to the main app (niche-mining)
+- `DATAFORSEO_LOGIN` and `DATAFORSEO_PASSWORD` are required for keyword research (volume, difficulty, SERP data)
+- `FIRECRAWL_API_KEY` is required for Website Audit mode (crawling user websites)
 - Nano Banana 2 API is critical for image generation feature
 - AI Search APIs are optional but recommended for enhanced competitor analysis
 
@@ -190,39 +242,14 @@ VITE_MAIN_APP_URL=http://localhost:3000
 - `api/lib/db.ts` - PostgreSQL database connection (pg library)
 - `api/lib/auth.ts` - JWT token generation and verification
 
-#### New: Agent System
-
-- `api/agents/_shared/orchestrator.ts` - Multi-agent orchestration logic
-- `api/agents/seo-researcher.ts` - Agent 1: SEO research & competitor analysis
-- `api/agents/content-writer.ts` - Agent 2: Content generation
-- `api/agents/quality-reviewer.ts` - Agent 3: Quality checks & scoring
-- `api/agents/image-creative.ts` - Agent 4: Image generation & integration
-
-#### New: Content Pipeline
-
-- `api/pipeline/_shared/pipeline-manager.ts` - Pipeline state management
-- `api/pipeline/search-preferences.ts` - Step 1: Search engine preference analysis
-- `api/pipeline/competitor-analysis.ts` - Step 2: Competitor structure analysis
-- `api/pipeline/keyword-optimization.ts` - Step 3: Keyword density & LSI
-- `api/pipeline/geo-optimization.ts` - Step 4: Geographic optimization
-- `api/pipeline/aio-optimization.ts` - Step 5: AI-engine optimization
-- `api/pipeline/content-generation.ts` - Step 6: Final article generation
-- `api/pipeline/quality-check.ts` - Step 7: Quality scoring
-- `api/pipeline/image-generation.ts` - Step 8: Image generation & integration
-
-#### New: Publication & Tracking
-
-- `api/publish/configure.ts` - Platform configuration
-- `api/publish/execute.ts` - Publish content
-- `api/publish/history.ts` - Publication history
-- `api/track/rankings.ts` - Keyword ranking tracking
-
-#### Existing APIs
+#### Existing APIs (COMPLETED)
 
 - `api/auth/verify-transfer.ts` - Transfer token verification endpoint
 - `api/auth/session.ts` - Session validation endpoint
 - `api/init-db.ts` - Database initialization script
-- Individual API endpoint files (`generate-keywords.ts`, `analyze-ranking.ts`, etc.)
+- Individual API endpoint files (`generate-keywords.ts`, `analyze-ranking.ts`, `deep-dive-strategy.ts`, etc.)
+
+**Note**: The actual implementation uses a unified `/api/seo-agent` endpoint rather than separate agent/pipeline endpoints. The 4-phase workshop approach is implemented within the existing API structure.
 
 ### Database Schema (To Be Implemented)
 
@@ -304,143 +331,67 @@ CREATE TABLE ranking_records (
 
 ### Key Features Implementation
 
-#### Current Features (Phase 1 - Completed)
+#### Completed Features (已完成)
 
-1. **Keyword Generation**: Uses Gemini API to generate keywords in target languages with search volume estimates
-2. **Ranking Analysis**: Analyzes SERP competition and assigns probability scores (High/Medium/Low)
-3. **Content Strategy**: Generates detailed SEO content plans with H1 titles, meta descriptions, and content structure
-4. **Multi-language Support**: Supports 10+ target languages with UI in Chinese/English
-5. **Batch Processing**: Processes keywords in batches to avoid API rate limits
-6. **Cross-Project Authentication**: Shares login state with niche-mining via transfer tokens (dev mode: auto-login enabled)
+**1. Keyword Mining (挖词)**
 
-#### New Features (Phase 2 - To Implement)
+- **Blue Ocean Mode**: SCAMPER semantic expansion from seed keywords
+- **Website Audit Mode**: Gap analysis using Firecrawl + DataForSEO competitor data
+- **SERP Audit**: Top 10 domain authority analysis and ranking probability scoring
+- **Multi-language Support**: 10+ target languages with cross-market insights
+- **Batch Processing**: Processes keywords in batches to avoid API rate limits
+- **Data Integration**: DataForSEO/SE-ranking for volume, difficulty, and SERP data
 
-**Multi-Agent AI System (4 Agents)**
+**2. Content Generation (图文)**
 
-1. **SEO Researcher Agent** (`api/agents/seo-researcher.ts`)
+- **4-Phase Workshop**: Deep Research → Strategy → Visual (parallel) → Writing
+- **SEO Researcher**: SERP insights, search engine preference analysis, data profiling
+- **SEO Strategist**: "Big fish eats small fish" strategy, content blueprint generation
+- **Image Artist**: Nano Banana 2 integration with parallel 4K image generation (4-6 images)
+- **Content Writer**: Quality pre-control, 3D optimization (GEO, AIO, LSI), auto-archive to database
+- **Reference Integration**: Support for document/URL injection and target market selection
 
-   - Search engine preference analysis (Google vs ChatGPT vs Claude vs Perplexity)
-   - Top 10 competitor structure extraction
-   - Content framework identification
-   - Content gap analysis
-   - Keyword & LSI keyword extraction
-   - GEO/AIO optimization recommendations
+**3. Authentication & Infrastructure**
 
-2. **Content Writer Agent** (`api/agents/content-writer.ts`)
+- Cross-project auth with niche-mining via transfer tokens
+- Development mode with auto-login enabled
+- PostgreSQL database with shared user authentication
 
-   - Draft generation based on SEO recommendations
-   - Follow competitor structure and style
-   - Inject target keywords at optimal positions
-   - Apply GEO optimizations (local content, case studies, regional data)
-   - Apply AIO optimizations (Q&A format, structured data, AI-friendly language)
+#### Features Not Yet Implemented (未完成)
 
-3. **Quality Reviewer Agent** (`api/agents/quality-reviewer.ts`)
+**Publication Strategy (发布) - See `docs/` for detailed strategy**
 
-   - Keyword density verification (target: 1-2%)
-   - AI probability detection (use Gemini to detect AI-written content)
-   - GEO/AIO compliance checks
-   - Readability score (Flesch Reading Ease)
-   - Quality scoring (0-100)
-   - Improvement suggestions
+**Fast/Slow Knife Mechanism (快慢刀机制)**:
+- **Theory**: Exploit legitimate indexing time gap (Indexing Lag Abuse)
+  - Google's flow: Discovery → Index → Initial ranking → Trust evaluation (7-30 days)
+  - Low-competition SERPs prioritize "similarity matching" over authority
+  - Faceted navigation gets indexed first, evaluated later
+- **Structure**:
+  - `/lab/` or `/test/` - Experimental content (short-term exposure, disposable)
+  - `/guide/`, `/tool/`, `/compare/`, `/live/` - Long-term conversion zones
+  - URL inheritance (not content inheritance) via 301 redirects or Canonical tags
+- **Process**:
+  1. Deploy 20-50 experimental articles to `/lab/` paths
+  2. Monitor for 7-14 days
+  3. Identify winners (Top 50 ranking or real clicks)
+  4. Upgrade winner content to data-backed depth
+  5. Inherit URL to permanent paths via 301/Canonical
+  6. Delete or noindex losers
 
-4. **Image Creative Director Agent** (`api/agents/image-creative.ts`)
-   - Extract 4-6 visual themes from content
-   - Generate optimized Nano Banana 2 prompts for each theme
-   - Call Nano Banana 2 API (parallel requests for speed)
-   - Download and add metadata to images
-   - Plan image positions within article
+**Platform Carriers (载体)**:
+- **A-tier (Highest Trust)**: Read the Docs, GitHub Pages, GitLab Pages, Official Docs subdomain
+- **B-tier (Scalable)**: Cloudflare Pages, Netlify, Vercel
+- Strategy: Use infrastructure-type platforms with inherent Google trust
 
-**Complete Content Creation Pipeline (8 Steps)**
+**Internal Link Architecture**:
+- **Single-direction funnel**: lab → guide/tool → compare/live (never reverse)
+- **Keyword cluster boost**: Multiple lab pages → one guide hub page
+- **Faceted navigation**: Facets only link to hub, not to each other
+- **Anchor text**: Mix exact match with semantic descriptions (1:1 ratio)
 
-1. **Search Engine Preference Analysis**
-
-   - Analyze ranking factors for Google vs ChatGPT vs Claude vs Perplexity
-   - Generate tailored optimization strategies for each engine
-
-2. **Competitor Analysis**
-
-   - Fetch Top 10 SERP results
-   - Extract content structure (H1, H2, H3 hierarchy)
-   - Identify content framework and style patterns
-   - Find content gaps and opportunities
-
-3. **Keyword Optimization**
-
-   - Calculate optimal keyword density (1-2%)
-   - Identify LSI keywords
-   - Plan keyword placement (title, headings, first paragraph, conclusion)
-
-4. **GEO Optimization**
-
-   - Add geographic references (cities, landmarks)
-   - Include local case studies
-   - Incorporate regional statistics/data
-   - Use localized language and expressions
-
-5. **AIO (AI Engine Optimization)**
-
-   - Structure content in Q&A format
-   - Optimize for answer boxes (featured snippets)
-   - Use AI-friendly language and sentence structures
-   - Add schema.org structured data markup
-   - Optimize citations and references
-
-6. **Content Generation**
-
-   - Synthesize all optimization recommendations
-   - Generate final article with all enhancements applied
-   - Ensure natural flow and readability
-
-7. **Quality Check**
-
-   - Verify keyword density compliance
-   - Check AI probability score
-   - Validate GEO/AIO optimizations
-   - Calculate overall quality score (0-100)
-   - Generate improvement suggestions if score < 80
-
-8. **Image Generation**
-   - Extract 4-6 visual themes from content
-   - Generate Nano Banana 2 prompts
-   - Call API in parallel (4-6 images simultaneously)
-   - Download and process images
-   - Add EXIF metadata
-   - Plan and insert image positions
-
-**User Workflow (4 Phases)**
-
-1. **Phase 1: Keyword Mining** (Existing)
-
-   - Input: Website URL or seed keyword
-   - Process: Identify blue ocean keywords
-   - Output: User selects target keywords
-
-2. **Phase 2: Content Generation** (New)
-
-   - Process: 4 agents collaborate (orchestrated workflow)
-   - UI: Real-time progress display with agent status
-   - Output: Preview and edit content before finalizing
-
-3. **Phase 3: Publication** (New)
-
-   - Select target platform (WordPress, Medium, Ghost, etc.)
-   - Configure publication parameters
-   - One-click publish
-   - Retrieve published URL
-
-4. **Phase 4: Tracking** (Optional, New)
-   - Monitor keyword rankings
-   - Track organic traffic
-   - Check AI engine citations
-   - Generate performance reports
-
-**Nano Banana 2 Integration**
-
-- Model: Fast generation (5-10 seconds per image)
-- Quality: 4K resolution
-- Cost: $0.05-0.08 per image
-- API: Parallel request support for batch generation
-- Workflow: Auto-extract themes → Generate prompts → Call API → Download → Add metadata → Position in content
+**Website Data & Task Dashboard** (Low priority):
+- Full metrics overview, ranking distribution, AI opportunity insights
+- Multi-task parallel execution (up to 5 tasks simultaneously)
 
 ## Development Patterns
 
@@ -473,71 +424,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 }
 ```
 
-### Agent System Pattern (New)
-
-Each agent follows this structure:
-
-```typescript
-import { AgentInput, AgentOutput } from "./types";
-
-export async function runAgent(input: AgentInput): Promise<AgentOutput> {
-  // 1. Validate input
-  // 2. Call Gemini API with agent-specific prompt
-  // 3. Parse and validate output
-  // 4. Return structured result with metadata
-}
-```
-
-### Pipeline Orchestration Pattern (New)
-
-```typescript
-import { runAgent } from "./agents";
-
-export async function executePipeline(
-  input: PipelineInput
-): Promise<PipelineOutput> {
-  const steps = [
-    { agent: "seo-researcher", name: "Search Preferences" },
-    { agent: "seo-researcher", name: "Competitor Analysis" },
-    { agent: "content-writer", name: "Keyword Optimization" },
-    // ... etc
-  ];
-
-  const results = {};
-  for (const step of steps) {
-    results[step.name] = await runAgent({ ...input, context: results });
-  }
-
-  return results;
-}
-```
-
 ### Gemini API Integration
 
 All AI functions use the shared `callGeminiAPI` wrapper in `api/_shared/gemini.ts` which handles:
 
-- Proxy URL configuration
+- Proxy URL configuration (302.ai or tu-zi.com)
 - API key management
 - JSON response parsing
 - Error handling and logging
 - Request batching for rate limit management
 
-### Nano Banana 2 Integration Pattern
+### 4-Phase Workshop Pattern
+
+The content generation follows a workshop orchestration pattern:
 
 ```typescript
-export async function generateImages(themes: string[]): Promise<Image[]> {
-  const requests = themes.map((theme) =>
-    fetch(NANO_BANANA_API_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.NANO_BANANA_API_KEY}` },
-      body: JSON.stringify({ prompt: generateOptimizedPrompt(theme) }),
-    })
-  );
+// Phase 1: Deep Research (SEO Researcher)
+const research = await callGeminiAPI({
+  prompt: serpAnalysisPrompt,
+  // SERP data, competitor analysis, volume/difficulty data
+});
 
-  const responses = await Promise.all(requests);
-  return await Promise.all(responses.map((r) => downloadAndProcessImage(r)));
-}
+// Phase 2: Strategy (SEO Strategist)
+const strategy = await callGeminiAPI({
+  prompt: strategyPrompt,
+  context: research,
+  // Content blueprint, H1/H2/H3 outline, meta description
+});
+
+// Phase 3 & 4: Parallel execution
+const [images, content] = await Promise.all([
+  generateImages(strategy.visualThemes), // Image Artist
+  generateContent(research, strategy), // Content Writer
+]);
+
+// Auto-archive to database
+await saveToDatabase({ content, images, metadata });
 ```
+
+## Important Notes
+
+### Key SEO Concepts & Strategies
+
+**Exploitable Search Engine Behaviors**:
+1. **Indexing Lag Abuse (合法时��差)**: Google's evaluation happens in stages - initial ranking based on relevance/usefulness (immediate), trust evaluation via E-E-A-T (7-30 days later)
+2. **SERP Chaos = Hub Page Hunger**: When SERPs are mixed (forums, PDFs, no authority), Google desperately needs a "center page" to organize the knowledge graph
+3. **Faceted Navigation Tolerance**: Google indexes first, evaluates later - allows temporary ranking before quality assessment
+4. **Cumulative Punishment Model**: Penalties accumulate over time, not instant judgment - allows exploitation window
+5. **Internal Links = Importance Signal**: PageRank flows through internal links - more quality internal links = higher perceived importance
+
+**Structural Gray-Hat Approach (结构灰帽)**:
+- Not black-hat spam, but strategic use of legitimate platform trust
+- Exploit timing gaps and structural signals, not deceptive content
+- Use high-trust infrastructure platforms (Read the Docs, GitHub Pages)
+- Create genuinely useful content, just optimized for indexing speed
 
 ## Important Notes
 
@@ -545,16 +485,16 @@ export async function generateImages(themes: string[]): Promise<Image[]> {
 
 - API functions have 60-second timeout limit (Vercel serverless constraint)
 - Keywords are processed in batches of 3 to avoid rate limits
-- Image generation uses parallel requests (4-6 images simultaneously)
-- Pipeline orchestration should support checkpoint/resume for long-running workflows
-- Consider using Vercel Cron Jobs for background tasks (ranking tracking)
+- Image generation uses parallel requests (4-6 images simultaneously) via Promise.all
+- DataForSEO API calls should be cached when possible to reduce costs
+- Phase 3 & 4 of workshop run in parallel for optimal performance
 
 ### Architecture Considerations
 
-- Multi-agent system requires careful state management (consider Redux or Zustand for frontend)
-- Pipeline progress should be streamed to frontend via WebSocket or Server-Sent Events
-- Large content drafts may exceed Vercel response size limits (consider pagination or streaming)
-- Image storage: Use Vercel Blob or external CDN (Cloudflare R2, AWS S3)
+- Unified `/api/seo-agent` endpoint handles multiple modes (keyword_mining, batch_translation, deep_dive)
+- 4-phase workshop approach is implemented as sequential + parallel execution (Phase 1 → Phase 2 → Parallel[Phase 3, Phase 4])
+- Content drafts and images are auto-archived to database after generation
+- Large content responses are handled via direct database storage with reference IDs
 
 ### Security & Validation
 
@@ -575,19 +515,42 @@ export async function generateImages(themes: string[]): Promise<Image[]> {
 - **Testing**: Test each agent independently before integrating into pipeline
 - **Monitoring**: Add error tracking (Sentry) and analytics (Vercel Analytics)
 
-### Phase 2 Implementation Priorities
+### Implementation Priorities
 
-1. **Priority 1**: Agent system core (4 agents + orchestrator)
-2. **Priority 2**: Content pipeline (8 steps)
-3. **Priority 3**: Database expansion (new tables)
-4. **Priority 4**: Frontend refactoring (modularize App.tsx)
-5. **Priority 5**: Publication integrations (WordPress, Medium, Ghost)
-6. **Priority 6**: Ranking tracking system
-7. **Priority 7**: Performance optimization and monitoring
+**Current Status**:
+- ✅ **Completed**: Keyword Mining (挖词) - Both Blue Ocean and Website Audit modes
+- ✅ **Completed**: Content Generation (图文) - 4-phase workshop with all agents
+- ❌ **Not Completed**: Publication System (发布) - Fast/slow knife strategy
+
+**Next Priorities**:
+1. **Priority 1**: Publication automation system
+   - Read the Docs integration and automated deployment
+   - Fast/slow knife URL inheritance mechanism (7-14 day monitoring)
+   - Internal link structure automation (single-direction funnel)
+   - Winner selection and 301/Canonical inheritance
+2. **Priority 2**: Platform carrier integrations
+   - GitHub Pages, GitLab Pages automation
+   - Cloudflare Pages, Netlify, Vercel deployment
+3. **Priority 3**: Ranking tracking and analytics
+   - Google SERP position monitoring
+   - AI search engine citation tracking (ChatGPT, Claude, Perplexity)
+   - Winner/loser identification automation
+4. **Priority 4**: Website Data & Task Dashboard (Low priority)
+   - Full metrics overview and ranking distribution
+   - Multi-task parallel execution monitoring
 
 ### Cost Estimates
 
 - Gemini API: ~$0.001-0.002 per 1K tokens (flash model)
 - Nano Banana 2: $0.05-0.08 per image (4-6 images per article = $0.20-0.48)
+- DataForSEO: Variable pricing based on API calls (keyword data, SERP analysis)
+- Firecrawl: Variable pricing based on pages crawled (Website Audit mode)
 - Vercel Serverless: Free tier generous, paid for high traffic
-- Total per article: ~$0.50-1.00 in AI costs (estimated)
+- Total per article: ~$0.50-1.50 in AI costs (estimated, including data sources)
+
+### Additional Resources
+
+For detailed implementation strategies, see:
+- `docs/AI + PSEO Agent：自动化搜索流量基础设施白皮书.md` - Complete product vision and architecture
+- `docs/NICHEDIGGER内容发布策略(3).md` - Fast/slow knife publication strategy and internal linking
+- `docs/Read the Docs 自动化发布 SOP.md` - Step-by-step Read the Docs deployment guide

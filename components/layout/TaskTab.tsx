@@ -78,6 +78,7 @@ export const TaskTab: React.FC<TaskTabProps> = ({
             : "bg-black/40 border-emerald-500/10 text-slate-400 hover:bg-black/60 hover:text-emerald-400"
         }
       `}
+      title={task.name}
     >
       <TaskIcon
         className={`w-3.5 h-3.5 flex-shrink-0 ${
@@ -93,11 +94,11 @@ export const TaskTab: React.FC<TaskTabProps> = ({
           onBlur={handleSaveName}
           onKeyDown={handleKeyDown}
           autoFocus
-          className="flex-1 bg-transparent outline-none text-xs font-medium border-b border-emerald-500/50 text-white"
+          className="flex-1 min-w-0 bg-transparent outline-none text-xs font-medium border-b border-emerald-500/50 text-white"
           onClick={(e) => e.stopPropagation()}
         />
       ) : (
-        <span className="flex-1 text-xs font-medium truncate">{task.name}</span>
+        <span className="flex-1 text-xs font-medium truncate min-w-0" title={task.name}>{task.name}</span>
       )}
 
       {isRunning && (
@@ -113,6 +114,7 @@ export const TaskTab: React.FC<TaskTabProps> = ({
           p-0.5 rounded hover:bg-red-500/20 transition-colors flex-shrink-0
           ${isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"}
         `}
+        title={uiLanguage === "zh" ? "关闭任务" : "Close task"}
       >
         <X className="w-3 h-3 text-slate-400 hover:text-red-400" />
       </button>

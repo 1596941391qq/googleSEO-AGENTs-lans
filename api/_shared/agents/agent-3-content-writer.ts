@@ -25,6 +25,16 @@ export interface ContentGenerationResult {
   };
   article_body?: string;
   logic_check?: string;
+  geo_score?: {
+    title_standard?: string;
+    summary?: string;
+    information_gain?: string;
+    format_engineering?: string;
+    entity_engineering?: string;
+    comparison?: string;
+    faq?: string;
+    total_score?: string;
+  };
   appliedOptimizations?: {
     keywords?: Array<{
       position?: string;
@@ -45,6 +55,14 @@ function extractJSON(text: string): string {
     return jsonMatch[1];
   }
   return text.trim();
+}
+
+// Processed promoted website with scraped content
+export interface ProcessedPromotedWebsite {
+  url: string;
+  content: string;
+  screenshot?: string;
+  title?: string;
 }
 
 /**
@@ -80,6 +98,7 @@ export async function generateContent(
   },
   promotedWebsites?: string[],
   promotionIntensity?: "natural" | "strong",
+  processedPromotedWebsites?: ProcessedPromotedWebsite[],
   onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
   onProgress?: (message: string) => void
 ): Promise<ContentGenerationResult> {
@@ -239,6 +258,48 @@ IMPORTANT: While the user provided this reference URL, the core theme of the art
       }
     }
 
+    // 添加推广网站的抓取内容（如果有）
+    let promotedWebsitesContext = '';
+    if (processedPromotedWebsites && processedPromotedWebsites.length > 0) {
+      const sitesWithContent = processedPromotedWebsites.filter(p => p.content && p.content.trim().length > 0);
+      if (sitesWithContent.length > 0) {
+        if (contentLanguage === 'zh') {
+          promotedWebsitesContext = `
+
+### 推广网站详细内容
+以下是用户希望在文章中推广的网站及其抓取的内容。请根据这些内容在文章中自然地介绍和推荐这些网站：
+
+${sitesWithContent.map((site, index) => {
+  const siteContent = site.content.length > 3000 ? site.content.substring(0, 3000) + '...' : site.content;
+  return `**网站 ${index + 1}: ${site.title || site.url}**
+URL: ${site.url}
+内容摘要：
+${siteContent}
+`;
+}).join('\n---\n')}
+
+请在文章中自然地融入对这些网站的介绍和推荐，基于它们的实际内容和功能来描述。`;
+        } else {
+          promotedWebsitesContext = `
+
+### Promoted Websites Content
+Below are the websites the user wants to promote in the article, along with their scraped content. Please naturally introduce and recommend these websites based on this content:
+
+${sitesWithContent.map((site, index) => {
+  const siteContent = site.content.length > 3000 ? site.content.substring(0, 3000) + '...' : site.content;
+  return `**Website ${index + 1}: ${site.title || site.url}**
+URL: ${site.url}
+Content Summary:
+${siteContent}
+`;
+}).join('\n---\n')}
+
+Please naturally integrate introductions and recommendations for these websites in the article, describing them based on their actual content and features.`;
+        }
+        console.log(`[Content Writer] Added ${sitesWithContent.length} promoted websites content to context`);
+      }
+    }
+
     // 构建生成提示
     const marketLabel = targetMarket === 'global'
       ? (contentLanguage === 'zh' ? '全球市场' : 'Global Market')
@@ -258,12 +319,15 @@ IMPORTANT: While the user provided this reference URL, the core theme of the art
     }
 
     // 使用 prompts/index.ts 中的 prompt 模板
+    // 将推广网站内容添加到 referenceContext 中
+    const fullReferenceContext = referenceContext + promotedWebsitesContext;
+    
     const prompt = getContentWriterPrompt(contentLanguage, {
       marketLabel,
       seoContext,
       searchPreferencesContext,
       competitorContext,
-      referenceContext,
+      referenceContext: fullReferenceContext,
       wordCountHint,
       promotedWebsites,
       promotionIntensity
@@ -301,28 +365,97 @@ IMPORTANT: While the user provided this reference URL, the core theme of the art
       throw new Error(`Failed to call Gemini API: ${apiError.message}`);
     }
 
-    // 直接返回 Markdown 内容，不需要 JSON 解析
-    const markdownContent = response?.text || '';
+    // 获取原始响应
+    const rawResponse = response?.text || '';
 
-    if (!markdownContent || markdownContent.length === 0) {
+    if (!rawResponse || rawResponse.length === 0) {
       console.error('[Content Writer] Empty response from API');
       throw new Error('Empty response from Gemini API');
     }
 
-    // 从 Markdown 中提取标题（第一个 # 标题）
-    const titleMatch = markdownContent.match(/^#\s+(.+)$/m);
-    const extractedTitle = titleMatch ? titleMatch[1].trim() : '';
+    console.log('[Content Writer] Raw response preview:', rawResponse.substring(0, 200));
+    console.log('[Content Writer] Response starts with:', rawResponse.trim().charAt(0));
+
+    // 尝试解析 JSON 格式的响应（AI 有时会返回 JSON 而不是纯 Markdown）
+    let markdownContent = '';
+    let extractedTitle = '';
+    let seoMeta: { title?: string; description?: string } | undefined;
+    let geoScore: any = undefined;
+    let logicCheck: string | undefined;
+
+    // 清理可能的 markdown 代码块包装
+    let cleanedResponse = rawResponse.trim();
+    if (cleanedResponse.startsWith('```json')) {
+      cleanedResponse = cleanedResponse.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+    } else if (cleanedResponse.startsWith('```')) {
+      cleanedResponse = cleanedResponse.replace(/^```\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+    }
+
+    // 检查是否是 JSON 格式
+    if (cleanedResponse.startsWith('{') && cleanedResponse.endsWith('}')) {
+      try {
+        const jsonData = JSON.parse(cleanedResponse);
+        console.log('[Content Writer] Detected JSON response, keys:', Object.keys(jsonData));
+        
+        // 提取 article_body 或 content 或 markdown
+        markdownContent = jsonData.article_body || jsonData.content || jsonData.markdown || '';
+        
+        // 提取标题（优先从 seo_meta.title，然后从 title 字段）
+        if (jsonData.seo_meta?.title) {
+          extractedTitle = jsonData.seo_meta.title;
+          seoMeta = jsonData.seo_meta;
+        } else if (jsonData.title) {
+          extractedTitle = jsonData.title;
+        }
+        
+        // 提取其他元数据
+        if (jsonData.geo_score) {
+          geoScore = jsonData.geo_score;
+        }
+        if (jsonData.logic_check) {
+          logicCheck = jsonData.logic_check;
+        }
+        
+        console.log('[Content Writer] Extracted from JSON - title:', extractedTitle?.substring(0, 50), 'content length:', markdownContent?.length);
+      } catch (e) {
+        console.log('[Content Writer] JSON parse failed, treating as Markdown');
+        markdownContent = rawResponse;
+      }
+    } else {
+      // 纯 Markdown 格式
+      console.log('[Content Writer] Detected Markdown response');
+      markdownContent = rawResponse;
+    }
+
+    // 如果 markdownContent 仍然是空的，使用原始响应
+    if (!markdownContent || markdownContent.trim().length === 0) {
+      console.warn('[Content Writer] No content extracted, using raw response');
+      markdownContent = rawResponse;
+    }
+
+    // 从 Markdown 中提取标题（第一个 # 标题）- 仅当还没有提取到标题时
+    if (!extractedTitle) {
+      const titleMatch = markdownContent.match(/^#\s+(.+)$/m);
+      extractedTitle = titleMatch ? titleMatch[1].trim() : '';
+      console.log('[Content Writer] Title from Markdown H1:', extractedTitle?.substring(0, 50));
+    }
 
     // 移除 H1 标题后的内容（用于正文部分）
+    const titleMatch = markdownContent.match(/^#\s+.+$/m);
     const contentBody = titleMatch
       ? markdownContent.replace(/^#\s+.+$/m, '').trim()
       : markdownContent;
+
+    console.log('[Content Writer] Final result - title:', extractedTitle?.substring(0, 50), 'content length:', contentBody?.length);
 
     return {
       markdown: markdownContent,
       content: contentBody,
       article_body: contentBody,
-      title: extractedTitle
+      title: extractedTitle,
+      seo_meta: seoMeta,
+      geo_score: geoScore,
+      logic_check: logicCheck
     };
   } catch (error: any) {
     console.error('Generate Content Error:', error);

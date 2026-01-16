@@ -381,19 +381,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     ? "border-transparent hover:bg-white/[0.02]"
                     : "border-transparent hover:bg-gray-50"
                 )}
-                title={isCollapsed ? task.name : ""}
+                title={isCollapsed ? task.name : task.name}
               >
                 <button
                   onClick={() => onTaskSwitch(task.id)}
                   className={cn(
-                    "flex items-center flex-1",
+                    "flex items-center flex-1 min-w-0",
                     isCollapsed ? "justify-center" : "space-x-3"
                   )}
                 >
                   {getTaskIcon(task)}
                   {!isCollapsed && (
                     <span
-                      className={`text-xs lg:text-sm font-bold truncate ${
+                      className={`text-xs lg:text-sm font-bold truncate min-w-0 ${
                         activeTaskId === task.id
                           ? isDarkTheme
                             ? "text-white"
@@ -402,19 +402,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           ? "text-neutral-400"
                           : "text-gray-600"
                       }`}
+                      title={task.name}
                     >
                       {task.name}
                     </span>
                   )}
                 </button>
                 {!isCollapsed && (
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
                     {activeTaskId === task.id && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] flex-shrink-0" />
                     )}
                     <button
                       onClick={(e) => onTaskDelete(task.id, e)}
-                      className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 ${
+                      className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 ${
                         isDarkTheme
                           ? "text-neutral-500 hover:text-red-400 hover:bg-red-500/10"
                           : "text-gray-400 hover:text-red-500 hover:bg-red-50"

@@ -478,7 +478,8 @@ export async function initPaymentTables() {
 /**
  * 验证字符串是否是有效的 UUID 格式
  */
-function isValidUUID(str: string): boolean {
+export function isValidUUID(str: string): boolean {
+  if (!str || typeof str !== 'string') return false;
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return uuidRegex.test(str);
 }
@@ -2081,7 +2082,7 @@ export async function getKeywordAnalysisCache(
     await initDomainCacheTables();
     
     let query;
-    if (websiteId) {
+    if (websiteId && isValidUUID(websiteId)) {
       query = sql<KeywordAnalysisCache>`
         SELECT * FROM keyword_analysis_cache
         WHERE keyword = ${keyword}
@@ -2129,7 +2130,7 @@ export async function getKeywordAnalysisCacheBatch(
     await initDomainCacheTables();
     
     let query;
-    if (websiteId) {
+    if (websiteId && isValidUUID(websiteId)) {
       query = sql<KeywordAnalysisCache>`
         SELECT * FROM keyword_analysis_cache
         WHERE keyword = ANY(${keywords})
@@ -2185,17 +2186,28 @@ export async function saveKeywordAnalysisCache(
     
     // 先删除可能存在的旧记录（处理唯一约束）
     if (cache.keyword) {
-      const websiteId = cache.website_id || null;
+      let websiteId = cache.website_id;
+      if (websiteId && !isValidUUID(websiteId as string)) {
+        websiteId = null as any;
+      }
+      const finalWebsiteId = websiteId || null;
+
       await sql`
         DELETE FROM keyword_analysis_cache
         WHERE keyword = ${cache.keyword}
           AND location_code = ${cache.location_code || 2840}
           AND search_engine = ${cache.search_engine || 'google'}
           AND (
-            (website_id IS NULL AND (${websiteId}::UUID IS NULL)) OR 
-            (website_id = ${websiteId}::UUID)
+            (website_id IS NULL AND (${finalWebsiteId}::UUID IS NULL)) OR 
+            (website_id = ${finalWebsiteId}::UUID)
           )
       `;
+    }
+    
+    // 验证并清理 website_id
+    let finalInsertWebsiteId = cache.website_id;
+    if (finalInsertWebsiteId && !isValidUUID(finalInsertWebsiteId as string)) {
+      finalInsertWebsiteId = null as any;
     }
     
     // 插入新记录
@@ -2229,7 +2241,7 @@ export async function saveKeywordAnalysisCache(
         data_updated_at,
         cache_expires_at
       ) VALUES (
-        ${cache.website_id || null}::UUID,
+        ${finalInsertWebsiteId || null}::UUID,
         ${cache.keyword},
         ${cache.location_code || 2840},
         ${cache.search_engine || 'google'},

@@ -1,6 +1,6 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { generateVisualArticle } from './_shared/services/visual-article-service.js';
+import { generateVisualArticle, ProcessedPromotedWebsite } from './_shared/services/visual-article-service.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { scrapeWebsite, cleanMarkdown } from './_shared/tools/firecrawl.js';
 
@@ -277,6 +277,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Process promoted websites - scrape content and take screenshots
+    let processedPromotedWebsites: ProcessedPromotedWebsite[] = [];
+
+    if (Array.isArray(promotedWebsites) && promotedWebsites.length > 0) {
+      console.log(`[visual-article] Processing ${promotedWebsites.length} promoted websites for scraping and screenshots`);
+
+      // Process each promoted website in parallel (with limit)
+      const scrapePromises = promotedWebsites.map(async (websiteUrl: string): Promise<ProcessedPromotedWebsite | null> => {
+        if (!websiteUrl || typeof websiteUrl !== 'string') return null;
+
+        const urlToScrape = websiteUrl.trim();
+
+        // Validate URL format
+        try {
+          new URL(urlToScrape);
+        } catch (urlError) {
+          console.warn('[visual-article] Invalid promoted URL format, skipping:', urlToScrape);
+          return null;
+        }
+
+        try {
+          console.log('[visual-article] Scraping promoted website:', urlToScrape);
+          const scrapeResult = await scrapeWebsite(urlToScrape, true); // true = include screenshot
+
+          const result: ProcessedPromotedWebsite = {
+            url: urlToScrape,
+            content: cleanMarkdown(scrapeResult.markdown || '', 10000), // Limit content per site
+          };
+          if (scrapeResult.screenshot) result.screenshot = scrapeResult.screenshot;
+          if (scrapeResult.title) result.title = scrapeResult.title;
+          return result;
+        } catch (error: any) {
+          console.error(`[visual-article] Failed to scrape promoted website ${urlToScrape}:`, error.message);
+          // Return partial result with just the URL
+          return {
+            url: urlToScrape,
+            content: '',
+          };
+        }
+      });
+
+      const results = await Promise.all(scrapePromises);
+      processedPromotedWebsites = results.filter((r): r is ProcessedPromotedWebsite => r !== null);
+
+      console.log(`[visual-article] Successfully processed ${processedPromotedWebsites.length} promoted websites`);
+      console.log('[visual-article] Screenshots captured:', processedPromotedWebsites.filter(p => p.screenshot).length);
+    }
+
     // Set up Server-Sent Events or multi-part like response for streaming
     // For simplicity but effectiveness, we'll use a custom newline-delimited JSON stream
     res.setHeader('Content-Type', 'text/event-stream');
@@ -305,6 +353,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         projectName: (projectName && typeof projectName === 'string') ? projectName : undefined,
         reference: processedReference,
         promotedWebsites: (Array.isArray(promotedWebsites)) ? promotedWebsites : undefined,
+        processedPromotedWebsites: processedPromotedWebsites.length > 0 ? processedPromotedWebsites : undefined,
         promotionIntensity: (promotionIntensity === 'strong' ? 'strong' : 'natural') as 'natural' | 'strong',
         onEvent: (event) => {
           sendEvent({ type: 'event', data: event });

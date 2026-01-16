@@ -24,15 +24,15 @@ const DATAFORSEO_BASE_URL = 'https://api.dataforseo.com/v3';
 /**
  * 将目标语言代码转换为 DataForSEO 的 location_code 和 language_code
  * 
- * 默认使用全球地区（美国 2840），不根据语言代码自动选择地区
+ * 默认根据目标语言自动选择对应的地区（如 ja -> 日本 2384）
  * 
  * @param targetLanguage - 目标语言代码
- * @param useGlobal - 是否使用全球地区（默认 true）
+ * @param useGlobal - 是否使用全球地区（默认 false，根据语言选择对应地区）
  * @returns { locationCode: number, languageCode: string }
  */
 export function getDataForSEOLocationAndLanguage(
   targetLanguage: string,
-  useGlobal: boolean = true // 默认使用全球地区
+  useGlobal: boolean = false // 默认根据语言选择对应地区
 ): { locationCode: number; languageCode: string } {
   // 语言代码映射
   const languageMap: { [key: string]: string } = {
@@ -64,7 +64,7 @@ export function getDataForSEOLocationAndLanguage(
   };
 
   const languageCode = languageMap[targetLanguage] || 'en';
-  // 默认使用全球地区（美国 2840），不根据语言代码自动选择
+  // 根据 useGlobal 参数决定是否使用全球地区（美国 2840）或目标语言对应的地区
   const locationCode = useGlobal ? 2840 : (locationMap[targetLanguage] || 2840);
 
   return { locationCode, languageCode };

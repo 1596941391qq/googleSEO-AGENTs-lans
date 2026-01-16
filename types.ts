@@ -344,6 +344,11 @@ export interface TaskState {
     miningStrategy: 'horizontal' | 'vertical';
     userSuggestion: string;
     logs: LogEntry[];
+    miningConfig?: {
+      industry?: string;
+      additionalSuggestions?: string;
+    };
+    selectedWebsite?: any | null;
     // 存量拓新模式相关字段
     websiteId?: string | null;
     websiteUrl?: string | null;
@@ -375,6 +380,12 @@ export interface TaskState {
     batchCurrentIndex: number;
     batchTotalCount: number;
     logs: LogEntry[];
+    miningMode?: 'blue-ocean' | 'existing-website-audit';
+    miningConfig?: {
+      industry?: string;
+      additionalSuggestions?: string;
+    };
+    batchSelectedWebsite?: any | null;
   };
 
   // Article Generator specific state
@@ -404,6 +415,13 @@ export interface CreateTaskParams {
   seedKeyword?: string; // For mining tasks
   inputKeywords?: string; // For batch tasks
   keyword?: KeywordData; // For deep-dive tasks
+  miningMode?: 'blue-ocean' | 'existing-website-audit';
+  miningConfig?: {
+    industry?: string;
+    additionalSuggestions?: string;
+  };
+  selectedWebsite?: any | null;
+  batchSelectedWebsite?: any | null;
 }
 
 export const STORAGE_KEYS = {
@@ -419,9 +437,12 @@ export interface AppState {
   taskManager: TaskManagerState;
 
   step: 'input' | 'mining' | 'results' | 'batch-analyzing' | 'batch-results' | 'deep-dive-analyzing' | 'deep-dive-results' | 'workflow-config' | 'article-generator' | 'content-generation';
+  miningMode: 'blue-ocean' | 'existing-website-audit';
   seedKeyword: string;
   targetLanguage: TargetLanguage;
   targetSearchEngine: 'google' | 'baidu' | 'bing' | 'yandex';
+  selectedWebsite: any | null;
+  batchSelectedWebsite: any | null;
   keywords: KeywordData[];
   error: string | null;
 

@@ -565,8 +565,11 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                                           )}
                                         >
                                           $
-                                          {item.serankingData.cpc?.toFixed(2) ||
-                                            "N/A"}
+                                          {item.serankingData.cpc !== undefined
+                                            ? Number(
+                                                item.serankingData.cpc
+                                              ).toFixed(2)
+                                            : "N/A"}
                                         </div>
                                         <div
                                           className={cn(

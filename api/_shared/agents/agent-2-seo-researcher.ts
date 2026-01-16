@@ -11,7 +11,7 @@ import { getSEOResearcherPrompt, DEFAULT_SERP_ANALYSIS } from '../../../services
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
 import { SearchEngine } from '../tools/dataforseo.js';
 import { getDomainOverview, getBatchDomainOverview } from '../tools/dataforseo-domain.js';
-import { sql } from '../../lib/database.js';
+import { sql, isValidUUID } from '../../lib/database.js';
 
 /**
  * 辅助函数：计算蓝海信号分值 (Workflow 1)
@@ -1042,12 +1042,12 @@ export const analyzeRankingProbability = async (
   let siteDR = websiteDR;
   if (websiteUrl && siteDR === undefined) {
     try {
-      if (websiteId) {
+      if (websiteId && isValidUUID(websiteId)) {
         console.log(`[Agent 2] Checking cache for target website DR: ${websiteId}`);
         const cacheResult = await sql`
           SELECT backlinks_info
           FROM domain_overview_cache
-          WHERE website_id = ${websiteId}
+          WHERE website_id = ${websiteId}::UUID
           ORDER BY data_date DESC
           LIMIT 1
         `;
@@ -1841,8 +1841,8 @@ CRITICAL:
       console.log(`[Agent 2] Saving ${results.length} newly analyzed keywords to cache...`);
 
       for (const keyword of results) {
-        // 1. 保存网站特定缓存（如果有 websiteId）
-        if (websiteId) {
+        // 1. 保存网站特定缓存（如果有 websiteId 且是有效 UUID）
+        if (websiteId && isValidUUID(websiteId)) {
           await saveKeywordAnalysisCache({
             website_id: websiteId as any,
             keyword: keyword.keyword,

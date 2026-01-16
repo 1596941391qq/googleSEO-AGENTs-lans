@@ -1726,9 +1726,16 @@ const AgentStream = ({
                               }`}
                             >
                               $
-                              {(
-                                kw.serankingData?.cpc ?? kw.dataForSEOData?.cpc
-                              )?.toFixed(2) || "N/A"}
+                              {(() => {
+                                const val =
+                                  kw.serankingData?.cpc ??
+                                  kw.dataForSEOData?.cpc;
+                                return typeof val === "number"
+                                  ? val.toFixed(2)
+                                  : val && !isNaN(Number(val))
+                                  ? Number(val).toFixed(2)
+                                  : "N/A";
+                              })()}
                             </div>
                           </div>
                           <div
@@ -1754,10 +1761,16 @@ const AgentStream = ({
                                   : "text-emerald-600"
                               }`}
                             >
-                              {(
-                                kw.serankingData?.competition ??
-                                kw.dataForSEOData?.competition
-                              )?.toFixed(2) || "N/A"}
+                              {(() => {
+                                const val =
+                                  kw.serankingData?.competition ??
+                                  kw.dataForSEOData?.competition;
+                                return typeof val === "number"
+                                  ? val.toFixed(2)
+                                  : val && !isNaN(Number(val))
+                                  ? Number(val).toFixed(2)
+                                  : "N/A";
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -2094,7 +2107,14 @@ const BatchAnalysisStream = ({
                               : "text-emerald-600"
                           }`}
                         >
-                          ${thought.serankingData.cpc?.toFixed(2) || "N/A"}
+                          {(() => {
+                            const val = thought.serankingData.cpc;
+                            return typeof val === "number"
+                              ? `$${val.toFixed(2)}`
+                              : val && !isNaN(Number(val))
+                              ? `$${Number(val).toFixed(2)}`
+                              : "N/A";
+                          })()}
                         </div>
                       </div>
                       <div
@@ -2563,7 +2583,7 @@ const DeepDiveAnalysisStream = ({
                               : "text-emerald-600"
                           }`}
                         >
-                          ${thought.data.serankingData.cpc.toFixed(2)}
+                          ${Number(thought.data.serankingData.cpc).toFixed(2)}
                         </div>
                       </div>
                     )}
@@ -2589,7 +2609,14 @@ const DeepDiveAnalysisStream = ({
                               : "text-emerald-600"
                           }`}
                         >
-                          {thought.data.serankingData.competition.toFixed(2)}
+                          {(() => {
+                            const val = thought.data.serankingData.competition;
+                            return typeof val === "number"
+                              ? val.toFixed(2)
+                              : val && !isNaN(Number(val))
+                              ? Number(val).toFixed(2)
+                              : "N/A";
+                          })()}
                         </div>
                       </div>
                     )}
@@ -3190,9 +3217,12 @@ export default function App() {
     },
 
     step: "content-generation",
+    miningMode: "blue-ocean",
     seedKeyword: "",
     targetLanguage: "en",
     targetSearchEngine: "google",
+    selectedWebsite: null,
+    batchSelectedWebsite: null,
     keywords: [],
     error: null,
     isMining: false,
@@ -3295,14 +3325,20 @@ export default function App() {
   const [showTaskMenu, setShowTaskMenu] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true); // Theme toggle state
   const [showMiningGuide, setShowMiningGuide] = useState(false); // 挖词引导模态框
-  const [selectedWebsite, setSelectedWebsite] = useState<any | null>(null); // Selected website for input page
+  // 选择的网站
+  const selectedWebsite = state.selectedWebsite;
+  const setSelectedWebsite = (website: any | null) => {
+    setState((prev) => ({ ...prev, selectedWebsite: website }));
+  };
   const [manualWebsiteUrl, setManualWebsiteUrl] = useState(""); // Manual website URL input
   const [urlValidationStatus, setUrlValidationStatus] = useState<
     "idle" | "valid" | "invalid" | "validating"
   >("idle"); // URL validation status
-  const [miningMode, setMiningMode] = useState<
-    "blue-ocean" | "existing-website-audit"
-  >("blue-ocean"); // 挖掘模式
+  // 挖掘模式
+  const miningMode = state.miningMode;
+  const setMiningMode = (mode: "blue-ocean" | "existing-website-audit") => {
+    setState((prev) => ({ ...prev, miningMode: mode }));
+  };
   const miningModeInitializedRef = useRef(false); // 标记挖掘模式是否已初始化
   const urlValidationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showWebsiteDropdown, setShowWebsiteDropdown] = useState(false); // Website dropdown visibility
@@ -3319,9 +3355,11 @@ export default function App() {
     } | null;
   } | null>(null); // Website list data
   // Batch mode website selection state
-  const [batchSelectedWebsite, setBatchSelectedWebsite] = useState<any | null>(
-    null
-  ); // Selected website for batch mode
+  // 批量选择的网站
+  const batchSelectedWebsite = state.batchSelectedWebsite;
+  const setBatchSelectedWebsite = (website: any | null) => {
+    setState((prev) => ({ ...prev, batchSelectedWebsite: website }));
+  };
   const [batchManualWebsiteUrl, setBatchManualWebsiteUrl] = useState(""); // Manual website URL input for batch mode
   const [batchUrlValidationStatus, setBatchUrlValidationStatus] = useState<
     "idle" | "valid" | "invalid" | "validating"
@@ -4856,6 +4894,9 @@ export default function App() {
           wordsPerRound: 10,
           miningStrategy: "horizontal",
           userSuggestion: "",
+          miningConfig: params.miningConfig,
+          miningMode: params.miningMode || "blue-ocean",
+          selectedWebsite: params.selectedWebsite,
           logs: [],
         };
         break;
@@ -4866,6 +4907,9 @@ export default function App() {
           batchThoughts: [],
           batchCurrentIndex: 0,
           batchTotalCount: 0,
+          miningMode: params.miningMode || "blue-ocean",
+          miningConfig: params.miningConfig,
+          batchSelectedWebsite: params.batchSelectedWebsite,
           logs: [],
         };
         break;
@@ -4934,12 +4978,15 @@ export default function App() {
             wordsPerRound: currentState.wordsPerRound,
             miningStrategy: currentState.miningStrategy,
             userSuggestion: currentState.userSuggestion,
+            miningConfig: currentState.miningConfig,
             logs: currentState.logs,
             // 保留网站信息和分析数据
             websiteId: updated.miningState.websiteId,
             websiteUrl: updated.miningState.websiteUrl,
             websiteDomain: updated.miningState.websiteDomain,
-            miningMode: updated.miningState.miningMode,
+            miningMode: currentState.miningMode,
+            miningConfig: currentState.miningConfig,
+            selectedWebsite: currentState.selectedWebsite,
             websiteAnalysis: updated.miningState.websiteAnalysis,
             competitorAnalysis: updated.miningState.competitorAnalysis,
           };
@@ -4954,6 +5001,9 @@ export default function App() {
             batchThoughts: currentState.batchThoughts,
             batchCurrentIndex: currentState.batchCurrentIndex,
             batchTotalCount: currentState.batchTotalCount,
+            miningMode: currentState.miningMode,
+            miningConfig: currentState.miningConfig,
+            batchSelectedWebsite: currentState.batchSelectedWebsite,
             logs: currentState.logs,
           };
         }
@@ -5010,6 +5060,9 @@ export default function App() {
             wordsPerRound: task.miningState?.wordsPerRound || 10,
             miningStrategy: task.miningState?.miningStrategy || "horizontal",
             userSuggestion: task.miningState?.userSuggestion || "",
+            miningConfig: task.miningState?.miningConfig,
+            miningMode: task.miningState?.miningMode || "blue-ocean",
+            selectedWebsite: task.miningState?.selectedWebsite || null,
             logs: task.miningState?.logs || [],
             // Clear other task types' state
             batchKeywords: [],
@@ -5043,6 +5096,9 @@ export default function App() {
             ...prev,
             ...baseState,
             step: batchStep,
+            miningMode: task.batchState?.miningMode || "blue-ocean",
+            miningConfig: task.batchState?.miningConfig,
+            batchSelectedWebsite: task.batchState?.batchSelectedWebsite || null,
             batchInputKeywords: task.batchState?.batchInputKeywords || "",
             batchKeywords: task.batchState?.batchKeywords || [],
             batchThoughts: task.batchState?.batchThoughts || [],
@@ -5065,6 +5121,8 @@ export default function App() {
             isDeepDiving: false,
             deepDiveProgress: 0,
             deepDiveCurrentStep: "",
+            miningConfig: undefined,
+            miningMode: "blue-ocean",
           };
         case "article-generator":
           const articleState =
@@ -5086,6 +5144,8 @@ export default function App() {
                 ? false
                 : articleState?.isGenerating || false,
             },
+            miningConfig: undefined,
+            miningMode: "blue-ocean",
             // Clear other task types' state
             seedKeyword: "",
             keywords: [],
@@ -5384,6 +5444,9 @@ export default function App() {
             miningStrategy:
               targetTask.miningState?.miningStrategy || "horizontal",
             userSuggestion: targetTask.miningState?.userSuggestion || "",
+            miningConfig: targetTask.miningState?.miningConfig,
+            miningMode: targetTask.miningState?.miningMode || "blue-ocean",
+            selectedWebsite: targetTask.miningState?.selectedWebsite || null,
             logs: targetTask.miningState?.logs || [],
             // Clear other task types
             batchKeywords: [],
@@ -5425,6 +5488,10 @@ export default function App() {
             ...prev,
             ...baseState,
             step: batchStep,
+            miningMode: targetTask.batchState?.miningMode || "blue-ocean",
+            miningConfig: targetTask.batchState?.miningConfig,
+            batchSelectedWebsite:
+              targetTask.batchState?.batchSelectedWebsite || null,
             batchInputKeywords: targetTask.batchState?.batchInputKeywords || "",
             batchKeywords: targetTask.batchState?.batchKeywords || [],
             batchThoughts: targetTask.batchState?.batchThoughts || [],
@@ -5475,6 +5542,8 @@ export default function App() {
             deepDiveProgress: targetTask.deepDiveState?.deepDiveProgress || 0,
             deepDiveCurrentStep:
               targetTask.deepDiveState?.deepDiveCurrentStep || "",
+            miningConfig: undefined,
+            miningMode: "blue-ocean",
             logs: targetTask.deepDiveState?.logs || [],
             // Clear other task types
             seedKeyword: "",
@@ -5522,6 +5591,8 @@ export default function App() {
                 ? false
                 : articleStateForTask?.isGenerating || false,
             },
+            miningConfig: undefined,
+            miningMode: "blue-ocean",
             // Clear other task types
             seedKeyword: "",
             keywords: [],
@@ -6092,6 +6163,9 @@ export default function App() {
       type: "mining",
       seedKeyword: state.seedKeyword,
       targetLanguage: state.targetLanguage,
+      miningMode: state.miningMode,
+      miningConfig: state.miningConfig,
+      selectedWebsite: state.selectedWebsite,
       name: taskName,
     });
     // Wait for task creation to complete
@@ -6172,6 +6246,9 @@ export default function App() {
       type: "mining",
       seedKeyword: `Website Audit: ${websiteToUse.url}`,
       targetLanguage: state.targetLanguage,
+      miningMode: state.miningMode,
+      miningConfig: state.miningConfig,
+      selectedWebsite: state.selectedWebsite,
       name: taskName,
     });
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -6695,14 +6772,37 @@ export default function App() {
       let latestMiningStrategy = state.miningStrategy;
       let latestUserSuggestion = state.userSuggestion;
       let latestMiningConfig = state.miningConfig;
+      let currentSeedKeyword = state.seedKeyword;
+      let currentTargetLanguage = state.targetLanguage;
+      let currentUiLanguage = state.uiLanguage;
 
       // Get latest state through setState callback to ensure we have the most recent values
       await new Promise<void>((resolve) => {
         setState((prev) => {
-          latestWordsPerRound = prev.wordsPerRound;
-          latestMiningStrategy = prev.miningStrategy;
-          latestUserSuggestion = prev.userSuggestion;
-          latestMiningConfig = prev.miningConfig;
+          // Find this specific task to get its latest settings
+          const currentTask = prev.taskManager.tasks.find(
+            (t) => t.id === taskId
+          );
+          if (currentTask && currentTask.miningState) {
+            currentSeedKeyword =
+              currentTask.miningState.seedKeyword || prev.seedKeyword;
+            currentTargetLanguage =
+              currentTask.targetLanguage || prev.targetLanguage;
+            latestWordsPerRound =
+              currentTask.miningState.wordsPerRound || prev.wordsPerRound;
+            latestMiningStrategy =
+              currentTask.miningState.miningStrategy || prev.miningStrategy;
+            latestUserSuggestion =
+              currentTask.miningState.userSuggestion || prev.userSuggestion;
+            latestMiningConfig =
+              currentTask.miningState.miningConfig || prev.miningConfig;
+          } else {
+            latestWordsPerRound = prev.wordsPerRound;
+            latestMiningStrategy = prev.miningStrategy;
+            latestUserSuggestion = prev.userSuggestion;
+            latestMiningConfig = prev.miningConfig;
+          }
+          currentUiLanguage = prev.uiLanguage;
           resolve();
           return prev; // Don't actually change state, just read latest values
         });
@@ -6711,9 +6811,7 @@ export default function App() {
       // Dynamic thought message based on mining strategy
       let thoughtMessage = "";
       if (currentRound === 1) {
-        thoughtMessage = `Initial expansion of "${
-          state.seedKeyword
-        }" in ${state.targetLanguage.toUpperCase()}.`;
+        thoughtMessage = `Initial expansion of "${currentSeedKeyword}" in ${currentTargetLanguage.toUpperCase()}.`;
       } else {
         if (latestMiningStrategy === "horizontal") {
           thoughtMessage = `Round ${currentRound}: Lateral thinking mode. Exploring semantically distant concepts.`;
@@ -6729,31 +6827,31 @@ export default function App() {
         // Update thinking status - AI is generating keywords
         setThinkingStatus(
           true,
-          state.uiLanguage === "zh"
-            ? `🧠 AI 正在挖掘 "${state.seedKeyword}" 相关的词`
-            : `🧠 AI is mining keywords related to "${state.seedKeyword}"`,
+          currentUiLanguage === "zh"
+            ? `🧠 AI 正在挖掘 "${currentSeedKeyword}" 相关的词`
+            : `🧠 AI is mining keywords related to "${currentSeedKeyword}"`,
           "generating",
           "ai-generating"
         );
 
         addLog(
           `🤖 ${
-            state.uiLanguage === "zh" ? "AI 正在思考..." : "AI is thinking..."
+            currentUiLanguage === "zh" ? "AI 正在思考..." : "AI is thinking..."
           }`,
           "info",
           taskId
         );
 
         const result = await generateKeywords(
-          state.seedKeyword,
-          state.targetLanguage,
+          currentSeedKeyword,
+          currentTargetLanguage,
           getWorkflowPrompt("mining", "mining-gen", state.genPrompt),
           allKeywordsRef.current,
           currentRound,
           latestWordsPerRound,
           latestMiningStrategy,
           latestUserSuggestion,
-          state.uiLanguage,
+          currentUiLanguage,
           latestMiningConfig?.industry,
           latestMiningConfig?.additionalSuggestions
         );
@@ -6830,7 +6928,7 @@ export default function App() {
         // Clear generating status and switch to keyword research API
         setThinkingStatus(
           true,
-          state.uiLanguage === "zh"
+          currentUiLanguage === "zh"
             ? `🔍 AI正在分析 ${generatedKeywords.length} 个关键词的数据`
             : `🔍 AI is analyzing data for ${generatedKeywords.length} keywords`,
           "analyzing",
@@ -6844,7 +6942,7 @@ export default function App() {
         );
         addLog(
           `🔍 ${
-            state.uiLanguage === "zh"
+            currentUiLanguage === "zh"
               ? "正在分析搜索引擎结果页面 (SERP) 估算排名概率..."
               : "Analyzing Search Engine Results Page (SERP) to estimate ranking probability..."
           }`,
@@ -6854,7 +6952,7 @@ export default function App() {
 
         // Batch analyze all keywords at once (API will batch fetch keyword research data internally)
         addLog(
-          state.uiLanguage === "zh"
+          currentUiLanguage === "zh"
             ? `🔍 批量分析 ${generatedKeywords.length} 个关键词（API 将批量获取研究数据）...`
             : `🔍 Batch analyzing ${generatedKeywords.length} keywords (API will batch fetch research data)...`,
           "info",
@@ -6863,7 +6961,7 @@ export default function App() {
 
         setThinkingStatus(
           true,
-          state.uiLanguage === "zh"
+          currentUiLanguage === "zh"
             ? `🔍 AI正在分析 ${generatedKeywords.length} 个关键词...`
             : `🔍 AI is analyzing ${generatedKeywords.length} keywords...`,
           "analyzing",
@@ -6882,8 +6980,8 @@ export default function App() {
           analyzedBatch = await analyzeRankingProbability(
             generatedKeywords, // Pass all keywords at once
             getWorkflowPrompt("mining", "mining-analyze", state.analyzePrompt),
-            state.uiLanguage,
-            state.targetLanguage,
+            currentUiLanguage,
+            currentTargetLanguage,
             selectedWebsite?.domain || undefined,
             websiteDRValue,
             state.targetSearchEngine,
@@ -8853,6 +8951,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       type: "batch",
       inputKeywords: effectiveBatchInput,
       targetLanguage: state.targetLanguage,
+      miningMode: state.miningMode,
+      miningConfig: state.miningConfig,
+      batchSelectedWebsite: state.batchSelectedWebsite,
       name: taskName,
     });
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -8896,27 +8997,52 @@ Please generate keywords based on the opportunities and keyword suggestions ment
   ) => {
     try {
       const allKeywords: KeywordData[] = [];
+
+      // Capture current state values to prevent issues with switching tasks
+      let currentTargetLanguage = state.targetLanguage;
+      let currentTargetSearchEngine = state.targetSearchEngine;
+      let currentUiLanguage = state.uiLanguage;
+      let currentMiningMode = state.miningMode;
+      let currentMiningConfig = state.miningConfig;
+
+      // Get latest values from task manager if possible
+      await new Promise<void>((resolve) => {
+        setState((prev) => {
+          const task = prev.taskManager.tasks.find((t) => t.id === taskId);
+          if (task) {
+            currentTargetLanguage = task.targetLanguage || prev.targetLanguage;
+            if (task.batchState) {
+              currentMiningMode = task.batchState.miningMode || prev.miningMode;
+              currentMiningConfig =
+                task.batchState.miningConfig || prev.miningConfig;
+            }
+          }
+          resolve();
+          return prev;
+        });
+      });
+
       let systemInstruction = getWorkflowPrompt(
         "batch",
         "batch-analyze",
         state.analyzePrompt
       );
 
-      // 如果是跨市场洞察模式且存在精确行业配置，将其添加到 systemInstruction
-      if (miningMode === "existing-website-audit" && state.miningConfig) {
+      // 如果存在精确行业配置，将其添加到 systemInstruction
+      if (currentMiningConfig) {
         const industryInfo: string[] = [];
-        if (state.miningConfig.industry) {
+        if (currentMiningConfig.industry) {
           industryInfo.push(
-            state.uiLanguage === "zh"
-              ? `目标行业: ${state.miningConfig.industry}`
-              : `Target Industry: ${state.miningConfig.industry}`
+            currentUiLanguage === "zh"
+              ? `目标行业: ${currentMiningConfig.industry}`
+              : `Target Industry: ${currentMiningConfig.industry}`
           );
         }
-        if (state.miningConfig.additionalSuggestions) {
+        if (currentMiningConfig.additionalSuggestions) {
           industryInfo.push(
-            state.uiLanguage === "zh"
-              ? `额外建议: ${state.miningConfig.additionalSuggestions}`
-              : `Additional Suggestions: ${state.miningConfig.additionalSuggestions}`
+            currentUiLanguage === "zh"
+              ? `额外建议: ${currentMiningConfig.additionalSuggestions}`
+              : `Additional Suggestions: ${currentMiningConfig.additionalSuggestions}`
           );
         }
         if (industryInfo.length > 0) {
@@ -8929,7 +9055,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       // 存量拓新模式 + 从网站获取的关键词：使用批量API，传递 keywordsFromAudit 参数（跳过翻译）
       if (keywordsFromAudit && keywordsFromAudit.length > 0) {
         addLog(
-          state.uiLanguage === "zh"
+          currentUiLanguage === "zh"
             ? `使用批量API分析 ${keywordsFromAudit.length} 个网站关键词（跳过翻译）...`
             : `Using batch API to analyze ${keywordsFromAudit.length} website keywords (skipping translation)...`,
           "info",
@@ -8945,7 +9071,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         // 调用批量API
         setThinkingStatus(
           true,
-          state.uiLanguage === "zh"
+          currentUiLanguage === "zh"
             ? `🌍 正在批量分析 ${keywordsFromAudit.length} 个网站关键词...`
             : `🌍 Batch analyzing ${keywordsFromAudit.length} website keywords...`,
           "analyzing"
@@ -8954,10 +9080,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         try {
           const batchResult = await batchTranslateAndAnalyze(
             undefined, // keywords (不使用，因为使用 keywordsFromAudit)
-            state.targetLanguage,
+            currentTargetLanguage,
             systemInstruction,
-            state.uiLanguage,
-            state.targetSearchEngine,
+            currentUiLanguage,
+            currentTargetSearchEngine,
             batchSelectedWebsite?.domain || undefined,
             batchWebsiteDR,
             keywordsFromAudit // 传递 keywordsFromAudit 参数
@@ -9189,13 +9315,13 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
           const singleResult = await translateAndAnalyzeSingle(
             originalKeyword,
-            state.targetLanguage,
+            currentTargetLanguage,
             systemInstruction,
-            state.uiLanguage,
-            state.targetSearchEngine,
+            currentUiLanguage,
+            currentTargetSearchEngine,
             batchSelectedWebsite?.domain || undefined,
             batchWebsiteDR,
-            miningMode === "existing-website-audit",
+            currentMiningMode === "existing-website-audit",
             undefined, // onRetry - 前端 HTTP 重试回调
             // onProgressLogs - 显示后端 AI 分析过程中的重试/回退信息
             (logs) => {
@@ -14510,9 +14636,12 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                 </div>
                                                 <div className="text-sm font-bold text-emerald-600">
                                                   $
-                                                  {data.serankingData.cpc?.toFixed(
-                                                    2
-                                                  ) || "N/A"}
+                                                  {data.serankingData.cpc !==
+                                                  undefined
+                                                    ? Number(
+                                                        data.serankingData.cpc
+                                                      ).toFixed(2)
+                                                    : "N/A"}
                                                 </div>
                                               </div>
                                               <div className="p-2 bg-slate-50 rounded border border-slate-100">

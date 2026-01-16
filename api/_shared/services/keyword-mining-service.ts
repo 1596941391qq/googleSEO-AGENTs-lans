@@ -7,7 +7,7 @@
  */
 
 import { generateKeywords } from '../agents/agent-1-keyword-mining.js';
-import { fetchDataForSEOData, fetchKeywordData } from '../tools/dataforseo.js';
+import { fetchDataForSEOData, fetchKeywordData, getDataForSEOLocationAndLanguage } from '../tools/dataforseo.js';
 import { analyzeRankingProbability } from '../agents/agent-2-seo-researcher.js';
 import { KeywordData, TargetLanguage } from '../types.js';
 
@@ -91,6 +91,7 @@ export async function generateKeywordsForMining(
  */
 export async function enrichKeywordsWithDataForSEOForMining(
   keywords: KeywordData[],
+  targetLanguage: TargetLanguage = 'en',
   onProgress?: (message: string) => void,
   uiLanguage: 'zh' | 'en' = 'en'
 ): Promise<KeywordData[]> {
@@ -98,7 +99,11 @@ export async function enrichKeywordsWithDataForSEOForMining(
     const keywordStrings = keywords.map(k => k.keyword);
     onProgress?.(uiLanguage === 'zh' ? `📊 正在从 DataForSEO 获取 ${keywords.length} 个关键词的搜索量和难度数据...` : `📊 Fetching volume and difficulty for ${keywords.length} keywords from DataForSEO...`);
 
-    const dataForSEOResults = await fetchKeywordData(keywordStrings, 2840, 'en');
+    // 根据目标语言获取对应的地区和语言代码
+    const { locationCode, languageCode } = getDataForSEOLocationAndLanguage(targetLanguage, false);
+    console.log(`[Keyword Mining Service] Using DataForSEO with location: ${locationCode}, language: ${languageCode} (targetLanguage: ${targetLanguage})`);
+
+    const dataForSEOResults = await fetchKeywordData(keywordStrings, locationCode, languageCode);
 
     // 创建 DataForSEO 数据映射
     const dataForSEOMap = new Map<string, typeof dataForSEOResults[0]>();
@@ -213,9 +218,9 @@ export async function executeKeywordMining(
 
     console.log(`[Keyword Mining Service] Generated ${generatedKeywords.length} keywords`);
 
-    // Step 2: 调用 DataForSEO 工具获取数据
-    onProgress?.(uiLanguage === 'zh' ? `📊 步骤 2: 获取基础 SEO 数据...` : `📊 Step 2: Fetching base SEO data...`);
-    const keywordsWithDataForSEO = await enrichKeywordsWithDataForSEOForMining(generatedKeywords, onProgress, uiLanguage);
+    // Step 2: 调用 DataForSEO 工具获取数据（使用目标市场的语言和地区）
+    onProgress?.(uiLanguage === 'zh' ? `📊 步骤 2: 获取基础 SEO 数据 (${targetLanguage.toUpperCase()} 市场)...` : `📊 Step 2: Fetching base SEO data (${targetLanguage.toUpperCase()} market)...`);
+    const keywordsWithDataForSEO = await enrichKeywordsWithDataForSEOForMining(generatedKeywords, targetLanguage, onProgress, uiLanguage);
     onProgress?.(uiLanguage === 'zh' ? `✅ 基础数据获取完成` : `✅ Base data fetched`);
 
     // Step 3: 使用快速排名分析工具做快速筛选（如果启用）
