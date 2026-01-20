@@ -151,11 +151,13 @@ All API endpoints are in `/api` directory and follow Vercel serverless function 
 
 The following features are described in documentation but not yet implemented:
 
-**Publication System** (See `docs/Read the Docs 自动化发布 SOP.md`):
-- Automated Read the Docs publishing workflow
-- Fast/Slow knife URL inheritance mechanism
-- Internal link structure automation
-- Ranking tracking and winner selection
+**Publication System - RTD via GitHub** (MVP Implemented ✅):
+- ✅ MkDocs + Read the Docs publishing via GitHub API
+- ✅ Fast/Slow knife URL paths (/lab/, /guide/, /compare/, /tool/)
+- ✅ HTML to Markdown conversion
+- ✅ Internal link generation (单向漏斗原则)
+- ⏳ Ranking tracking and winner selection (TODO)
+- ⏳ URL inheritance via 301/Canonical (TODO)
 
 **Website Data & Task Dashboard** (Low priority, incomplete):
 - Website Data: Full metrics overview, ranking distribution, high-value keywords, AI opportunity insights
@@ -196,11 +198,12 @@ POSTGRES_URL=your_postgres_connection_string
 JWT_SECRET=your_jwt_secret_key
 MAIN_APP_URL=http://localhost:3000
 
-# Publication Platforms (Optional)
-WORDPRESS_CLIENT_ID=your_wordpress_client_id
-WORDPRESS_CLIENT_SECRET=your_wordpress_client_secret
-MEDIUM_API_KEY=your_medium_integration_token
-GHOST_ADMIN_API_KEY=your_ghost_admin_api_key
+# Admin Console (PSEO Publishing Pool Management)
+ADMIN_USERNAME=admin                         # Admin 登录用户名
+ADMIN_PASSWORD=your_secure_password          # Admin 登录密码
+
+# Publication Platform Tokens are managed via Admin Console (/admin)
+# No need to configure here - Admin manages token pool in database
 
 # Development mode
 NODE_ENV=development

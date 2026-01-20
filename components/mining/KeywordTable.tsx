@@ -7,6 +7,7 @@ import {
   BrainCircuit,
   TrendingUp,
   Lightbulb,
+  Star,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Badge } from "../ui/badge";
@@ -18,11 +19,13 @@ interface KeywordTableProps {
   expandedRowId: string | null;
   onToggleExpand: (id: string | null) => void;
   onDeepDive: (keyword: KeywordData) => void;
+  onToggleHighPerformer?: (keyword: KeywordData, isHighPerformer: boolean) => void; // 标记高表现词
   isDarkTheme: boolean;
   uiLanguage: UILanguage;
   t: any; // Translation object
   MarkdownContent: React.FC<{ content: string; isDarkTheme: boolean }>;
   miningMode?: "blue-ocean" | "existing-website-audit"; // 添加miningMode prop
+  showHighPerformerToggle?: boolean; // 是否显示高表现词标记按钮
 }
 
 export const KeywordTable: React.FC<KeywordTableProps> = ({
@@ -30,11 +33,13 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
   expandedRowId,
   onToggleExpand,
   onDeepDive,
+  onToggleHighPerformer,
   isDarkTheme,
   uiLanguage,
   t,
   MarkdownContent,
   miningMode = "blue-ocean", // 默认蓝海模式
+  showHighPerformerToggle = false,
 }) => {
   // 蓝海模式不显示DR对比列
   const showDRComparison = miningMode === "existing-website-audit";
@@ -200,6 +205,36 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                         <FileText className="w-3 h-3" />
                         {t.btnGenerateArticle || t.deepDive}
                       </button>
+                      {/* 高表现词标记按钮 */}
+                      {showHighPerformerToggle && onToggleHighPerformer && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleHighPerformer(item, !(item as any).isHighPerformer);
+                          }}
+                          className={`flex items-center gap-1 px-2 py-1.5 rounded transition-colors text-xs font-medium ${
+                            (item as any).isHighPerformer
+                              ? "bg-amber-500/20 text-amber-400 hover:bg-amber-500/30"
+                              : isDarkTheme
+                              ? "bg-slate-700/50 text-slate-400 hover:bg-slate-600/50"
+                              : "bg-slate-200/50 text-slate-500 hover:bg-slate-300/50"
+                          }`}
+                          title={
+                            (item as any).isHighPerformer
+                              ? (uiLanguage === "zh" ? "取消标记好词" : "Unmark as high performer")
+                              : (uiLanguage === "zh" ? "标记为好词" : "Mark as high performer")
+                          }
+                        >
+                          <Star
+                            className={`w-3 h-3 ${
+                              (item as any).isHighPerformer ? "fill-amber-400" : ""
+                            }`}
+                          />
+                          {(item as any).isHighPerformer
+                            ? (uiLanguage === "zh" ? "好词" : "★")
+                            : (uiLanguage === "zh" ? "标记" : "☆")}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

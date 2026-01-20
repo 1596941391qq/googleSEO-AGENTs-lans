@@ -6,7 +6,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { auditWebsiteForKeywords } from './_shared/agents/agent-1-website-audit.js';
+import { auditWebsiteForKeywords, auditWebsiteWithStrategies, StrategyConfig } from './_shared/agents/agent-1-website-audit.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 
 // Main app URL for credits API
@@ -123,8 +123,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       miningStrategy = 'horizontal',
       additionalSuggestions,
       searchEngine = 'google',
-      skipCreditsCheck = false
-    } = body;
+      skipCreditsCheck = false,
+      // 新增：策略模块配置
+      strategies,
+      maxTotalKeywords = 50,
+      useStrategyMode = false, // 是否使用新的策略模式
+    } = body as {
+      websiteId: string;
+      websiteUrl: string;
+      websiteDomain: string;
+      targetLanguage?: string;
+      uiLanguage?: 'zh' | 'en';
+      industry?: string;
+      wordsPerRound?: number;
+      miningStrategy?: 'horizontal' | 'vertical';
+      additionalSuggestions?: string;
+      searchEngine?: string;
+      skipCreditsCheck?: boolean;
+      strategies?: StrategyConfig;
+      maxTotalKeywords?: number;
+      useStrategyMode?: boolean;
+    };
 
     if (!websiteId || !websiteUrl || !websiteDomain) {
       return res.status(400).json({ 
@@ -165,38 +184,81 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     try {
-      const result = await auditWebsiteForKeywords({
-        websiteId,
-        websiteUrl,
-        websiteDomain,
-        targetLanguage,
-        uiLanguage,
-        industry,
-        wordsPerRound,
-        miningStrategy,
-        additionalSuggestions,
-        searchEngine,
-        onEvent: (event) => {
-          sendEvent({ type: 'event', data: event });
-        }
-      });
+      // 判断是否使用策略模式
+      const shouldUseStrategyMode = useStrategyMode || (strategies && Object.values(strategies).some(s => s?.enabled));
+      
+      let keywordCount = 0;
+      
+      if (shouldUseStrategyMode) {
+        // 使用新的策略模块化模式
+        console.log(`[Website Audit API] Using strategy mode with strategies:`, JSON.stringify(strategies));
+        
+        const result = await auditWebsiteWithStrategies({
+          websiteId,
+          websiteUrl,
+          websiteDomain,
+          targetLanguage,
+          uiLanguage,
+          industry,
+          miningStrategy,
+          strategies,
+          maxTotalKeywords,
+          searchEngine,
+          onEvent: (event) => {
+            sendEvent({ type: 'event', data: event });
+          }
+        });
 
-      sendEvent({ 
-        type: 'done', 
-        data: {
-          success: true, // 添加 success 字段
-          analysisReport: result.analysisReport,
-          keywords: result.keywords, // 添加关键词列表
-          rawResponse: result.rawResponse,
-          competitorKeywordsPool: result.competitorKeywordsPool, // 添加竞争对手关键词池
-          analysis: result.analysis,
-        }
-      });
+        keywordCount = result.keywords.length;
+
+        sendEvent({ 
+          type: 'done', 
+          data: {
+            success: true,
+            keywords: result.keywords,
+            rawResponse: result.rawResponse,
+            enabledStrategies: result.enabledStrategies,
+            analysis: result.analysis,
+            isStrategyMode: true,
+          }
+        });
+      } else {
+        // 使用原有模式
+        const result = await auditWebsiteForKeywords({
+          websiteId,
+          websiteUrl,
+          websiteDomain,
+          targetLanguage,
+          uiLanguage,
+          industry,
+          wordsPerRound,
+          miningStrategy,
+          additionalSuggestions,
+          searchEngine,
+          onEvent: (event) => {
+            sendEvent({ type: 'event', data: event });
+          }
+        });
+
+        keywordCount = result.keywords.length;
+
+        sendEvent({ 
+          type: 'done', 
+          data: {
+            success: true,
+            analysisReport: result.analysisReport,
+            keywords: result.keywords,
+            rawResponse: result.rawResponse,
+            competitorKeywordsPool: result.competitorKeywordsPool,
+            analysis: result.analysis,
+            isStrategyMode: false,
+          }
+        });
+      }
 
       // Consume credits after successful audit
-      if (!skipCreditsCheck && token) {
+      if (!skipCreditsCheck && token && keywordCount > 0) {
         try {
-          const keywordCount = result.keywords.length;
           const creditsAmount = Math.ceil(keywordCount / 10) * 30;
           await consumeCredits(
             token,

@@ -132,4 +132,15 @@ export const apiClient = {
     const response = await postWithAuth(url, data, options);
     return response.json();
   },
+
+  /**
+   * Update keyword high performer status
+   */
+  async updateKeywordHighPerformer(keywordId: string, isHighPerformer: boolean): Promise<any> {
+    const response = await postWithAuth('/api/projects/update-keyword-performer', {
+      keywordId,
+      isHighPerformer,
+    });
+    return response.json();
+  },
 };

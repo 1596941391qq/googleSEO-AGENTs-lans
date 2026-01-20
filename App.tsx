@@ -80,6 +80,7 @@ import {
   KeywordMiningGuide,
   MiningConfig,
 } from "./components/workflow/KeywordMiningGuide";
+import { StrategySelector, StrategyConfig } from "./components/mining/StrategySelector";
 import { fetchWithAuth, postWithAuth } from "./lib/api-client";
 import { ProxySwitcher } from "./components/ProxySwitcher";
 import {
@@ -3330,6 +3331,15 @@ export default function App() {
   const setSelectedWebsite = (website: any | null) => {
     setState((prev) => ({ ...prev, selectedWebsite: website }));
   };
+  // 策略配置（存量拓新模式）
+  const [strategyConfig, setStrategyConfig] = useState<StrategyConfig>({
+    website_content: { enabled: true, count: 10 },
+    website_ranked: { enabled: false, count: 10 },
+    competitor_keywords: { enabled: false, count: 10 },
+    high_performer_expand: { enabled: false, count: 10 },
+    industry_context: { enabled: false, count: 10 },
+  });
+  const [useStrategyMode, setUseStrategyMode] = useState(true); // 默认启用策略模式
   const [manualWebsiteUrl, setManualWebsiteUrl] = useState(""); // Manual website URL input
   const [urlValidationStatus, setUrlValidationStatus] = useState<
     "idle" | "valid" | "invalid" | "validating"
@@ -6374,6 +6384,10 @@ export default function App() {
               miningStrategy: state.miningStrategy || "horizontal",
               industry: state.miningConfig?.industry,
               additionalSuggestions: state.miningConfig?.additionalSuggestions,
+              // 策略模块化配置
+              useStrategyMode: useStrategyMode,
+              strategies: useStrategyMode ? strategyConfig : undefined,
+              maxTotalKeywords: 50,
             },
             {
               signal: controller.signal,
@@ -10794,33 +10808,35 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   {/* Existing Website Audit Mode - Show website selector and audit button */}
                   {miningMode === "existing-website-audit" && (
                     <>
-                      {/* Refine Industry Button */}
-                      <div className="mb-4 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <BrainCircuit className="w-5 h-5 text-emerald-400" />
-                          <span
-                            className={`text-sm font-semibold ${
-                              isDarkTheme ? "text-white" : "text-gray-900"
-                            }`}
+                      {/* Refine Industry Button - 仅在非策略模式下显示（策略模式有行业上下文模块） */}
+                      {!useStrategyMode && (
+                        <div className="mb-4 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                            <span
+                              className={`text-sm font-semibold ${
+                                isDarkTheme ? "text-white" : "text-gray-900"
+                              }`}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "需要帮助？"
+                                : "Need Help?"}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => setShowMiningGuide(true)}
+                            className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
                           >
+                            <Lightbulb className="w-3.5 h-3.5" />
                             {state.uiLanguage === "zh"
-                              ? "需要帮助？"
-                              : "Need Help?"}
-                          </span>
+                              ? "精确行业"
+                              : "Refine Industry"}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setShowMiningGuide(true)}
-                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
-                        >
-                          <Lightbulb className="w-3.5 h-3.5" />
-                          {state.uiLanguage === "zh"
-                            ? "精确行业"
-                            : "Refine Industry"}
-                        </button>
-                      </div>
+                      )}
 
-                      {/* Display Saved Mining Configuration */}
-                      {state.miningConfig && (
+                      {/* Display Saved Mining Configuration - 仅在非策略模式下显示 */}
+                      {!useStrategyMode && state.miningConfig && (
                         <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
                           <div className="flex items-center gap-2 mb-2">
                             <Lightbulb className="w-4 h-4 text-emerald-400" />
@@ -11151,7 +11167,67 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         </button>
                       </div>
 
+                      {/* Strategy Selector - 策略模块化挖词 */}
+                      <section className="space-y-4 mt-8">
+                        <div className="flex items-center justify-between px-2">
+                          <div className="flex items-center space-x-2">
+                            <Layers
+                              size={14}
+                              className={cn(
+                                isDarkTheme
+                                  ? "text-emerald-500"
+                                  : "text-emerald-600"
+                              )}
+                            />
+                            <h3
+                              className={cn(
+                                "text-[10px] font-black uppercase tracking-[0.2em]",
+                                isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                              )}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "挖词策略模块"
+                                : "Mining Strategy Modules"}
+                            </h3>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={useStrategyMode}
+                              onChange={(e) => setUseStrategyMode(e.target.checked)}
+                              className="w-4 h-4 rounded border-emerald-500 text-emerald-500 focus:ring-emerald-500"
+                            />
+                            <span className={cn(
+                              "text-xs",
+                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                            )}>
+                              {state.uiLanguage === "zh" ? "启用策略模式" : "Enable Strategy Mode"}
+                            </span>
+                          </label>
+                        </div>
+                        {useStrategyMode && (
+                          <div
+                            className={cn(
+                              "p-4 rounded-lg border",
+                              isDarkTheme
+                                ? "bg-black/40 border-emerald-500/20"
+                                : "bg-white border-emerald-500/30"
+                            )}
+                          >
+                            <StrategySelector
+                              value={strategyConfig}
+                              onChange={setStrategyConfig}
+                              maxTotalKeywords={50}
+                              language={state.uiLanguage}
+                              hasHighPerformerKeywords={false}
+                              isDarkTheme={isDarkTheme}
+                            />
+                          </div>
+                        )}
+                      </section>
+
                       {/* Mining Settings Panel - Same as blue-ocean mode */}
+                      {!useStrategyMode && (
                       <section className="space-y-4 mt-8">
                         <div className="flex items-center space-x-2 px-2">
                           <Settings
@@ -11329,6 +11405,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           </div>
                         </div>
                       </section>
+                      )}
                     </>
                   )}
 

@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AuthProvider } from './contexts/AuthContext';
+import { AdminPage } from './components/admin/AdminPage';
 
 // Add global styles to hide all scrollbars (complementing index.html styles)
 const style = document.createElement('style');
@@ -76,11 +77,19 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
+// 简单路由：检查是否是 /admin 路径
+const isAdminRoute = window.location.pathname.startsWith('/admin');
+
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    {isAdminRoute ? (
+      // Admin 页面不需要 AuthProvider（有自己的认证逻辑）
+      <AdminPage />
+    ) : (
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    )}
   </React.StrictMode>
 );

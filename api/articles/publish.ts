@@ -2,10 +2,20 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { sql, initPublishedArticlesTable } from '../lib/database.js';
 import { authenticateRequest } from '../_shared/auth.js';
-import { notifyGoogleIndexing } from '../_shared/services/indexing-service.js';
-import { publishToMedium } from '../_shared/publishers/medium.js';
-import { publishToWordPress } from '../_shared/publishers/wordpress.js';
+import { publishArticle, getProjectPublishingSites } from '../_shared/services/pseo-publisher.js';
 
+/**
+ * 发布文章 API (v2)
+ * 
+ * 自动从 Admin 配置的站点池中分配站点:
+ * - 用户不需要配置任何 Token
+ * - 系统根据内容类型（informational/commercial）自动选择平台
+ * - 首次发布时自动创建 GitHub 仓库和平台项目
+ * - 后续发布复用已绑定的站点
+ * 
+ * POST /api/articles/publish
+ * Body: { articleId, projectId? }
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
 
@@ -25,72 +35,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await initPublishedArticlesTable();
     const body = parseRequestBody(req);
-    const { articleId, platform, urlSlug, config } = body;
+    const { articleId, projectId } = body;
 
     if (!articleId) {
       return sendErrorResponse(res, null, 'articleId is required', 400);
     }
 
     // 1. 获取文章详情
-    const result = await sql`
+    const articleResult = await sql`
       SELECT * FROM published_articles WHERE id = ${articleId} AND user_id = ${authResult.userId}
     `;
 
-    if (result.rows.length === 0) {
+    if (articleResult.rows.length === 0) {
       return sendErrorResponse(res, null, 'Article not found', 404);
     }
 
-    const article = result.rows[0];
-
-    // 2. 生成最终的 slug
-    const finalSlug = urlSlug || article.url_slug || article.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    const article = articleResult.rows[0];
     
-    let liveUrl = null;
-    let publishResult: any = null;
-    let indexingResult = null;
-
-    // 3. 发布逻辑
-    if (platform === 'platform' || !platform) {
-      const baseDomain = process.env.PLATFORM_DOMAIN || 'seo-factory.com';
-      const userSubdomain = authResult.userId.substring(0, 8); 
-      liveUrl = `https://${userSubdomain}.${baseDomain}/p/${finalSlug}`;
-
-      // 调用 Google Indexing API
-      indexingResult = await notifyGoogleIndexing(liveUrl);
-      publishResult = { success: true, url: liveUrl };
-    } 
-    else if (platform === 'medium') {
-      if (!config?.mediumToken) {
-        return sendErrorResponse(res, null, 'Medium Token is required', 400);
-      }
-      publishResult = await publishToMedium(
-        { title: article.title, content: article.content, images: [], keyword: article.keyword },
-        { integrationToken: config.mediumToken, publishStatus: 'public' }
-      );
-      liveUrl = publishResult.url;
-    } 
-    else if (platform === 'wordpress') {
-      if (!config?.wpUrl || !config?.wpUsername || !config?.wpPassword) {
-        return sendErrorResponse(res, null, 'WordPress config (url, username, password) is required', 400);
-      }
-      publishResult = await publishToWordPress(
-        { title: article.title, content: article.content, keyword: article.keyword },
-        { 
-          siteUrl: config.wpUrl, 
-          username: config.wpUsername, 
-          applicationPassword: config.wpPassword,
-          publishStatus: 'publish' 
-        }
-      );
-      liveUrl = publishResult.url;
+    // 2. 确定内容类型（从文章或使用默认值）
+    const contentType: 'informational' | 'commercial' = article.content_type || 'informational';
+    
+    // 3. 获取项目 ID（从参数或文章关联）
+    const actualProjectId = projectId || article.project_id;
+    
+    if (!actualProjectId) {
+      return sendErrorResponse(res, null, 'Project ID is required for publishing', 400);
     }
 
-    // 4. 更新数据库状态（添加 user_id 条件确保数据隔离）
+    // 4. 生成 URL slug
+    const urlSlug = article.url_slug || article.title
+      .toLowerCase()
+      .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+      .substring(0, 50);
+
+    // 5. 使用 PSEO Publisher 发布
+    const publishResult = await publishArticle(
+      actualProjectId,
+      {
+        id: articleId,
+        title: article.title,
+        content: article.content,
+        keyword: article.keyword || '',
+        metaDescription: article.meta_description,
+        contentType,
+        urlSlug,
+      },
+      article.project_name // 用于生成站点名
+    );
+
+    if (!publishResult.success) {
+      return sendErrorResponse(
+        res, 
+        null, 
+        publishResult.error || 'Failed to publish article', 
+        publishResult.error?.includes('No available') ? 503 : 500
+      );
+    }
+
+    // 6. 更新文章状态
     await sql`
       UPDATE published_articles
       SET status = 'published',
           published_at = NOW(),
-          url_slug = ${finalSlug},
+          url_slug = ${urlSlug},
+          content_type = ${contentType},
           updated_at = NOW()
       WHERE id = ${articleId} AND user_id::text = ${authResult.userId.toString()}
     `;
@@ -98,10 +107,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({
       success: true,
       data: {
-        message: `Article published to ${platform || 'platform'} successfully`,
-        liveUrl,
-        publishResult,
-        indexing: indexingResult,
+        message: `Article published to ${publishResult.platform} successfully`,
+        liveUrl: publishResult.articleUrl,
+        platform: publishResult.platform,
+        siteName: publishResult.siteName,
+        siteUrl: publishResult.siteUrl,
+        repoUrl: publishResult.repoUrl,
+        isNewSite: publishResult.isNewSite,
         publishedAt: new Date().toISOString()
       }
     });
@@ -109,5 +121,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error: any) {
     console.error('[Publish Article] Error:', error);
     return sendErrorResponse(res, error, 'Failed to publish article', 500);
+  }
+}
+
+/**
+ * 获取项目的发布站点信息 API
+ * GET /api/articles/publish?projectId=xxx
+ */
+export async function getProjectSites(req: VercelRequest, res: VercelResponse) {
+  try {
+    const authResult = await authenticateRequest(req);
+    if (!authResult) {
+      return sendErrorResponse(res, null, 'Unauthorized', 401);
+    }
+
+    const { projectId } = req.query;
+    if (!projectId || typeof projectId !== 'string') {
+      return sendErrorResponse(res, null, 'projectId is required', 400);
+    }
+
+    const sites = await getProjectPublishingSites(projectId);
+
+    return res.json({
+      success: true,
+      data: {
+        informational: sites.informational ? {
+          siteName: sites.informational.site.site_name,
+          siteUrl: sites.informational.site.site_url,
+          platform: sites.informational.site.platform,
+          repoName: sites.informational.site.repo_name,
+          status: sites.informational.site.status,
+          usageCount: sites.informational.site.usage_count,
+        } : null,
+        commercial: sites.commercial ? {
+          siteName: sites.commercial.site.site_name,
+          siteUrl: sites.commercial.site.site_url,
+          platform: sites.commercial.site.platform,
+          repoName: sites.commercial.site.repo_name,
+          status: sites.commercial.site.status,
+          usageCount: sites.commercial.site.usage_count,
+        } : null,
+      }
+    });
+  } catch (error: any) {
+    console.error('[Get Project Sites] Error:', error);
+    return sendErrorResponse(res, error, 'Failed to get project sites', 500);
   }
 }

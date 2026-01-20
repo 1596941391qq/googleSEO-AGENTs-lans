@@ -947,10 +947,13 @@ The JSON must include:
 - metaDescription_trans: Translation in ${uiLangName}
 - urlSlug: Clean, SEO-friendly URL slug
 - userIntentSummary: What users in ${marketLabel} market expect when searching this keyword
-- contentStructure: Array of H2 sections, each with header, header_trans, description, description_trans
+- contentStructure: Array of H2 sections, each with header, header_trans, description, description_trans, targetWordCount (150-300 words per section), maxKeywordOccurrences (1-2 per section)
 - longTailKeywords: Array of 5-10 semantic variations in ${targetLangName}
 - longTailKeywords_trans: Array of translations in ${uiLangName}
+- lsiKeywords: Array of 8-12 LSI (Latent Semantic Indexing) keywords - semantically related terms, synonyms, and entity variations that should be naturally integrated throughout the article to enhance topical coverage
+- lsiKeywords_trans: Array of LSI keyword translations in ${uiLangName}
 - recommendedWordCount: Recommended word count based on SERP analysis
+- keywordStrategy: Object with { targetDensity: "0.8-1.5%", primaryKeywordCount: number based on word count, lsiDistribution: "spread evenly across H2 sections" }
 - markdown: Formatted Markdown version of the strategy report`
   },
 
@@ -1083,14 +1086,15 @@ export const CONTENT_WRITER_PROMPTS = {
 ## 2. 首屏摘要（15分）
 - 文章开头必须包含80-120字的Bullets格式摘要
 - 摘要包含3-6条结构化要点
-- 每条要点8-16字，独立完整
+- 每条要点10-20字，独立完整，必须包含动词或明确结论
+- 每条要点可独立被AI引用，信息密度高
 - 格式示例：
   \`\`\`
   ## 核心要点
-  • [产品/主题]定义：8-16字
-  • 核心优势：8-16字
-  • 适用对象：8-16字
-  • 结论导向：8-16字
+  • [产品/主题]是[类属]+[核心价值]：10-20字
+  • 核心优势：[具体数据/效果]：10-20字
+  • 适用对象：[目标人群]+[使用场景]：10-20字
+  • 结论：[行动建议/价值判断]：10-20字
   \`\`\`
 
 ## 3. 信息增益（25分）
@@ -1112,11 +1116,24 @@ export const CONTENT_WRITER_PROMPTS = {
 - 关键实体重复出现3-5次
 - 构建标准化实体描述模板，确保 AI 能精准提取实体关系
 
-## 6. 对比区（10分）
+## 6. 对比区（10-20分，根据关键词意图动态调整）
+**基础要求：**
 - 如涉及多个产品/方案，必须构建对比表格
 - 至少5个对比维度，字数占比文章约 10-15%
 - 保持客观中立，避免营销化表达
 - 对比结论基于事实数据
+- 必须包含价格/成本维度
+
+**商业意图关键词加权规则：**
+- 若关键词为 "X vs Y" 类型：对比区权重提升至 20分，占比 20-25%
+- 若关键词意图为 Commercial/Transactional：对比区权重提升至 15分
+- 对比表格必须易于AI提取和引用
+
+**对比表格标准结构：**
+| 维度 | [产品A] | [产品B] | 推荐场景 |
+|------|---------|---------|----------|
+| 价格 | 具体价格 | 具体价格 | 预算敏感用户选X |
+| 核心功能 | 功能列表 | 功能列表 | 需要Y功能选Z |
 
 ## 7. FAQ质量（10分）
 - 必须包含5-8条常见问题
@@ -1130,10 +1147,10 @@ export const CONTENT_WRITER_PROMPTS = {
 # [标题：对应用户意图 + 核心关键词 + 时效性]
 
 ## 核心要点
-• [要点1：8-16字]
-• [要点2：8-16字]
-• [要点3：8-16字]
-• [要点4：8-16字]
+• [要点1：10-20字，包含动词或明确结论]
+• [要点2：10-20字，包含具体数据或效果]
+• [要点3：10-20字，明确目标人群或场景]
+• [要点4：10-20字，给出行动建议]
 
 ---
 
@@ -1274,14 +1291,15 @@ Based on the provided SEO research report, create professional content that meet
 ## 2. First-Screen Summary (15 points)
 - Article must start with 80-120 word Bullets format summary
 - Summary contains 3-6 structured points
-- Each point 8-16 words, independent and complete
+- Each point 10-20 words, independent and complete, must include verb or clear conclusion
+- Each point can be independently cited by AI, high information density
 - Format example:
   \`\`\`
   ## Key Points
-  • [Product/Topic] Definition: 8-16 words
-  • Core Advantages: 8-16 words
-  • Target Users: 8-16 words
-  • Conclusion: 8-16 words
+  • [Product/Topic] is [category] + [core value]: 10-20 words
+  • Core Advantage: [specific data/effect]: 10-20 words
+  • Target Users: [audience] + [use case]: 10-20 words
+  • Conclusion: [action recommendation/value judgment]: 10-20 words
   \`\`\`
 
 ## 3. Information Gain (25 points)
@@ -1303,11 +1321,24 @@ Based on the provided SEO research report, create professional content that meet
 - Key entities appear 3-5 times
 - Build standardized entity description templates to ensure AI can accurately extract entity relationships
 
-## 6. Comparison Section (10 points)
+## 6. Comparison Section (10-20 points, dynamically adjusted by keyword intent)
+**Basic Requirements:**
 - If involving multiple products/solutions, must build comparison table
 - At least 5 comparison dimensions, word count around 10-15% of the article
 - Maintain objective neutrality, avoid marketing expressions
 - Comparison conclusions based on factual data
+- Must include price/cost dimension
+
+**Commercial Intent Keyword Weighting Rules:**
+- If keyword is "X vs Y" type: Comparison section weight increased to 20 points, 20-25% of article
+- If keyword intent is Commercial/Transactional: Comparison section weight increased to 15 points
+- Comparison table must be easily extractable and citable by AI
+
+**Standard Comparison Table Structure:**
+| Dimension | [Product A] | [Product B] | Recommended Scenario |
+|-----------|-------------|-------------|---------------------|
+| Price | Specific price | Specific price | Budget-sensitive users choose X |
+| Core Features | Feature list | Feature list | Users needing Y feature choose Z |
 
 ## 7. FAQ Quality (10 points)
 - Must include 5-8 common questions
@@ -1321,10 +1352,10 @@ Based on the provided SEO research report, create professional content that meet
 # [Title: Match user intent + Core keywords + Timeliness]
 
 ## Key Points
-• [Point 1: 8-16 words]
-• [Point 2: 8-16 words]
-• [Point 3: 8-16 words]
-• [Point 4: 8-16 words]
+• [Point 1: 10-20 words, include verb or clear conclusion]
+• [Point 2: 10-20 words, include specific data or effect]
+• [Point 3: 10-20 words, specify target audience or scenario]
+• [Point 4: 10-20 words, provide action recommendation]
 
 ---
 
@@ -1475,11 +1506,16 @@ ${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variab
 
 要求：
 1. 严格按照推荐的内容结构撰写，特别关注 ${variables.marketLabel || '全球'} 市场的本地化需求
-2. 自然融入目标关键词和长尾关键词（关键词密度1-2%），使用适合 ${variables.marketLabel || '全球'} 市场的表达方式
+2. **关键词密度策略**（目标密度 0.8%-1.5%）：
+   - 主关键词：在标题、首段、至少1个H2、结尾段落必须出现
+   - 每个H2节主关键词出现 1-2 次，避免堆砌
+   - 自然融入LSI语义关键词和长尾关键词，分散在各H2节
+   - 使用关键词的同义词和变体，避免100%精确匹配
 3. 前100字必须直接击中 ${variables.marketLabel || '全球'} 市场用户的搜索痛点
-4. 每段不超过3行，多使用列表、粗体和引言
-5. 确保内容流畅自然，有价值，符合 ${variables.marketLabel || '全球'} 市场的文化和习惯
-6. 字数约 ${variables.wordCountHint || '1500-2000'} 字
+4. **H2节长度控制**：每个H2节 150-300 字，段落不超过3行
+5. 多使用列表、粗体和引言，Bullets占比≥60%
+6. 确保内容流畅自然，有价值，符合 ${variables.marketLabel || '全球'} 市场的文化和习惯
+7. 字数约 ${variables.wordCountHint || '1500-2000'} 字
 
 请以Markdown格式输出完整文章，包括以下部分：
 - **H1 标题**（文章主标题）
@@ -1491,11 +1527,16 @@ ${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variab
 
 Requirements:
 1. Follow the recommended content structure strictly, with special attention to localization needs for ${variables.marketLabel || 'Global'} market
-2. Naturally integrate target keyword and long-tail keywords (1-2% density), using expressions appropriate for ${variables.marketLabel || 'Global'} market
+2. **Keyword Density Strategy** (target density 0.8%-1.5%):
+   - Primary keyword: Must appear in title, first paragraph, at least 1 H2, and conclusion
+   - Each H2 section: Primary keyword appears 1-2 times max, avoid stuffing
+   - Naturally integrate LSI semantic keywords and long-tail keywords, distributed across H2 sections
+   - Use keyword synonyms and variations, avoid 100% exact match repetition
 3. First 100 words must directly address search pain points of users in ${variables.marketLabel || 'Global'} market
-4. Keep paragraphs under 3 lines, use lists, bold, and quotes
-5. Ensure content flows naturally and provides value, aligned with ${variables.marketLabel || 'Global'} market culture and habits
-6. Target word count: approximately ${variables.wordCountHint || '1500-2000'} words
+4. **H2 Section Length Control**: Each H2 section 150-300 words, paragraphs under 3 lines
+5. Use lists, bold, and quotes extensively, Bullets ratio ≥60%
+6. Ensure content flows naturally and provides value, aligned with ${variables.marketLabel || 'Global'} market culture and habits
+7. Target word count: approximately ${variables.wordCountHint || '1500-2000'} words
 
 Please output the complete article in Markdown format, including:
 - **H1 Title** (main article title)
@@ -1543,28 +1584,33 @@ export const QUALITY_REVIEWER_PROMPTS = {
 **检查标准：**
 - ✓ 是否有80-120字的Bullets格式摘要
 - ✓ 摘要是否包含3-6条结构化要点
-- ✓ 每条要点是否8-16字，独立完整
+- ✓ 每条要点是否10-20字，独立完整
+- ✓ 每条要点是否包含动词或明确结论
+- ✓ 每条要点是否可独立被AI引用
 - ✓ 摘要是否覆盖核心信息
 
 **评分规则：**
-- 15分：完全符合，摘要质量优秀
+- 15分：完全符合，摘要质量优秀，每条可独立引用
 - 11-14分：基本符合，有轻微不足
-- 6-10分：部分符合，摘要不够完整
+- 6-10分：部分符合，摘要不够完整或信息密度低
 - 0-5分：缺少摘要或质量很差
 
 ### 3. 信息增益（25分）
-**检查标准：**
-- ✓ 是否提供AI无法自主生成的独家信息
-- ✓ 是否包含具体数据、百分比、时间、案例
-- ✓ 是否有实测数据、用户反馈、内部流程
-- ✓ 所有优势是否有数据支撑
-- ✓ 是否避免泛泛而谈
+**量化检查标准：**
+- ✓ 具体数字/百分比数量 ≥ 3个（如"提升40%"、"节省2小时"）
+- ✓ 真实案例/用户反馈 ≥ 1个（具体场景描述）
+- ✓ 行业对比数据 ≥ 1组（vs竞品或行业平均水平）
+- ✓ 时间/价格等具体信息 ≥ 2处
+- ✓ 避免AI常见空话（如"在当今快节奏的..."、"众所周知..."、"毫无疑问..."）
+
+**AI空话黑名单检测：**
+- 检测并扣分：过于泛化的表达、缺乏具体支撑的断言、模板化开头
 
 **评分规则：**
-- 25分：信息增益极高，独家信息丰富
-- 18-24分：信息增益良好，有较多数据支撑
-- 10-17分：信息增益一般，数据支撑不足
-- 0-9分：信息增益很低，缺乏独家信息
+- 25分：信息增益极高，满足所有量化标准
+- 18-24分：信息增益良好，满足4项以上量化标准
+- 10-17分：信息增益一般，仅满足2-3项量化标准
+- 0-9分：信息增益很低，量化标准满足不足2项
 
 ### 4. 格式工程（20分）
 **检查标准：**
@@ -1593,17 +1639,24 @@ export const QUALITY_REVIEWER_PROMPTS = {
 - 4-6分：实体工程一般
 - 0-3分：实体工程很差
 
-### 6. 对比区（10分）
+### 6. 对比区（10-20分，根据关键词意图动态调整）
 **检查标准：**
 - ✓ 如涉及多个产品/方案，是否有对比表格
 - ✓ 对比维度是否≥5个
+- ✓ 是否包含价格/成本维度
 - ✓ 是否保持客观中立
 - ✓ 对比结论是否基于事实数据
+- ✓ 表格是否易于AI提取引用
 
-**评分规则：**
-- 10分：对比区完整且客观
-- 7-9分：对比区基本完整
-- 4-6分：对比区不够完整
+**动态权重规则：**
+- "X vs Y" 类关键词：满分20分，对比区占比需达20-25%
+- Commercial/Transactional 意图：满分15分
+- 其他意图：满分10分
+
+**评分规则（以10分为基准）：**
+- 10分：对比区完整且客观，包含价格维度
+- 7-9分：对比区基本完整，缺少1项
+- 4-6分：对比区不够完整，缺少2-3项
 - 0-3分：缺少对比区或质量很差
 
 ### 7. FAQ质量（10分）
@@ -1619,6 +1672,31 @@ export const QUALITY_REVIEWER_PROMPTS = {
 - 4-6分：FAQ质量一般，不够完整
 - 0-3分：缺少FAQ或质量很差
 
+### 8. 用户意图匹配度（新增维度，10分）
+**检查标准：**
+- ✓ 识别关键词意图类型：Informational / Commercial / Transactional / Local
+- ✓ 文章结构是否匹配该意图？
+
+**意图-结构匹配规则：**
+- **Informational（信息型）**：文章应以教程/指南/定义为主
+  - 必须有"是什么"、"怎么做"类H2
+  - 重点检查：步骤说明、原理解释是否清晰
+- **Commercial（商业型）**：文章应以对比/评测/推荐为主
+  - 必须有对比表格和推荐结论
+  - 重点检查：对比区是否完整，是否有价格信息
+- **Transactional（交易型）**：文章应包含CTA/购买指引/价格信息
+  - 必须有明确的行动号召
+  - 重点检查：购买链接、价格、优惠信息
+- **Local（本地型）**：文章应包含地理位置相关信息
+  - 必须有地址、联系方式、服务范围
+  - 重点检查：本地化信息是否准确
+
+**评分规则：**
+- 10分：意图匹配完美，结构完全符合用户预期
+- 7-9分：意图基本匹配，有1-2处可优化
+- 4-6分：意图匹配一般，结构与意图有偏差
+- 0-3分：意图不匹配，用户无法找到预期内容
+
 # 其他质量检查
 
 ## 1. 真实性检查
@@ -1628,8 +1706,20 @@ export const QUALITY_REVIEWER_PROMPTS = {
 
 ## 2. SEO深度检查
 - 关键词是否出现在Title、首段、H2和结尾？
-- 关键词密度是否在1-2%范围内？
+- 关键词密度是否在0.8-1.5%范围内？（超过2%视为过度优化）
 - LSI关键词是否自然融入？
+
+## 2.1 过度优化检测（重要）
+**关键词堆砌检测：**
+- ⚠️ 主关键词是否在连续2句话中都出现？（不自然）
+- ⚠️ 同一段落内主关键词出现是否超过2次？（堆砌风险）
+- ⚠️ 关键词是否总是出现在句首？（机械化SEO写法）
+- ⚠️ 是否100%使用精确匹配，没有使用同义词/变体？
+
+**自然度评分标准：**
+- 高（自然）：关键词分散在不同位置，有变体使用，读起来流畅
+- 中（可接受）：偶尔有堆砌痕迹，但整体可读
+- 低（过度优化）：明显堆砌，读起来生硬，需要修改
 
 ## 3. 人味检测
 - 语气是否过于机械？
@@ -1693,8 +1783,16 @@ export const QUALITY_REVIEWER_PROMPTS = {
       "details": ["检查项1", "检查项2"],
       "issues": ["问题1", "问题2"]
     },
+    "intent_match": {
+      "score": 0,
+      "max_score": 10,
+      "detected_intent": "Informational | Commercial | Transactional | Local",
+      "structure_alignment": "文章结构与意图的匹配分析",
+      "missing_elements": ["缺失的意图匹配元素"],
+      "issues": ["问题1", "问题2"]
+    },
     "total_score": 0,
-    "max_score": 100,
+    "max_score": 110,
     "rating": "可用GEO内容 (70-79分) | 可进入AI摘要 (80-89分) | 长期可复用母稿 (90-100分) | 需要优化 (<70分)"
   },
   "other_checks": {
@@ -1705,6 +1803,13 @@ export const QUALITY_REVIEWER_PROMPTS = {
     "seo_depth": {
       "keyword_density": 1.5,
       "keyword_positions": ["title", "first_paragraph", "h2"],
+      "over_optimization": {
+        "consecutive_sentences": false,
+        "paragraph_stuffing": false,
+        "sentence_start_pattern": false,
+        "lacks_variations": false,
+        "naturalness_rating": "high | medium | low"
+      },
       "issues": ["问题1"]
     },
     "human_touch": {
@@ -1757,28 +1862,33 @@ Perform comprehensive GEO adaptation diagnosis and quality assessment on the art
 **Check Criteria:**
 - ✓ Is there an 80-120 word Bullets format summary?
 - ✓ Does summary contain 3-6 structured points?
-- ✓ Is each point 8-16 words, independent and complete?
+- ✓ Is each point 10-20 words, independent and complete?
+- ✓ Does each point contain a verb or clear conclusion?
+- ✓ Can each point be independently cited by AI?
 - ✓ Does summary cover core information?
 
 **Scoring Rules:**
-- 15 points: Fully meets, excellent summary quality
+- 15 points: Fully meets, excellent summary quality, each point independently citable
 - 11-14 points: Basically meets, minor deficiencies
-- 6-10 points: Partially meets, summary incomplete
+- 6-10 points: Partially meets, summary incomplete or low information density
 - 0-5 points: Missing summary or very poor quality
 
 ### 3. Information Gain (25 points)
-**Check Criteria:**
-- ✓ Does it provide exclusive information AI cannot generate independently?
-- ✓ Does it include specific data, percentages, time, cases?
-- ✓ Does it have test data, user feedback, internal processes?
-- ✓ Do all advantages have data support?
-- ✓ Does it avoid generalizations?
+**Quantifiable Check Criteria:**
+- ✓ Specific numbers/percentages ≥ 3 (e.g., "improved by 40%", "saves 2 hours")
+- ✓ Real case studies/user feedback ≥ 1 (specific scenario descriptions)
+- ✓ Industry comparison data ≥ 1 set (vs competitors or industry average)
+- ✓ Specific time/price information ≥ 2 places
+- ✓ Avoid AI common platitudes (e.g., "In today's fast-paced...", "As we all know...", "Undoubtedly...")
+
+**AI Platitude Blacklist Detection:**
+- Detect and deduct points: Overly generic expressions, assertions lacking specific support, template-style openings
 
 **Scoring Rules:**
-- 25 points: Very high information gain, rich exclusive information
-- 18-24 points: Good information gain, sufficient data support
-- 10-17 points: Average information gain, insufficient data support
-- 0-9 points: Very low information gain, lacks exclusive information
+- 25 points: Very high information gain, meets all quantifiable criteria
+- 18-24 points: Good information gain, meets 4+ quantifiable criteria
+- 10-17 points: Average information gain, meets only 2-3 quantifiable criteria
+- 0-9 points: Very low information gain, meets fewer than 2 quantifiable criteria
 
 ### 4. Format Engineering (20 points)
 **Check Criteria:**
@@ -1807,17 +1917,24 @@ Perform comprehensive GEO adaptation diagnosis and quality assessment on the art
 - 4-6 points: Average entity engineering
 - 0-3 points: Poor entity engineering
 
-### 6. Comparison Section (10 points)
+### 6. Comparison Section (10-20 points, dynamically adjusted by keyword intent)
 **Check Criteria:**
 - ✓ If involving multiple products/solutions, is there a comparison table?
 - ✓ Are there ≥ 5 comparison dimensions?
+- ✓ Is price/cost dimension included?
 - ✓ Is it objective and neutral?
 - ✓ Are comparison conclusions based on factual data?
+- ✓ Is table easily extractable/citable by AI?
 
-**Scoring Rules:**
-- 10 points: Complete and objective comparison section
-- 7-9 points: Basically complete comparison section
-- 4-6 points: Incomplete comparison section
+**Dynamic Weight Rules:**
+- "X vs Y" type keywords: Max 20 points, comparison section needs 20-25% of article
+- Commercial/Transactional intent: Max 15 points
+- Other intents: Max 10 points
+
+**Scoring Rules (based on 10 points):**
+- 10 points: Complete and objective comparison section, includes price dimension
+- 7-9 points: Basically complete, missing 1 item
+- 4-6 points: Incomplete comparison section, missing 2-3 items
 - 0-3 points: Missing comparison section or very poor quality
 
 ### 7. FAQ Quality (10 points)
@@ -1833,6 +1950,31 @@ Perform comprehensive GEO adaptation diagnosis and quality assessment on the art
 - 4-6 points: Average FAQ quality, incomplete
 - 0-3 points: Missing FAQ or very poor quality
 
+### 8. User Intent Match (New Dimension, 10 points)
+**Check Criteria:**
+- ✓ Identify keyword intent type: Informational / Commercial / Transactional / Local
+- ✓ Does article structure match this intent?
+
+**Intent-Structure Matching Rules:**
+- **Informational**: Article should focus on tutorials/guides/definitions
+  - Must have "What is" and "How to" type H2s
+  - Focus check: Are steps and explanations clear?
+- **Commercial**: Article should focus on comparisons/reviews/recommendations
+  - Must have comparison table and recommendation conclusions
+  - Focus check: Is comparison section complete? Is pricing info included?
+- **Transactional**: Article should include CTA/purchase guidance/pricing
+  - Must have clear call-to-action
+  - Focus check: Purchase links, prices, promotional info
+- **Local**: Article should include geographic location information
+  - Must have address, contact info, service area
+  - Focus check: Is local information accurate?
+
+**Scoring Rules:**
+- 10 points: Perfect intent match, structure fully meets user expectations
+- 7-9 points: Basic intent match, 1-2 areas for optimization
+- 4-6 points: Average intent match, structure deviates from intent
+- 0-3 points: Intent mismatch, users cannot find expected content
+
 # Other Quality Checks
 
 ## 1. Authenticity Check
@@ -1842,8 +1984,20 @@ Perform comprehensive GEO adaptation diagnosis and quality assessment on the art
 
 ## 2. SEO Depth Check
 - Do keywords appear in Title, first paragraph, H2, and conclusion?
-- Is keyword density within 1-2% range?
+- Is keyword density within 0.8-1.5% range? (Above 2% considered over-optimization)
 - Are LSI keywords naturally integrated?
+
+## 2.1 Over-Optimization Detection (Important)
+**Keyword Stuffing Detection:**
+- ⚠️ Does primary keyword appear in 2 consecutive sentences? (Unnatural)
+- ⚠️ Does primary keyword appear more than 2 times in same paragraph? (Stuffing risk)
+- ⚠️ Does keyword always appear at sentence beginning? (Mechanical SEO writing)
+- ⚠️ Is 100% exact match used without synonyms/variations?
+
+**Naturalness Rating Standards:**
+- High (Natural): Keywords distributed across different positions, variations used, reads fluently
+- Medium (Acceptable): Occasional stuffing traces, but overall readable
+- Low (Over-optimized): Obvious stuffing, reads awkwardly, needs revision
 
 ## 3. Human Touch Detection
 - Is the tone too mechanical?
@@ -1907,8 +2061,16 @@ Perform comprehensive GEO adaptation diagnosis and quality assessment on the art
       "details": ["Check item 1", "Check item 2"],
       "issues": ["Issue 1", "Issue 2"]
     },
+    "intent_match": {
+      "score": 0,
+      "max_score": 10,
+      "detected_intent": "Informational | Commercial | Transactional | Local",
+      "structure_alignment": "Analysis of article structure alignment with intent",
+      "missing_elements": ["Missing intent-matching elements"],
+      "issues": ["Issue 1", "Issue 2"]
+    },
     "total_score": 0,
-    "max_score": 100,
+    "max_score": 110,
     "rating": "Usable GEO Content (70-79) | AI Summary Ready (80-89) | Long-term Reusable Master Copy (90-100) | Needs Optimization (<70)"
   },
   "other_checks": {
@@ -1919,6 +2081,13 @@ Perform comprehensive GEO adaptation diagnosis and quality assessment on the art
     "seo_depth": {
       "keyword_density": 1.5,
       "keyword_positions": ["title", "first_paragraph", "h2"],
+      "over_optimization": {
+        "consecutive_sentences": false,
+        "paragraph_stuffing": false,
+        "sentence_start_pattern": false,
+        "lacks_variations": false,
+        "naturalness_rating": "high | medium | low"
+      },
       "issues": ["Issue 1"]
     },
     "human_touch": {
@@ -1937,7 +2106,7 @@ Perform comprehensive GEO adaptation diagnosis and quality assessment on the art
       "priority": "high | medium | low",
       "issue": "Specific issue description (Specify which paragraph or sentence has the issue)",
       "suggestion": "Specific modification suggestion (Provide a rewritten example, at least 50 words)",
-      "affected_dimension": "title_standard | summary | information_gain | format_engineering | entity_engineering | comparison | faq"
+      "affected_dimension": "title_standard | summary | information_gain | format_engineering | entity_engineering | comparison | faq | over_optimization"
     }
   ],
   "ai_footprint_analysis": "Analyze which parts of the article have the strongest AI traces and provide rewriting examples (Targeted analysis, at least 100 words)."
@@ -2714,3 +2883,295 @@ export function getDefaultPrompt(
 export const DEFAULT_GEN_PROMPT_EN = KEYWORD_MINING_PROMPTS.base.en.trim();
 export const DEFAULT_ANALYZE_PROMPT_EN = DEFAULT_SERP_ANALYSIS.en.trim();
 export const DEFAULT_DEEP_DIVE_PROMPT_EN = DEFAULT_DEEP_DIVE_STRATEGY.en.trim();
+
+// ============================================================================
+// 存量拓新策略模块化挖词 (Strategy-based Keyword Mining)
+// ============================================================================
+
+/**
+ * 策略模块类型定义
+ */
+export type StrategyModuleId =
+  | 'website_content'      // 网站内容分析
+  | 'website_ranked'       // 网站已排名词
+  | 'competitor_keywords'  // 竞对关键词
+  | 'high_performer_expand' // 高表现词扩展
+  | 'industry_context';    // 行业上下文
+
+/**
+ * 策略模块配置
+ */
+export interface StrategyModuleConfig {
+  id: StrategyModuleId;
+  enabled: boolean;
+  count: number;
+  // industry_context 特有
+  industry?: string;
+  suggestions?: string;
+}
+
+/**
+ * 策略模块上下文数据
+ */
+export interface StrategyContextData {
+  website_content?: string;        // 网站内容摘要
+  website_ranked?: string[];       // 已排名关键词列表
+  competitor_keywords?: string[];  // 竞对关键词列表
+  high_performer_expand?: string[]; // 高表现词列表
+  industry_context?: {
+    industry: string;
+    suggestions?: string;
+  };
+}
+
+/**
+ * 构建动态策略挖词 Prompt
+ * 
+ * @param enabledStrategies - 启用的策略模块列表
+ * @param contexts - 各模块的上下文数据
+ * @param uiLanguage - UI 语言
+ * @param miningStrategy - 挖掘策略（横向/纵向）
+ * @param maxTotalKeywords - 总数限制
+ */
+export function buildDynamicStrategyPrompt(
+  enabledStrategies: StrategyModuleConfig[],
+  contexts: StrategyContextData,
+  uiLanguage: 'zh' | 'en' = 'en',
+  miningStrategy: 'horizontal' | 'vertical' = 'horizontal',
+  maxTotalKeywords: number = 50
+): string {
+  const sections: string[] = [];
+  const isZh = uiLanguage === 'zh';
+
+  // 1. 基础角色定义
+  sections.push(isZh
+    ? `# 角色
+你是 SEO 关键词挖掘专家，擅长从多个角度发现高潜力关键词。
+
+# 核心任务
+根据以下不同角度的分析信息，生成高潜力 SEO 关键词。每个角度独立生成指定数量的关键词。`
+    : `# Role
+You are an SEO keyword mining expert, skilled at discovering high-potential keywords from multiple perspectives.
+
+# Core Task
+Generate high-potential SEO keywords based on the following analysis perspectives. Generate the specified number of keywords for each perspective independently.`
+  );
+
+  // 2. 挖掘策略说明
+  const strategyText = miningStrategy === 'horizontal'
+    ? (isZh
+      ? `\n# 挖掘策略：横向挖掘
+- 探索相关但不同的主题领域
+- 寻找语义相关的平行关键词
+- 发现相邻行业或领域的交叉机会`
+      : `\n# Mining Strategy: Horizontal
+- Explore related but different topic areas
+- Find semantically related parallel keywords
+- Discover cross-opportunities in adjacent industries`)
+    : (isZh
+      ? `\n# 挖掘策略：纵向挖掘
+- 深入挖掘现有主题的长尾变体
+- 探索更具体的使用场景
+- 发现细分需求和深度优化方向`
+      : `\n# Mining Strategy: Vertical
+- Deep dive into long-tail variations of existing topics
+- Explore more specific use cases
+- Discover niche needs and deep optimization directions`);
+
+  sections.push(strategyText);
+
+  // 3. 计算总数并验证
+  const totalRequested = enabledStrategies.reduce((sum, s) => sum + s.count, 0);
+  if (totalRequested > maxTotalKeywords) {
+    sections.push(isZh
+      ? `\n⚠️ 注意：请求的总关键词数（${totalRequested}）超过限制（${maxTotalKeywords}），请严格控制每个角度的输出数量。`
+      : `\n⚠️ Note: Total requested keywords (${totalRequested}) exceeds limit (${maxTotalKeywords}). Please strictly control output for each perspective.`
+    );
+  }
+
+  // 4. 动态添加各模块的上下文和要求
+  let perspectiveIndex = 1;
+
+  enabledStrategies.forEach(strategy => {
+    if (!strategy.enabled) return;
+
+    const count = strategy.count;
+
+    switch (strategy.id) {
+      case 'website_content':
+        if (contexts.website_content) {
+          sections.push(isZh
+            ? `\n## 角度${perspectiveIndex}：网站内容分析（生成 ${count} 个，source: "website_content"）
+网站内容摘要：
+${contexts.website_content.substring(0, 1500)}${contexts.website_content.length > 1500 ? '...' : ''}
+
+从网站现有内容主题出发，发现可扩展的关键词机会。关注内容覆盖的主题、潜在的内容缺口和可优化方向。`
+            : `\n## Perspective ${perspectiveIndex}: Website Content Analysis (generate ${count}, source: "website_content")
+Website content summary:
+${contexts.website_content.substring(0, 1500)}${contexts.website_content.length > 1500 ? '...' : ''}
+
+Find expandable keyword opportunities from existing content themes. Focus on covered topics, potential content gaps, and optimization directions.`
+          );
+          perspectiveIndex++;
+        }
+        break;
+
+      case 'website_ranked':
+        if (contexts.website_ranked && contexts.website_ranked.length > 0) {
+          sections.push(isZh
+            ? `\n## 角度${perspectiveIndex}：网站已排名词（生成 ${count} 个，source: "website_ranked"）
+网站当前已排名的关键词样本：
+${contexts.website_ranked.slice(0, 30).join(', ')}
+
+基于这些已排名词的语义相关性，发现可以强化或扩展的关键词。寻找长尾变体、相关问题词、比较词等。`
+            : `\n## Perspective ${perspectiveIndex}: Website Ranked Keywords (generate ${count}, source: "website_ranked")
+Sample of currently ranked keywords:
+${contexts.website_ranked.slice(0, 30).join(', ')}
+
+Find keywords to strengthen or expand based on semantic relevance. Look for long-tail variants, related questions, comparison keywords.`
+          );
+          perspectiveIndex++;
+        }
+        break;
+
+      case 'competitor_keywords':
+        if (contexts.competitor_keywords && contexts.competitor_keywords.length > 0) {
+          sections.push(isZh
+            ? `\n## 角度${perspectiveIndex}：竞对关键词（生成 ${count} 个，source: "competitor_keywords"）
+竞争对手正在排名的关键词样本：
+${contexts.competitor_keywords.slice(0, 40).join(', ')}
+
+从竞对覆盖但我们可能未覆盖的词中发现机会。关注内容缺口和差异化机会。`
+            : `\n## Perspective ${perspectiveIndex}: Competitor Keywords (generate ${count}, source: "competitor_keywords")
+Sample of competitor ranked keywords:
+${contexts.competitor_keywords.slice(0, 40).join(', ')}
+
+Find opportunities from competitor coverage gaps. Focus on content gaps and differentiation opportunities.`
+          );
+          perspectiveIndex++;
+        }
+        break;
+
+      case 'high_performer_expand':
+        if (contexts.high_performer_expand && contexts.high_performer_expand.length > 0) {
+          sections.push(isZh
+            ? `\n## 角度${perspectiveIndex}：高表现词扩展（生成 ${count} 个，source: "high_performer_expand"）
+用户标记的高表现关键词：
+${contexts.high_performer_expand.join(', ')}
+
+基于这些好词进行语义扩展。包括：
+- 长尾变体（如 "best X for Y", "X vs Z"）
+- 问题词（如 "how to X", "why X"）
+- 比较词（如 "X alternative", "X vs competitor"）
+- 意图变体（信息型/商业型/交易型）`
+            : `\n## Perspective ${perspectiveIndex}: High Performer Expansion (generate ${count}, source: "high_performer_expand")
+User-marked high performer keywords:
+${contexts.high_performer_expand.join(', ')}
+
+Semantically expand these good keywords. Include:
+- Long-tail variants (e.g., "best X for Y", "X vs Z")
+- Question keywords (e.g., "how to X", "why X")
+- Comparison keywords (e.g., "X alternative", "X vs competitor")
+- Intent variants (informational/commercial/transactional)`
+          );
+          perspectiveIndex++;
+        }
+        break;
+
+      case 'industry_context':
+        if (contexts.industry_context?.industry) {
+          sections.push(isZh
+            ? `\n## 角度${perspectiveIndex}：行业上下文（生成 ${count} 个，source: "industry_context"）
+行业：${contexts.industry_context.industry}
+${contexts.industry_context.suggestions ? `用户建议：${contexts.industry_context.suggestions}` : ''}
+
+结合行业特点生成关键词。关注：
+- 行业特定术语和行话
+- 该行业的常见痛点和问题
+- 行业趋势和新兴话题`
+            : `\n## Perspective ${perspectiveIndex}: Industry Context (generate ${count}, source: "industry_context")
+Industry: ${contexts.industry_context.industry}
+${contexts.industry_context.suggestions ? `User suggestions: ${contexts.industry_context.suggestions}` : ''}
+
+Generate keywords based on industry characteristics. Focus on:
+- Industry-specific terminology and jargon
+- Common pain points and problems in this industry
+- Industry trends and emerging topics`
+          );
+          perspectiveIndex++;
+        }
+        break;
+    }
+  });
+
+  // 5. 输出格式说明（简化版，不需要 reasoning）
+  sections.push(isZh
+    ? `\n# 输出格式
+返回 JSON 数组，每个对象包含以下字段：
+- keyword: 关键词（目标语言）
+- translation: 翻译（UI语言）
+- intent: 搜索意图，"Informational" | "Transactional" | "Local" | "Commercial" 之一
+- volume: 估计月搜索量（数字）
+- source: 来源模块ID（必须与上面指定的 source 值完全匹配）
+
+示例：
+[
+  {"keyword": "best ai writing tool", "translation": "最佳AI写作工具", "intent": "Commercial", "volume": 5000, "source": "website_content"},
+  {"keyword": "ai content generator free", "translation": "免费AI内容生成器", "intent": "Transactional", "volume": 3000, "source": "competitor_keywords"}
+]
+
+CRITICAL: 
+1. 返回 ONLY 一个有效的 JSON 数组
+2. 不要包含任何解释、思考过程或 markdown 格式
+3. 每个 source 字段必须与对应角度指定的值完全匹配
+4. 只返回 JSON 数组`
+    : `\n# Output Format
+Return a JSON array, each object containing:
+- keyword: The keyword (target language)
+- translation: Translation (UI language)
+- intent: Search intent, one of "Informational" | "Transactional" | "Local" | "Commercial"
+- volume: Estimated monthly search volume (number)
+- source: Source module ID (must exactly match the source value specified above)
+
+Example:
+[
+  {"keyword": "best ai writing tool", "translation": "最佳AI写作工具", "intent": "Commercial", "volume": 5000, "source": "website_content"},
+  {"keyword": "ai content generator free", "translation": "免费AI内容生成器", "intent": "Transactional", "volume": 3000, "source": "competitor_keywords"}
+]
+
+CRITICAL:
+1. Return ONLY a valid JSON array
+2. Do NOT include any explanations, thoughts, or markdown formatting
+3. Each source field must exactly match the specified value for that perspective
+4. Return ONLY the JSON array`
+  );
+
+  return sections.join('\n');
+}
+
+/**
+ * 获取策略模块的显示名称
+ */
+export function getStrategyModuleName(id: StrategyModuleId, language: 'zh' | 'en'): string {
+  const names: Record<StrategyModuleId, { zh: string; en: string }> = {
+    website_content: { zh: '网站内容分析', en: 'Website Content Analysis' },
+    website_ranked: { zh: '网站已排名词', en: 'Website Ranked Keywords' },
+    competitor_keywords: { zh: '竞对关键词', en: 'Competitor Keywords' },
+    high_performer_expand: { zh: '高表现词扩展', en: 'High Performer Expansion' },
+    industry_context: { zh: '行业上下文', en: 'Industry Context' }
+  };
+  return names[id][language];
+}
+
+/**
+ * 获取默认的策略模块配置
+ */
+export function getDefaultStrategyConfigs(): Record<StrategyModuleId, StrategyModuleConfig> {
+  return {
+    website_content: { id: 'website_content', enabled: true, count: 10 },
+    website_ranked: { id: 'website_ranked', enabled: false, count: 10 },
+    competitor_keywords: { id: 'competitor_keywords', enabled: false, count: 10 },
+    high_performer_expand: { id: 'high_performer_expand', enabled: false, count: 10 },
+    industry_context: { id: 'industry_context', enabled: false, count: 10 }
+  };
+}

@@ -49,6 +49,14 @@ export interface DataForSEOData {
 // 保留向后兼容
 export type SErankingData = DataForSEOData;
 
+// 策略模块 ID 类型（用于关键词来源标记）
+export type StrategyModuleId = 
+  | 'website_content'
+  | 'website_ranked'
+  | 'competitor_keywords'
+  | 'high_performer_expand'
+  | 'industry_context';
+
 export interface KeywordData {
   id: string;
   keyword: string; // The keyword in target language
@@ -57,7 +65,11 @@ export interface KeywordData {
   volume: number; // Estimated monthly volume
 
   // Source tracking
-  source?: 'manual' | 'website-audit'; // 标记关键词来源：手动输入 或 存量拓新
+  source?: 'manual' | 'website-audit' | 'strategy-audit'; // 标记关键词来源
+  sources?: StrategyModuleId[]; // 策略模块来源（支持多来源）
+  
+  // 高表现词标记
+  isHighPerformer?: boolean;
 
   // DataForSEO API Data (before SERP analysis)
   dataForSEOData?: DataForSEOData;
