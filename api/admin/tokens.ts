@@ -95,12 +95,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return sendErrorResponse(res, null, 'name, token, and owner_name are required', 400);
         }
 
-        const newToken = await createGitHubToken({ name, token, owner_name });
+        const result = await createGitHubToken({ name, token, owner_name });
+        
+        // 检查是否返回错误
+        if ('error' in result) {
+          return sendErrorResponse(res, null, result.error, 409);
+        }
 
         return res.json({
           success: true,
           data: {
-            ...newToken,
+            ...result,
             token_encrypted: undefined,
             token_preview: '****' + token.slice(-4)
           }
@@ -119,12 +124,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return sendErrorResponse(res, null, `Invalid platform. Must be one of: ${validPlatforms.join(', ')}`, 400);
         }
 
-        const newToken = await createPlatformToken({ platform, token, name });
+        const result = await createPlatformToken({ platform, token, name });
+        
+        // 检查是否返回错误
+        if ('error' in result) {
+          return sendErrorResponse(res, null, result.error, 409);
+        }
 
         return res.json({
           success: true,
           data: {
-            ...newToken,
+            ...result,
             token_encrypted: undefined,
             token_preview: '****' + token.slice(-4)
           }

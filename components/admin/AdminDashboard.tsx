@@ -652,7 +652,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                         <SelectTrigger className="rounded-xl bg-zinc-800 border-zinc-700">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                        <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
                           {Object.entries(PLATFORM_CONFIG)
                             .filter(([key]) => key !== 'github_pages')
                             .map(([key, config]) => (
@@ -805,7 +805,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                         <SelectTrigger className="rounded-xl bg-zinc-800 border-zinc-700">
                           <SelectValue placeholder="Select GitHub Token" />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                        <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
                           {githubTokens.filter(t => t.status === 'active').map((t) => (
                             <SelectItem key={t.id} value={t.id}>
                               <div className="flex items-center gap-2">
@@ -826,7 +826,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                         <SelectTrigger className="rounded-xl bg-zinc-800 border-zinc-700">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                        <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
                           {Object.entries(PLATFORM_CONFIG).map(([key, config]) => (
                             <SelectItem key={key} value={key}>
                               <div className="flex items-center gap-2">
@@ -848,7 +848,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                           <SelectTrigger className="rounded-xl bg-zinc-800 border-zinc-700">
                             <SelectValue placeholder="Select Platform Token" />
                           </SelectTrigger>
-                          <SelectContent className="bg-zinc-900 border-zinc-800">
+                          <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
                             {platformTokens
                               .filter(t => t.status === 'active' && t.platform === newSite.platform)
                               .map((t) => (
@@ -869,7 +869,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                         <SelectTrigger className="rounded-xl bg-zinc-800 border-zinc-700">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent className="bg-zinc-900 border-zinc-800">
+                        <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
                           <SelectItem value="informational">📚 信息型</SelectItem>
                           <SelectItem value="commercial">🏷️ 商业型</SelectItem>
                         </SelectContent>

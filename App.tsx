@@ -10877,6 +10877,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         </div>
                       )}
 
+                      {/* 策略模式下的顶部间距 */}
+                      {useStrategyMode && <div className="mt-4" />}
+
                       {/* Redesigned Input Design - Similar to Blue Ocean Mode */}
                       <div
                         className={cn(

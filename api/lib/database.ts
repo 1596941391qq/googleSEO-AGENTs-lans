@@ -3477,7 +3477,7 @@ export async function initPSEOPublishTables() {
       
       try {
         await sql`ALTER TABLE github_tokens ADD CONSTRAINT github_tokens_valid_status CHECK (status IN ('active', 'disabled'))`;
-      } catch (e: any) { if (!e.message?.includes('already exists')) throw e; }
+      } catch (e: any) { /* 忽略已存在错误 */ }
 
       // 2. 平台 Token 表 - 各发布平台的 API Token
       await sql`
@@ -3495,11 +3495,11 @@ export async function initPSEOPublishTables() {
       
       try {
         await sql`ALTER TABLE platform_tokens_v2 ADD CONSTRAINT platform_tokens_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel'))`;
-      } catch (e: any) { if (!e.message?.includes('already exists')) throw e; }
+      } catch (e: any) { /* 忽略已存在错误 */ }
       
       try {
         await sql`ALTER TABLE platform_tokens_v2 ADD CONSTRAINT platform_tokens_v2_valid_status CHECK (status IN ('active', 'disabled'))`;
-      } catch (e: any) { if (!e.message?.includes('already exists')) throw e; }
+      } catch (e: any) { /* 忽略已存在错误 */ }
 
       // 3. 平台站点表 - 实际的发布站点
       await sql`
@@ -3523,15 +3523,15 @@ export async function initPSEOPublishTables() {
       
       try {
         await sql`ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel', 'github_pages'))`;
-      } catch (e: any) { if (!e.message?.includes('already exists')) throw e; }
+      } catch (e: any) { /* 忽略已存在错误 */ }
       
       try {
         await sql`ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_content_type CHECK (content_type IN ('informational', 'commercial'))`;
-      } catch (e: any) { if (!e.message?.includes('already exists')) throw e; }
+      } catch (e: any) { /* 忽略已存在错误 */ }
       
       try {
         await sql`ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_status CHECK (status IN ('pending', 'active', 'disabled'))`;
-      } catch (e: any) { if (!e.message?.includes('already exists')) throw e; }
+      } catch (e: any) { /* 忽略已存在错误 */ }
 
       // 4. 项目-站点绑定表
       await sql`
@@ -3546,11 +3546,11 @@ export async function initPSEOPublishTables() {
       
       try {
         await sql`ALTER TABLE project_site_bindings_v2 ADD CONSTRAINT project_site_bindings_v2_valid_content_type CHECK (content_type IN ('informational', 'commercial'))`;
-      } catch (e: any) { if (!e.message?.includes('already exists')) throw e; }
+      } catch (e: any) { /* 忽略已存在错误 */ }
       
       try {
         await sql`ALTER TABLE project_site_bindings_v2 ADD CONSTRAINT project_site_bindings_v2_unique UNIQUE (project_id, content_type)`;
-      } catch (e: any) { if (!e.message?.includes('already exists')) throw e; }
+      } catch (e: any) { /* 忽略已存在错误 */ }
 
       // 5. 给 published_articles 表添加新字段
       try {
@@ -3610,14 +3610,47 @@ export async function initPSEOPublishTables() {
 // ============================================================================
 
 /**
+ * 检查 GitHub Token 是否已存在（按 name 或 owner_name 检查）
+ */
+export async function checkGitHubTokenExists(data: {
+  name?: string;
+  owner_name?: string;
+}): Promise<{ exists: boolean; field?: string; value?: string }> {
+  await initPSEOPublishTables();
+  
+  if (data.name) {
+    const result = await sql`SELECT id FROM github_tokens WHERE name = ${data.name}`;
+    if (result.rows.length > 0) {
+      return { exists: true, field: 'name', value: data.name };
+    }
+  }
+  
+  if (data.owner_name) {
+    const result = await sql`SELECT id FROM github_tokens WHERE owner_name = ${data.owner_name}`;
+    if (result.rows.length > 0) {
+      return { exists: true, field: 'owner_name', value: data.owner_name };
+    }
+  }
+  
+  return { exists: false };
+}
+
+/**
  * 创建 GitHub Token
  */
 export async function createGitHubToken(data: {
   name: string;
   token: string;
   owner_name: string;
-}): Promise<GitHubToken> {
+}): Promise<GitHubToken | { error: string }> {
   await initPSEOPublishTables();
+  
+  // 检查重复
+  const existsCheck = await checkGitHubTokenExists({ name: data.name, owner_name: data.owner_name });
+  if (existsCheck.exists) {
+    return { error: `GitHub Token with ${existsCheck.field} "${existsCheck.value}" already exists` };
+  }
+  
   const tokenEncrypted = Buffer.from(data.token).toString('base64');
   
   const result = await sql<GitHubToken>`
@@ -3694,14 +3727,42 @@ export async function incrementGitHubTokenUsage(tokenId: string): Promise<void> 
 // ============================================================================
 
 /**
+ * 检查平台 Token 是否已存在（按 name + platform 检查）
+ */
+export async function checkPlatformTokenExists(data: {
+  name: string;
+  platform: string;
+}): Promise<{ exists: boolean; message?: string }> {
+  await initPSEOPublishTables();
+  
+  // 检查相同平台下是否有同名 Token
+  const result = await sql`
+    SELECT id FROM platform_tokens_v2 
+    WHERE name = ${data.name} AND platform = ${data.platform}
+  `;
+  if (result.rows.length > 0) {
+    return { exists: true, message: `Platform Token "${data.name}" for ${data.platform} already exists` };
+  }
+  
+  return { exists: false };
+}
+
+/**
  * 创建平台 Token
  */
 export async function createPlatformToken(data: {
   platform: PlatformToken['platform'];
   token: string;
   name: string;
-}): Promise<PlatformToken> {
+}): Promise<PlatformToken | { error: string }> {
   await initPSEOPublishTables();
+  
+  // 检查重复
+  const existsCheck = await checkPlatformTokenExists({ name: data.name, platform: data.platform });
+  if (existsCheck.exists) {
+    return { error: existsCheck.message || 'Token already exists' };
+  }
+  
   const tokenEncrypted = Buffer.from(data.token).toString('base64');
   
   const result = await sql<PlatformToken>`

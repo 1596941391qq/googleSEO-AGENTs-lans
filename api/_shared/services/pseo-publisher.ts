@@ -26,7 +26,7 @@ import {
   GitHubToken,
   PlatformToken,
   PlatformSite,
-} from '../lib/database.js';
+} from '../../lib/database.js';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ArticleForPublish {
