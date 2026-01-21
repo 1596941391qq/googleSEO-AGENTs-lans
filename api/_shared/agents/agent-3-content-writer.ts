@@ -66,6 +66,17 @@ export interface ProcessedPromotedWebsite {
 }
 
 /**
+ * 可用图片资源（用于写手在文章中插入）
+ */
+export interface AvailableImage {
+  url: string;
+  theme: string;
+  description?: string;
+  isScreenshot?: boolean;
+  sourceUrl?: string;  // 如果是推广截图，附带来源URL
+}
+
+/**
  * 生成内容
  * 
  * 基于SEO研究报告、搜索引擎偏好分析和竞争对手分析，生成高质量的文章内容
@@ -100,7 +111,8 @@ export async function generateContent(
   promotionIntensity?: "natural" | "strong",
   processedPromotedWebsites?: ProcessedPromotedWebsite[],
   onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  availableImages?: AvailableImage[]  // 新增：可用图片资源，用于在文章中插入
 ): Promise<ContentGenerationResult> {
   try {
     // 获取 Content Writer prompt - 使用 targetLanguage 来确定生成内容的语言
@@ -330,7 +342,8 @@ Please naturally integrate introductions and recommendations for these websites 
       referenceContext: fullReferenceContext,
       wordCountHint,
       promotedWebsites,
-      promotionIntensity
+      promotionIntensity,
+      availableImages  // 传递可用图片资源
     });
 
     // 验证 prompt

@@ -444,6 +444,14 @@ export const STORAGE_KEYS = {
   WORKFLOW_CONFIGS: 'google_seo_workflow_configs',
 } as const;
 
+// 新存储系统的 key 前缀和常量
+export const SMART_STORAGE_KEYS = {
+  PREFIX: 'gss_',
+  TASK_META: 'gss_task_meta',
+  TASK_INDEX: 'gss_task_index',
+  SETTINGS: 'gss_settings',
+} as const;
+
 export interface AppState {
   // Task Management
   taskManager: TaskManagerState;
@@ -584,6 +592,13 @@ export interface ProjectWithStats extends Project {
   type?: 'project' | 'task';
   status?: string;
   task_type?: string;
+  // 挖掘任务额外信息
+  mining_mode?: 'blue-ocean' | 'existing-website-audit';
+  website_url?: string;
+  website_domain?: string;
+  // 归档相关
+  deleted_at?: string | null;
+  is_archived?: boolean;
 }
 
 export interface KeywordWithStatus {

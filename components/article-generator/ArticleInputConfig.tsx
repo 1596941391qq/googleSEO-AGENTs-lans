@@ -134,7 +134,8 @@ export interface ArticleConfig {
   visualStyle: string;
   targetAudience: "beginner" | "expert";
   targetMarket: string;
-  promotedWebsites?: string[]; // 推广网站 URL 或已绑定网站 ID
+  websiteId: string; // 必需：关联的用户网站 ID (来自 user_websites 表)
+  websiteUrl?: string; // 可选：网站 URL，用于在文章中推广
   promotionIntensity?: "natural" | "strong"; // 推广强度
   reference?: {
     type: "document" | "url";
@@ -172,9 +173,9 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   const [targetMarket, setTargetMarket] = useState(initialTargetMarket);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Promotion state
-  const [promotedWebsites, setPromotedWebsites] = useState<string[]>(initialPromotedWebsites);
-  const [newPromoUrl, setNewPromoUrl] = useState("");
+  // Promotion state - 单选必填
+  const [selectedWebsiteId, setSelectedWebsiteId] = useState<string>("");
+  const [selectedWebsiteUrl, setSelectedWebsiteUrl] = useState<string>("");
   const [promotionIntensity, setPromotionIntensity] = useState<"natural" | "strong">(initialPromotionIntensity);
   const [boundWebsites, setBoundWebsites] = useState<Array<{id: string, url: string, domain: string, title?: string}>>([]);
   const [isLoadingWebsites, setIsLoadingWebsites] = useState(false);
@@ -200,33 +201,16 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
     fetchWebsites();
   }, [userId]);
 
-  const handleAddPromoUrl = (e: React.KeyboardEvent | React.MouseEvent) => {
-    if (e.type === 'keydown' && (e as React.KeyboardEvent).key !== 'Enter') return;
-    
-    const url = newPromoUrl.trim();
-    if (!url) return;
-
-    if (!isValidUrl(url)) {
-      alert(uiLanguage === "zh" ? "请输入有效的 URL (例如: https://example.com)" : "Please enter a valid URL (e.g., https://example.com)");
-      return;
-    }
-
-    if (!promotedWebsites.includes(url)) {
-      setPromotedWebsites([...promotedWebsites, url]);
-      setNewPromoUrl("");
-    }
+  // 选择绑定的网站（单选必填）
+  const selectBoundWebsite = (website: {id: string, url: string, domain: string}) => {
+    setSelectedWebsiteId(website.id);
+    setSelectedWebsiteUrl(website.url);
   };
 
-  const removePromoUrl = (url: string) => {
-    setPromotedWebsites(promotedWebsites.filter(u => u !== url));
-  };
-
-  const toggleBoundWebsite = (url: string) => {
-    if (promotedWebsites.includes(url)) {
-      setPromotedWebsites(promotedWebsites.filter(u => u !== url));
-    } else {
-      setPromotedWebsites([...promotedWebsites, url]);
-    }
+  // 清除选择
+  const clearSelectedWebsite = () => {
+    setSelectedWebsiteId("");
+    setSelectedWebsiteUrl("");
   };
 
   // Update local state when initial props change
@@ -470,10 +454,14 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
     e.preventDefault();
     if (!keyword.trim()) return;
 
-    // Robustness: If there's a valid URL in the promo input but not added yet, add it
-    let finalPromotedWebsites = [...promotedWebsites];
-    if (newPromoUrl.trim() && isValidUrl(newPromoUrl.trim()) && !finalPromotedWebsites.includes(newPromoUrl.trim())) {
-      finalPromotedWebsites.push(newPromoUrl.trim());
+    // 验证必须选择推广网站
+    if (!selectedWebsiteId) {
+      alert(
+        uiLanguage === "zh"
+          ? "请选择一个推广网站（必填）"
+          : "Please select a promotion website (required)"
+      );
+      return;
     }
 
     // Validate URL if provided
@@ -514,7 +502,8 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
       visualStyle,
       targetAudience: audience,
       targetMarket,
-      promotedWebsites: finalPromotedWebsites.length > 0 ? finalPromotedWebsites : undefined,
+      websiteId: selectedWebsiteId,
+      websiteUrl: selectedWebsiteUrl,
       promotionIntensity,
     };
 
@@ -598,78 +587,91 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
 
         {/* Step 2: Three-Column Grid Layout ( 平铺展示 ) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Column 1: Website Promotion */}
+          {/* Column 1: Website Promotion (必选单选) */}
           <div className={cn(
             "p-5 rounded-2xl border transition-all flex flex-col",
-            isDarkTheme ? "bg-black/20 border-white/5" : "bg-white border-gray-100 shadow-sm"
+            isDarkTheme ? "bg-black/20 border-white/5" : "bg-white border-gray-100 shadow-sm",
+            !selectedWebsiteId && "border-amber-500/30"
           )}>
             <div className="flex items-center space-x-2 mb-4">
               <div className="p-1.5 bg-blue-500/10 rounded-lg">
                 <Rocket className="text-blue-400" size={16} />
               </div>
               <h3 className={cn("text-xs font-bold uppercase tracking-wider", isDarkTheme ? "text-white" : "text-gray-900")}>
-                {uiLanguage === "zh" ? "网站推广" : "Promotion"}
+                {uiLanguage === "zh" ? "推广网站" : "Promotion Website"}
+                <span className="text-amber-400 ml-1">*</span>
               </h3>
             </div>
 
             <div className="space-y-4 flex-1">
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  value={newPromoUrl}
-                  onChange={(e) => setNewPromoUrl(e.target.value)}
-                  onKeyDown={handleAddPromoUrl}
-                  placeholder={uiLanguage === "zh" ? "输入推广 URL" : "URL"}
-                  className={cn(
-                    "flex-1 text-[11px] p-2.5 rounded-lg border focus:outline-none",
-                    isDarkTheme ? "bg-black/40 border-white/5 text-white" : "bg-gray-50 border-gray-200"
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={handleAddPromoUrl}
-                  className="px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-[11px] font-bold border border-white/5"
-                >
-                  {uiLanguage === "zh" ? "添加" : "Add"}
-                </button>
-              </div>
-
-              {promotedWebsites.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {promotedWebsites.map(url => (
-                    <div key={url} className="flex items-center space-x-1 px-2 py-1 bg-blue-500/10 border border-blue-500/20 rounded-md text-[9px] text-blue-300">
-                      <span className="truncate max-w-[80px]">{url}</span>
-                      <button onClick={() => removePromoUrl(url)} className="hover:text-white">
-                        <X size={10} />
-                      </button>
-                    </div>
-                  ))}
+              {/* 当前选中的网站 */}
+              {selectedWebsiteId && (
+                <div className="flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <CheckCircle2 size={14} className="text-blue-400" />
+                    <span className="text-[11px] font-bold text-blue-300 truncate max-w-[140px]">
+                      {boundWebsites.find(w => w.id === selectedWebsiteId)?.domain || selectedWebsiteUrl}
+                    </span>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={clearSelectedWebsite} 
+                    className="text-blue-400 hover:text-white"
+                  >
+                    <X size={12} />
+                  </button>
                 </div>
               )}
 
-              {boundWebsites.length > 0 && (
-                <div className="pt-3 border-t border-white/5">
-                  <div className="grid grid-cols-1 gap-1.5 max-h-[100px] overflow-y-auto pr-1 custom-scrollbar">
+              {/* 网站列表 */}
+              {isLoadingWebsites ? (
+                <div className="flex items-center justify-center p-4">
+                  <Loader2 size={16} className="animate-spin text-gray-500" />
+                  <span className="text-[10px] text-gray-500 ml-2">
+                    {uiLanguage === "zh" ? "加载中..." : "Loading..."}
+                  </span>
+                </div>
+              ) : boundWebsites.length > 0 ? (
+                <div className="space-y-2">
+                  <span className="text-[9px] font-black text-gray-500 uppercase">
+                    {uiLanguage === "zh" ? "选择您的网站" : "Select Your Website"}
+                  </span>
+                  <div className="grid grid-cols-1 gap-1.5 max-h-[120px] overflow-y-auto pr-1 custom-scrollbar">
                     {boundWebsites.map(site => (
                       <button
                         key={site.id}
                         type="button"
-                        onClick={() => toggleBoundWebsite(site.url)}
+                        onClick={() => selectBoundWebsite(site)}
                         className={cn(
-                          "flex items-center justify-between p-2 rounded-lg border text-left transition-all",
-                          promotedWebsites.includes(site.url)
+                          "flex items-center justify-between p-2.5 rounded-lg border text-left transition-all",
+                          selectedWebsiteId === site.id
                             ? "bg-blue-500/10 border-blue-500/40 text-blue-300"
                             : "bg-black/20 border-white/5 text-gray-400 hover:border-white/20"
                         )}
                       >
-                        <span className="text-[10px] font-medium truncate">{site.domain}</span>
-                        {promotedWebsites.includes(site.url) && <CheckCircle2 size={10} />}
+                        <div className="flex flex-col">
+                          <span className="text-[11px] font-bold truncate max-w-[160px]">{site.domain}</span>
+                          {site.title && (
+                            <span className="text-[9px] text-gray-500 truncate max-w-[160px]">{site.title}</span>
+                          )}
+                        </div>
+                        {selectedWebsiteId === site.id && <CheckCircle2 size={12} className="text-blue-400 shrink-0" />}
                       </button>
                     ))}
                   </div>
                 </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center p-4 border border-dashed border-amber-500/30 rounded-lg bg-amber-500/5">
+                  <Globe size={20} className="text-amber-500/50 mb-2" />
+                  <span className="text-[10px] text-amber-400 text-center">
+                    {uiLanguage === "zh" 
+                      ? "请先在「我的网站」添加网站" 
+                      : "Please add a website in 'My Websites' first"}
+                  </span>
+                </div>
               )}
 
+              {/* 推广强度 */}
               <div className="pt-3 border-t border-white/5 mt-auto">
                 <div className="flex items-center justify-between">
                   <span className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "推广强度" : "Intensity"}</span>
@@ -854,7 +856,7 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
         </div>
 
         {/* Floating Quick Settings Info (Only show when modified) */}
-        {(tone !== "professional" || visualStyle !== "realistic" || targetMarket !== "global" || promotedWebsites.length > 0) && (
+        {(tone !== "professional" || visualStyle !== "realistic" || targetMarket !== "global" || selectedWebsiteId) && (
           <div className="flex justify-center pt-2">
             <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-full flex items-center space-x-3">
               <MousePointer2 size={10} className="text-emerald-400" />
@@ -862,7 +864,7 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                 {uiLanguage === "zh" ? "自定义配置已激活" : "Custom Config Active"}
               </span>
               <div className="flex -space-x-1.5">
-                {promotedWebsites.length > 0 && <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">P</div>}
+                {selectedWebsiteId && <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">W</div>}
                 {tone !== "professional" && <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">T</div>}
                 {visualStyle !== "realistic" && <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">V</div>}
               </div>

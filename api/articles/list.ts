@@ -26,15 +26,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Initialize tables
     await initPublishedArticlesTable();
 
-    // Get articles from published_articles
+    // Get articles from published_articles (LEFT JOIN with user_websites to get website info)
     const result = await sql`
       SELECT 
-        id, title, content, images,
-        keyword, tone, visual_style, target_audience, target_market,
-        status, created_at, updated_at, published_at, url_slug
-      FROM published_articles
-      WHERE user_id::text = ${userId.toString()}
-      ORDER BY created_at DESC
+        pa.id, pa.title, pa.content, pa.images,
+        pa.keyword, pa.tone, pa.visual_style, pa.target_audience, pa.target_market,
+        pa.status, pa.created_at, pa.updated_at, pa.published_at, pa.url_slug,
+        pa.website_id, pa.content_type, pa.site_id,
+        uw.website_domain as website_name, uw.website_url as website_url
+      FROM published_articles pa
+      LEFT JOIN user_websites uw ON pa.website_id = uw.id
+      WHERE pa.user_id::text = ${userId.toString()}
+      ORDER BY pa.created_at DESC
     `;
 
     const publishedArticles = result.rows.map((row) => ({
@@ -52,6 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       updatedAt: row.updated_at,
       publishedAt: row.published_at,
       urlSlug: row.url_slug,
+      websiteId: row.website_id,
+      websiteName: row.website_name,
+      websiteUrl: row.website_url,
+      content_type: row.content_type, // 'informational' | 'commercial'
+      siteId: row.site_id, // 发布到的 PSEO 站点 ID
       source: 'published'
     }));
 

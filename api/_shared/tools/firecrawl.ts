@@ -84,116 +84,159 @@ export function cleanMarkdown(markdown: string, maxLength: number = 12000): stri
  * Scrape a website and return its content in markdown format
  * @param url - The URL to scrape
  * @param includeScreenshot - Whether to capture a screenshot (default: false)
+ * @param maxRetries - Maximum number of retries (default: 2)
  * @returns The scraped content in markdown format
  */
-export async function scrapeWebsite(url: string, includeScreenshot: boolean = false): Promise<ScrapeResult> {
-  try {
-    console.log(`[Firecrawl] Scraping website: ${url} (screenshot: ${includeScreenshot})`);
-
-    const formats = ['markdown'];
-    if (includeScreenshot) {
-      formats.push('screenshot');
-    }
-
-    const response = await fetch(`${FIRECRAWL_BASE_URL}/firecrawl/v1/scrape`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url,
-        formats,
-        onlyMainContent: true,
-        timeout: 30000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[Firecrawl] API error:', response.status, errorText);
-      throw new Error(`Firecrawl API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('[Firecrawl] Response structure:', JSON.stringify(data, null, 2).substring(0, 500));
-
-    // Handle different response formats
-    let markdown = '';
-    let images: string[] = [];
-    let screenshot: string | undefined;
-    let title: string | undefined;
-
-    // Standard Firecrawl format (most common)
-    if (data.success && data.data) {
-      markdown = data.data.markdown || '';
-      images = data.data.images || [];
-      screenshot = typeof data.data.screenshot === 'object' ? data.data.screenshot?.url : data.data.screenshot;
-      title = data.data.title || data.data.metadata?.title;
-    }
-    // Alternative format with pages array (older API version)
-    else if (data.pages && data.pages.length > 0) {
-      const page = data.pages[0];
-      markdown = page.markdown || '';
-      images = page.images || [];
-      screenshot = typeof page.screenshot === 'object' ? page.screenshot?.url : page.screenshot;
-      title = page.title || page.metadata?.title;
-    }
-    // Direct format (some proxies return this)
-    else if (data.markdown) {
-      markdown = data.markdown;
-      images = data.images || [];
-      screenshot = typeof data.screenshot === 'object' ? data.screenshot?.url : data.screenshot;
-      title = data.title || data.metadata?.title;
-    }
-    // Nested data format
-    else if (data.data && data.data.markdown) {
-      markdown = data.data.markdown;
-      images = data.data.images || [];
-      screenshot = typeof data.data.screenshot === 'object' ? data.data.screenshot?.url : data.data.screenshot;
-      title = data.data.title || data.data.metadata?.title;
-    }
-    else {
-      console.error('[Firecrawl] Unexpected response format:', data);
-      throw new Error('No content returned from Firecrawl API');
-    }
-
-    if (!markdown || markdown.trim() === '') {
-      throw new Error('Empty content returned from Firecrawl API');
-    }
-
-    console.log(`[Firecrawl] Successfully scraped ${markdown.length} characters of markdown${screenshot ? ' + screenshot' : ''}`);
-
-    // If screenshot is a URL, convert it to Base64 to make it permanent
-    if (screenshot && typeof screenshot === 'string' && screenshot.trim().toLowerCase().startsWith('http')) {
-      try {
-        console.log(`[Firecrawl] Converting screenshot URL to Base64: ${screenshot.substring(0, 50)}...`);
-        const imgResponse = await fetch(screenshot);
-        if (imgResponse && imgResponse.ok) {
-          const buffer = await imgResponse.arrayBuffer();
-          const base64 = Buffer.from(buffer).toString('base64');
-          const contentType = imgResponse.headers.get('content-type') || 'image/png';
-          screenshot = `data:${contentType};base64,${base64}`;
-          console.log(`[Firecrawl] Successfully converted screenshot to Base64 (${screenshot.length} chars)`);
-        } else {
-          console.warn(`[Firecrawl] Failed to fetch screenshot for Base64 conversion: ${imgResponse?.status || 'no response'}`);
-        }
-      } catch (error: any) {
-        console.warn(`[Firecrawl] Error converting screenshot to Base64: ${error?.message || String(error)}`);
-        // Keep the original URL as fallback
-      }
-    }
-
-    return {
-      markdown,
-      images,
-      screenshot,
-      title,
-    };
-  } catch (error: any) {
-    console.error('[Firecrawl] Scraping failed:', error);
-    throw error;
+export async function scrapeWebsite(
+  url: string, 
+  includeScreenshot: boolean = false,
+  maxRetries: number = 2
+): Promise<ScrapeResult> {
+  const formats = ['markdown'];
+  if (includeScreenshot) {
+    formats.push('screenshot');
   }
+
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // 重试前增加延迟（首次不延迟）
+    if (attempt > 0) {
+      const delay = 1500 * attempt; // 1.5s, 3s 递增延迟
+      console.log(`[Firecrawl] 重试 ${attempt}/${maxRetries}，延迟 ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    // 添加 AbortController 超时控制（45秒）
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+    try {
+      console.log(`[Firecrawl] Scraping website: ${url} (screenshot: ${includeScreenshot}, attempt: ${attempt + 1})`);
+
+      const response = await fetch(`${FIRECRAWL_BASE_URL}/firecrawl/v1/scrape`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url,
+          formats,
+          onlyMainContent: true,
+          timeout: 30000,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Firecrawl] API error:', response.status, errorText);
+        throw new Error(`Firecrawl API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      // 只在首次成功时打印详细日志
+      if (attempt === 0) {
+        console.log('[Firecrawl] Response structure:', JSON.stringify(data, null, 2).substring(0, 500));
+      }
+
+      // Handle different response formats
+      let markdown = '';
+      let images: string[] = [];
+      let screenshot: string | undefined;
+      let title: string | undefined;
+
+      // Standard Firecrawl format (most common)
+      if (data.success && data.data) {
+        markdown = data.data.markdown || '';
+        images = data.data.images || [];
+        screenshot = typeof data.data.screenshot === 'object' ? data.data.screenshot?.url : data.data.screenshot;
+        title = data.data.title || data.data.metadata?.title;
+      }
+      // Alternative format with pages array (older API version)
+      else if (data.pages && data.pages.length > 0) {
+        const page = data.pages[0];
+        markdown = page.markdown || '';
+        images = page.images || [];
+        screenshot = typeof page.screenshot === 'object' ? page.screenshot?.url : page.screenshot;
+        title = page.title || page.metadata?.title;
+      }
+      // Direct format (some proxies return this)
+      else if (data.markdown) {
+        markdown = data.markdown;
+        images = data.images || [];
+        screenshot = typeof data.screenshot === 'object' ? data.screenshot?.url : data.screenshot;
+        title = data.title || data.metadata?.title;
+      }
+      // Nested data format
+      else if (data.data && data.data.markdown) {
+        markdown = data.data.markdown;
+        images = data.data.images || [];
+        screenshot = typeof data.data.screenshot === 'object' ? data.data.screenshot?.url : data.data.screenshot;
+        title = data.data.title || data.data.metadata?.title;
+      }
+      else {
+        console.error('[Firecrawl] Unexpected response format:', data);
+        throw new Error('No content returned from Firecrawl API');
+      }
+
+      if (!markdown || markdown.trim() === '') {
+        throw new Error('Empty content returned from Firecrawl API');
+      }
+
+      console.log(`[Firecrawl] Successfully scraped ${markdown.length} characters of markdown${screenshot ? ' + screenshot' : ''}`);
+
+      // If screenshot is a URL, convert it to Base64 to make it permanent
+      if (screenshot && typeof screenshot === 'string' && screenshot.trim().toLowerCase().startsWith('http')) {
+        try {
+          console.log(`[Firecrawl] Converting screenshot URL to Base64: ${screenshot.substring(0, 50)}...`);
+          const imgResponse = await fetch(screenshot);
+          if (imgResponse && imgResponse.ok) {
+            const buffer = await imgResponse.arrayBuffer();
+            const base64 = Buffer.from(buffer).toString('base64');
+            const contentType = imgResponse.headers.get('content-type') || 'image/png';
+            screenshot = `data:${contentType};base64,${base64}`;
+            console.log(`[Firecrawl] Successfully converted screenshot to Base64 (${screenshot.length} chars)`);
+          } else {
+            console.warn(`[Firecrawl] Failed to fetch screenshot for Base64 conversion: ${imgResponse?.status || 'no response'}`);
+          }
+        } catch (error: any) {
+          console.warn(`[Firecrawl] Error converting screenshot to Base64: ${error?.message || String(error)}`);
+          // Keep the original URL as fallback
+        }
+      }
+
+      return {
+        markdown,
+        images,
+        screenshot,
+        title,
+      };
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      lastError = error;
+
+      const isTimeout = error.name === 'AbortError' || 
+                        error.message?.includes('timeout') ||
+                        error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT';
+
+      if (isTimeout) {
+        console.warn(`[Firecrawl] 请求超时 (45s): "${url}" (尝试 ${attempt + 1}/${maxRetries + 1})`);
+      } else {
+        console.error(`[Firecrawl] API 调用失败: "${url}"`, error.message);
+      }
+
+      // 继续重试
+      if (attempt < maxRetries) continue;
+    }
+  }
+
+  // 所有重试都失败
+  console.error(`[Firecrawl] 所有重试都失败: "${url}"`, lastError?.message);
+  throw lastError || new Error('Firecrawl API 调用失败');
 }
 
 export interface WebsitePage {

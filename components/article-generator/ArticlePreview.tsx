@@ -33,6 +33,7 @@ interface ArticlePreviewProps {
     qualityReview?: any;
     seo_meta?: any;
     logic_check?: string;
+    contentType?: "informational" | "commercial"; // AI 标记的内容类型
   };
   onClose: () => void;
   articleConfig?: {
@@ -41,6 +42,7 @@ interface ArticlePreviewProps {
     visualStyle?: string;
     targetAudience?: string;
     targetMarket?: string;
+    websiteId?: string; // 关联的用户网站 ID
   };
   uiLanguage?: "en" | "zh";
   isDarkTheme?: boolean;
@@ -84,6 +86,9 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
   const handleSave = async () => {
     setIsSaving(true);
     try {
+      // 从 finalArticle 中提取 contentType（AI 在生成时标记的）
+      const contentType = finalArticle.contentType || "informational"; // 默认为信息型
+      
       const response = await fetch("/api/articles/save", {
         method: "POST",
         headers: {
@@ -99,6 +104,8 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           visualStyle: articleConfig?.visualStyle || null,
           targetAudience: articleConfig?.targetAudience || null,
           targetMarket: articleConfig?.targetMarket || null,
+          websiteId: articleConfig?.websiteId || null, // 关联的用户网站 ID
+          contentType: contentType, // AI 标记的内容类型
         }),
       });
 
@@ -826,9 +833,12 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
       );
     }
 
-    // Naive image injection - this should be handled by the backend Agent 3 logic ideally,
-    // but here we just render them at the top or specific placeholders if we had them.
-    // For this MVP, let's just render images at the top after title.
+    // 检测 Markdown 内容中是否已经包含了嵌入的图片
+    // 如果写手已经在文章中嵌入了图片（![...](...)），就不再在开头显示图片网格
+    const hasEmbeddedImages = content && /!\[.*?\]\(.*?\)/.test(content);
+    
+    // 只有当文章中没有嵌入图片，且有独立的图片数据时，才在开头显示图片网格（兼容旧文章）
+    const shouldShowImageGrid = !hasEmbeddedImages && finalArticle.images.length > 0;
 
     return (
       <div
@@ -837,8 +847,8 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           isDarkTheme ? "prose-invert prose-lg" : "prose-lg"
         )}
       >
-        {/* Images Grid */}
-        {finalArticle.images.length > 0 && (
+        {/* Images Grid - 仅当文章中没有嵌入图片时显示（兼容旧文章） */}
+        {shouldShowImageGrid && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 not-prose mb-8">
             {finalArticle.images.map((img, i) => (
               <div
@@ -883,7 +893,11 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           </div>
         )}
 
-        <MarkdownContent content={content} isDarkTheme={isDarkTheme} />
+        <MarkdownContent 
+          content={content} 
+          isDarkTheme={isDarkTheme} 
+          onImageClick={(url, alt) => setLightboxImage({ url, prompt: alt })}
+        />
 
         {/* SEO Meta Card */}
         {(articleData.seo_meta || finalArticle.seo_meta) && (

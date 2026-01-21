@@ -219,7 +219,8 @@ interface ArticleGeneratorLayoutProps {
     targetAudience: string;
     visualStyle: string;
     targetMarket?: string;
-    promotedWebsites?: string[];
+    websiteId?: string; // 关联的用户网站 ID
+    websiteUrl?: string; // 网站 URL
     promotionIntensity?: "natural" | "strong";
     reference?: any; // Added reference field to state
     isGenerating: boolean;
@@ -236,6 +237,7 @@ interface ArticleGeneratorLayoutProps {
       title: string;
       content: string;
       images: { url: string; prompt: string; placement: string }[];
+      contentType?: "informational" | "commercial"; // AI 标记的内容类型
     } | null;
   };
   onStateChange?: (
@@ -245,7 +247,8 @@ interface ArticleGeneratorLayoutProps {
       targetAudience: string;
       visualStyle: string;
       targetMarket: string;
-      promotedWebsites: string[];
+      websiteId: string;
+      websiteUrl: string;
       promotionIntensity: "natural" | "strong";
       isGenerating: boolean;
       progress: number;
@@ -266,6 +269,7 @@ interface ArticleGeneratorLayoutProps {
         qualityReview?: any;
         seo_meta?: { title?: string; description?: string };
         logic_check?: string;
+        contentType?: "informational" | "commercial";
       } | null;
     }>
   ) => void;
@@ -513,7 +517,8 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
       targetAudience: config.targetAudience,
       visualStyle: config.visualStyle,
       targetMarket: config.targetMarket,
-      promotedWebsites: config.promotedWebsites,
+      websiteId: config.websiteId,
+      websiteUrl: config.websiteUrl,
       promotionIntensity: config.promotionIntensity,
       // Ensure reference is preserved in state
       reference: config.reference,
@@ -1019,6 +1024,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                 visualStyle: (state as any).visualStyle || "realistic",
                 targetAudience: (state as any).targetAudience || "beginner",
                 targetMarket: (state as any).targetMarket,
+                websiteId: (state as any).websiteId, // 传递关联的网站 ID
               }}
               uiLanguage={uiLanguage}
               isDarkTheme={isDarkTheme}
@@ -1045,6 +1051,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                   visualStyle: (state as any).visualStyle || "realistic",
                   targetAudience: (state as any).targetAudience || "beginner",
                   targetMarket: (state as any).targetMarket,
+                  websiteId: (state as any).websiteId, // 传递关联的网站 ID
                 }}
                 uiLanguage={uiLanguage}
                 isDarkTheme={isDarkTheme}

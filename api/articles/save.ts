@@ -47,11 +47,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       visualStyle,
       targetAudience,
       targetMarket,
+      websiteId,      // 关联的用户网站 ID (必需)
+      contentType,    // 内容类型: 'informational' | 'commercial' (AI 生成时标记)
     } = body;
 
     // 验证必需字段
     if (!title || !content) {
       return sendErrorResponse(res, null, 'title and content are required', 400);
+    }
+    
+    // 验证 websiteId 必需
+    if (!websiteId) {
+      return sendErrorResponse(res, null, 'websiteId is required - please select a promotion website', 400);
+    }
+    
+    // 验证 contentType 必需
+    if (!contentType || !['informational', 'commercial'].includes(contentType)) {
+      return sendErrorResponse(res, null, 'contentType must be "informational" or "commercial"', 400);
     }
 
     // 验证并清理 images 数组
@@ -67,6 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       INSERT INTO published_articles (
         user_id, title, content, images,
         keyword, tone, visual_style, target_audience, target_market,
+        website_id, content_type,
         status
       )
       VALUES (
@@ -79,9 +92,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ${visualStyle || null},
         ${targetAudience || null},
         ${targetMarket || null},
+        ${websiteId},
+        ${contentType},
         'draft'
       )
-      RETURNING id, created_at
+      RETURNING id, created_at, website_id, content_type
     `;
 
     const article = result.rows[0];
@@ -90,6 +105,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       data: {
         articleId: article.id,
+        websiteId: article.website_id,
+        contentType: article.content_type,
         message: 'Article saved successfully',
         createdAt: article.created_at,
       },

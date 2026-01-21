@@ -209,7 +209,7 @@ export const KEYWORD_MINING_PROMPTS = {
     "translation": "翻译（如需要）",
     "intent": "Informational" | "Transactional" | "Local" | "Commercial",
     "volume": 估计月搜索量,
-    "reasoning": "解释为什么这个词在 2026 年具有增长潜力，它解决了用户的什么痛点？(要求 50-100 字)"
+    "reasoning": "解释为什么这个词在 2026 年具有增长潜力，它解决了用户的什么痛点？(要求 20-30 字)"
   }
 ]
 
@@ -1469,6 +1469,13 @@ export function getContentWriterPrompt(
     wordCountHint?: string;
     promotedWebsites?: string[];
     promotionIntensity?: "natural" | "strong";
+    availableImages?: Array<{
+      url: string;
+      theme: string;
+      description?: string;
+      isScreenshot?: boolean;
+      sourceUrl?: string;
+    }>;
   }
 ): string {
   // 如果提供了变量，返回生成文章的 prompt
@@ -1482,7 +1489,7 @@ ${variables.promotedWebsites.map(url => `- ${url}`).join('\n')}
 
 推广策略：
 1. **意图匹配**：如果本文是评测/对比类（Commercial/Transactional），请将这些网站作为行业领先方案进行深度评测或对比。
-2. **自然引用**：如果本文是科普/解答类（Informational），请在正文中自然地作为“参考来源”、“推荐工具”或“专业案例”提及。
+2. **自然引用**：如果本文是科普/解答类（Informational），请在正文中自然地作为"参考来源"、"推荐工具"或"专业案例"提及。
 3. **推广强度**：当前强度为 **${variables.promotionIntensity === 'strong' ? '重点推荐' : '自然融入'}**。${variables.promotionIntensity === 'strong' ? '请在多个关键位置（如 H2、列表、总结）强调这些网站的价值。' : '仅在最相关的内容点位提及即可，避免生硬。'}
 4. **原则**：严禁过度营销，保持百科式的专业中立口吻，通过事实和数据展示网站价值。
 `
@@ -1499,10 +1506,61 @@ Promotion Strategy:
 `)
       : '';
 
+    // 图片插入指令
+    const imageInstructions = variables.availableImages && variables.availableImages.length > 0
+      ? (language === 'zh'
+        ? `
+### 图片插入规范 (Image Embedding)
+你有以下可用图片资源，请在文章中**必须**插入这些图片：
+
+${variables.availableImages.map((img, i) => `**图片 ${i + 1}**: ${img.theme}
+- URL: ${img.url}
+- 描述: ${img.description || img.theme}
+${img.isScreenshot ? `- 类型: 推广截图 (来源: ${img.sourceUrl || '推广网站'})` : '- 类型: AI生成图'}`).join('\n\n')}
+
+**插入要求：**
+1. **必须使用标准Markdown图片语法**：\`![alt描述](图片URL)\`
+2. **每张图片只使用一次**，不要重复插入同一张图片
+3. **位置选择策略**：
+   - 在"核心要点"或首段之后插入第一张图片
+   - 在重要的H2章节开头或结尾处插入图片
+   - 推广截图应放在介绍对应网站/工具的段落附近
+   - AI生成图应放在与其主题最相关的内容节点
+4. **alt文本要求**：
+   - 包含核心关键词，有助于图片SEO
+   - 准确描述图片内容，不要使用"图片"、"image"等无意义词汇
+   - 示例：\`![best project management tools comparison 2026](URL)\`
+5. **严禁**将图片全部堆在文章开头或结尾，必须分散嵌入到正文中
+`
+        : `
+### Image Embedding Guidelines
+You have the following images available. You **MUST** embed these images in the article:
+
+${variables.availableImages.map((img, i) => `**Image ${i + 1}**: ${img.theme}
+- URL: ${img.url}
+- Description: ${img.description || img.theme}
+${img.isScreenshot ? `- Type: Promotion Screenshot (Source: ${img.sourceUrl || 'promoted website'})` : '- Type: AI Generated'}`).join('\n\n')}
+
+**Embedding Requirements:**
+1. **Use standard Markdown image syntax**: \`![alt description](image URL)\`
+2. **Use each image only once** - do not duplicate images
+3. **Placement Strategy**:
+   - Insert the first image after "Key Takeaways" or the opening paragraph
+   - Place images at the beginning or end of important H2 sections
+   - Promotion screenshots should be near paragraphs discussing that website/tool
+   - AI-generated images should be placed at content nodes most relevant to their theme
+4. **Alt Text Requirements**:
+   - Include core keywords for image SEO
+   - Accurately describe image content, avoid generic words like "image" or "picture"
+   - Example: \`![best project management tools comparison 2026](URL)\`
+5. **DO NOT** pile all images at the beginning or end - they must be distributed throughout the article body
+`)
+      : '';
+
     const template = language === 'zh'
       ? `基于以下SEO研究结果，为 ${variables.marketLabel || '全球'} 市场撰写一篇高质量的文章内容。
 
-${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}${promotionInstructions}
+${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}${promotionInstructions}${imageInstructions}
 
 要求：
 1. 严格按照推荐的内容结构撰写，特别关注 ${variables.marketLabel || '全球'} 市场的本地化需求
@@ -1516,14 +1574,15 @@ ${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variab
 5. 多使用列表、粗体和引言，Bullets占比≥60%
 6. 确保内容流畅自然，有价值，符合 ${variables.marketLabel || '全球'} 市场的文化和习惯
 7. 字数约 ${variables.wordCountHint || '1500-2000'} 字
+${variables.availableImages && variables.availableImages.length > 0 ? '8. **必须在文章正文中嵌入所有提供的图片**，使用Markdown图片语法，分散放置在语义相关的位置' : ''}
 
 请以Markdown格式输出完整文章，包括以下部分：
 - **H1 标题**（文章主标题）
-- **文章正文**（使用 H2、H3 标题组织结构）
+- **文章正文**（使用 H2、H3 标题组织结构${variables.availableImages && variables.availableImages.length > 0 ? '，并嵌入图片' : ''}）
 - **关键要点总结**（在文章末尾）`
       : `Generate a high-quality article based on the following SEO research findings for the ${variables.marketLabel || 'Global'} market.
 
-${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}${promotionInstructions}
+${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variables.competitorContext || ''}${variables.referenceContext || ''}${promotionInstructions}${imageInstructions}
 
 Requirements:
 1. Follow the recommended content structure strictly, with special attention to localization needs for ${variables.marketLabel || 'Global'} market
@@ -1537,10 +1596,11 @@ Requirements:
 5. Use lists, bold, and quotes extensively, Bullets ratio ≥60%
 6. Ensure content flows naturally and provides value, aligned with ${variables.marketLabel || 'Global'} market culture and habits
 7. Target word count: approximately ${variables.wordCountHint || '1500-2000'} words
+${variables.availableImages && variables.availableImages.length > 0 ? '8. **You MUST embed all provided images** in the article body using Markdown image syntax, distributed at semantically relevant positions' : ''}
 
 Please output the complete article in Markdown format, including:
 - **H1 Title** (main article title)
-- **Article Body** (organized with H2, H3 headings)
+- **Article Body** (organized with H2, H3 headings${variables.availableImages && variables.availableImages.length > 0 ? ', with embedded images' : ''})
 - **Key Takeaways** (at the end of the article)`;
 
     return template;

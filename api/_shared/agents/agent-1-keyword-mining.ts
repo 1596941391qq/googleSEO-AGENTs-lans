@@ -250,9 +250,11 @@ export async function generateKeywords(
       return { keywords: [], rawResponse: originalResponse };
     }
 
+    // 使用时间戳+随机数生成唯一 ID，避免多轮挖掘时 ID 冲突
+    const kwTimestamp = Date.now();
     const keywords = rawData.map((item: any, index: number) => ({
       ...item,
-      id: `kw-${Date.now()}-${index}`,
+      id: `kw-${kwTimestamp}-${index}-${Math.random().toString(36).substring(7)}`,
     }));
 
     return {

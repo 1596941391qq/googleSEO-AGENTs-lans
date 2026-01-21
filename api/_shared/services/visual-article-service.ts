@@ -6,7 +6,7 @@ import {
   SearchPreferencesResult,
   CompetitorAnalysisResult
 } from '../agents/agent-2-seo-researcher.js';
-import { generateContent, ContentGenerationResult } from '../agents/agent-3-content-writer.js';
+import { generateContent, ContentGenerationResult, AvailableImage } from '../agents/agent-3-content-writer.js';
 import { reviewQuality, QualityReviewResult } from '../agents/agent-4-quality-reviewer.js';
 import {
   extractVisualThemes,
@@ -19,14 +19,8 @@ import { fetchSerpResults } from '../tools/serp-search.js';
 import { fetchKeywordData, getDataForSEOLocationAndLanguage } from '../tools/dataforseo.js';
 import { KeywordData, SEOStrategyReport, TargetLanguage } from '../types.js';
 import { AgentStreamEvent } from '../../../types.js';
-import {
-  initContentManagementTables,
-  createOrGetProject,
-  createOrGetKeyword,
-  saveContentDraft,
-  saveImages,
-  ContentDraft
-} from '../../lib/database.js';
+// Note: Project/content management moved to published_articles system
+// Content saving is now handled by frontend calling /api/articles/save
 
 // Processed promoted website with scraped content and screenshot
 export interface ProcessedPromotedWebsite {
@@ -266,6 +260,12 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     const promotedScreenshotCount = promotedScreenshots.length;
     
     console.log(`[VisualArticle] Image generation strategy: ${promotedScreenshotCount} promoted URLs with screenshots`);
+    console.log(`[VisualArticle] processedPromotedWebsites:`, processedPromotedWebsites?.map(p => ({
+      url: p.url,
+      hasContent: !!p.content,
+      hasScreenshot: !!p.screenshot,
+      title: p.title
+    })));
 
     // Image generation logic:
     // - 0 promoted URLs → 2 AI images
@@ -292,79 +292,87 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       ? `图片策略: ${promotedScreenshotCount} 个推广链接截图 + ${aiImageCount} 张 AI 生成图`
       : `Image strategy: ${promotedScreenshotCount} promotion screenshots + ${aiImageCount} AI generated images`);
 
-    // Generate AI images if needed
+    // Generate AI images if needed (with error handling to ensure article generation continues)
     if (aiImageCount > 0) {
-      const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage, (msg) => emit('artist', 'log', msg));
-      
-      if (visualThemes.themes && visualThemes.themes.length > 0) {
-        const selectedThemes = visualThemes.themes.slice(0, aiImageCount);
-        // 传递关键词和文章标题以增强图像与主题的相关性
-        const prompts = await generateImagePrompts(
-          selectedThemes,
-          uiLanguage,
-          keyword,
-          pageTitle || undefined
-        );
+      try {
+        const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage, (msg) => emit('artist', 'log', msg));
+        
+        if (visualThemes.themes && visualThemes.themes.length > 0) {
+          const selectedThemes = visualThemes.themes.slice(0, aiImageCount);
+          // 传递关键词和文章标题以增强图像与主题的相关性
+          const prompts = await generateImagePrompts(
+            selectedThemes,
+            uiLanguage,
+            keyword,
+            pageTitle || undefined
+          );
 
-        // Emit image-gen cards as "loading" with theme info
-        prompts.forEach((p, i) => {
-          const theme = selectedThemes[i];
-          emit('artist', 'card', undefined, 'image-gen', {
-            theme: theme?.title || theme?.id || `Theme ${i + 1}`,
-            prompt: p.prompt,
-            description: p.description,
-            imageUrl: null,
-            status: 'extracting',
-            progress: 0
+          // Emit image-gen cards as "loading" with theme info
+          prompts.forEach((p, i) => {
+            const theme = selectedThemes[i];
+            emit('artist', 'card', undefined, 'image-gen', {
+              theme: theme?.title || theme?.id || `Theme ${i + 1}`,
+              prompt: p.prompt,
+              description: p.description,
+              imageUrl: null,
+              status: 'extracting',
+              progress: 0
+            });
           });
-        });
 
-        // Generate images (parallel processing)
-        emit('artist', 'log', uiLanguage === 'zh' ? `正在生成 ${prompts.length} 张 AI 图片...` : `Generating ${prompts.length} AI images...`);
-        const imageResults = await generateImages(prompts);
+          // Generate images (parallel processing)
+          emit('artist', 'log', uiLanguage === 'zh' ? `正在生成 ${prompts.length} 张 AI 图片...` : `Generating ${prompts.length} AI images...`);
+          const imageResults = await generateImages(prompts);
 
-        const successCount = imageResults.filter(r => r.imageUrl).length;
-        const failCount = imageResults.filter(r => r.error).length;
-        emit('artist', 'log', `✓ ${uiLanguage === 'zh' ? `AI 图片生成完成: ${successCount} 成功, ${failCount} 失败` : `AI image generation complete: ${successCount} succeeded, ${failCount} failed`}`);
+          const successCount = imageResults.filter(r => r.imageUrl).length;
+          const failCount = imageResults.filter(r => r.error).length;
+          emit('artist', 'log', `✓ ${uiLanguage === 'zh' ? `AI 图片生成完成: ${successCount} 成功, ${failCount} 失败` : `AI image generation complete: ${successCount} succeeded, ${failCount} failed`}`);
 
-        generatedImages = imageResults.filter(r => r.imageUrl).map(r => ({
-          url: r.imageUrl,
-          prompt: r.theme,
-          placement: 'inline'
-        }));
+          generatedImages = imageResults.filter(r => r.imageUrl).map(r => ({
+            url: r.imageUrl,
+            prompt: r.theme,
+            placement: 'inline'
+          }));
 
-        // Update cards with results and progress
-        imageResults.forEach((res, i) => {
-          const theme = selectedThemes[i];
-          if (res.imageUrl) {
-            emit('artist', 'card',
-              uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`,
-              'image-gen',
-              {
-                theme: theme?.title || theme?.id || res.theme,
-                prompt: prompts[i]?.prompt || res.theme,
-                description: prompts[i]?.description,
-                imageUrl: res.imageUrl,
-                status: 'completed',
-                progress: 100
-              }
-            );
-          } else if (res.error) {
-            emit('artist', 'card',
-              uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`,
-              'image-gen',
-              {
-                theme: theme?.title || theme?.id || res.theme,
-                prompt: prompts[i]?.prompt || res.theme,
-                description: prompts[i]?.description,
-                imageUrl: null,
-                status: 'failed',
-                error: res.error,
-                progress: 0
-              }
-            );
-          }
-        });
+          // Update cards with results and progress
+          imageResults.forEach((res, i) => {
+            const theme = selectedThemes[i];
+            if (res.imageUrl) {
+              emit('artist', 'card',
+                uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`,
+                'image-gen',
+                {
+                  theme: theme?.title || theme?.id || res.theme,
+                  prompt: prompts[i]?.prompt || res.theme,
+                  description: prompts[i]?.description,
+                  imageUrl: res.imageUrl,
+                  status: 'completed',
+                  progress: 100
+                }
+              );
+            } else if (res.error) {
+              emit('artist', 'card',
+                uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`,
+                'image-gen',
+                {
+                  theme: theme?.title || theme?.id || res.theme,
+                  prompt: prompts[i]?.prompt || res.theme,
+                  description: prompts[i]?.description,
+                  imageUrl: null,
+                  status: 'failed',
+                  error: res.error,
+                  progress: 0
+                }
+              );
+            }
+          });
+        }
+      } catch (aiImageError: any) {
+        // AI 图片生成失败不应阻止文章生成
+        console.error('[VisualArticle] AI image generation failed:', aiImageError.message);
+        emit('artist', 'log', uiLanguage === 'zh' 
+          ? `⚠️ AI 图片生成失败: ${aiImageError.message}，将继续生成文章`
+          : `⚠️ AI image generation failed: ${aiImageError.message}, continuing with article generation`);
       }
     } else {
       emit('artist', 'log', uiLanguage === 'zh' 
@@ -454,6 +462,33 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       interval: 50
     });
 
+    // 将生成的图片转换为写手可用的格式
+    const availableImagesForWriter: AvailableImage[] = generatedImages.map((img: any) => ({
+      url: img.url,
+      theme: img.prompt || img.theme || 'Image',
+      description: img.description || img.prompt || '',
+      isScreenshot: img.isScreenshot || false,
+      sourceUrl: img.sourceUrl || undefined
+    }));
+
+    // 详细日志：记录传递给写手的图片信息
+    console.log(`[VisualArticle] availableImagesForWriter:`, availableImagesForWriter.map(img => ({
+      theme: img.theme,
+      isScreenshot: img.isScreenshot,
+      hasUrl: !!img.url,
+      urlPreview: img.url?.substring(0, 50) + '...'
+    })));
+
+    if (availableImagesForWriter.length > 0) {
+      emit('writer', 'log', uiLanguage === 'zh' 
+        ? `📷 将 ${availableImagesForWriter.length} 张图片传递给写手，用于嵌入文章...（AI生成: ${availableImagesForWriter.filter(i => !i.isScreenshot).length}，截图: ${availableImagesForWriter.filter(i => i.isScreenshot).length}）`
+        : `📷 Passing ${availableImagesForWriter.length} images to writer for embedding... (AI: ${availableImagesForWriter.filter(i => !i.isScreenshot).length}, Screenshots: ${availableImagesForWriter.filter(i => i.isScreenshot).length})`);
+    } else {
+      emit('writer', 'log', uiLanguage === 'zh' 
+        ? `⚠️ 没有可用图片传递给写手，文章将不包含嵌入图片`
+        : `⚠️ No images available for writer, article will not contain embedded images`);
+    }
+
     let contentResult: ContentGenerationResult;
     try {
       contentResult = await generateContent(
@@ -473,127 +508,99 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
             emit('writer', 'card', undefined, 'google-search-results', { results: searchResults });
           }
         },
-        (msg) => emit('writer', 'log', msg)
+        (msg) => emit('writer', 'log', msg),
+        availableImagesForWriter  // 传递可用图片给写手
       );
+      // 内容生成成功后的详细日志
+      console.log('[VisualArticle] Content generation successful:', {
+        hasTitle: !!contentResult.title,
+        titleLength: contentResult.title?.length || 0,
+        hasContent: !!contentResult.content,
+        contentLength: contentResult.content?.length || 0,
+        hasArticleBody: !!contentResult.article_body,
+        articleBodyLength: contentResult.article_body?.length || 0,
+        hasMarkdown: !!contentResult.markdown,
+        markdownLength: contentResult.markdown?.length || 0,
+        contentPreview: (contentResult.content || contentResult.article_body || '')?.substring(0, 200)
+      });
     } catch (contentError: any) {
       console.error('[VisualArticle] Failed to generate content:', contentError);
+      console.error('[VisualArticle] Content error stack:', contentError?.stack);
       // Create a fallback content result
       contentResult = {
         title: strategyReport?.pageTitleH1 || keyword,
-        content: `# ${strategyReport?.pageTitleH1 || keyword}\n\nContent generation failed. Please try again.`,
-        article_body: ''
+        content: `# ${strategyReport?.pageTitleH1 || keyword}\n\nContent generation failed: ${contentError?.message || 'Unknown error'}. Please try again.`,
+        article_body: `Content generation failed: ${contentError?.message || 'Unknown error'}`
       };
-      emit('writer', 'log', uiLanguage === 'zh' ? '警告: 内容生成失败' : 'Warning: Content generation failed');
+      emit('writer', 'log', uiLanguage === 'zh' ? `警告: 内容生成失败 - ${contentError?.message}` : `Warning: Content generation failed - ${contentError?.message}`);
     }
 
     // Update streaming text with final content
-    if (contentResult!.content || contentResult!.article_body) {
+    const finalContent = contentResult!.content || contentResult!.article_body || '';
+    console.log('[VisualArticle] Final content for streaming-text:', {
+      hasContent: !!finalContent,
+      contentLength: finalContent.length,
+      contentPreview: finalContent.substring(0, 200)
+    });
+    
+    if (finalContent) {
       emit('writer', 'card', undefined, 'streaming-text', {
-        content: contentResult!.content || contentResult!.article_body || '',
+        content: finalContent,
         speed: 3,
         interval: 50
       });
+    } else {
+      emit('writer', 'log', uiLanguage === 'zh' ? '⚠️ 警告: 未生成有效内容' : '⚠️ Warning: No valid content generated');
     }
 
     // Final result assembly with defensive checks
+    // 确保至少有一个内容来源
+    const articleContent = contentResult!.content || contentResult!.article_body || contentResult!.markdown || '';
+    const articleTitle = contentResult!.title || strategyReport?.pageTitleH1 || keyword;
+    
     const finalArticle = {
-      title: contentResult!.title || strategyReport?.pageTitleH1 || keyword,
-      content: contentResult!.content || contentResult!.article_body || '',
+      title: articleTitle,
+      content: articleContent,
+      // 同时保留 article_body 以兼容前端不同的解析逻辑
+      article_body: articleContent,
+      markdown: contentResult!.markdown || articleContent,
       images: Array.isArray(generatedImages) ? generatedImages : [],
       // Include metadata from Content Writer if available
       seo_meta: contentResult!.seo_meta || (strategyReport?.metaDescription ? {
-        title: contentResult!.title || strategyReport?.pageTitleH1,
+        title: articleTitle,
         description: strategyReport.metaDescription
       } : undefined),
       geo_score: contentResult!.geo_score,
       logic_check: contentResult!.logic_check,
     };
 
-    // Log final article for debugging
+    // Log final article for debugging - 详细日志
     console.log('[VisualArticle] Final article constructed:', {
       hasTitle: !!finalArticle.title,
-      titleLength: finalArticle.title?.length || 0,
+      titleValue: finalArticle.title?.substring(0, 50),
       hasContent: !!finalArticle.content,
       contentLength: finalArticle.content?.length || 0,
+      contentPreview: finalArticle.content?.substring(0, 300),
+      hasArticleBody: !!finalArticle.article_body,
+      hasMarkdown: !!finalArticle.markdown,
       imagesCount: finalArticle.images?.length || 0,
+      imagesUrls: finalArticle.images?.map((i: any) => i.url?.substring(0, 50)),
       hasSeoMeta: !!finalArticle.seo_meta,
       hasGeoScore: !!finalArticle.geo_score,
     });
 
-    // Auto-save to database if userId is provided
-    let savedDraft: ContentDraft | null = null;
-    if (userId) {
-      try {
-        await initContentManagementTables();
-
-        // Create or get project
-        const project = await createOrGetProject(
-          userId,
-          projectName || `Project: ${keyword}`,
-          keyword,
-          targetLanguage
-        );
-
-        // Create or get keyword
-        const keywordRecord = await createOrGetKeyword(
-          project.id,
-          keyword,
-          keyword,
-          keywordData.intent,
-          keywordData.volume || undefined,
-          undefined
-        );
-
-        // Save content draft
-        savedDraft = await saveContentDraft(
-          project.id,
-          keywordRecord.id,
-          finalArticle.title,
-          finalArticle.content,
-          strategyReport.metaDescription,
-          undefined, // url_slug
-          undefined  // qualityScore
-        );
-
-        // Save images if any
-        if (generatedImages && generatedImages.length > 0 && savedDraft) {
-          await saveImages(
-            savedDraft.id,
-            generatedImages.map((img, index) => ({
-              imageUrl: img.url,
-              prompt: img.prompt,
-              altText: img.prompt,
-              position: index,
-              metadata: {
-                placement: img.placement,
-                isScreenshot: img.isScreenshot || false
-              }
-            }))
-          );
-        }
-
-        emit('tracker', 'log', uiLanguage === 'zh' ? '内容已自动保存到数据库' : 'Content automatically saved to database');
-      } catch (dbError: any) {
-        console.error('[VisualArticle] Error saving to database:', dbError);
-        // Don't throw error, just log it - the article generation succeeded
-        emit('tracker', 'log', uiLanguage === 'zh' ? '警告: 保存到数据库失败，但内容已生成' : 'Warning: Failed to save to database, but content was generated');
-      }
+    // 如果内容仍然为空，记录警告
+    if (!finalArticle.content || finalArticle.content.trim().length === 0) {
+      console.error('[VisualArticle] WARNING: Final article has empty content!');
+      emit('writer', 'log', uiLanguage === 'zh' 
+        ? '⚠️ 警告: 文章内容为空，请检查生成过程' 
+        : '⚠️ Warning: Article content is empty, please check the generation process');
     }
 
-    // Add draftId and projectId to result if saved
-    const finalResult: any = { ...finalArticle };
-    if (savedDraft && userId) {
-      finalResult.draftId = savedDraft.id;
-      const project = await createOrGetProject(
-        userId,
-        projectName || `Project: ${keyword}`,
-        keyword,
-        targetLanguage
-      );
-      finalResult.projectId = project.id;
-    }
+    // Note: Content saving is now handled by frontend calling /api/articles/save
+    // The article data is returned directly, and frontend decides when to save
 
-    return finalResult;
+    return finalArticle;
 
   } catch (error: any) {
     emit('tracker', 'error', `Mission failed: ${error.message}`);

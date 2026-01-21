@@ -114,9 +114,14 @@ function parseSerpResponse(data: any): {
 }
 
 /**
- * ThorData SERP API调用
+ * ThorData SERP API调用（带重试逻辑）
  */
-async function fetchThorDataSerp(query: string, targetLanguage: string = 'en', engine: string = 'google'): Promise<SerpData> {
+async function fetchThorDataSerp(
+  query: string, 
+  targetLanguage: string = 'en', 
+  engine: string = 'google',
+  maxRetries: number = 2
+): Promise<SerpData> {
   const formData = new URLSearchParams();
   formData.append('engine', engine);
   formData.append('q', query);
@@ -128,66 +133,92 @@ async function fetchThorDataSerp(query: string, targetLanguage: string = 'en', e
     formData.append('gl', countryCode);
   }
 
-  // 添加超时控制 (60秒)
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000);
+  let lastError: any = null;
 
-  try {
-    const response = await fetch(THORDATA_API_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${THORDATA_API_TOKEN}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`ThorData API 请求失败: ${response.status} ${errorText}`);
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // 重试前增加延迟（首次不延迟）
+    if (attempt > 0) {
+      const delay = 1000 * attempt; // 1s, 2s 递增延迟
+      console.log(`[ThorData] 重试 ${attempt}/${maxRetries}，延迟 ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
 
-    let responseData: any = await response.json();
+    // 添加超时控制 (30秒，降低超时时间以便更快重试)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    // 打印前两百个字的响应
-    const responseText = JSON.stringify(responseData, null, 2);
-    const first200Chars = responseText.substring(0, 200);
-    console.log('ThorData API 响应前两百个字:', first200Chars);
+    try {
+      const response = await fetch(THORDATA_API_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${THORDATA_API_TOKEN}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
 
-    // 检查是否有错误
-    if (responseData && responseData.error) {
-      throw new Error(`ThorData API 错误: ${responseData.error}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`ThorData API 请求失败: ${response.status} ${errorText}`);
+      }
+
+      let responseData: any = await response.json();
+
+      // 打印前两百个字的响应（只在首次成功时打印，避免日志过多）
+      if (attempt === 0) {
+        const responseText = JSON.stringify(responseData, null, 2);
+        const first200Chars = responseText.substring(0, 200);
+        console.log('ThorData API 响应前两百个字:', first200Chars);
+      }
+
+      // 检查是否有错误
+      if (responseData && responseData.error) {
+        throw new Error(`ThorData API 错误: ${responseData.error}`);
+      }
+
+      // 如果响应被包装在 { code, data } 结构中，提取实际的 data
+      if (responseData && responseData.data && typeof responseData.data === 'object') {
+        responseData = responseData.data;
+      }
+
+      // 解析响应
+      const parsed = parseSerpResponse(responseData);
+
+      return {
+        keyword: query,
+        totalResults: parsed.resultCount > 0 ? parsed.resultCount : undefined,
+        results: parsed.serpSnippets.map((s, index) => ({
+          title: s.title,
+          url: s.url,
+          snippet: s.snippet,
+          position: index + 1
+        })),
+      };
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      lastError = error;
+      
+      const isTimeout = error.name === 'AbortError' || 
+                        error.message?.includes('timeout') ||
+                        error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT';
+      
+      if (isTimeout) {
+        console.warn(`[ThorData] 请求超时 (30s): "${query}" (尝试 ${attempt + 1}/${maxRetries + 1})`);
+        // 超时错误可以重试
+        if (attempt < maxRetries) continue;
+      } else {
+        console.error(`[ThorData] API 调用失败: "${query}"`, error.message);
+        // 非超时错误也尝试重试
+        if (attempt < maxRetries) continue;
+      }
     }
-
-    // 如果响应被包装在 { code, data } 结构中，提取实际的 data
-    if (responseData && responseData.data && typeof responseData.data === 'object') {
-      responseData = responseData.data;
-    }
-
-    // 解析响应
-    const parsed = parseSerpResponse(responseData);
-
-    return {
-      keyword: query,
-      totalResults: parsed.resultCount > 0 ? parsed.resultCount : undefined,
-      results: parsed.serpSnippets.map((s, index) => ({
-        title: s.title,
-        url: s.url,
-        snippet: s.snippet,
-        position: index + 1
-      })),
-    };
-  } catch (error: any) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      console.error(`ThorData API 请求超时 (60s): ${query}`);
-      throw new Error(`ThorData API 请求超时 (60s)`);
-    }
-    console.error('调用 ThorData API 失败:', error);
-    throw error;
   }
+
+  // 所有重试都失败
+  console.error(`[ThorData] 所有重试都失败: "${query}"`, lastError?.message);
+  throw lastError || new Error('ThorData API 调用失败');
 }
 
 /**
@@ -217,21 +248,21 @@ export async function fetchSerpResults(
 }
 
 /**
- * 批量并行获取SERP结果（优化版本 - 真正的并行处理）
+ * 批量并行获取SERP结果（优化版本 - 控制并发避免超时）
  * 
  * @param keywords - 关键词数组
  * @param language - 语言，默认 'en'
  * @param engine - 搜索引擎，默认 'google'
- * @param batchSize - 并发批次大小，默认 6（与 Agent 2 批处理大小一致）
- * @param batchDelay - 批次间延迟（毫秒），默认 300ms
+ * @param batchSize - 并发批次大小，默认 2（降低并发避免 ThorData 超时）
+ * @param batchDelay - 批次间延迟（毫秒），默认 800ms（增加延迟保证稳定性）
  * @returns 关键词到SERP数据的Map
  */
 export async function fetchSerpResultsBatch(
   keywords: string[],
   language: string = 'en',
   engine: string = 'google',
-  batchSize: number = 6,
-  batchDelay: number = 300
+  batchSize: number = 2,
+  batchDelay: number = 800
 ): Promise<Map<string, SerpData>> {
   const results = new Map<string, SerpData>();
 

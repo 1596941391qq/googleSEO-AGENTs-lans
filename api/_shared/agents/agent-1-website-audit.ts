@@ -535,9 +535,11 @@ export async function auditWebsiteForKeywords(
     }
 
     // 转换为 KeywordData 格式
+    // 使用时间戳+随机数生成唯一 ID，避免多轮挖掘时 ID 冲突
+    const auditTimestamp = Date.now();
     let keywords: KeywordData[] = extractedKeywords
       .map((kw: any, index: number) => ({
-        id: `audit-${Date.now()}-${index}`,
+        id: `audit-${auditTimestamp}-${index}-${Math.random().toString(36).substring(7)}`,
         keyword: kw.keyword || '',
         translation: kw.translation || kw.keyword,
         intent: (kw.intent || 'Informational') as KeywordData['intent'],
@@ -605,6 +607,23 @@ export async function auditWebsiteForKeywords(
 
     console.log(`[Website Audit] Generated analysis report (${analysisReport.length} characters, extracted ${keywords.length} keywords)`);
 
+    // 立即发送关键词提取结果卡片（在 SERP 分析前）
+    emit('strategist', 'card', uiLanguage === 'zh'
+      ? `关键词提取完成 (${keywords.length} 个关键词)`
+      : `Keywords Extracted (${keywords.length} keywords)`,
+      'keywords-extracted', {
+        keywords: keywords.map(k => ({
+          keyword: k.keyword,
+          translation: k.translation,
+          intent: k.intent,
+          volume: k.volume,
+          difficulty: k.dataForSEOData?.difficulty || (k as any).difficulty
+        })),
+        totalCount: keywords.length,
+        stage: 'generated'
+      }
+    );
+
     // Step 6: 对提取的关键词进行 SERP 分析和概率分析
     let analyzedKeywords = keywords;
     if (keywords.length > 0) {
@@ -620,8 +639,8 @@ export async function auditWebsiteForKeywords(
           systemInstruction,
           uiLanguage,
           targetLanguage,
-          websiteUrl, // 传递 websiteUrl 以获取网站 DR 值
-          undefined, // websiteDR 先传 undefined，函数内部会根据 websiteUrl 自动获取
+          websiteUrl,
+          undefined, // websiteDR 参数已弃用，保留以保持向后兼容性
           searchEngine,
           (msg) => emit('strategist', 'log', msg),
           options.websiteId, // 传递 websiteId 以便检查缓存，避免重复分析
@@ -795,6 +814,7 @@ export async function auditWebsiteWithStrategies(
     miningStrategy = 'horizontal',
     strategies,
     maxTotalKeywords = 50,
+    searchEngine = 'google', // 添加搜索引擎参数
     onEvent,
   } = options;
 
@@ -894,10 +914,44 @@ export async function auditWebsiteWithStrategies(
   const analysis: StrategyAuditResult['analysis'] = {};
   const collectTasks: Promise<void>[] = [];
 
+  // 导入缓存函数
+  const { getWebsiteContentCache, saveWebsiteContentCache } = await import('../../lib/database.js');
+
   // 2.1 网站内容分析
   if (enabledStrategyIds.includes('website_content')) {
     collectTasks.push((async () => {
       try {
+        // 优先检查缓存
+        const cached = await getWebsiteContentCache(websiteId, 'scraped_content');
+        
+        if (cached && cached.content) {
+          // 使用缓存的网站内容
+          emit('researcher', 'log', uiLanguage === 'zh'
+            ? `📦 使用缓存的网站内容 (${cached.content.length} 字符)`
+            : `📦 Using cached website content (${cached.content.length} chars)`
+          );
+          
+          contexts.website_content = cached.content;
+          analysis.websiteContentLength = cached.content.length;
+          
+          // 发送可视化卡片（标记为缓存）
+          emit('researcher', 'card', uiLanguage === 'zh'
+            ? `网站内容分析 (${cached.content.length} 字符) [缓存]`
+            : `Website Content Analysis (${cached.content.length} chars) [Cached]`,
+            'firecrawl-result', {
+              url: websiteUrl,
+              title: cached.title || websiteUrl,
+              contentLength: cached.content.length,
+              hasScreenshot: false,
+              images: cached.metadata?.images || [],
+              preview: cached.content.substring(0, 500) + (cached.content.length > 500 ? '...' : ''),
+              fromCache: true
+            }
+          );
+          return;
+        }
+
+        // 无缓存，重新抓取
         emit('researcher', 'log', uiLanguage === 'zh'
           ? '📄 正在抓取网站内容...'
           : '📄 Fetching website content...'
@@ -906,6 +960,35 @@ export async function auditWebsiteWithStrategies(
         const websiteContent = cleanMarkdown(scrapeResult.markdown || '', 15000);
         contexts.website_content = websiteContent;
         analysis.websiteContentLength = websiteContent.length;
+        
+        // 保存到缓存（有效期 24 小时）
+        await saveWebsiteContentCache(
+          websiteId,
+          websiteContent,
+          'scraped_content',
+          scrapeResult.title,
+          {
+            images: scrapeResult.images || [],
+            scrapedAt: new Date().toISOString(),
+            url: websiteUrl
+          },
+          24
+        );
+        
+        // 发送可视化卡片
+        emit('researcher', 'card', uiLanguage === 'zh'
+          ? `网站内容分析 (${websiteContent.length} 字符)`
+          : `Website Content Analysis (${websiteContent.length} chars)`,
+          'firecrawl-result', {
+            url: websiteUrl,
+            title: scrapeResult.title || websiteUrl,
+            contentLength: websiteContent.length,
+            hasScreenshot: !!scrapeResult.screenshot,
+            images: scrapeResult.images || [],
+            preview: websiteContent.substring(0, 500) + (websiteContent.length > 500 ? '...' : '')
+          }
+        );
+        
         emit('researcher', 'log', uiLanguage === 'zh'
           ? `✅ 网站内容抓取完成 (${websiteContent.length} 字符)`
           : `✅ Website content fetched (${websiteContent.length} chars)`
@@ -932,6 +1015,26 @@ export async function auditWebsiteWithStrategies(
         const keywords = await getDomainKeywords(websiteDomain, locationCode, 50);
         contexts.website_ranked = keywords.map(k => k.keyword).filter(k => k && k.trim());
         analysis.websiteRankedCount = contexts.website_ranked.length;
+        
+        // 发送可视化卡片
+        if (keywords.length > 0) {
+          emit('researcher', 'card', uiLanguage === 'zh'
+            ? `网站已排名关键词 (${contexts.website_ranked.length} 个)`
+            : `Website Ranked Keywords (${contexts.website_ranked.length})`,
+            'dataforseo-keywords', {
+              domain: websiteDomain,
+              keywords: keywords.slice(0, 20).map(k => ({
+                keyword: k.keyword,
+                position: k.position,
+                volume: k.volume,
+                traffic: k.traffic,
+                url: k.url
+              })),
+              totalCount: contexts.website_ranked.length
+            }
+          );
+        }
+        
         emit('researcher', 'log', uiLanguage === 'zh'
           ? `✅ 获取到 ${contexts.website_ranked.length} 个已排名关键词`
           : `✅ Found ${contexts.website_ranked.length} ranked keywords`
@@ -969,6 +1072,25 @@ export async function auditWebsiteWithStrategies(
           return;
         }
 
+        // 发送竞争对手列表可视化卡片
+        emit('researcher', 'card', uiLanguage === 'zh'
+          ? `竞争对手分析 (${competitors.length} 个)`
+          : `Competitor Analysis (${competitors.length})`,
+          'dataforseo-competitors', {
+            domain: websiteDomain,
+            competitors: competitors.map(c => ({
+              domain: c.domain,
+              title: c.title || c.domain,
+              commonKeywords: c.commonKeywords || 0,
+              organicTraffic: c.organicTraffic || 0,
+              totalKeywords: c.totalKeywords || 0,
+              gapKeywords: c.gapKeywords || 0,
+              visibilityScore: c.visibilityScore || 0
+            })),
+            totalCompetitors: competitors.length
+          }
+        );
+
         // 获取每个竞争对手的关键词
         const competitorKeywordsArrays = await Promise.all(
           competitorDomains.slice(0, 3).map(async (domain) => {
@@ -983,6 +1105,20 @@ export async function auditWebsiteWithStrategies(
 
         contexts.competitor_keywords = Array.from(new Set(competitorKeywordsArrays.flat())).filter(k => k && k.trim());
         analysis.competitorKeywordsCount = contexts.competitor_keywords.length;
+        
+        // 发送竞对关键词可视化卡片
+        if (contexts.competitor_keywords.length > 0) {
+          emit('researcher', 'card', uiLanguage === 'zh'
+            ? `竞对关键词池 (${contexts.competitor_keywords.length} 个)`
+            : `Competitor Keywords Pool (${contexts.competitor_keywords.length})`,
+            'competitor-keywords', {
+              keywords: contexts.competitor_keywords.slice(0, 30),
+              totalCount: contexts.competitor_keywords.length,
+              competitorCount: competitorDomains.length
+            }
+          );
+        }
+        
         emit('researcher', 'log', uiLanguage === 'zh'
           ? `✅ 从 ${competitorDomains.length} 个竞争对手收集到 ${contexts.competitor_keywords.length} 个关键词`
           : `✅ Collected ${contexts.competitor_keywords.length} keywords from ${competitorDomains.length} competitors`
@@ -1016,6 +1152,16 @@ export async function auditWebsiteWithStrategies(
             : `⚠️ No high performer keywords marked. Please mark some good keywords first.`
           );
         } else {
+          // 发送高表现词可视化卡片
+          emit('researcher', 'card', uiLanguage === 'zh'
+            ? `高表现关键词 (${highPerformers.length} 个)`
+            : `High Performer Keywords (${highPerformers.length})`,
+            'high-performers', {
+              keywords: highPerformers.slice(0, 20),
+              totalCount: highPerformers.length
+            }
+          );
+          
           emit('researcher', 'log', uiLanguage === 'zh'
             ? `✅ 找到 ${highPerformers.length} 个高表现关键词`
             : `✅ Found ${highPerformers.length} high performer keywords`
@@ -1122,14 +1268,14 @@ export async function auditWebsiteWithStrategies(
     }
   });
 
-  const keywords = Array.from(keywordMap.values());
+  let keywords = Array.from(keywordMap.values());
 
   emit('strategist', 'log', uiLanguage === 'zh'
     ? `✅ 生成了 ${keywords.length} 个关键词（去重后）`
     : `✅ Generated ${keywords.length} keywords (after deduplication)`
   );
 
-  // 7. 发送结果卡片
+  // 立即发送关键词生成结果卡片（在 SERP 分析前）
   emit('strategist', 'card', uiLanguage === 'zh'
     ? `策略挖词结果 (${keywords.length} 个关键词)`
     : `Strategy Mining Results (${keywords.length} keywords)`,
@@ -1138,7 +1284,96 @@ export async function auditWebsiteWithStrategies(
       keywords: keywords.slice(0, 20),
       totalCount: keywords.length,
       enabledStrategies: enabledStrategyIds,
-      analysis
+      analysis,
+      stage: 'generated' // 标记为生成阶段
+    }
+  );
+
+  // 7. 对关键词进行 SERP 分析和排名概率分析
+  if (keywords.length > 0) {
+    try {
+      emit('strategist', 'log', uiLanguage === 'zh'
+        ? `🔍 正在对 ${keywords.length} 个关键词进行 SERP 分析和排名概率分析...`
+        : `🔍 Analyzing SERP and ranking probability for ${keywords.length} keywords...`
+      );
+      
+      // 将策略挖词结果转换为 KeywordData 格式
+      // 使用时间戳+随机数生成唯一 ID，避免多轮挖掘时 ID 冲突
+      const timestamp = Date.now();
+      const keywordsForAnalysis: KeywordData[] = keywords.map((kw, idx) => ({
+        id: `strategy-${timestamp}-${idx}-${Math.random().toString(36).substring(7)}`,
+        keyword: kw.keyword,
+        translation: kw.translation || '',
+        intent: kw.intent || 'Informational',
+        volume: kw.volume || 0,
+        difficulty: kw.difficulty,
+        probability: 'Medium' as const,
+        sources: kw.sources
+      }));
+      
+      const systemInstruction = `You are an SEO expert analyzing keyword ranking opportunities for an existing website. Use the website's content themes and competitor analysis to provide accurate probability assessments.`;
+      
+      const analyzedKeywords = await analyzeRankingProbability(
+        keywordsForAnalysis,
+        systemInstruction,
+        uiLanguage,
+        targetLanguage,
+        websiteUrl,
+        undefined,
+        searchEngine,
+        (msg) => emit('strategist', 'log', msg),
+        options.websiteId,
+        industry
+      );
+      
+      // 合并分析结果回原关键词
+      const analyzedMap = new Map(analyzedKeywords.map(k => [k.keyword.toLowerCase(), k]));
+      keywords = keywords.map(kw => {
+        const analyzed = analyzedMap.get(kw.keyword.toLowerCase());
+        if (analyzed) {
+          return {
+            ...kw,
+            probability: analyzed.probability,
+            reasoning: analyzed.reasoning,
+            intentAssessment: analyzed.intentAssessment,
+            serpResultCount: analyzed.serpResultCount,
+            topDomainType: analyzed.topDomainType,
+            topSerpSnippets: analyzed.topSerpSnippets,
+            serankingData: analyzed.serankingData,
+            dataForSEOData: analyzed.dataForSEOData
+          };
+        }
+        return kw;
+      });
+      
+      const highProbCount = keywords.filter(k => k.probability === 'High').length;
+      const mediumProbCount = keywords.filter(k => k.probability === 'Medium').length;
+      const lowProbCount = keywords.filter(k => k.probability === 'Low').length;
+      
+      emit('strategist', 'log', uiLanguage === 'zh'
+        ? `✓ SERP 分析完成：高概率 ${highProbCount} 个，中概率 ${mediumProbCount} 个，低概率 ${lowProbCount} 个`
+        : `✓ SERP analysis complete: ${highProbCount} High, ${mediumProbCount} Medium, ${lowProbCount} Low probability`
+      );
+    } catch (analysisError: any) {
+      console.warn(`[Strategy Audit] SERP analysis failed: ${analysisError.message}`);
+      emit('strategist', 'log', uiLanguage === 'zh'
+        ? `⚠️ SERP 分析失败，使用原始关键词数据: ${analysisError.message}`
+        : `⚠️ SERP analysis failed, using original keywords: ${analysisError.message}`
+      );
+    }
+  }
+
+  // 8. 发送分析完成后的结果卡片
+  emit('strategist', 'card', uiLanguage === 'zh'
+    ? `SERP 分析完成 (${keywords.length} 个关键词)`
+    : `SERP Analysis Complete (${keywords.length} keywords)`,
+    'strategy-keywords-result',
+    {
+      keywords: keywords.slice(0, 20),
+      totalCount: keywords.length,
+      enabledStrategies: enabledStrategyIds,
+      analysis,
+      stage: 'analyzed' // 标记为分析完成阶段
     }
   );
 

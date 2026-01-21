@@ -10,7 +10,7 @@ import { fetchSerpResults, fetchSerpResultsBatch, type SerpData } from '../tools
 import { getSEOResearcherPrompt, DEFAULT_SERP_ANALYSIS } from '../../../services/prompts/index.js';
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
 import { SearchEngine } from '../tools/dataforseo.js';
-import { getDomainOverview, getBatchDomainOverview } from '../tools/dataforseo-domain.js';
+import { getDomainOverview } from '../tools/dataforseo-domain.js';
 import { sql, isValidUUID } from '../../lib/database.js';
 
 /**
@@ -982,11 +982,7 @@ export const analyzeRankingProbability = async (
           keyword.topSerpSnippets = cached.agent2_top_serp_snippets || [];
           (keyword as any).blueOceanScore = cached.agent2_blue_ocean_score;
           (keyword as any).blueOceanScoreBreakdown = cached.agent2_blue_ocean_breakdown;
-          (keyword as any).websiteDR = cached.website_dr;
-          (keyword as any).competitorDRs = cached.competitor_drs;
-          (keyword as any).top3Probability = cached.top3_probability;
-          (keyword as any).top10Probability = cached.top10_probability;
-          (keyword as any).canOutrankPositions = cached.can_outrank_positions;
+          // DR 相关字段已移除
 
           keywordsFromCache.push(keyword);
           console.log(`[Agent 2] Using cached analysis for "${keyword.keyword}" (probability: ${cached.agent2_probability})`);
@@ -1038,46 +1034,10 @@ export const analyzeRankingProbability = async (
   }
   // If it's a custom prompt, keep it as-is (user may have customized it in English)
 
-  // 如果提供了网站URL但没提供DR，尝试从缓存获取网站自身的DR，不再自动调用 API
-  let siteDR = websiteDR;
-  if (websiteUrl && siteDR === undefined) {
-    try {
-      if (websiteId && isValidUUID(websiteId)) {
-        console.log(`[Agent 2] Checking cache for target website DR: ${websiteId}`);
-        const cacheResult = await sql`
-          SELECT backlinks_info
-          FROM domain_overview_cache
-          WHERE website_id = ${websiteId}::UUID
-          ORDER BY data_date DESC
-          LIMIT 1
-        `;
-
-        if (cacheResult.rows.length > 0) {
-          const row = cacheResult.rows[0];
-          // 如果 backlinks_info 是字符串，解析它
-          const backlinksInfo = typeof row.backlinks_info === 'string'
-            ? JSON.parse(row.backlinks_info)
-            : row.backlinks_info;
-
-          const referringDomains = backlinksInfo?.referringDomains || 0;
-          siteDR = Math.min(Math.round(Math.log10(referringDomains + 1) * 15), 100);
-          console.log(`[Agent 2] Loaded site DR from cache: ${siteDR}`);
-        } else {
-          console.log(`[Agent 2] No cached domain overview found for ${websiteId}, skipping DR estimation.`);
-        }
-      } else {
-        console.log(`[Agent 2] No websiteId provided, cannot check cache for DR.`);
-      }
-    } catch (e) {
-      console.warn(`[Agent 2] Failed to get site DR from cache:`, e);
-    }
-  }
-
-  // 优化版本：使用预获取的 SERP 和 DR 数据进行分析
+  // 优化版本：使用预获取的 SERP 数据进行分析（DR 功能已移除）
   const analyzeSingleKeywordWithPreFetchedData = async (
     keywordData: KeywordData,
-    serpData: SerpData | undefined,
-    allDomainsDRMap: Map<string, number>
+    serpData: SerpData | undefined
   ): Promise<KeywordData> => {
     // 使用预获取的 SERP 数据
     let serpResults: any[] = [];
@@ -1088,37 +1048,11 @@ export const analyzeRankingProbability = async (
       serpResultCount = serpData.totalResults || -1;
     }
 
-    // 从预获取的 DR Map 中提取竞争对手 DR 值（优化：只取第1名、第5名、第10名）
-    // competitorDRs数组格式：[第1名DR, 第5名DR, 第10名DR]
-    let competitorDRs: number[] = [];
-    if (serpResults.length > 0) {
-      const drValues: number[] = [];
-      // 提取第1名、第5名、第10名的DR值
-      if (serpResults.length > 0 && serpResults[0]?.url) {
-        const domain = serpResults[0].url.replace(/^https?:\/\//, '').split('/')[0];
-        const dr = allDomainsDRMap.get(domain) || 0;
-        if (dr > 0) drValues.push(dr);
-      }
-      if (serpResults.length >= 5 && serpResults[4]?.url) {
-        const domain = serpResults[4].url.replace(/^https?:\/\//, '').split('/')[0];
-        const dr = allDomainsDRMap.get(domain) || 0;
-        if (dr > 0) drValues.push(dr);
-      }
-      if (serpResults.length >= 10 && serpResults[9]?.url) {
-        const domain = serpResults[9].url.replace(/^https?:\/\//, '').split('/')[0];
-        const dr = allDomainsDRMap.get(domain) || 0;
-        if (dr > 0) drValues.push(dr);
-      }
-
-      // 存储第1名、第5名、第10名的DR值
-      competitorDRs = drValues;
-    }
-
-    // 继续使用原有的分析逻辑...
-    return await continueAnalysisWithSerpAndDR(keywordData, serpResults, serpResultCount, competitorDRs, industry);
+    // 继续使用原有的分析逻辑（不再需要 DR 对比）
+    return await continueAnalysisWithSerp(keywordData, serpResults, serpResultCount, industry);
   };
 
-  // 原有版本：串行获取 SERP 和 DR（保留作为备用）
+  // 原有版本：串行获取 SERP（保留作为备用，DR 功能已移除）
   const analyzeSingleKeyword = async (keywordData: KeywordData): Promise<KeywordData> => {
     onProgress?.(uiLanguage === 'zh'
       ? `🔍 [${keywordData.keyword}] 开始深度分析...`
@@ -1145,57 +1079,14 @@ export const analyzeRankingProbability = async (
       console.warn(`[Agent 2] Failed to fetch ${searchEngine} SERP for ${keywordData.keyword}:`, error.message);
     }
 
-    // Step 1.5: Fetch DR for Top competitors (优化：只获取第1名、第5名、第10名，节省70%成本)
-    let competitorDRs: number[] = [];
-    if (serpResults.length > 0) {
-      try {
-        onProgress?.(uiLanguage === 'zh'
-          ? `🛡️ [${keywordData.keyword}] 正在评估竞争对手的域名权威度 (DR)...`
-          : `🛡️ [${keywordData.keyword}] Assessing Domain Rating (DR) for competitors...`);
-
-        const drFetchStart = Date.now();
-        // 优化：只获取第1名、第5名、第10名（如果存在）的域名
-        const domainsToFetch: string[] = [];
-        if (serpResults.length > 0 && serpResults[0]?.url) {
-          domainsToFetch.push(serpResults[0].url);
-        }
-        if (serpResults.length >= 5 && serpResults[4]?.url) {
-          domainsToFetch.push(serpResults[4].url);
-        }
-        if (serpResults.length >= 10 && serpResults[9]?.url) {
-          domainsToFetch.push(serpResults[9].url);
-        }
-
-        if (domainsToFetch.length > 0) {
-          const domainMap = await getBatchDomainOverview(domainsToFetch);
-          const drValues: number[] = [];
-          domainsToFetch.forEach(url => {
-            const domain = url.replace(/^https?:\/\//, '').split('/')[0];
-            const dr = (domainMap.get(domain) as any)?.dr || 0;
-            if (dr > 0) drValues.push(dr);
-          });
-
-          // 存储第1名、第5名、第10名的DR值
-          competitorDRs = drValues;
-        }
-
-        onProgress?.(uiLanguage === 'zh'
-          ? `✅ [${keywordData.keyword}] 竞争对手权威度评估完成`
-          : `✅ [${keywordData.keyword}] Competitor DR assessment completed`);
-      } catch (e) {
-        console.warn(`[Agent 2] Failed to fetch competitor DRs:`, e);
-      }
-    }
-
-    return await continueAnalysisWithSerpAndDR(keywordData, serpResults, serpResultCount, competitorDRs, industry);
+    return await continueAnalysisWithSerp(keywordData, serpResults, serpResultCount, industry);
   };
 
-  // 提取共同的分析逻辑
-  const continueAnalysisWithSerpAndDR = async (
+  // 提取共同的分析逻辑（DR 功能已移除）
+  const continueAnalysisWithSerp = async (
     keywordData: KeywordData,
     serpResults: any[],
     serpResultCount: number,
-    competitorDRs: number[],
     industry?: string
   ): Promise<KeywordData> => {
     // 记录分析开始时间，用于性能统计
@@ -1204,14 +1095,12 @@ export const analyzeRankingProbability = async (
     // Step 2: Build system instruction with real SERP data
     // OPTIMIZED: Reduced from Top 5 to Top 3, removed verbose warnings
     const maxSerpResults = 3; // 只使用前3个结果 (优化：从5减到3)
-    const isBlueOceanMode = siteDR === undefined;
 
     const serpContext = serpResults.length > 0
       ? `\n\nTOP ${maxSerpResults} ${engineName} RESULTS for "${keywordData.keyword}":\n${serpResults.slice(0, maxSerpResults).map((r, i) => {
         if (!r) return `${i + 1}. [No data]`;
-        const drInfo = (!isBlueOceanMode && competitorDRs[i] !== undefined) ? ` [DR:${competitorDRs[i]}]` : '';
-        return `${i + 1}. ${r.title || '[No title]'} | ${r.url || '[No URL]'}${drInfo}`;
-      }).join('\n')}${!isBlueOceanMode && siteDR !== undefined ? `\n\nYour DR: ${siteDR}` : ''}`
+        return `${i + 1}. ${r.title || '[No title]'} | ${r.url || '[No URL]'}`;
+      }).join('\n')}`
       : `\n\nNote: SERP data unavailable.`;
 
     // Add DataForSEO data context if available (use dataForSEOData or serankingData for backward compatibility)
@@ -1655,21 +1544,7 @@ CRITICAL:
         ...analysis
       });
 
-      // 计算大鱼吃小鱼对比结果 (Workflow 3) - 仅在存量拓新模式（有siteDR）下计算
-      // 只返回对比结果（canOutrankPositions），供分析agent作为参考，不计算概率
-      let outrankData = {
-        canOutrankPositions: [] as number[],
-        top3Probability: ProbabilityLevel.LOW,
-        top10Probability: ProbabilityLevel.LOW,
-        finalProbability: analysis.probability || ProbabilityLevel.MEDIUM
-      };
-
-      // 存量拓新模式：如果有 DR 数据，使用"大鱼吃小鱼"算法计算outrank相关指标
-      if (!isBlueOceanMode && siteDR !== undefined && competitorDRs.length > 0) {
-        outrankData = calculateOutrankProbability(siteDR, competitorDRs, analysis.relevanceScore || 0.5);
-      }
-
-      // 直接使用AI返回的probability，不再重新计算
+      // 直接使用AI返回的probability，不再计算 DR 相关指标
 
       console.log(`[Agent 2] Total analysis for "${keywordData.keyword}" took ${Date.now() - keywordStartTime}ms`);
 
@@ -1681,11 +1556,6 @@ CRITICAL:
           totalScore: blueOceanScoreData.totalScore,
           factors: blueOceanScoreData.factors
         },
-        websiteDR: siteDR,
-        competitorDRs,
-        canOutrankPositions: outrankData.canOutrankPositions,
-        top3Probability: outrankData.top3Probability,
-        top10Probability: outrankData.top10Probability,
         rawResponse: response?.text || '',
         searchResults: response?.searchResults // 添加联网搜索结果
       };
@@ -1705,8 +1575,8 @@ CRITICAL:
 
   const results: KeywordData[] = [];
 
-  const BATCH_SIZE = 6; // 提升批处理大小，充分利用 API 并发能力
-  const BATCH_DELAY = 300; // 减少批次间延迟，避免过度等待
+  const BATCH_SIZE = 3; // 降低批处理大小，提高稳定性
+  const BATCH_DELAY = 500; // 增加批次间延迟，避免 API 限流
   const startTime = Date.now();
   const MAX_EXECUTION_TIME = 260000; // 保持 260 秒超时限制，确保在前端 300 秒超时前返回
 
@@ -1735,76 +1605,20 @@ CRITICAL:
       : `📡 [Batch ${currentBatchNum}] Batch fetching SERP results in parallel...`);
 
     const batchKeywords = batch.map(k => k.keyword);
+    // ThorData SERP 调用使用顺序执行（batchSize=1）以提高稳定性
     const serpResultsMap = await fetchSerpResultsBatch(
       batchKeywords,
       targetLanguage,
       searchEngine, // engine 参数
-      BATCH_SIZE, // 批次大小
-      BATCH_DELAY // 批次延迟
+      1, // ThorData 不并发，顺序执行
+      500 // 请求间延迟 500ms
     );
 
-    // Step 2: 从所有 SERP 结果中提取所有需要查询的域名，批量并行获取 DR 值
-    // 蓝海模式（siteDR === undefined）跳过 DR 获取以节省 API 调用和时间
-    const isBlueOceanMode = siteDR === undefined;
-    let allDomainsDRMap = new Map<string, number>();
-
-    if (!isBlueOceanMode) {
-      // 存量拓新模式：需要 DR 数据用于"大鱼吃小鱼"算法
-      onProgress?.(uiLanguage === 'zh'
-        ? `🛡️ [批次 ${currentBatchNum}] 正在批量并行获取竞争对手 DR 值...`
-        : `🛡️ [Batch ${currentBatchNum}] Batch fetching competitor DR values in parallel...`);
-
-      // 优化：只获取每个关键词的第1名、第5名、第10名域名（节省70%成本）
-      const allDomains = new Set<string>();
-      batch.forEach(k => {
-        const serpData = serpResultsMap.get(k.keyword.toLowerCase());
-        if (serpData?.results) {
-          const results = serpData.results;
-          // 只添加第1名、第5名、第10名的域名
-          if (results.length > 0 && results[0]?.url) {
-            const domain = results[0].url.replace(/^https?:\/\//, '').split('/')[0];
-            if (domain && domain.includes('.')) {
-              allDomains.add(domain);
-            }
-          }
-          if (results.length >= 5 && results[4]?.url) {
-            const domain = results[4].url.replace(/^https?:\/\//, '').split('/')[0];
-            if (domain && domain.includes('.')) {
-              allDomains.add(domain);
-            }
-          }
-          if (results.length >= 10 && results[9]?.url) {
-            const domain = results[9].url.replace(/^https?:\/\//, '').split('/')[0];
-            if (domain && domain.includes('.')) {
-              allDomains.add(domain);
-            }
-          }
-        }
-      });
-
-      if (allDomains.size > 0) {
-        try {
-          const domainsArray = Array.from(allDomains);
-          const drMap = await getBatchDomainOverview(domainsArray);
-          // 转换 Map 格式
-          drMap.forEach((overview, domain) => {
-            allDomainsDRMap.set(domain, (overview as any)?.dr || 0);
-          });
-        } catch (e) {
-          console.warn(`[Agent 2] Failed to batch fetch DRs:`, e);
-        }
-      }
-    } else {
-      // 蓝海模式：跳过 DR 获取
-      console.log(`[Agent 2] Blue Ocean mode: Skipping competitor DR fetching to save API calls and time`);
-    }
-
-    // Step 3: 并行处理批次内的所有关键词（使用已获取的 SERP 和 DR 数据）
+    // Step 2: 并行处理批次内的所有关键词（使用已获取的 SERP 数据，DR 功能已移除）
     const batchResults = await Promise.allSettled(
       batch.map(k => analyzeSingleKeywordWithPreFetchedData(
         k,
-        serpResultsMap.get(k.keyword.toLowerCase()),
-        allDomainsDRMap
+        serpResultsMap.get(k.keyword.toLowerCase())
       ))
     );
 

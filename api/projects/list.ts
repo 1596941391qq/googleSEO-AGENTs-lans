@@ -1,8 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse } from '../_shared/request-handler.js';
-import { getUserProjects, getUserExecutionTasks } from '../lib/database.js';
+import { getUserExecutionTasks } from '../lib/database.js';
 import { authenticateRequest } from '../_shared/auth.js';
 
+/**
+ * GET /api/projects/list
+ * 获取用户的任务列表，转换为 ProjectWithStats 格式供任务看板使用
+ */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
 
@@ -15,154 +19,127 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // 权限校验
     const authResult = await authenticateRequest(req);
     if (!authResult) {
       return sendErrorResponse(res, null, 'Unauthorized', 401);
     }
     const userId = authResult.userId;
-    
-    // 检查 userId 是否有效，避免 parseInt("NaN") 导致的数据库错误
-    if (!userId || userId === 'NaN') {
-      return res.json({
-        success: true,
-        data: {
-          projects: []
-        },
-      });
-    }
 
-    // 尝试转换为数字，如果失败（如 UUID）则保留字符串，getUserProjects 已适配两者
-    const numericUserId = parseInt(userId);
-    const finalUserId = isNaN(numericUserId) ? userId : numericUserId;
-    
-    const tasks = await getUserExecutionTasks(finalUserId);
+    // 解析查询参数
+    const showArchived = req.query.showArchived === 'true';
+    const onlyArchived = req.query.onlyArchived === 'true';
 
-    // 将任务转换为类似项目的结构，以便看板显示
-    const taskProjects = tasks.map(task => {
-      let keywordCount = 0;
-      if (task.type === 'mining') {
-        keywordCount = task.state?.keywords?.length || task.state?.miningState?.keywords?.length || 0;
-      } else if (task.type === 'batch') {
-        keywordCount = task.state?.batchKeywords?.length || task.state?.batchState?.batchKeywords?.length || 0;
-      } else if (task.type === 'article-generator') {
-        keywordCount = 1;
-      }
+    // 获取用户的所有执行任务
+    const tasks = await getUserExecutionTasks(userId, 100, {
+      includeDeleted: showArchived,
+      onlyDeleted: onlyArchived,
+    });
 
-      // 获取更友好的名称
-      let displayName = task.name;
-      if (!displayName || displayName === 'New Task' || displayName === 'Keyword Mining' || displayName === 'Article Generation') {
-        const seed = task.params?.seedKeyword || task.params?.keyword || task.state?.seedKeyword || task.state?.keyword || task.state?.miningState?.seedKeyword;
-        if (seed) {
-          displayName = typeof seed === 'string' ? seed : (seed.keyword || displayName);
-        }
-      }
-
-      // 根据任务所在页面状态确定显示状态
-      // 输入页 = pending（未开始）
-      // 过程页 = in_progress（进行中）
-      // 结果页 = completed（已完成）
-      let effectiveStatus = task.status;
+    // 将 ExecutionTask 转换为 ProjectWithStats 格式
+    const projects = tasks.map((task) => {
       const state = task.state || {};
-      const miningState = state.miningState || state;
-      const batchState = state.batchState || state;
-      const articleState = state.articleGeneratorState || state;
-      const deepDiveState = state.deepDiveState || state;
+      const miningState = state.miningState || {};
+      const batchState = state.batchState || {};
+      
+      // 计算关键词数量
+      const miningKeywords = miningState.keywords || [];
+      const batchKeywords = batchState.batchKeywords || [];
+      const keywordCount = miningKeywords.length + batchKeywords.length;
 
+      // 从 state 中提取草稿和发布数量（如果有的话）
+      const draftCount = state.draftCount || 0;
+      const publishedCount = state.publishedCount || 0;
+
+      // 正确判断任务状态：
+      // - mining 任务：检查 miningState.miningSuccess
+      // - batch 任务：检查 batchKeywords 是否有数据
+      // - 其他任务：使用数据库中的 status
+      let computedStatus = task.status || 'in_progress';
+      
       if (task.type === 'mining') {
-        const hasKeywords = (miningState.keywords && miningState.keywords.length > 0);
-        const isMining = miningState.isMining === true;
-        const hasSeedKeyword = !!(miningState.seedKeyword || state.seedKeyword);
-        
-        if (hasKeywords || miningState.miningSuccess === true) {
-          // 结果页：有关键词结果
-          effectiveStatus = 'completed';
-        } else if (isMining) {
-          // 过程页：正在挖掘中
-          effectiveStatus = 'in_progress';
-        } else if (miningState.miningError) {
-          // 失败
-          effectiveStatus = 'failed';
-        } else {
-          // 输入页：还没有开始挖掘
-          effectiveStatus = 'pending';
+        if (miningState.miningSuccess === true) {
+          computedStatus = 'completed';
+        } else if (miningState.isMining === true) {
+          computedStatus = 'in_progress';
         }
       } else if (task.type === 'batch') {
-        const hasResults = batchState.batchKeywords && batchState.batchKeywords.length > 0;
-        const isProcessing = batchState.batchCurrentIndex !== undefined && 
-                            batchState.batchCurrentIndex < (batchState.batchTotalCount || 0);
-        
-        if (hasResults && !isProcessing) {
-          // 结果页：批量处理完成
-          effectiveStatus = 'completed';
-        } else if (isProcessing) {
-          // 过程页：正在批量处理
-          effectiveStatus = 'in_progress';
-        } else {
-          // 输入页：未开始
-          effectiveStatus = 'pending';
-        }
-      } else if (task.type === 'article-generator') {
-        const currentStage = articleState.currentStage;
-        const hasFinalArticle = !!articleState.finalArticle;
-        const isGenerating = articleState.isGenerating === true;
-        
-        if (currentStage === 'complete' || hasFinalArticle) {
-          // 结果页：文章生成完成
-          effectiveStatus = 'completed';
-        } else if (isGenerating || (currentStage && currentStage !== 'input')) {
-          // 过程页：正在生成（research, strategy, writing, visualizing）
-          effectiveStatus = 'in_progress';
-        } else {
-          // 输入页：还在配置阶段
-          effectiveStatus = 'pending';
-        }
-      } else if (task.type === 'deep-dive') {
-        const hasReport = !!deepDiveState.currentStrategyReport;
-        const isDeepDiving = deepDiveState.isDeepDiving === true;
-        
-        if (hasReport) {
-          // 结果页
-          effectiveStatus = 'completed';
-        } else if (isDeepDiving) {
-          // 过程页
-          effectiveStatus = 'in_progress';
-        } else {
-          // 输入页
-          effectiveStatus = 'pending';
+        if (batchKeywords.length > 0 && !batchState.isProcessing) {
+          computedStatus = 'completed';
+        } else if (batchState.isProcessing === true) {
+          computedStatus = 'in_progress';
         }
       }
+
+      // 挖掘模式：blue-ocean（蓝海模式）或 existing-website-audit（存量拓新）
+      const miningMode = miningState.miningMode || batchState.miningMode || 'blue-ocean';
+      
+      // 种子词或网站信息
+      const seedKeyword = miningState.seedKeyword || '';
+      const websiteUrl = miningState.websiteUrl || miningState.selectedWebsite?.url || '';
+      const websiteDomain = miningState.websiteDomain || '';
+      
+      // 批量任务的输入关键词
+      const batchInput = batchState.batchInputKeywords || '';
+
+      // 智能任务名称：
+      // 1. 如果任务已完成且有关键词，用第一个关键词作为名称
+      // 2. 否则用原名称或生成描述性名称
+      let displayName = task.name || 'Untitled Task';
+      
+      if (computedStatus === 'completed') {
+        // 尝试用第一个关键词命名
+        const firstKeyword = miningKeywords[0]?.keyword || batchKeywords[0]?.keyword || batchKeywords[0]?.original;
+        if (firstKeyword) {
+          // 截取前30个字符，避免过长
+          displayName = firstKeyword.length > 30 ? firstKeyword.substring(0, 30) + '...' : firstKeyword;
+        }
+      } else if (displayName.match(/^(挖掘|Mining|批量|Batch)\s*#\d+$/)) {
+        // 如果是默认的 #数字 格式，生成更具描述性的名称
+        if (miningMode === 'existing-website-audit' && websiteDomain) {
+          displayName = `存量拓新: ${websiteDomain}`;
+        } else if (seedKeyword) {
+          displayName = seedKeyword.length > 25 ? seedKeyword.substring(0, 25) + '...' : seedKeyword;
+        } else if (batchInput) {
+          const firstLine = batchInput.split('\n')[0].trim();
+          displayName = firstLine.length > 25 ? firstLine.substring(0, 25) + '...' : firstLine;
+        }
+      }
+
+      // 如果任务已归档，状态显示为 archived
+      const finalStatus = task.deleted_at ? 'archived' : computedStatus;
 
       return {
         id: task.id,
         user_id: task.user_id,
-        name: displayName || (task.type === 'mining' ? 'Keyword Mining' : 'Task'),
-        status: effectiveStatus,
-        type: 'task',
-        task_type: task.type,
+        name: displayName,
+        seed_keyword: seedKeyword || batchInput || null,
+        target_language: state.targetLanguage || miningState.targetLanguage || null,
         created_at: task.created_at,
         updated_at: task.updated_at,
+        deleted_at: task.deleted_at,
+        // ProjectWithStats 扩展字段
         keyword_count: keywordCount,
-        draft_count: task.type === 'article-generator' && effectiveStatus === 'completed' ? 1 : 0,
-        published_count: 0,
-        params: task.params,
-        state: task.state
+        draft_count: draftCount,
+        published_count: publishedCount,
+        type: 'task' as const,
+        status: finalStatus,
+        task_type: task.type,
+        // 额外信息供前端显示
+        mining_mode: miningMode,
+        website_url: websiteUrl,
+        website_domain: websiteDomain,
+        is_archived: !!task.deleted_at,
       };
     });
-
-    // 合并并按更新时间排序
-    const allProjects = [...taskProjects].sort((a, b) => 
-      new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-    );
 
     return res.json({
       success: true,
       data: {
-        projects: allProjects
+        projects
       },
     });
   } catch (error: any) {
-    console.error('[List Projects] Error:', error);
+    console.error('[Projects List] Error:', error);
     return sendErrorResponse(res, error, 'Failed to list projects', 500);
   }
 }

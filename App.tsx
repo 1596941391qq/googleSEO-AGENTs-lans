@@ -124,6 +124,12 @@ import {
   DEEP_DIVE_WORKFLOW,
   createDefaultConfig,
 } from "./workflows";
+import {
+  smartStorage,
+  saveTasksCompat,
+  loadTasksCompat,
+  migrateFromOldStorage,
+} from "./lib/storage";
 
 // --- Constants & Translations ---
 
@@ -3339,7 +3345,8 @@ export default function App() {
     high_performer_expand: { enabled: false, count: 10 },
     industry_context: { enabled: false, count: 10 },
   });
-  const [useStrategyMode, setUseStrategyMode] = useState(true); // 默认启用策略模式
+  // 存量拓新模式始终使用策略模式（已简化）
+  const useStrategyMode = true;
   const [manualWebsiteUrl, setManualWebsiteUrl] = useState(""); // Manual website URL input
   const [urlValidationStatus, setUrlValidationStatus] = useState<
     "idle" | "valid" | "invalid" | "validating"
@@ -4127,12 +4134,27 @@ export default function App() {
     }
   }, [authenticated, user]);
 
-  // Load tasks from localStorage on mount
+  // Initialize smart storage and load tasks on mount
   useEffect(() => {
-    loadTasksFromLocalStorage();
-    if (authenticated) {
-      loadTasksFromBackend();
-    }
+    const initAndLoad = async () => {
+      // 初始化智能存储系统（IndexedDB）
+      try {
+        await smartStorage.init();
+        console.log('[App] Smart storage initialized');
+      } catch (e) {
+        console.warn('[App] Smart storage init failed, using fallback:', e);
+      }
+      
+      // 加载本地任务
+      await loadTasksFromLocalStorage();
+      
+      // 如果已登录，从后端加载任务
+      if (authenticated) {
+        loadTasksFromBackend();
+      }
+    };
+    
+    initAndLoad();
   }, [authenticated]);
 
   const loadTasksFromBackend = async () => {
@@ -4291,9 +4313,9 @@ export default function App() {
     }
   };
 
-  // Auto-save tasks to localStorage and backend
+  // Auto-save tasks to smart storage and backend
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       if (
         state.taskManager.tasks.length > 0 &&
         state.taskManager.activeTaskId
@@ -4316,17 +4338,14 @@ export default function App() {
           },
         }));
 
-        // Sync to localStorage
+        // Sync to smart storage (IndexedDB + localStorage fallback)
         try {
           const updatedTasks = state.taskManager.tasks.map((t) =>
             t.id === state.taskManager.activeTaskId ? updatedTask : t
           );
-          localStorage.setItem(
-            STORAGE_KEYS.TASKS,
-            JSON.stringify(updatedTasks)
-          );
+          await saveTasksCompat(updatedTasks);
         } catch (e) {
-          console.error("Failed to save tasks to local storage", e);
+          console.error("Failed to save tasks to storage", e);
         }
 
         // Sync to backend
@@ -5131,8 +5150,6 @@ export default function App() {
             isDeepDiving: false,
             deepDiveProgress: 0,
             deepDiveCurrentStep: "",
-            miningConfig: undefined,
-            miningMode: "blue-ocean",
           };
         case "article-generator":
           const articleState =
@@ -5196,6 +5213,8 @@ export default function App() {
     newStep: AppState["step"],
     additionalUpdates?: (prev: AppState) => Partial<AppState>
   ) => {
+    let tasksToSave: TaskState[] | null = null;
+    
     setState((prev) => {
       const currentActiveTaskId = prev.taskManager.activeTaskId;
       let updatedTasks = prev.taskManager.tasks;
@@ -5210,12 +5229,8 @@ export default function App() {
         });
       }
 
-      // Save to localStorage
-      try {
-        localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(updatedTasks));
-      } catch (e) {
-        console.error("Failed to save tasks", e);
-      }
+      // Store tasks for async save after setState
+      tasksToSave = updatedTasks;
 
       const baseUpdate: Partial<AppState> = {
         step: newStep,
@@ -5234,10 +5249,17 @@ export default function App() {
         ...additional,
       };
     });
+
+    // Save to smart storage asynchronously after setState
+    if (tasksToSave) {
+      saveTasksCompat(tasksToSave).catch((e) => {
+        console.error("Failed to save tasks", e);
+      });
+    }
   };
 
-  // Save tasks to localStorage
-  const saveTasksToLocalStorage = () => {
+  // Save tasks to smart storage (IndexedDB + localStorage fallback)
+  const saveTasksToLocalStorage = async () => {
     try {
       const tasksToSave = state.taskManager.tasks.map((task) => {
         if (task.id === state.taskManager.activeTaskId) {
@@ -5246,18 +5268,20 @@ export default function App() {
         return task;
       });
 
-      localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasksToSave));
+      // 使用智能存储系统（自动处理 IndexedDB + localStorage 分片 + 压缩）
+      await saveTasksCompat(tasksToSave);
     } catch (e) {
       console.error("Failed to save tasks", e);
     }
   };
 
-  // Load tasks from localStorage
-  const loadTasksFromLocalStorage = () => {
+  // Load tasks from smart storage (IndexedDB with localStorage fallback)
+  const loadTasksFromLocalStorage = async () => {
     try {
-      const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
-      if (savedTasks) {
-        const tasks: TaskState[] = JSON.parse(savedTasks);
+      // 使用智能存储系统加载任务（自动处理迁移和降级）
+      const tasks = await loadTasksCompat();
+      
+      if (tasks && tasks.length > 0) {
         // 确保所有任务都不是active，默认显示"我的网站"
         const tasksWithNoActive = tasks.map((t) => ({
           ...t,
@@ -6372,6 +6396,13 @@ export default function App() {
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
+          // 计算策略模式下的总关键词数（各启用模块的 count 之和）
+          const strategyTotalKeywords = useStrategyMode
+            ? Object.values(strategyConfig)
+                .filter((s) => s?.enabled)
+                .reduce((sum, s) => sum + (s?.count || 0), 0)
+            : 0;
+
           response = await postWithAuth(
             "/api/website-audit",
             {
@@ -6380,14 +6411,16 @@ export default function App() {
               websiteDomain: websiteDomain,
               targetLanguage: state.targetLanguage,
               uiLanguage: state.uiLanguage,
-              wordsPerRound: state.wordsPerRound || 10,
+              // 非策略模式使用 wordsPerRound，策略模式下此参数被忽略
+              wordsPerRound: useStrategyMode ? undefined : (state.wordsPerRound || 10),
               miningStrategy: state.miningStrategy || "horizontal",
               industry: state.miningConfig?.industry,
               additionalSuggestions: state.miningConfig?.additionalSuggestions,
               // 策略模块化配置
               useStrategyMode: useStrategyMode,
               strategies: useStrategyMode ? strategyConfig : undefined,
-              maxTotalKeywords: 50,
+              // 策略模式：使用各模块 count 之和；非策略模式：使用 wordsPerRound
+              maxTotalKeywords: useStrategyMode ? strategyTotalKeywords : (state.wordsPerRound || 10),
             },
             {
               signal: controller.signal,
@@ -6510,6 +6543,7 @@ export default function App() {
                   {
                     data: event.data,
                     dataType: event.cardType,
+                    round: state.miningRound, // 确保使用正确的轮次
                   },
                   currentTaskId
                 );
@@ -6529,6 +6563,15 @@ export default function App() {
             console.error("[Website Audit] Parse error:", parseError);
           }
         }
+      }
+
+      // 检查 result 是否有效
+      if (!result) {
+        throw new Error(
+          state.uiLanguage === "zh"
+            ? "服务器响应异常，未收到完成消息"
+            : "Server response error, no completion message received"
+        );
       }
 
       if (result.success && result.keywords) {
@@ -6657,7 +6700,7 @@ export default function App() {
           currentTaskId
         );
 
-        // 保存分析报告和竞争对手关键词池到任务状态，以便在挖掘循环中使用
+        // 保存分析报告和竞争对手关键词池到任务状态
         setState((prev) => {
           const updatedTasks = prev.taskManager.tasks.map((task) => {
             if (task.id === currentTaskId && task.miningState) {
@@ -6670,9 +6713,26 @@ export default function App() {
                 task.miningState.competitorKeywordsPool =
                   result.competitorKeywordsPool;
               }
+              // 策略模式：第一轮关键词已由后端生成并完成 SERP 分析，直接保存
+              if (useStrategyMode && result.keywords && result.keywords.length > 0) {
+                task.miningState.keywords = result.keywords;
+              }
             }
             return task;
           });
+          
+          // 策略模式：同步更新全局 keywords 状态
+          if (useStrategyMode && result.keywords && result.keywords.length > 0) {
+            return {
+              ...prev,
+              keywords: result.keywords,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          }
+          
           return {
             ...prev,
             taskManager: {
@@ -6682,13 +6742,34 @@ export default function App() {
           };
         });
 
-        // 开始循环挖掘（第一轮会使用分析报告，后续轮次优先使用竞争对手关键词池）
-        // 第一轮不需要种子关键词，因为会使用分析报告
-        await runWebsiteAuditMiningLoop(
-          [],
-          currentTaskId,
-          result.analysisReport
-        );
+        // 策略模式：使用策略专用循环挖掘
+        // 非策略模式：使用旧的循环挖掘
+        if (useStrategyMode && result.keywords && result.keywords.length > 0) {
+          addLog(
+            state.uiLanguage === "zh"
+              ? `✅ 策略模式第一轮完成，发现 ${result.keywords.length} 个关键词（已完成 SERP 分析）`
+              : `✅ Strategy mode round 1 complete, found ${result.keywords.length} keywords (SERP analysis done)`,
+            "success",
+            currentTaskId
+          );
+          
+          // 策略模式：使用策略专用循环挖掘（每轮都调用后端 API，遵循策略配置）
+          await runStrategyMiningLoop(
+            currentTaskId,
+            websiteToUse,
+            websiteDomain,
+            strategyConfig,
+            1 // 从第二轮开始（startRound = 1 表示已完成第一轮）
+          );
+        } else {
+          // 非策略模式：使用旧的循环挖掘（使用竞争对手关键词池）
+          await runWebsiteAuditMiningLoop(
+            [],
+            currentTaskId,
+            result.analysisReport,
+            0 // 从第一轮开始
+          );
+        }
       } else {
         throw new Error(result.error || "Website audit failed");
       }
@@ -6837,6 +6918,16 @@ export default function App() {
       addThought("generation", thoughtMessage, undefined, taskId);
       addLog(`💭 ${thoughtMessage}`, "info", taskId);
 
+      // 检查是否需要停止（在长时间操作之前）
+      if (stopMiningRef.current) {
+        addLog(
+          state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+          "warning",
+          taskId
+        );
+        break;
+      }
+
       try {
         // Update thinking status - AI is generating keywords
         setThinkingStatus(
@@ -6869,6 +6960,16 @@ export default function App() {
           latestMiningConfig?.industry,
           latestMiningConfig?.additionalSuggestions
         );
+
+        // 检查是否需要停止（在异步操作之后）
+        if (stopMiningRef.current) {
+          addLog(
+            state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+            "warning",
+            taskId
+          );
+          break;
+        }
 
         const generatedKeywords = result.keywords;
         const rawResponse = result.rawResponse;
@@ -7398,13 +7499,405 @@ export default function App() {
     }
   };
 
-  // Website Audit Mining Loop (存量拓新的关键词挖掘循环)
+  // Strategy Mining Loop (策略模式专用循环挖掘)
+  // 每轮都调用后端 API，遵循用户选择的策略配置
+  const runStrategyMiningLoop = async (
+    taskId: string,
+    website: any,
+    websiteDomain: string,
+    strategies: StrategyConfig,
+    startRound: number = 1
+  ) => {
+    let currentRound = startRound;
+
+    while (!stopMiningRef.current) {
+      currentRound++;
+
+      // 更新轮次状态
+      setState((prev) => {
+        const updatedTasks = prev.taskManager.tasks.map((task) => {
+          if (task.id === taskId && task.miningState) {
+            return {
+              ...task,
+              miningState: {
+                ...task.miningState,
+                miningRound: currentRound,
+              },
+            };
+          }
+          return task;
+        });
+
+        if (taskId === prev.taskManager.activeTaskId) {
+          return {
+            ...prev,
+            miningRound: currentRound,
+            taskManager: {
+              ...prev.taskManager,
+              tasks: updatedTasks,
+            },
+          };
+        }
+        return {
+          ...prev,
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      });
+
+      addLog(
+        state.uiLanguage === "zh"
+          ? `[轮次 ${currentRound}] 策略模式挖词中...`
+          : `[Round ${currentRound}] Strategy mining...`,
+        "info",
+        taskId
+      );
+
+      // 检查停止信号
+      if (stopMiningRef.current) {
+        addLog(
+          state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+          "warning",
+          taskId
+        );
+        break;
+      }
+
+      try {
+        // 计算策略模式下的总关键词数
+        const strategyTotalKeywords = Object.values(strategies)
+          .filter((s) => s?.enabled)
+          .reduce((sum, s) => sum + (s?.count || 0), 0);
+
+        // 调用后端 API（带策略配置）
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5分钟超时
+
+        const response = await postWithAuth(
+          "/api/website-audit",
+          {
+            websiteId: website.id,
+            websiteUrl: website.url,
+            websiteDomain: websiteDomain,
+            targetLanguage: state.targetLanguage,
+            uiLanguage: state.uiLanguage,
+            miningStrategy: state.miningStrategy || "horizontal",
+            industry: state.miningConfig?.industry,
+            searchEngine: state.targetSearchEngine || "google", // 添加搜索引擎参数
+            useStrategyMode: true,
+            strategies: strategies,
+            maxTotalKeywords: strategyTotalKeywords,
+          },
+          {
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        // 解析 SSE 流
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("No response body");
+
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let roundResult: any = null;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const json = JSON.parse(line.slice(6));
+              if (json.type === "event" && json.data) {
+                const event = json.data;
+                if (event.type === "log" && event.message) {
+                  addLog(event.message, "info", taskId);
+                } else if (event.type === "card" && event.cardType) {
+                  // 添加可视化卡片到 Agent Thoughts（使用当前轮次）
+                  addThought(
+                    event.agentId === "researcher"
+                      ? "analysis"
+                      : event.agentId === "strategist"
+                      ? "generation"
+                      : "analysis",
+                    event.message || "",
+                    {
+                      data: event.data,
+                      dataType: event.cardType,
+                      round: currentRound, // 确保使用正确的轮次
+                    },
+                    taskId
+                  );
+                } else if (event.type === "error" && event.message) {
+                  addLog(event.message, "error", taskId);
+                }
+              } else if (json.type === "done") {
+                roundResult = json.data;
+              } else if (json.type === "error") {
+                throw new Error(json.message || "Strategy mining failed");
+              }
+            } catch (parseError) {
+              // 忽略解析错误
+            }
+          }
+        }
+
+        // 检查停止信号
+        if (stopMiningRef.current) {
+          break;
+        }
+
+        // 处理本轮结果
+        if (roundResult?.success && roundResult.keywords?.length > 0) {
+          const newKeywords = roundResult.keywords as KeywordData[];
+
+          addLog(
+            state.uiLanguage === "zh"
+              ? `✅ [轮次 ${currentRound}] 发现 ${newKeywords.length} 个新关键词`
+              : `✅ [Round ${currentRound}] Found ${newKeywords.length} new keywords`,
+            "success",
+            taskId
+          );
+
+          // 检测高概率关键词
+          const highProbKeywords = newKeywords.filter(
+            (k) => k.probability === "High" || k.probability === ProbabilityLevel.HIGH
+          );
+
+          // 更新关键词列表（累加到已有关键词）
+          setState((prev) => {
+            const updatedTasks = prev.taskManager.tasks.map((task) => {
+              if (task.id === taskId && task.miningState) {
+                // 合并去重
+                const existingKeywords = task.miningState.keywords || [];
+                const existingSet = new Set(existingKeywords.map(k => k.keyword.toLowerCase()));
+                const uniqueNewKeywords = newKeywords.filter(
+                  k => !existingSet.has(k.keyword.toLowerCase())
+                );
+                return {
+                  ...task,
+                  miningState: {
+                    ...task.miningState,
+                    keywords: [...existingKeywords, ...uniqueNewKeywords],
+                  },
+                };
+              }
+              return task;
+            });
+
+            // 同步更新全局状态
+            if (taskId === prev.taskManager.activeTaskId) {
+              const existingKeywords = prev.keywords || [];
+              const existingSet = new Set(existingKeywords.map(k => k.keyword.toLowerCase()));
+              const uniqueNewKeywords = newKeywords.filter(
+                k => !existingSet.has(k.keyword.toLowerCase())
+              );
+              return {
+                ...prev,
+                keywords: [...existingKeywords, ...uniqueNewKeywords],
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            }
+            return {
+              ...prev,
+              taskManager: {
+                ...prev.taskManager,
+                tasks: updatedTasks,
+              },
+            };
+          });
+
+          // 如果发现高概率词，停止挖掘并显示成功提示
+          if (highProbKeywords.length > 0) {
+            const highProbCandidate = highProbKeywords[0];
+            
+            addThought(
+              "decision",
+              state.uiLanguage === "zh"
+                ? `发现高概率关键词: "${highProbCandidate.keyword}"。停止挖掘。`
+                : `Found HIGH probability opportunity: "${highProbCandidate.keyword}". Stopping.`,
+              undefined,
+              taskId
+            );
+            addLog(
+              state.uiLanguage === "zh"
+                ? `🎉 成功！发现 ${highProbKeywords.length} 个高概率关键词！`
+                : `🎉 Success! Found ${highProbKeywords.length} high probability keywords!`,
+              "success",
+              taskId
+            );
+
+            // 设置挖掘成功状态并显示提示窗口
+            setState((prev) => {
+              const updatedTasks = prev.taskManager.tasks.map((task) => {
+                if (task.id === taskId && task.miningState) {
+                  return {
+                    ...task,
+                    miningState: {
+                      ...task.miningState,
+                      isMining: false,
+                      miningSuccess: true,
+                      showSuccessPrompt: true,
+                    },
+                  };
+                }
+                return task;
+              });
+
+              // 保存归档
+              saveToArchive(prev);
+
+              if (taskId === prev.taskManager.activeTaskId) {
+                return {
+                  ...prev,
+                  isMining: false,
+                  miningSuccess: true,
+                  showSuccessPrompt: true,
+                  taskManager: {
+                    ...prev.taskManager,
+                    tasks: updatedTasks,
+                  },
+                };
+              }
+              return {
+                ...prev,
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            });
+
+            // 清除思考状态
+            setThinkingStatus(false, "", "idle");
+
+            // 播放完成提示音
+            playCompletionSound();
+
+            // 滚动到顶部
+            if (taskId === state.taskManager.activeTaskId) {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+            return; // 停止挖掘循环
+          }
+
+          // 没有高概率词，继续下一轮
+          addThought(
+            "decision",
+            state.uiLanguage === "zh"
+              ? `本轮未发现高概率词，继续挖掘...`
+              : `No HIGH probability keywords found. Continuing...`,
+            undefined,
+            taskId
+          );
+
+          // 短暂延迟后继续下一轮
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          // 没有新关键词，记录并继续
+          addLog(
+            state.uiLanguage === "zh"
+              ? `⚠️ [轮次 ${currentRound}] 未发现新关键词`
+              : `⚠️ [Round ${currentRound}] No new keywords found`,
+            "warning",
+            taskId
+          );
+          // 短暂延迟后继续
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+      } catch (error: any) {
+        if (error.name === "AbortError" || stopMiningRef.current) {
+          addLog(
+            state.uiLanguage === "zh" ? "⏹️ 挖词已停止" : "⏹️ Mining stopped",
+            "warning",
+            taskId
+          );
+          break;
+        }
+        
+        addLog(
+          state.uiLanguage === "zh"
+            ? `❌ [轮次 ${currentRound}] 错误: ${error.message}`
+            : `❌ [Round ${currentRound}] Error: ${error.message}`,
+          "error",
+          taskId
+        );
+        
+        // 出错后等待一段时间再重试
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
+    }
+
+    // 循环结束，标记挖词完成
+    setState((prev) => {
+      const updatedTasks = prev.taskManager.tasks.map((task) => {
+        if (task.id === taskId && task.miningState) {
+          return {
+            ...task,
+            miningState: {
+              ...task.miningState,
+              isMining: false,
+              miningSuccess: true,
+            },
+          };
+        }
+        return task;
+      });
+
+      if (taskId === prev.taskManager.activeTaskId) {
+        return {
+          ...prev,
+          isMining: false,
+          miningSuccess: true,
+          showSuccessPrompt: true,
+          taskManager: {
+            ...prev.taskManager,
+            tasks: updatedTasks,
+          },
+        };
+      }
+      return {
+        ...prev,
+        taskManager: {
+          ...prev.taskManager,
+          tasks: updatedTasks,
+        },
+      };
+    });
+
+    addLog(
+      state.uiLanguage === "zh"
+        ? `🎉 策略模式挖词完成，共 ${currentRound} 轮`
+        : `🎉 Strategy mining complete, ${currentRound} rounds total`,
+      "success",
+      taskId
+    );
+  };
+
+  // Website Audit Mining Loop (存量拓新的关键词挖掘循环 - 非策略模式)
   const runWebsiteAuditMiningLoop = async (
     seedKeywords: string[],
     taskId: string,
-    analysisReport?: string
+    analysisReport?: string,
+    startRound: number = 0
   ) => {
-    let currentRound = 0;
+    let currentRound = startRound;
     const allKeywords: KeywordData[] = [];
 
     // 将初始关键词添加到 allKeywords
@@ -7697,6 +8190,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
         // 如果缓存的关键词不够或没有缓存，调用AI生成
         if (generatedKeywords.length === 0) {
+          // 检查是否需要停止（在长时间操作之前）
+          if (stopMiningRef.current) {
+            addLog(
+              state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+              "warning",
+              taskId
+            );
+            break;
+          }
+
           addLog(
             state.uiLanguage === "zh"
               ? "🤖 AI 正在思考..."
@@ -7718,6 +8221,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             latestMiningConfig?.industry,
             combinedAdditionalSuggestions
           );
+
+          // 检查是否需要停止（在异步操作之后）
+          if (stopMiningRef.current) {
+            addLog(
+              state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+              "warning",
+              taskId
+            );
+            break;
+          }
 
           generatedKeywords = result.keywords;
 
@@ -7757,6 +8270,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           continue;
         }
 
+        // 检查是否需要停止（在 SERP 分析之前）
+        if (stopMiningRef.current) {
+          addLog(
+            state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+            "warning",
+            taskId
+          );
+          break;
+        }
+
         addLog(
           state.uiLanguage === "zh"
             ? `🔍 正在分析 SERP 估算排名概率...`
@@ -7765,11 +8288,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           taskId
         );
 
-        // 获取网站信息（用于DR对比和"大鱼吃小鱼"分析）
+        // 获取网站信息（用于分析）
         const websiteUrl = currentTaskState?.miningState?.websiteUrl;
 
-        // 分析排名概率（包含SERP分析和DR对比）
-        // 传递websiteUrl，后端会根据它获取网站的DR值，并与SERP结果的DR值进行对比分析
+        // 分析排名概率（包含SERP分析）
         const analyzedBatch = await analyzeRankingProbability(
           generatedKeywords,
           getWorkflowPrompt("mining", "mining-analyze", state.analyzePrompt),
@@ -7786,6 +8308,44 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             });
           }
         );
+
+        // 检查是否需要停止（在 SERP 分析之后）
+        if (stopMiningRef.current) {
+          addLog(
+            state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+            "warning",
+            taskId
+          );
+          // 即使停止，也保存已分析的关键词
+          if (analyzedBatch.length > 0) {
+            allKeywords.push(...analyzedBatch);
+            setState((prev) => {
+              const updatedTasks = prev.taskManager.tasks.map((task) => {
+                if (task.id === taskId && task.miningState) {
+                  return {
+                    ...task,
+                    miningState: {
+                      ...task.miningState,
+                      keywords: [...task.miningState.keywords, ...analyzedBatch],
+                    },
+                  };
+                }
+                return task;
+              });
+              return {
+                ...prev,
+                keywords: taskId === prev.taskManager.activeTaskId 
+                  ? [...prev.keywords, ...analyzedBatch] 
+                  : prev.keywords,
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            });
+          }
+          break;
+        }
 
         // 更新关键词列表
         allKeywords.push(...analyzedBatch);
@@ -8105,7 +8665,38 @@ Please generate keywords based on the opportunities and keyword suggestions ment
   };
 
   const goToResults = () => {
-    setState((prev) => ({ ...prev, step: "results", miningSuccess: false }));
+    // 停止挖词循环
+    stopMiningRef.current = true;
+    setThinkingStatus(false, "", "idle");
+    
+    setState((prev) => {
+      // 更新任务状态
+      const updatedTasks = prev.taskManager.tasks.map((task) => {
+        if (task.id === prev.taskManager.activeTaskId && task.miningState) {
+          return {
+            ...task,
+            miningState: {
+              ...task.miningState,
+              isMining: false,
+              miningSuccess: true,
+            },
+          };
+        }
+        return task;
+      });
+      
+      return { 
+        ...prev, 
+        step: "results", 
+        isMining: false,
+        miningSuccess: false,
+        showSuccessPrompt: false,
+        taskManager: {
+          ...prev.taskManager,
+          tasks: updatedTasks,
+        },
+      };
+    });
   };
 
   const continueMining = () => {
@@ -10810,29 +11401,29 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     <>
                       {/* Refine Industry Button - 仅在非策略模式下显示（策略模式有行业上下文模块） */}
                       {!useStrategyMode && (
-                        <div className="mb-4 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <BrainCircuit className="w-5 h-5 text-emerald-400" />
-                            <span
-                              className={`text-sm font-semibold ${
-                                isDarkTheme ? "text-white" : "text-gray-900"
-                              }`}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "需要帮助？"
-                                : "Need Help?"}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => setShowMiningGuide(true)}
-                            className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                      <div className="mb-4 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                          <span
+                            className={`text-sm font-semibold ${
+                              isDarkTheme ? "text-white" : "text-gray-900"
+                            }`}
                           >
-                            <Lightbulb className="w-3.5 h-3.5" />
                             {state.uiLanguage === "zh"
-                              ? "精确行业"
-                              : "Refine Industry"}
-                          </button>
+                              ? "需要帮助？"
+                              : "Need Help?"}
+                          </span>
                         </div>
+                        <button
+                          onClick={() => setShowMiningGuide(true)}
+                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                        >
+                          <Lightbulb className="w-3.5 h-3.5" />
+                          {state.uiLanguage === "zh"
+                            ? "精确行业"
+                            : "Refine Industry"}
+                        </button>
+                      </div>
                       )}
 
                       {/* Display Saved Mining Configuration - 仅在非策略模式下显示 */}
@@ -11193,22 +11784,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 : "Mining Strategy Modules"}
                             </h3>
                           </div>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={useStrategyMode}
-                              onChange={(e) => setUseStrategyMode(e.target.checked)}
-                              className="w-4 h-4 rounded border-emerald-500 text-emerald-500 focus:ring-emerald-500"
-                            />
-                            <span className={cn(
-                              "text-xs",
-                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                            )}>
-                              {state.uiLanguage === "zh" ? "启用策略模式" : "Enable Strategy Mode"}
-                            </span>
-                          </label>
                         </div>
-                        {useStrategyMode && (
+                        {/* 策略模式选择器（存量拓新始终使用策略模式） */}
                           <div
                             className={cn(
                               "p-4 rounded-lg border",
@@ -11226,7 +11803,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                               isDarkTheme={isDarkTheme}
                             />
                           </div>
-                        )}
                       </section>
 
                       {/* Mining Settings Panel - Same as blue-ocean mode */}
@@ -13187,10 +13763,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               >
                 <div className="overflow-x-auto custom-scrollbar">
                   {(() => {
-                    // 判断是否显示 DR 对比列：只有在存量拓新模式（有关键词有 websiteDR）时才显示
-                    const showDRComparison = state.batchKeywords.some(
-                      (kw) => kw.websiteDR !== undefined
-                    );
+                    // DR对比功能已移除
+                    const showDRComparison = false;
 
                     return (
                       <table

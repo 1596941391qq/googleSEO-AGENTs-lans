@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { generateVisualArticle, ProcessedPromotedWebsite } from './_shared/services/visual-article-service.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { scrapeWebsite, cleanMarkdown } from './_shared/tools/firecrawl.js';
+import { getWebsiteContentCache, saveWebsiteContentCache } from './lib/database.js';
 
 // Main app URL for credits API
 const MAIN_APP_URL = process.env.MAIN_APP_URL || process.env.VITE_MAIN_APP_URL || 'https://niche-mining-web.vercel.app';
@@ -152,7 +153,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId,
       projectId,
       projectName,
-      skipCreditsCheck = false
+      skipCreditsCheck = false,
+      websiteId,       // 关联的用户网站 ID（用于获取缓存的网站内容）
+      websiteUrl       // 网站 URL
     } = body;
 
     // Validate keyword
@@ -280,14 +283,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Process promoted websites - scrape content and take screenshots
     let processedPromotedWebsites: ProcessedPromotedWebsite[] = [];
 
+    // 优先使用缓存的用户网站内容（通过 websiteId）
+    if (websiteId && typeof websiteId === 'string' && websiteUrl) {
+      console.log(`[visual-article] Checking cached website content for websiteId: ${websiteId}`);
+      try {
+        const cached = await getWebsiteContentCache(websiteId, 'scraped_content');
+        
+        if (cached && cached.content) {
+          console.log(`[visual-article] Using cached website content (${cached.content.length} chars)`);
+          // 使用缓存的网站内容
+          processedPromotedWebsites.push({
+            url: websiteUrl,
+            content: cached.content.substring(0, 10000), // 限制内容长度
+            title: cached.title || undefined,
+            // 缓存中没有 screenshot，需要时可以重新获取
+          });
+        } else {
+          console.log(`[visual-article] No valid cache found, will scrape website: ${websiteUrl}`);
+          // 缓存不存在或已过期，抓取并缓存
+          try {
+            const scrapeResult = await scrapeWebsite(websiteUrl, true);
+            const websiteContent = cleanMarkdown(scrapeResult.markdown || '', 15000);
+            
+            // 保存到缓存
+            await saveWebsiteContentCache(
+              websiteId,
+              websiteContent,
+              'scraped_content',
+              scrapeResult.title,
+              {
+                images: scrapeResult.images || [],
+                scrapedAt: new Date().toISOString(),
+                url: websiteUrl
+              },
+              24 // 24小时有效期
+            );
+            
+            processedPromotedWebsites.push({
+              url: websiteUrl,
+              content: websiteContent.substring(0, 10000),
+              title: scrapeResult.title || undefined,
+              screenshot: scrapeResult.screenshot || undefined,
+            });
+            
+            console.log(`[visual-article] Scraped and cached website content (${websiteContent.length} chars)`);
+          } catch (scrapeError: any) {
+            console.error(`[visual-article] Failed to scrape website ${websiteUrl}:`, scrapeError.message);
+          }
+        }
+      } catch (cacheError: any) {
+        console.error('[visual-article] Error accessing website content cache:', cacheError.message);
+      }
+    }
+
+    // 处理额外的 promotedWebsites（用户手动添加的推广网站）
     if (Array.isArray(promotedWebsites) && promotedWebsites.length > 0) {
       console.log(`[visual-article] Processing ${promotedWebsites.length} promoted websites for scraping and screenshots`);
 
       // Process each promoted website in parallel (with limit)
-      const scrapePromises = promotedWebsites.map(async (websiteUrl: string): Promise<ProcessedPromotedWebsite | null> => {
-        if (!websiteUrl || typeof websiteUrl !== 'string') return null;
+      const scrapePromises = promotedWebsites.map(async (promWebsiteUrl: string): Promise<ProcessedPromotedWebsite | null> => {
+        if (!promWebsiteUrl || typeof promWebsiteUrl !== 'string') return null;
 
-        const urlToScrape = websiteUrl.trim();
+        const urlToScrape = promWebsiteUrl.trim();
+
+        // 如果已经通过 websiteId 处理过相同的 URL，跳过
+        if (processedPromotedWebsites.some(p => p.url === urlToScrape)) {
+          console.log(`[visual-article] Skipping duplicate URL: ${urlToScrape}`);
+          return null;
+        }
 
         // Validate URL format
         try {
@@ -319,9 +382,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
 
       const results = await Promise.all(scrapePromises);
-      processedPromotedWebsites = results.filter((r): r is ProcessedPromotedWebsite => r !== null);
+      const additionalWebsites = results.filter((r): r is ProcessedPromotedWebsite => r !== null);
+      processedPromotedWebsites = [...processedPromotedWebsites, ...additionalWebsites];
 
-      console.log(`[visual-article] Successfully processed ${processedPromotedWebsites.length} promoted websites`);
+      console.log(`[visual-article] Successfully processed ${processedPromotedWebsites.length} total promoted websites`);
       console.log('[visual-article] Screenshots captured:', processedPromotedWebsites.filter(p => p.screenshot).length);
     }
 

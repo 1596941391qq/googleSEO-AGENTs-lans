@@ -6,7 +6,7 @@ import { ProjectListTable } from './ProjectListTable';
 import { ProjectKeywordTable } from './ProjectKeywordTable';
 import { RichTextEditor } from './RichTextEditor';
 import { Button } from '../ui/button';
-import { ArrowLeft, Loader2, Plus, RefreshCw, X, Search, Sparkles, Languages, CheckCircle2, CircleDashed, AlertCircle, Clock, Trash2, Folder, Circle } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, RefreshCw, X, Search, Sparkles, Languages, CheckCircle2, CircleDashed, AlertCircle, Clock, Trash2, Folder, Circle, Globe, Compass, Waves, Archive } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserId } from '../website-data/utils';
@@ -43,10 +43,11 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
     content: string;
     source: 'published' | 'task' | 'draft';
   } | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const currentUserId = getUserId(user);
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (includeArchived = showArchived) => {
     if (!user) {
       setError('Please login to view projects');
       setLoading(false);
@@ -55,7 +56,10 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`/api/projects/list?userId=${currentUserId}`, {
+      const url = includeArchived 
+        ? `/api/projects/list?userId=${currentUserId}&showArchived=true`
+        : `/api/projects/list?userId=${currentUserId}`;
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
         }
@@ -71,6 +75,12 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleToggleArchived = () => {
+    const newValue = !showArchived;
+    setShowArchived(newValue);
+    fetchProjects(newValue);
   };
 
   const handleCreateProject = async () => {
@@ -162,9 +172,9 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
 
   useEffect(() => {
     if (user) {
-      fetchProjects();
+      fetchProjects(showArchived);
     }
-  }, [user]);
+  }, [user, showArchived]);
 
   const handleSelectProject = (project: ProjectWithStats) => {
     // Only allow selecting projects and mining tasks for now
@@ -256,15 +266,23 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   };
 
   const renderKanban = () => {
-    const columns = [
-      { id: 'pending', title: uiLanguage === 'zh' ? '未开始' : 'Pending', icon: <Circle className="w-4 h-4" /> },
-      { id: 'in_progress', title: uiLanguage === 'zh' ? '进行中' : 'In Progress', icon: <CircleDashed className="w-4 h-4 animate-spin" /> },
-      { id: 'completed', title: uiLanguage === 'zh' ? '已完成' : 'Completed', icon: <CheckCircle2 className="w-4 h-4" /> },
-      { id: 'failed', title: uiLanguage === 'zh' ? '已失败' : 'Failed', icon: <AlertCircle className="w-4 h-4" /> },
+    const baseColumns = [
+      { id: 'pending', title: uiLanguage === 'zh' ? '未开始' : 'Pending', icon: <Circle className="w-4 h-4" />, color: 'text-zinc-400' },
+      { id: 'in_progress', title: uiLanguage === 'zh' ? '进行中' : 'In Progress', icon: <CircleDashed className="w-4 h-4 animate-spin" />, color: 'text-amber-500' },
+      { id: 'completed', title: uiLanguage === 'zh' ? '已完成' : 'Completed', icon: <CheckCircle2 className="w-4 h-4" />, color: 'text-emerald-500' },
+      { id: 'failed', title: uiLanguage === 'zh' ? '已失败' : 'Failed', icon: <AlertCircle className="w-4 h-4" />, color: 'text-red-500' },
     ];
+    
+    // 如果显示归档，添加归档列
+    const columns = showArchived 
+      ? [...baseColumns, { id: 'archived', title: uiLanguage === 'zh' ? '已归档' : 'Archived', icon: <Archive className="w-4 h-4" />, color: 'text-slate-500' }]
+      : baseColumns;
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className={cn(
+        "grid grid-cols-1 md:grid-cols-2 gap-6",
+        showArchived ? "lg:grid-cols-5" : "lg:grid-cols-4"
+      )}>
         {columns.map(column => {
           const columnProjects = projects.filter(p => (p.status || 'completed') === column.id);
           return (
@@ -274,11 +292,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                 isDarkTheme ? "bg-zinc-900/50 border-zinc-800" : "bg-gray-50 border-gray-200"
               )}>
                 <div className="flex items-center gap-2">
-                  <span className={cn(
-                    column.id === 'pending' ? "text-zinc-400" :
-                    column.id === 'in_progress' ? "text-amber-500" : 
-                    column.id === 'completed' ? "text-emerald-500" : "text-red-500"
-                  )}>
+                  <span className={column.color}>
                     {column.icon}
                   </span>
                   <h3 className={cn("font-bold text-sm", isDarkTheme ? "text-zinc-300" : "text-gray-700")}>
@@ -322,20 +336,63 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                             {project.name}
                           </h4>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className={cn(
-                            "h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity",
-                            isDarkTheme ? "text-zinc-500 hover:text-red-400" : "text-gray-400 hover:text-red-500"
-                          )}
-                          onClick={(e) => handleDelete(project, e)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        {!project.is_archived && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity",
+                              isDarkTheme ? "text-zinc-500 hover:text-red-400" : "text-gray-400 hover:text-red-500"
+                            )}
+                            onClick={(e) => handleDelete(project, e)}
+                            title={uiLanguage === 'zh' ? '归档任务' : 'Archive task'}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </div>
 
                       <div className="flex flex-wrap gap-2">
+                        {/* 挖掘模式标签 */}
+                        {project.task_type === 'mining' && project.mining_mode && (
+                          <div className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1",
+                            project.mining_mode === 'existing-website-audit'
+                              ? (isDarkTheme ? "bg-orange-500/10 text-orange-400" : "bg-orange-50 text-orange-700")
+                              : (isDarkTheme ? "bg-cyan-500/10 text-cyan-400" : "bg-cyan-50 text-cyan-700")
+                          )}>
+                            {project.mining_mode === 'existing-website-audit' ? (
+                              <>
+                                <Compass className="w-3 h-3" />
+                                {uiLanguage === 'zh' ? '存量拓新' : 'Audit'}
+                              </>
+                            ) : (
+                              <>
+                                <Waves className="w-3 h-3" />
+                                {uiLanguage === 'zh' ? '蓝海' : 'Blue Ocean'}
+                              </>
+                            )}
+                          </div>
+                        )}
+                        {/* 网站/种子词标签 */}
+                        {project.website_domain && (
+                          <div className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 max-w-[120px]",
+                            isDarkTheme ? "bg-violet-500/10 text-violet-400" : "bg-violet-50 text-violet-700"
+                          )} title={project.website_url}>
+                            <Globe className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{project.website_domain}</span>
+                          </div>
+                        )}
+                        {!project.website_domain && project.seed_keyword && (
+                          <div className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 max-w-[120px]",
+                            isDarkTheme ? "bg-pink-500/10 text-pink-400" : "bg-pink-50 text-pink-700"
+                          )} title={project.seed_keyword}>
+                            <Search className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{project.seed_keyword.split('\n')[0]}</span>
+                          </div>
+                        )}
                         {project.target_language && (
                           <div className={cn(
                             "text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1",
@@ -351,7 +408,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                             isDarkTheme ? "bg-emerald-500/10 text-emerald-400" : "bg-emerald-50 text-emerald-700"
                           )}>
                             <Search className="w-3 h-3" />
-                            {project.keyword_count} {uiLanguage === 'zh' ? '关键词' : 'Keywords'}
+                            {project.keyword_count} {uiLanguage === 'zh' ? '关键词' : 'KWs'}
                           </div>
                         )}
                         {project.draft_count > 0 && (
@@ -435,10 +492,27 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
           </div>
         </div>
         <div className="flex gap-2">
-           <Button
+          <Button
             variant="outline"
             size="sm"
-            onClick={fetchProjects}
+            onClick={handleToggleArchived}
+            className={cn(
+              "font-bold transition-all active:scale-95",
+              showArchived 
+                ? (isDarkTheme ? 'border-slate-600 bg-slate-800 text-slate-300' : 'border-slate-400 bg-slate-100 text-slate-700')
+                : (isDarkTheme ? 'border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white' : 'border-gray-200 text-gray-600 hover:bg-gray-100')
+            )}
+          >
+            <Archive className="w-4 h-4 mr-2" />
+            {showArchived 
+              ? (uiLanguage === 'zh' ? '隐藏归档' : 'Hide Archived')
+              : (uiLanguage === 'zh' ? '显示归档' : 'Show Archived')
+            }
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchProjects(showArchived)}
             className={cn("font-bold transition-all active:scale-95", isDarkTheme ? 'border-zinc-800 text-zinc-400 hover:bg-zinc-800 hover:text-white' : 'border-gray-200 text-gray-600 hover:bg-gray-100')}
           >
             <RefreshCw className="w-4 h-4 mr-2" />

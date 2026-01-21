@@ -49,7 +49,7 @@ if (pool) {
 
 // 原始 SQL 标记类，用于标记不应该参数化的值
 class RawSQL {
-  constructor(public value: string) {}
+  constructor(public value: string) { }
 }
 
 // 导出 SQL 查询函数 (tagged template 语法)
@@ -213,7 +213,7 @@ export async function createWorkflowConfig(
 
     // 将 userId 标准化为有效的 UUID 格式（开发模式下处理测试用户）
     const normalizedUserId = normalizeUserIdForQuery(userId);
-    
+
     // 在生产环境下，验证 userId 是否是有效的 UUID 格式
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
     if (!isDevelopment && !isValidUUID(normalizedUserId)) {
@@ -492,7 +492,7 @@ export function isValidUUID(str: string): boolean {
 function normalizeUserIdForQuery(userId: string | number): string {
   const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
   const userIdStr = userId.toString();
-  
+
   // 开发模式下的测试用户特殊处理
   if (isDevelopment && (userIdStr === '12345' || userIdStr === 'NaN')) {
     // 使用固定的测试用户 UUID: b61cbbf9-15b0-4353-8d49-89952042cf75
@@ -501,18 +501,18 @@ function normalizeUserIdForQuery(userId: string | number): string {
     const testUUID = 'b61cbbf9-15b0-4353-8d49-89952042cf75';
     return testUUID;
   }
-  
+
   // 如果是有效的 UUID，直接返回
   if (isValidUUID(userIdStr)) {
     return userIdStr;
   }
-  
+
   // 如果既不是测试用户也不是有效 UUID，在开发模式下也使用测试 UUID
   if (isDevelopment) {
     const testUUID = 'b61cbbf9-15b0-4353-8d49-89952042cf75';
     return testUUID;
   }
-  
+
   // 生产环境返回原值（会由调用者处理）
   return userIdStr;
 }
@@ -529,7 +529,7 @@ export async function getUserWorkflowConfigs(
 
     // 将 userId 标准化为有效的 UUID 格式（开发模式下处理测试用户）
     const normalizedUserId = normalizeUserIdForQuery(userId);
-    
+
     // 在生产环境下，如果仍然不是有效的 UUID，返回空数组
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
     if (!isDevelopment && !isValidUUID(normalizedUserId)) {
@@ -588,7 +588,7 @@ export async function getWorkflowConfigById(
 
     // 如果提供了 userId，将其标准化为有效的 UUID 格式（开发模式下处理测试用户）
     const normalizedUserId = userId ? normalizeUserIdForQuery(userId) : undefined;
-    
+
     // 在生产环境下，如果仍然不是有效的 UUID，返回 null
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
     if (userId && !isDevelopment && !isValidUUID(normalizedUserId!)) {
@@ -651,7 +651,7 @@ export async function updateWorkflowConfig(
 
     // 将 userId 标准化为有效的 UUID 格式（开发模式下处理测试用户）
     const normalizedUserId = normalizeUserIdForQuery(userId);
-    
+
     // 在生产环境下，如果仍然不是有效的 UUID，返回 null
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
     if (!isDevelopment && !isValidUUID(normalizedUserId)) {
@@ -730,7 +730,7 @@ export async function deleteWorkflowConfig(
 
     // 将 userId 标准化为有效的 UUID 格式（开发模式下处理测试用户）
     const normalizedUserId = normalizeUserIdForQuery(userId);
-    
+
     // 在生产环境下，如果仍然不是有效的 UUID，返回 false
     const isDevelopment = process.env.NODE_ENV === 'development' || process.env.ENABLE_DEV_AUTO_LOGIN === 'true';
     if (!isDevelopment && !isValidUUID(normalizedUserId)) {
@@ -877,7 +877,7 @@ export async function initUserWebsitesTable() {
             AND table_name = 'user_websites'
           )
         `;
-        
+
         if (tableCheck.rows[0].exists) {
           const columnCheck = await sql`
             SELECT data_type
@@ -886,19 +886,19 @@ export async function initUserWebsitesTable() {
             AND table_name = 'user_websites' 
             AND column_name = 'user_id'
           `;
-          
+
           // 如果列不存在，直接添加
           if (columnCheck.rows.length === 0) {
             await sql`ALTER TABLE user_websites ADD COLUMN user_id UUID NOT NULL`;
             await sql`ALTER TABLE user_websites ADD CONSTRAINT unique_user_website UNIQUE (user_id, website_url)`;
             console.log('[Database] ✅ Added missing user_id UUID column to user_websites');
-          } 
+          }
           // 如果列存在但是 INTEGER 类型，需要迁移
           else if (columnCheck.rows[0].data_type === 'integer') {
             // 检查是否有数据
             const dataCheck = await sql`SELECT COUNT(*) as count FROM user_websites`;
             const rowCount = parseInt(dataCheck.rows[0].count || '0', 10);
-            
+
             if (rowCount === 0) {
               // 如果没有数据，删除约束、删除列、重新添加列和约束
               await sql`ALTER TABLE user_websites DROP CONSTRAINT IF EXISTS unique_user_website`;
@@ -1059,7 +1059,7 @@ export async function initWebsiteKeywordsTable() {
             AND table_name = 'website_keywords'
           )
         `;
-        
+
         if (tableCheck.rows[0].exists) {
           const competitionCheck = await sql`
             SELECT numeric_precision, numeric_scale
@@ -1068,7 +1068,7 @@ export async function initWebsiteKeywordsTable() {
             AND table_name = 'website_keywords' 
             AND column_name = 'seranking_competition'
           `;
-          
+
           if (competitionCheck.rows.length > 0) {
             const precision = competitionCheck.rows[0].numeric_precision;
             if (precision && precision < 10) {
@@ -1176,7 +1176,7 @@ export async function initUserPreferencesTable() {
             AND table_name = 'user_preferences'
           )
         `;
-        
+
         if (tableCheck.rows[0].exists) {
           const columnCheck = await sql`
             SELECT data_type
@@ -1185,7 +1185,7 @@ export async function initUserPreferencesTable() {
             AND table_name = 'user_preferences' 
             AND column_name = 'user_id'
           `;
-          
+
           // 辅助函数：删除现有的主键约束
           const dropExistingPrimaryKey = async () => {
             const existingPkCheck = await sql`
@@ -1202,20 +1202,20 @@ export async function initUserPreferencesTable() {
               console.log(`[Database] ✅ Dropped existing PRIMARY KEY constraint: ${pkName}`);
             }
           };
-          
+
           // 如果列不存在，直接添加
           if (columnCheck.rows.length === 0) {
             // 先删除已存在的主键（如果有）
             await dropExistingPrimaryKey();
             await sql`ALTER TABLE user_preferences ADD COLUMN user_id UUID PRIMARY KEY`;
             console.log('[Database] ✅ Added missing user_id UUID column to user_preferences');
-          } 
+          }
           // 如果列存在但是 INTEGER 类型，需要迁移
           else if (columnCheck.rows[0].data_type === 'integer') {
             // 检查是否有数据
             const dataCheck = await sql`SELECT COUNT(*) as count FROM user_preferences`;
             const rowCount = parseInt(dataCheck.rows[0].count || '0', 10);
-            
+
             if (rowCount === 0) {
               // 如果没有数据，删除并重新添加列（CASCADE 会自动删除相关约束）
               await dropExistingPrimaryKey();
@@ -1658,6 +1658,26 @@ export async function initDomainCacheTables() {
       await sql`CREATE INDEX IF NOT EXISTS idx_keyword_analysis_expires ON keyword_analysis_cache(cache_expires_at)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_keyword_analysis_composite ON keyword_analysis_cache(keyword, location_code, search_engine, website_id)`;
 
+      // --- 网站内容缓存表（用于策略模式和图文工厂，避免重复抓取网站内容）---
+      await sql`
+        CREATE TABLE IF NOT EXISTS website_content_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          website_id UUID NOT NULL REFERENCES user_websites(id) ON DELETE CASCADE,
+          content_type VARCHAR(50) NOT NULL DEFAULT 'scraped_content',
+          content TEXT,
+          content_length INTEGER DEFAULT 0,
+          title VARCHAR(500),
+          metadata JSONB,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          cache_expires_at TIMESTAMP DEFAULT (NOW() + INTERVAL '24 hours'),
+          CONSTRAINT website_content_cache_unique UNIQUE(website_id, content_type)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_content_website ON website_content_cache(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_content_type ON website_content_cache(content_type)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_website_content_expires ON website_content_cache(cache_expires_at)`;
+
       domainCacheTablesInitialized = true;
     } catch (error) {
       console.error('[initDomainCacheTables] Error:', error);
@@ -1818,7 +1838,7 @@ export async function initPublishedArticlesTable() {
           WHERE table_name = 'published_articles' 
           AND column_name = 'user_id'
         `;
-        
+
         if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
           console.warn('[Database] ⚠️ Migrating published_articles.user_id from INTEGER to UUID');
           if (process.env.NODE_ENV !== 'production') {
@@ -1833,7 +1853,7 @@ export async function initPublishedArticlesTable() {
         console.error('[Database] Could not migrate published_articles.user_id:', e);
       }
 
-      // 添加 published_at 和 url_slug 字段（如果表已存在但没有这些字段）
+      // 添加 published_at, url_slug, website_id, content_type 字段（如果表已存在但没有这些字段）
       await sql`
         DO $$ 
         BEGIN
@@ -1852,12 +1872,41 @@ export async function initPublishedArticlesTable() {
           ) THEN
             ALTER TABLE published_articles ADD COLUMN url_slug VARCHAR(500);
           END IF;
+
+          -- 新增：website_id 列（关联用户网站）
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'published_articles' 
+            AND column_name = 'website_id'
+          ) THEN
+            ALTER TABLE published_articles ADD COLUMN website_id UUID;
+          END IF;
+
+          -- 新增：content_type 列（信息型/商业型）
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'published_articles' 
+            AND column_name = 'content_type'
+          ) THEN
+            ALTER TABLE published_articles ADD COLUMN content_type VARCHAR(20);
+          END IF;
+
+          -- 新增：site_id 列（发布到的站点 ID）
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'published_articles' 
+            AND column_name = 'site_id'
+          ) THEN
+            ALTER TABLE published_articles ADD COLUMN site_id UUID;
+          END IF;
         END $$;
       `;
 
       await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_user ON published_articles(user_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_status ON published_articles(status)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_created ON published_articles(created_at DESC)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_website ON published_articles(website_id)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_content_type ON published_articles(content_type)`;
 
       publishedArticlesTableInitialized = true;
     } catch (error) {
@@ -1905,7 +1954,7 @@ export async function initTasksTable() {
           WHERE table_name = 'execution_tasks' 
           AND column_name = 'user_id'
         `;
-        
+
         if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type !== 'uuid') {
           console.warn(`[Database] ⚠️ Migrating execution_tasks.user_id from ${columnCheck.rows[0].data_type} to UUID`);
           if (process.env.NODE_ENV !== 'production') {
@@ -1923,6 +1972,23 @@ export async function initTasksTable() {
       await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_user ON execution_tasks(user_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_status ON execution_tasks(status)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_type ON execution_tasks(type)`;
+
+      // 迁移：添加 deleted_at 列支持软删除
+      try {
+        const deletedAtCheck = await sql`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'execution_tasks' 
+          AND column_name = 'deleted_at'
+        `;
+        if (deletedAtCheck.rows.length === 0) {
+          await sql`ALTER TABLE execution_tasks ADD COLUMN deleted_at TIMESTAMP DEFAULT NULL`;
+          await sql`CREATE INDEX IF NOT EXISTS idx_execution_tasks_deleted ON execution_tasks(deleted_at)`;
+          console.log('[Database] ✅ Added deleted_at column to execution_tasks');
+        }
+      } catch (e) {
+        console.error('[Database] Could not add deleted_at column:', e);
+      }
 
       tasksTableInitialized = true;
     } catch (error) {
@@ -2080,7 +2146,7 @@ export async function getKeywordAnalysisCache(
 ): Promise<KeywordAnalysisCache | null> {
   try {
     await initDomainCacheTables();
-    
+
     let query;
     if (websiteId && isValidUUID(websiteId)) {
       query = sql<KeywordAnalysisCache>`
@@ -2104,12 +2170,131 @@ export async function getKeywordAnalysisCache(
         LIMIT 1
       `;
     }
-    
+
     const result = await query;
     return result.rows[0] || null;
   } catch (error) {
     console.error('[getKeywordAnalysisCache] Error:', error);
     return null;
+  }
+}
+
+// ==================== 网站内容缓存 ====================
+
+/**
+ * 获取网站内容缓存（通过 websiteId）
+ * 用于策略模式挖词和图文工厂，避免重复抓取网站内容
+ */
+export async function getWebsiteContentCache(
+  websiteId: string,
+  contentType: string = 'scraped_content'
+): Promise<{ content: string; title: string | null; metadata: any; updatedAt: Date } | null> {
+  try {
+    await initDomainCacheTables();
+
+    const result = await sql`
+      SELECT content, title, metadata, updated_at
+      FROM website_content_cache
+      WHERE website_id = ${websiteId}
+        AND content_type = ${contentType}
+        AND cache_expires_at > NOW()
+    `;
+
+    if (result.rows.length > 0) {
+      const row = result.rows[0];
+      return {
+        content: row.content,
+        title: row.title,
+        metadata: row.metadata,
+        updatedAt: row.updated_at
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('[getWebsiteContentCache] Error:', error);
+    return null;
+  }
+}
+
+/**
+ * 保存网站内容到缓存
+ * @param websiteId - 网站ID
+ * @param content - 网站内容（清洗后的 markdown）
+ * @param contentType - 内容类型，默认 'scraped_content'
+ * @param title - 网站标题
+ * @param metadata - 额外元数据（如 images、scrapedAt 等）
+ * @param expiresInHours - 缓存有效期（小时），默认 24 小时
+ */
+export async function saveWebsiteContentCache(
+  websiteId: string,
+  content: string,
+  contentType: string = 'scraped_content',
+  title?: string,
+  metadata?: any,
+  expiresInHours: number = 24
+): Promise<boolean> {
+  try {
+    await initDomainCacheTables();
+
+    // 计算过期时间
+    const expiresAt = new Date(Date.now() + expiresInHours * 60 * 60 * 1000);
+
+    await sql`
+      INSERT INTO website_content_cache (
+        website_id, content_type, content, content_length, title, metadata, cache_expires_at, updated_at
+      ) VALUES (
+        ${websiteId},
+        ${contentType},
+        ${content},
+        ${content.length},
+        ${title || null},
+        ${metadata ? JSON.stringify(metadata) : null},
+        ${expiresAt},
+        NOW()
+      )
+      ON CONFLICT (website_id, content_type) DO UPDATE SET
+        content = EXCLUDED.content,
+        content_length = EXCLUDED.content_length,
+        title = EXCLUDED.title,
+        metadata = EXCLUDED.metadata,
+        cache_expires_at = EXCLUDED.cache_expires_at,
+        updated_at = NOW()
+    `;
+
+    console.log(`[saveWebsiteContentCache] Saved cache for website ${websiteId}, type: ${contentType}, length: ${content.length}`);
+    return true;
+  } catch (error) {
+    console.error('[saveWebsiteContentCache] Error:', error);
+    return false;
+  }
+}
+
+/**
+ * 删除网站内容缓存（用于强制刷新）
+ */
+export async function deleteWebsiteContentCache(
+  websiteId: string,
+  contentType?: string
+): Promise<boolean> {
+  try {
+    await initDomainCacheTables();
+
+    if (contentType) {
+      await sql`
+        DELETE FROM website_content_cache
+        WHERE website_id = ${websiteId} AND content_type = ${contentType}
+      `;
+    } else {
+      await sql`
+        DELETE FROM website_content_cache
+        WHERE website_id = ${websiteId}
+      `;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('[deleteWebsiteContentCache] Error:', error);
+    return false;
   }
 }
 
@@ -2123,12 +2308,12 @@ export async function getKeywordAnalysisCacheBatch(
   websiteId?: string
 ): Promise<Map<string, KeywordAnalysisCache>> {
   const cacheMap = new Map<string, KeywordAnalysisCache>();
-  
+
   if (keywords.length === 0) return cacheMap;
-  
+
   try {
     await initDomainCacheTables();
-    
+
     let query;
     if (websiteId && isValidUUID(websiteId)) {
       query = sql<KeywordAnalysisCache>`
@@ -2149,9 +2334,9 @@ export async function getKeywordAnalysisCacheBatch(
           AND cache_expires_at > NOW()
       `;
     }
-    
+
     const result = await query;
-    
+
     // 对于每个关键词，优先使用 website_id 匹配的缓存，否则使用通用缓存
     const sortedRows = result.rows.sort((a, b) => {
       // website_id 不为 null 的优先级更高
@@ -2167,7 +2352,7 @@ export async function getKeywordAnalysisCacheBatch(
         cacheMap.set(key, row);
       }
     }
-    
+
     return cacheMap;
   } catch (error) {
     console.error('[getKeywordAnalysisCacheBatch] Error:', error);
@@ -2183,7 +2368,7 @@ export async function saveKeywordAnalysisCache(
 ): Promise<void> {
   try {
     await initDomainCacheTables();
-    
+
     // 先删除可能存在的旧记录（处理唯一约束）
     if (cache.keyword) {
       let websiteId = cache.website_id;
@@ -2203,13 +2388,13 @@ export async function saveKeywordAnalysisCache(
           )
       `;
     }
-    
+
     // 验证并清理 website_id
     let finalInsertWebsiteId = cache.website_id;
     if (finalInsertWebsiteId && !isValidUUID(finalInsertWebsiteId as string)) {
       finalInsertWebsiteId = null as any;
     }
-    
+
     // 插入新记录
     await sql`
       INSERT INTO keyword_analysis_cache (
@@ -2306,463 +2491,8 @@ export async function getUserById(id: string): Promise<User | null> {
 }
 
 // =============================================
-// Projects & Content Management Tables
+// High Performer Keywords (from execution_tasks)
 // =============================================
-
-let projectsTableInitialized = false;
-let projectsTableInitPromise: Promise<void> | null = null;
-
-export async function initProjectsTable() {
-  if (projectsTableInitialized) return;
-  if (projectsTableInitPromise) {
-    await projectsTableInitPromise;
-    return;
-  }
-
-  projectsTableInitPromise = (async () => {
-    try {
-      await sql`
-        CREATE TABLE IF NOT EXISTS projects (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id UUID NOT NULL,
-          name VARCHAR(255) NOT NULL,
-          seed_keyword VARCHAR(500),
-          target_language VARCHAR(10),
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `;
-
-      // 迁移：确保 user_id 是 UUID 类型
-      try {
-        const columnCheck = await sql`
-          SELECT data_type
-          FROM information_schema.columns 
-          WHERE table_name = 'projects' 
-          AND column_name = 'user_id'
-        `;
-        
-        if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
-          console.warn('[Database] ⚠️ Migrating projects.user_id from INTEGER to UUID');
-          if (process.env.NODE_ENV !== 'production') {
-            await sql`DELETE FROM projects`;
-            await sql`ALTER TABLE projects ALTER COLUMN user_id TYPE UUID USING NULL`;
-            console.log('[Database] ✅ Migrated projects.user_id to UUID (data cleared in dev)');
-          } else {
-            // 生产环境下尝试直接转换，如果失败则需要手动处理
-            await sql`ALTER TABLE projects ALTER COLUMN user_id TYPE UUID USING user_id::text::uuid`;
-          }
-        }
-      } catch (e) {
-        console.error('[Database] Could not migrate projects.user_id:', e);
-      }
-
-      await sql`CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_projects_created ON projects(created_at DESC)`;
-
-      projectsTableInitialized = true;
-    } catch (error) {
-      console.error('[initProjectsTable] Error:', error);
-      projectsTableInitPromise = null;
-      throw error;
-    }
-  })();
-
-  await projectsTableInitPromise;
-}
-
-let keywordsTableInitialized = false;
-let keywordsTableInitPromise: Promise<void> | null = null;
-
-export async function initKeywordsTable() {
-  if (keywordsTableInitialized) return;
-  if (keywordsTableInitPromise) {
-    await keywordsTableInitPromise;
-    return;
-  }
-
-  keywordsTableInitPromise = (async () => {
-    try {
-      await initProjectsTable(); // Ensure projects table exists first
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS keywords (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
-          keyword VARCHAR(500) NOT NULL,
-          translation VARCHAR(500),
-          intent VARCHAR(50),
-          volume INTEGER,
-          probability VARCHAR(20),
-          is_selected BOOLEAN DEFAULT false,
-          is_high_performer BOOLEAN DEFAULT false,
-          status VARCHAR(50) DEFAULT 'selected',
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `;
-
-      await sql`CREATE INDEX IF NOT EXISTS idx_keywords_project ON keywords(project_id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_keywords_selected ON keywords(is_selected)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_keywords_project_status ON keywords(project_id, status)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_keywords_high_performer ON keywords(project_id, is_high_performer)`;
-
-      // Migration: Add is_high_performer column if not exists
-      try {
-        await sql`
-          DO $$ 
-          BEGIN
-            IF NOT EXISTS (
-              SELECT 1 FROM information_schema.columns 
-              WHERE table_name = 'keywords' AND column_name = 'is_high_performer'
-            ) THEN
-              ALTER TABLE keywords ADD COLUMN is_high_performer BOOLEAN DEFAULT false;
-            END IF;
-          END $$;
-        `;
-      } catch (migrationError: any) {
-        console.warn('[initKeywordsTable] Migration warning:', migrationError.message);
-      }
-
-      keywordsTableInitialized = true;
-    } catch (error) {
-      console.error('[initKeywordsTable] Error:', error);
-      keywordsTableInitPromise = null;
-      throw error;
-    }
-  })();
-
-  await keywordsTableInitPromise;
-}
-
-let contentDraftsTableInitialized = false;
-let contentDraftsTableInitPromise: Promise<void> | null = null;
-
-export async function initContentDraftsTable() {
-  if (contentDraftsTableInitialized) return;
-  if (contentDraftsTableInitPromise) {
-    await contentDraftsTableInitPromise;
-    return;
-  }
-
-  contentDraftsTableInitPromise = (async () => {
-    try {
-      await initProjectsTable(); // Ensure projects table exists first
-      await initKeywordsTable(); // Ensure keywords table exists first
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS content_drafts (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
-          keyword_id UUID REFERENCES keywords(id) ON DELETE SET NULL,
-          title VARCHAR(500),
-          content TEXT,
-          meta_description TEXT,
-          url_slug VARCHAR(500),
-          version INTEGER DEFAULT 1,
-          status VARCHAR(50) DEFAULT 'draft',
-          quality_score INTEGER,
-          created_at TIMESTAMP DEFAULT NOW(),
-          updated_at TIMESTAMP DEFAULT NOW()
-        )
-      `;
-
-      await sql`CREATE INDEX IF NOT EXISTS idx_content_drafts_project ON content_drafts(project_id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_content_drafts_keyword ON content_drafts(keyword_id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_content_drafts_status ON content_drafts(status)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_content_drafts_version ON content_drafts(project_id, keyword_id, version)`;
-
-      contentDraftsTableInitialized = true;
-    } catch (error) {
-      console.error('[initContentDraftsTable] Error:', error);
-      contentDraftsTableInitPromise = null;
-      throw error;
-    }
-  })();
-
-  await contentDraftsTableInitPromise;
-}
-
-let imagesTableInitialized = false;
-let imagesTableInitPromise: Promise<void> | null = null;
-
-export async function initImagesTable() {
-  if (imagesTableInitialized) return;
-  if (imagesTableInitPromise) {
-    await imagesTableInitPromise;
-    return;
-  }
-
-  imagesTableInitPromise = (async () => {
-    try {
-      await initContentDraftsTable(); // Ensure content_drafts table exists first
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS images (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          content_draft_id UUID REFERENCES content_drafts(id) ON DELETE CASCADE,
-          prompt TEXT,
-          image_url VARCHAR(1000),
-          alt_text VARCHAR(500),
-          position INTEGER DEFAULT 0,
-          metadata JSONB DEFAULT '{}'::jsonb,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `;
-
-      await sql`CREATE INDEX IF NOT EXISTS idx_images_content_draft ON images(content_draft_id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_images_position ON images(content_draft_id, position)`;
-
-      imagesTableInitialized = true;
-    } catch (error) {
-      console.error('[initImagesTable] Error:', error);
-      imagesTableInitPromise = null;
-      throw error;
-    }
-  })();
-
-  await imagesTableInitPromise;
-}
-
-let publicationsTableInitialized = false;
-let publicationsTableInitPromise: Promise<void> | null = null;
-
-export async function initPublicationsTable() {
-  if (publicationsTableInitialized) return;
-  if (publicationsTableInitPromise) {
-    await publicationsTableInitPromise;
-    return;
-  }
-
-  publicationsTableInitPromise = (async () => {
-    try {
-      await initContentDraftsTable(); // Ensure content_drafts table exists first
-
-      await sql`
-        CREATE TABLE IF NOT EXISTS publications (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          content_draft_id UUID REFERENCES content_drafts(id) ON DELETE CASCADE,
-          platform VARCHAR(100) NOT NULL,
-          platform_post_id VARCHAR(255),
-          post_url VARCHAR(1000),
-          status VARCHAR(50) DEFAULT 'pending',
-          published_at TIMESTAMP,
-          created_at TIMESTAMP DEFAULT NOW()
-        )
-      `;
-
-      await sql`CREATE INDEX IF NOT EXISTS idx_publications_content_draft ON publications(content_draft_id)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_publications_platform ON publications(platform)`;
-      await sql`CREATE INDEX IF NOT EXISTS idx_publications_status ON publications(status)`;
-
-      publicationsTableInitialized = true;
-    } catch (error) {
-      console.error('[initPublicationsTable] Error:', error);
-      publicationsTableInitPromise = null;
-      throw error;
-    }
-  })();
-
-  await publicationsTableInitPromise;
-}
-
-// Initialize all content management tables
-export async function initContentManagementTables() {
-  await initProjectsTable();
-  await initKeywordsTable();
-  await initContentDraftsTable();
-  await initImagesTable();
-  await initPublicationsTable();
-}
-
-// =============================================
-// Content Management Database Operations
-// =============================================
-
-export interface Project {
-  id: string;
-  user_id: number;
-  name: string;
-  seed_keyword: string | null;
-  target_language: string | null;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface Keyword {
-  id: string;
-  project_id: string;
-  keyword: string;
-  translation: string | null;
-  intent: string | null;
-  volume: number | null;
-  probability: string | null;
-  is_selected: boolean;
-  is_high_performer: boolean;
-  created_at: Date;
-}
-
-export interface ContentDraft {
-  id: string;
-  project_id: string;
-  keyword_id: string | null;
-  title: string | null;
-  content: string | null;
-  meta_description: string | null;
-  url_slug: string | null;
-  version: number;
-  status: string;
-  quality_score: number | null;
-  created_at: Date;
-  updated_at: Date;
-}
-
-export interface Image {
-  id: string;
-  content_draft_id: string;
-  prompt: string | null;
-  image_url: string | null;
-  alt_text: string | null;
-  position: number;
-  metadata: any;
-  created_at: Date;
-}
-
-export interface Publication {
-  id: string;
-  content_draft_id: string;
-  platform: string;
-  platform_post_id: string | null;
-  post_url: string | null;
-  status: string;
-  published_at: Date | null;
-  created_at: Date;
-}
-
-/**
- * 创建或获取项目
- */
-export async function createOrGetProject(
-  userId: string | number,
-  name: string,
-  seedKeyword?: string,
-  targetLanguage?: string
-): Promise<Project> {
-  try {
-    await initProjectsTable();
-
-    // 将 userId 标准化为有效的 UUID 格式
-    const normalizedUserId = normalizeUserIdForQuery(userId);
-
-    // Try to find existing project with same name and user
-    const existing = await sql<Project>`
-      SELECT * FROM projects
-      WHERE user_id = ${normalizedUserId} AND name = ${name}
-      ORDER BY created_at DESC
-      LIMIT 1
-    `;
-
-    if (existing.rows.length > 0) {
-      return existing.rows[0];
-    }
-
-    // Create new project
-    const result = await sql<Project>`
-      INSERT INTO projects (user_id, name, seed_keyword, target_language, created_at, updated_at)
-      VALUES (${normalizedUserId}, ${name}, ${seedKeyword || null}, ${targetLanguage || null}, NOW(), NOW())
-      RETURNING *
-    `;
-
-    return result.rows[0];
-  } catch (error) {
-    console.error('Error creating/getting project:', error);
-    throw error;
-  }
-}
-
-/**
- * 创建或获取关键词
- */
-export async function createOrGetKeyword(
-  projectId: string,
-  keyword: string,
-  translation?: string,
-  intent?: string,
-  volume?: number,
-  probability?: string
-): Promise<Keyword> {
-  try {
-    await initKeywordsTable();
-
-    // Try to find existing keyword
-    const existing = await sql<Keyword>`
-      SELECT * FROM keywords
-      WHERE project_id = ${projectId} AND keyword = ${keyword}
-      LIMIT 1
-    `;
-
-    if (existing.rows.length > 0) {
-      return existing.rows[0];
-    }
-
-    // Create new keyword
-    const result = await sql<Keyword>`
-      INSERT INTO keywords (project_id, keyword, translation, intent, volume, probability, created_at)
-      VALUES (${projectId}, ${keyword}, ${translation || null}, ${intent || null}, ${volume || null}, ${probability || null}, NOW())
-      RETURNING *
-    `;
-
-    return result.rows[0];
-  } catch (error) {
-    console.error('Error creating/getting keyword:', error);
-    throw error;
-  }
-}
-
-/**
- * 更新关键词的 is_high_performer 状态
- */
-export async function updateKeywordHighPerformer(
-  keywordId: string,
-  isHighPerformer: boolean
-): Promise<Keyword | null> {
-  try {
-    await initKeywordsTable();
-
-    const result = await sql<Keyword>`
-      UPDATE keywords
-      SET is_high_performer = ${isHighPerformer}
-      WHERE id = ${keywordId}
-      RETURNING *
-    `;
-
-    return result.rows[0] || null;
-  } catch (error) {
-    console.error('Error updating keyword high performer status:', error);
-    throw error;
-  }
-}
-
-/**
- * 获取项目下所有标记为高表现的关键词
- */
-export async function getHighPerformerKeywords(
-  projectId: string
-): Promise<Keyword[]> {
-  try {
-    await initKeywordsTable();
-
-    const result = await sql<Keyword>`
-      SELECT * FROM keywords
-      WHERE project_id = ${projectId} AND is_high_performer = true
-      ORDER BY volume DESC NULLS LAST, created_at DESC
-    `;
-
-    return result.rows;
-  } catch (error) {
-    console.error('Error getting high performer keywords:', error);
-    throw error;
-  }
-}
 
 /**
  * 获取网站关联的所有高表现关键词（通过 execution_tasks 查找）
@@ -2772,10 +2502,9 @@ export async function getHighPerformerKeywordsByWebsiteId(
   userId: string | number
 ): Promise<string[]> {
   try {
-    await initKeywordsTable();
-    await initExecutionTasksTable();
+    await initTasksTable();
 
-    // 1. 从 execution_tasks 中查找与该网站关联的任务
+    // 从 execution_tasks 中查找与该网站关联的任务
     const tasks = await sql`
       SELECT state FROM execution_tasks
       WHERE user_id = ${userId}
@@ -2785,7 +2514,7 @@ export async function getHighPerformerKeywordsByWebsiteId(
 
     const highPerformerKeywords: string[] = [];
 
-    // 2. 从每个任务的 state 中提取标记为 isHighPerformer 的关键词
+    // 从每个任务的 state 中提取标记为 isHighPerformer 的关键词
     for (const task of tasks.rows) {
       const state = task.state || {};
       const miningState = state.miningState || state;
@@ -2793,424 +2522,17 @@ export async function getHighPerformerKeywordsByWebsiteId(
 
       keywords.forEach((kw: any) => {
         if (kw.isHighPerformer && kw.keyword) {
-          highPerformerKeywords.push(kw.keyword);
+          if (!highPerformerKeywords.includes(kw.keyword)) {
+            highPerformerKeywords.push(kw.keyword);
+          }
         }
       });
     }
-
-    // 3. 也从 projects/keywords 表中查找（如果有关联）
-    const projectKeywords = await sql<Keyword>`
-      SELECT k.keyword FROM keywords k
-      JOIN projects p ON k.project_id = p.id
-      WHERE p.user_id = ${userId} AND k.is_high_performer = true
-    `;
-
-    projectKeywords.rows.forEach(row => {
-      if (!highPerformerKeywords.includes(row.keyword)) {
-        highPerformerKeywords.push(row.keyword);
-      }
-    });
 
     return highPerformerKeywords;
   } catch (error) {
     console.error('Error getting high performer keywords by website:', error);
     return [];
-  }
-}
-
-/**
- * 保存内容草稿
- */
-export async function saveContentDraft(
-  projectId: string,
-  keywordId: string | null,
-  title: string,
-  content: string,
-  metaDescription?: string,
-  urlSlug?: string,
-  qualityScore?: number
-): Promise<ContentDraft> {
-  try {
-    await initContentDraftsTable();
-
-    // Get next version number
-    const versionResult = await sql<{ max_version: number }>`
-      SELECT COALESCE(MAX(version), 0) + 1 as max_version
-      FROM content_drafts
-      WHERE project_id = ${projectId} AND (keyword_id = ${keywordId} OR (keyword_id IS NULL AND ${keywordId} IS NULL))
-    `;
-    const nextVersion = versionResult.rows[0]?.max_version || 1;
-
-    const result = await sql<ContentDraft>`
-      INSERT INTO content_drafts (
-        project_id, keyword_id, title, content, meta_description, url_slug,
-        version, status, quality_score, created_at, updated_at
-      )
-      VALUES (
-        ${projectId}, ${keywordId}, ${title}, ${content},
-        ${metaDescription || null}, ${urlSlug || null},
-        ${nextVersion}, 'draft', ${qualityScore || null}, NOW(), NOW()
-      )
-      RETURNING *
-    `;
-
-    return result.rows[0];
-  } catch (error) {
-    console.error('Error saving content draft:', error);
-    throw error;
-  }
-}
-
-/**
- * 获取内容草稿的所有版本
- */
-export async function getContentDraftVersions(
-  projectId: string,
-  keywordId: string
-): Promise<ContentDraft[]> {
-  try {
-    await initContentDraftsTable();
-
-    const result = await sql<ContentDraft>`
-      SELECT * FROM content_drafts
-      WHERE project_id = ${projectId} AND keyword_id = ${keywordId}
-      ORDER BY version DESC
-    `;
-
-    return result.rows;
-  } catch (error) {
-    console.error('Error fetching content draft versions:', error);
-    return [];
-  }
-}
-
-/**
- * 获取最新的内容草稿
- */
-export async function getLatestContentDraft(
-  projectId: string,
-  keywordId: string
-): Promise<ContentDraft | null> {
-  try {
-    await initContentDraftsTable();
-
-    const result = await sql<ContentDraft>`
-      SELECT * FROM content_drafts
-      WHERE project_id = ${projectId} AND keyword_id = ${keywordId}
-      ORDER BY version DESC
-      LIMIT 1
-    `;
-
-    return result.rows[0] || null;
-  } catch (error) {
-    console.error('Error fetching latest content draft:', error);
-    return null;
-  }
-}
-
-/**
- * 获取特定版本的内容草稿
- */
-export async function getContentDraftById(draftId: string): Promise<ContentDraft | null> {
-  try {
-    await initContentDraftsTable();
-
-    const result = await sql<ContentDraft>`
-      SELECT * FROM content_drafts
-      WHERE id = ${draftId}
-    `;
-
-    return result.rows[0] || null;
-  } catch (error) {
-    console.error('Error fetching content draft by id:', error);
-    return null;
-  }
-}
-
-/**
- * 获取草稿关联的所有图片
- */
-export async function getContentDraftImages(draftId: string): Promise<Image[]> {
-  try {
-    await initImagesTable();
-
-    const result = await sql<Image>`
-      SELECT * FROM images
-      WHERE content_draft_id = ${draftId}
-      ORDER BY position ASC
-    `;
-
-    return result.rows;
-  } catch (error) {
-    console.error('Error fetching content draft images:', error);
-    return [];
-  }
-}
-
-/**
- * 保存图片
- */
-export async function saveImage(
-  contentDraftId: string,
-  imageUrl: string,
-  prompt?: string,
-  altText?: string,
-  position?: number,
-  metadata?: any
-): Promise<Image> {
-  try {
-    await initImagesTable();
-
-    const result = await sql<Image>`
-      INSERT INTO images (
-        content_draft_id, prompt, image_url, alt_text, position, metadata, created_at
-      )
-      VALUES (
-        ${contentDraftId}, ${prompt || null}, ${imageUrl}, ${altText || null},
-        ${position || 0}, ${metadata ? JSON.stringify(metadata) : '{}'}::jsonb, NOW()
-      )
-      RETURNING *
-    `;
-
-    return result.rows[0];
-  } catch (error) {
-    console.error('Error saving image:', error);
-    throw error;
-  }
-}
-
-/**
- * 批量保存图片
- */
-export async function saveImages(
-  contentDraftId: string,
-  images: Array<{
-    imageUrl: string;
-    prompt?: string;
-    altText?: string;
-    position?: number;
-    metadata?: any;
-  }>
-): Promise<Image[]> {
-  const savedImages: Image[] = [];
-  for (const img of images) {
-    const saved = await saveImage(
-      contentDraftId,
-      img.imageUrl,
-      img.prompt,
-      img.altText,
-      img.position,
-      img.metadata
-    );
-    savedImages.push(saved);
-  }
-  return savedImages;
-}
-
-/**
- * 创建发布记录
- */
-export async function createPublication(
-  contentDraftId: string,
-  platform: string,
-  platformPostId?: string,
-  postUrl?: string,
-  status: string = 'pending'
-): Promise<Publication> {
-  try {
-    await initPublicationsTable();
-
-    const result = await sql<Publication>`
-      INSERT INTO publications (
-        content_draft_id, platform, platform_post_id, post_url, status, created_at
-      )
-      VALUES (
-        ${contentDraftId}, ${platform}, ${platformPostId || null}, ${postUrl || null}, ${status}, NOW()
-      )
-      RETURNING *
-    `;
-
-    return result.rows[0];
-  } catch (error) {
-    console.error('Error creating publication:', error);
-    throw error;
-  }
-}
-
-/**
- * 获取用户所有项目及其统计信息
- */
-export async function getUserProjects(userId: string | number): Promise<any[]> {
-  try {
-    await initContentManagementTables();
-
-    // 将 userId 标准化为有效的 UUID 格式
-    const normalizedUserId = normalizeUserIdForQuery(userId);
-
-    const result = await sql`
-      SELECT 
-        p.*,
-        COUNT(DISTINCT k.id) as keyword_count,
-        COUNT(DISTINCT cd.id) as draft_count,
-        COUNT(DISTINCT pub.id) FILTER (WHERE pub.status = 'published') as published_count
-      FROM projects p
-      LEFT JOIN keywords k ON p.id = k.project_id
-      LEFT JOIN content_drafts cd ON p.id = cd.project_id
-      LEFT JOIN publications pub ON cd.id = pub.content_draft_id
-      WHERE p.user_id = ${normalizedUserId}
-      GROUP BY p.id
-      ORDER BY p.updated_at DESC
-    `;
-
-    return result.rows;
-  } catch (error) {
-    console.error('Error getting user projects:', error);
-    throw error;
-  }
-}
-
-/**
- * 根据 ID 获取项目详情
- */
-export async function getProjectById(projectId: string, userId: string | number): Promise<Project | null> {
-  try {
-    await initProjectsTable();
-
-    // 将 userId 标准化为有效的 UUID 格式
-    const normalizedUserId = normalizeUserIdForQuery(userId);
-
-    const result = await sql<Project>`
-      SELECT * FROM projects WHERE id = ${projectId} AND user_id = ${normalizedUserId}
-    `;
-    return result.rows[0] || null;
-  } catch (error) {
-    console.error('Error getting project by id:', error);
-    throw error;
-  }
-}
-
-/**
- * 更新项目信息
- */
-export async function updateProject(
-  projectId: string, 
-  userId: string | number, 
-  updates: { name?: string; seed_keyword?: string; target_language?: string }
-): Promise<Project | null> {
-  try {
-    // 将 userId 标准化为有效的 UUID 格式
-    const normalizedUserId = normalizeUserIdForQuery(userId);
-
-    const setParts: string[] = [];
-    const values: any[] = [];
-    let i = 1;
-
-    if (updates.name) {
-      setParts.push(`name = $${i++}`);
-      values.push(updates.name);
-    }
-    if (updates.seed_keyword) {
-      setParts.push(`seed_keyword = $${i++}`);
-      values.push(updates.seed_keyword);
-    }
-    if (updates.target_language) {
-      setParts.push(`target_language = $${i++}`);
-      values.push(updates.target_language);
-    }
-
-    if (setParts.length === 0) return null;
-
-    values.push(projectId, normalizedUserId);
-    const result = await sql(
-      raw(`UPDATE projects SET ${setParts.join(', ')}, updated_at = NOW() WHERE id = $${i++} AND user_id = $${i++} RETURNING *`),
-      ...values
-    );
-
-    return result.rows[0] || null;
-  } catch (error) {
-    console.error('Error updating project:', error);
-    throw error;
-  }
-}
-
-/**
- * 删除项目
- */
-export async function deleteProject(projectId: string, userId: string | number): Promise<boolean> {
-  try {
-    // 将 userId 标准化为有效的 UUID 格式
-    const normalizedUserId = normalizeUserIdForQuery(userId);
-
-    const result = await sql`
-      DELETE FROM projects WHERE id = ${projectId} AND user_id = ${normalizedUserId} RETURNING id
-    `;
-    return result.rows.length > 0;
-  } catch (error) {
-    console.error('Error deleting project:', error);
-    throw error;
-  }
-}
-
-/**
- * 获取项目关键词
- */
-export async function getProjectKeywords(projectId: string): Promise<Keyword[]> {
-  try {
-    await initContentManagementTables();
-    const result = await sql<Keyword>`
-      SELECT k.*, 
-        (SELECT status FROM content_drafts WHERE keyword_id = k.id ORDER BY updated_at DESC LIMIT 1) as content_status
-      FROM keywords k
-      WHERE k.project_id = ${projectId}
-      ORDER BY k.created_at DESC
-    `;
-    return result.rows;
-  } catch (error) {
-    console.error('Error getting project keywords:', error);
-    throw error;
-  }
-}
-
-/**
- * 更新关键词状态
- */
-export async function updateKeywordStatus(keywordId: string, status: string): Promise<boolean> {
-  try {
-    const result = await sql`
-      UPDATE keywords SET status = ${status} WHERE id = ${keywordId} RETURNING id
-    `;
-    return result.rows.length > 0;
-  } catch (error) {
-    console.error('Error updating keyword status:', error);
-    throw error;
-  }
-}
-
-/**
- * 获取项目统计数据
- */
-export async function getProjectStats(projectId: string, userId: string | number): Promise<any> {
-  try {
-    await initContentManagementTables();
-
-    // 将 userId 标准化为有效的 UUID 格式
-    const normalizedUserId = normalizeUserIdForQuery(userId);
-
-    const result = await sql`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'selected') as selected,
-        COUNT(*) FILTER (WHERE status = 'generating') as generating,
-        COUNT(*) FILTER (WHERE status = 'completed') as completed,
-        COUNT(*) FILTER (WHERE status = 'failed') as failed
-      FROM keywords
-      JOIN projects ON projects.id = keywords.project_id
-      WHERE keywords.project_id = ${projectId} AND projects.user_id = ${normalizedUserId}
-    `;
-    return result.rows[0];
-  } catch (error) {
-    console.error('Error getting project stats:', error);
-    throw error;
   }
 }
 
@@ -3228,6 +2550,7 @@ export interface ExecutionTask {
   state: any;
   created_at: Date;
   updated_at: Date;
+  deleted_at: Date | null;
 }
 
 /**
@@ -3305,20 +2628,50 @@ export async function updateExecutionTask(
 
 /**
  * 获取用户的任务列表
+ * @param userId 用户ID
+ * @param limit 返回数量限制
+ * @param options.includeDeleted 是否包含已删除的任务
+ * @param options.onlyDeleted 是否只返回已删除的任务
  */
-export async function getUserExecutionTasks(userId: string | number, limit: number = 20): Promise<ExecutionTask[]> {
+export async function getUserExecutionTasks(
+  userId: string | number,
+  limit: number = 20,
+  options: { includeDeleted?: boolean; onlyDeleted?: boolean } = {}
+): Promise<ExecutionTask[]> {
   try {
     await initTasksTable();
 
     // 将 userId 标准化为有效的 UUID 格式
     const normalizedUserId = normalizeUserIdForQuery(userId);
 
-    const result = await sql<ExecutionTask>`
-      SELECT * FROM execution_tasks 
-      WHERE user_id = ${normalizedUserId} 
-      ORDER BY updated_at DESC 
-      LIMIT ${limit}
-    `;
+    let result;
+    if (options.onlyDeleted) {
+      // 只返回已删除的任务
+      result = await sql<ExecutionTask>`
+        SELECT * FROM execution_tasks 
+        WHERE user_id = ${normalizedUserId} 
+        AND deleted_at IS NOT NULL
+        ORDER BY deleted_at DESC 
+        LIMIT ${limit}
+      `;
+    } else if (options.includeDeleted) {
+      // 返回所有任务（包括已删除）
+      result = await sql<ExecutionTask>`
+        SELECT * FROM execution_tasks 
+        WHERE user_id = ${normalizedUserId} 
+        ORDER BY updated_at DESC 
+        LIMIT ${limit}
+      `;
+    } else {
+      // 默认：只返回未删除的任务
+      result = await sql<ExecutionTask>`
+        SELECT * FROM execution_tasks 
+        WHERE user_id = ${normalizedUserId} 
+        AND deleted_at IS NULL
+        ORDER BY updated_at DESC 
+        LIMIT ${limit}
+      `;
+    }
     return result.rows;
   } catch (error) {
     console.error('Error getting user execution tasks:', error);
@@ -3347,7 +2700,7 @@ export async function getExecutionTaskById(taskId: string, userId: string | numb
 }
 
 /**
- * 删除任务
+ * 软删除任务（归档）
  */
 export async function deleteExecutionTask(taskId: string, userId: string | number): Promise<boolean> {
   try {
@@ -3357,11 +2710,57 @@ export async function deleteExecutionTask(taskId: string, userId: string | numbe
     const normalizedUserId = normalizeUserIdForQuery(userId);
 
     const result = await sql`
-      DELETE FROM execution_tasks WHERE id = ${taskId} AND user_id = ${normalizedUserId} RETURNING id
+      UPDATE execution_tasks 
+      SET deleted_at = NOW(), updated_at = NOW()
+      WHERE id = ${taskId} AND user_id = ${normalizedUserId} AND deleted_at IS NULL
+      RETURNING id
     `;
     return result.rows.length > 0;
   } catch (error) {
     console.error('Error deleting execution task:', error);
+    throw error;
+  }
+}
+
+/**
+ * 恢复已删除的任务
+ */
+export async function restoreExecutionTask(taskId: string, userId: string | number): Promise<boolean> {
+  try {
+    await initTasksTable();
+
+    const normalizedUserId = normalizeUserIdForQuery(userId);
+
+    const result = await sql`
+      UPDATE execution_tasks 
+      SET deleted_at = NULL, updated_at = NOW()
+      WHERE id = ${taskId} AND user_id = ${normalizedUserId} AND deleted_at IS NOT NULL
+      RETURNING id
+    `;
+    return result.rows.length > 0;
+  } catch (error) {
+    console.error('Error restoring execution task:', error);
+    throw error;
+  }
+}
+
+/**
+ * 永久删除任务（从数据库彻底移除）
+ */
+export async function permanentlyDeleteExecutionTask(taskId: string, userId: string | number): Promise<boolean> {
+  try {
+    await initTasksTable();
+
+    const normalizedUserId = normalizeUserIdForQuery(userId);
+
+    const result = await sql`
+      DELETE FROM execution_tasks 
+      WHERE id = ${taskId} AND user_id = ${normalizedUserId}
+      RETURNING id
+    `;
+    return result.rows.length > 0;
+  } catch (error) {
+    console.error('Error permanently deleting execution task:', error);
     throw error;
   }
 }
@@ -3419,13 +2818,13 @@ export interface PlatformSite {
 }
 
 /**
- * 项目-站点绑定关系
+ * 网站-站点绑定关系 (website_id 关联 user_websites 表)
  */
-export interface ProjectSiteBinding {
+export interface WebsiteSiteBinding {
   id: string;
-  project_id: string;
+  website_id: string;  // 关联 user_websites.id
   content_type: 'informational' | 'commercial';
-  site_id: string;
+  site_id: string;     // 关联 platform_sites_v2.id
   created_at: Date;
 }
 
@@ -3453,12 +2852,12 @@ let pseoTablesInitializing: Promise<void> | null = null;
  */
 export async function initPSEOPublishTables() {
   if (pseoTablesInitialized) return;
-  
+
   if (pseoTablesInitializing) {
     await pseoTablesInitializing;
     return;
   }
-  
+
   pseoTablesInitializing = (async () => {
     try {
       // 1. GitHub Token 表 - 用于管理 GitHub 仓库
@@ -3474,10 +2873,15 @@ export async function initPSEOPublishTables() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `;
-      
-      try {
-        await sql`ALTER TABLE github_tokens ADD CONSTRAINT github_tokens_valid_status CHECK (status IN ('active', 'disabled'))`;
-      } catch (e: any) { /* 忽略已存在错误 */ }
+
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'github_tokens_valid_status') THEN
+            ALTER TABLE github_tokens ADD CONSTRAINT github_tokens_valid_status CHECK (status IN ('active', 'disabled'));
+          END IF;
+        END $$
+      `;
 
       // 2. 平台 Token 表 - 各发布平台的 API Token
       await sql`
@@ -3492,14 +2896,24 @@ export async function initPSEOPublishTables() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `;
-      
-      try {
-        await sql`ALTER TABLE platform_tokens_v2 ADD CONSTRAINT platform_tokens_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel'))`;
-      } catch (e: any) { /* 忽略已存在错误 */ }
-      
-      try {
-        await sql`ALTER TABLE platform_tokens_v2 ADD CONSTRAINT platform_tokens_v2_valid_status CHECK (status IN ('active', 'disabled'))`;
-      } catch (e: any) { /* 忽略已存在错误 */ }
+
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_tokens_v2_valid_platform') THEN
+            ALTER TABLE platform_tokens_v2 ADD CONSTRAINT platform_tokens_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel'));
+          END IF;
+        END $$
+      `;
+
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_tokens_v2_valid_status') THEN
+            ALTER TABLE platform_tokens_v2 ADD CONSTRAINT platform_tokens_v2_valid_status CHECK (status IN ('active', 'disabled'));
+          END IF;
+        END $$
+      `;
 
       // 3. 平台站点表 - 实际的发布站点
       await sql`
@@ -3520,37 +2934,63 @@ export async function initPSEOPublishTables() {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `;
-      
-      try {
-        await sql`ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel', 'github_pages'))`;
-      } catch (e: any) { /* 忽略已存在错误 */ }
-      
-      try {
-        await sql`ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_content_type CHECK (content_type IN ('informational', 'commercial'))`;
-      } catch (e: any) { /* 忽略已存在错误 */ }
-      
-      try {
-        await sql`ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_status CHECK (status IN ('pending', 'active', 'disabled'))`;
-      } catch (e: any) { /* 忽略已存在错误 */ }
 
-      // 4. 项目-站点绑定表
       await sql`
-        CREATE TABLE IF NOT EXISTS project_site_bindings_v2 (
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_platform') THEN
+            ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel', 'github_pages'));
+          END IF;
+        END $$
+      `;
+
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_content_type') THEN
+            ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_content_type CHECK (content_type IN ('informational', 'commercial'));
+          END IF;
+        END $$
+      `;
+
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_status') THEN
+            ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_status CHECK (status IN ('pending', 'active', 'disabled'));
+          END IF;
+        END $$
+      `;
+
+      // 4. 网站-站点绑定表 (website_id 关联 user_websites)
+      await sql`
+        CREATE TABLE IF NOT EXISTS website_site_bindings (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          project_id UUID NOT NULL,
+          website_id UUID NOT NULL,
           content_type VARCHAR(20) NOT NULL,
           site_id UUID NOT NULL REFERENCES platform_sites_v2(id) ON DELETE CASCADE,
           created_at TIMESTAMP DEFAULT NOW()
         )
       `;
-      
-      try {
-        await sql`ALTER TABLE project_site_bindings_v2 ADD CONSTRAINT project_site_bindings_v2_valid_content_type CHECK (content_type IN ('informational', 'commercial'))`;
-      } catch (e: any) { /* 忽略已存在错误 */ }
-      
-      try {
-        await sql`ALTER TABLE project_site_bindings_v2 ADD CONSTRAINT project_site_bindings_v2_unique UNIQUE (project_id, content_type)`;
-      } catch (e: any) { /* 忽略已存在错误 */ }
+
+      // 使用 DO 块安全添加约束（不产生错误日志）
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'website_site_bindings_valid_content_type') THEN
+            ALTER TABLE website_site_bindings ADD CONSTRAINT website_site_bindings_valid_content_type CHECK (content_type IN ('informational', 'commercial'));
+          END IF;
+        END $$
+      `;
+
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'website_site_bindings_unique') THEN
+            ALTER TABLE website_site_bindings ADD CONSTRAINT website_site_bindings_unique UNIQUE (website_id, content_type);
+          END IF;
+        END $$
+      `;
 
       // 5. 给 published_articles 表添加新字段
       try {
@@ -3562,6 +3002,9 @@ export async function initPSEOPublishTables() {
             END IF;
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'published_articles' AND column_name = 'site_id') THEN
               ALTER TABLE published_articles ADD COLUMN site_id UUID;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'published_articles' AND column_name = 'website_id') THEN
+              ALTER TABLE published_articles ADD COLUMN website_id UUID;
             END IF;
           END $$;
         `;
@@ -3578,9 +3021,9 @@ export async function initPSEOPublishTables() {
         'CREATE INDEX IF NOT EXISTS idx_platform_sites_v2_platform_token_id ON platform_sites_v2(platform_token_id)',
         'CREATE INDEX IF NOT EXISTS idx_platform_sites_v2_content_type ON platform_sites_v2(content_type)',
         'CREATE INDEX IF NOT EXISTS idx_platform_sites_v2_status ON platform_sites_v2(status)',
-        'CREATE INDEX IF NOT EXISTS idx_project_site_bindings_v2_project_id ON project_site_bindings_v2(project_id)'
+        'CREATE INDEX IF NOT EXISTS idx_website_site_bindings_website_id ON website_site_bindings(website_id)'
       ];
-      
+
       for (const indexSql of indexes) {
         try {
           await sql(new RawSQL(indexSql));
@@ -3601,7 +3044,7 @@ export async function initPSEOPublishTables() {
       pseoTablesInitializing = null;
     }
   })();
-  
+
   await pseoTablesInitializing;
 }
 
@@ -3617,21 +3060,21 @@ export async function checkGitHubTokenExists(data: {
   owner_name?: string;
 }): Promise<{ exists: boolean; field?: string; value?: string }> {
   await initPSEOPublishTables();
-  
+
   if (data.name) {
     const result = await sql`SELECT id FROM github_tokens WHERE name = ${data.name}`;
     if (result.rows.length > 0) {
       return { exists: true, field: 'name', value: data.name };
     }
   }
-  
+
   if (data.owner_name) {
     const result = await sql`SELECT id FROM github_tokens WHERE owner_name = ${data.owner_name}`;
     if (result.rows.length > 0) {
       return { exists: true, field: 'owner_name', value: data.owner_name };
     }
   }
-  
+
   return { exists: false };
 }
 
@@ -3644,15 +3087,15 @@ export async function createGitHubToken(data: {
   owner_name: string;
 }): Promise<GitHubToken | { error: string }> {
   await initPSEOPublishTables();
-  
+
   // 检查重复
   const existsCheck = await checkGitHubTokenExists({ name: data.name, owner_name: data.owner_name });
   if (existsCheck.exists) {
     return { error: `GitHub Token with ${existsCheck.field} "${existsCheck.value}" already exists` };
   }
-  
+
   const tokenEncrypted = Buffer.from(data.token).toString('base64');
-  
+
   const result = await sql<GitHubToken>`
     INSERT INTO github_tokens (name, token_encrypted, owner_name)
     VALUES (${data.name}, ${tokenEncrypted}, ${data.owner_name})
@@ -3687,7 +3130,7 @@ export async function getGitHubTokenById(tokenId: string): Promise<GitHubToken |
  * 更新 GitHub Token 状态
  */
 export async function updateGitHubTokenStatus(
-  tokenId: string, 
+  tokenId: string,
   status: 'active' | 'disabled'
 ): Promise<GitHubToken | null> {
   await initPSEOPublishTables();
@@ -3734,7 +3177,7 @@ export async function checkPlatformTokenExists(data: {
   platform: string;
 }): Promise<{ exists: boolean; message?: string }> {
   await initPSEOPublishTables();
-  
+
   // 检查相同平台下是否有同名 Token
   const result = await sql`
     SELECT id FROM platform_tokens_v2 
@@ -3743,7 +3186,7 @@ export async function checkPlatformTokenExists(data: {
   if (result.rows.length > 0) {
     return { exists: true, message: `Platform Token "${data.name}" for ${data.platform} already exists` };
   }
-  
+
   return { exists: false };
 }
 
@@ -3756,15 +3199,15 @@ export async function createPlatformToken(data: {
   name: string;
 }): Promise<PlatformToken | { error: string }> {
   await initPSEOPublishTables();
-  
+
   // 检查重复
   const existsCheck = await checkPlatformTokenExists({ name: data.name, platform: data.platform });
   if (existsCheck.exists) {
     return { error: existsCheck.message || 'Token already exists' };
   }
-  
+
   const tokenEncrypted = Buffer.from(data.token).toString('base64');
-  
+
   const result = await sql<PlatformToken>`
     INSERT INTO platform_tokens_v2 (platform, token_encrypted, name)
     VALUES (${data.platform}, ${tokenEncrypted}, ${data.name})
@@ -3799,7 +3242,7 @@ export async function getPlatformTokenById(tokenId: string): Promise<PlatformTok
  * 更新平台 Token 状态
  */
 export async function updatePlatformTokenStatus(
-  tokenId: string, 
+  tokenId: string,
   status: 'active' | 'disabled'
 ): Promise<PlatformToken | null> {
   await initPSEOPublishTables();
@@ -3854,7 +3297,7 @@ export async function createPlatformSite(data: {
   status?: PlatformSite['status'];
 }): Promise<PlatformSite> {
   await initPSEOPublishTables();
-  
+
   const result = await sql<PlatformSite>`
     INSERT INTO platform_sites_v2 (
       github_token_id, platform_token_id, platform, content_type, 
@@ -3902,13 +3345,13 @@ export async function getSitesByGitHubTokenId(tokenId: string): Promise<Platform
 /**
  * 获取所有站点（带 Token 信息）
  */
-export async function getAllPlatformSites(): Promise<(PlatformSite & { 
+export async function getAllPlatformSites(): Promise<(PlatformSite & {
   github_token_name: string;
   github_owner: string;
   platform_token_name: string | null;
 })[]> {
   await initPSEOPublishTables();
-  const result = await sql<PlatformSite & { 
+  const result = await sql<PlatformSite & {
     github_token_name: string;
     github_owner: string;
     platform_token_name: string | null;
@@ -3930,7 +3373,7 @@ export async function getAllPlatformSites(): Promise<(PlatformSite & {
  * 更新站点状态
  */
 export async function updatePlatformSiteStatus(
-  siteId: string, 
+  siteId: string,
   status: 'pending' | 'active' | 'disabled'
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
@@ -3947,7 +3390,7 @@ export async function updatePlatformSiteStatus(
  * 更新站点 URL
  */
 export async function updatePlatformSiteUrl(
-  siteId: string, 
+  siteId: string,
   siteUrl: string
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
@@ -3987,10 +3430,10 @@ export async function incrementSiteUsage(siteId: string): Promise<void> {
 // ============================================================================
 
 /**
- * 获取项目已绑定的站点
+ * 获取网站已绑定的站点 (website_id 来自 user_websites 表)
  */
-export async function getProjectSiteBindings(projectId: string): Promise<(ProjectSiteBinding & { 
-  site: PlatformSite; 
+export async function getWebsiteSiteBindings(websiteId: string): Promise<(WebsiteSiteBinding & {
+  site: PlatformSite;
   github_token: GitHubToken;
   platform_token: PlatformToken | null;
 })[]> {
@@ -4001,39 +3444,42 @@ export async function getProjectSiteBindings(projectId: string): Promise<(Projec
       row_to_json(s.*) as site,
       row_to_json(g.*) as github_token,
       CASE WHEN p.id IS NOT NULL THEN row_to_json(p.*) ELSE NULL END as platform_token
-    FROM project_site_bindings_v2 b
+    FROM website_site_bindings b
     JOIN platform_sites_v2 s ON b.site_id = s.id
     JOIN github_tokens g ON s.github_token_id = g.id
     LEFT JOIN platform_tokens_v2 p ON s.platform_token_id = p.id
-    WHERE b.project_id = ${projectId}
+    WHERE b.website_id = ${websiteId}
   `;
   return result.rows;
 }
 
 /**
- * 为项目分配站点（最少使用优先）
+ * 为用户网站分配导流站点（最少使用优先）
  * 
  * 发布策略:
  * - 信息型内容 -> RTD, CF Pages
  * - 商业型内容 -> Netlify, Vercel, GitHub Pages
+ * 
+ * @param websiteId - 用户网站 ID (来自 user_websites 表)
+ * @param contentType - 内容类型
  */
-export async function assignSiteToProject(
-  projectId: string, 
+export async function assignSiteToWebsite(
+  websiteId: string,
   contentType: 'informational' | 'commercial'
-): Promise<{ 
-  site: PlatformSite; 
+): Promise<{
+  site: PlatformSite;
   github_token: GitHubToken;
   platform_token: PlatformToken | null;
   isNew: boolean;
 } | null> {
   await initPSEOPublishTables();
-  
+
   // 1. 检查是否已绑定
-  const existingBinding = await sql<ProjectSiteBinding>`
-    SELECT * FROM project_site_bindings_v2 
-    WHERE project_id = ${projectId} AND content_type = ${contentType}
+  const existingBinding = await sql<WebsiteSiteBinding>`
+    SELECT * FROM website_site_bindings 
+    WHERE website_id = ${websiteId} AND content_type = ${contentType}
   `;
-  
+
   if (existingBinding.rows.length > 0) {
     const binding = existingBinding.rows[0];
     const siteResult = await sql<any>`
@@ -4055,12 +3501,12 @@ export async function assignSiteToProject(
       };
     }
   }
-  
+
   // 2. 根据内容类型确定可用的平台
-  const platforms = contentType === 'informational' 
-    ? ['rtd', 'cf_pages'] 
+  const platforms = contentType === 'informational'
+    ? ['rtd', 'cf_pages']
     : ['netlify', 'vercel', 'github_pages'];
-  
+
   // 3. 查找使用次数最少的可用站点（已存在的站点优先）
   const availableSite = await sql<any>`
     SELECT 
@@ -4077,21 +3523,21 @@ export async function assignSiteToProject(
     ORDER BY s.usage_count ASC, s.created_at ASC
     LIMIT 1
   `;
-  
+
   if (availableSite.rows.length === 0) {
-    console.log(`[assignSiteToProject] No available site for content_type: ${contentType}, will need to create one`);
+    console.log(`[assignSiteToWebsite] No available site for content_type: ${contentType}, will need to create one`);
     return null;
   }
-  
+
   const site = availableSite.rows[0];
-  
+
   // 4. 创建绑定关系
   await sql`
-    INSERT INTO project_site_bindings_v2 (project_id, content_type, site_id)
-    VALUES (${projectId}, ${contentType}, ${site.id})
-    ON CONFLICT (project_id, content_type) DO NOTHING
+    INSERT INTO website_site_bindings (website_id, content_type, site_id)
+    VALUES (${websiteId}, ${contentType}, ${site.id})
+    ON CONFLICT (website_id, content_type) DO NOTHING
   `;
-  
+
   return {
     site: site,
     github_token: site.github_token,
@@ -4111,11 +3557,11 @@ export async function getAvailableTokensForNewSite(
   platform: PlatformSite['platform'];
 } | null> {
   await initPSEOPublishTables();
-  
-  const platforms = contentType === 'informational' 
-    ? ['rtd', 'cf_pages'] 
+
+  const platforms = contentType === 'informational'
+    ? ['rtd', 'cf_pages']
     : ['netlify', 'vercel', 'github_pages'];
-  
+
   // 获取使用最少的 GitHub Token
   const githubTokenResult = await sql<GitHubToken>`
     SELECT * FROM github_tokens 
@@ -4123,24 +3569,24 @@ export async function getAvailableTokensForNewSite(
     ORDER BY usage_count ASC, created_at ASC
     LIMIT 1
   `;
-  
+
   if (githubTokenResult.rows.length === 0) {
     console.error('[getAvailableTokensForNewSite] No active GitHub token');
     return null;
   }
-  
+
   // 获取使用最少的平台 Token（如果需要）
   // github_pages 不需要平台 Token
   let platformToken: PlatformToken | null = null;
   let selectedPlatform: PlatformSite['platform'] = 'github_pages';
-  
+
   const platformTokenResult = await sql<PlatformToken>`
     SELECT * FROM platform_tokens_v2 
     WHERE status = 'active' AND platform = ANY(${platforms.filter(p => p !== 'github_pages')}::text[])
     ORDER BY usage_count ASC, created_at ASC
     LIMIT 1
   `;
-  
+
   if (platformTokenResult.rows.length > 0) {
     platformToken = platformTokenResult.rows[0];
     selectedPlatform = platformToken.platform as PlatformSite['platform'];
@@ -4151,7 +3597,7 @@ export async function getAvailableTokensForNewSite(
     console.error(`[getAvailableTokensForNewSite] No platform token for ${contentType}`);
     return null;
   }
-  
+
   return {
     github_token: githubTokenResult.rows[0],
     platform_token: platformToken,
@@ -4182,7 +3628,7 @@ export async function getPSEOPublishStats(): Promise<{
   contentTypeBreakdown: { content_type: string; count: number }[];
 }> {
   await initPSEOPublishTables();
-  
+
   const [githubTokens, platformTokens, sites, bindings, platformBreakdown, contentBreakdown] = await Promise.all([
     sql<{ total: string; active: string }>`
       SELECT 
@@ -4203,7 +3649,7 @@ export async function getPSEOPublishStats(): Promise<{
         COUNT(*) FILTER (WHERE status = 'pending') as pending
       FROM platform_sites_v2
     `,
-    sql<{ total: string }>`SELECT COUNT(*) as total FROM project_site_bindings_v2`,
+    sql<{ total: string }>`SELECT COUNT(*) as total FROM website_site_bindings`,
     sql<{ platform: string; count: string }>`
       SELECT platform, COUNT(*) as count
       FROM platform_sites_v2
@@ -4215,7 +3661,7 @@ export async function getPSEOPublishStats(): Promise<{
       GROUP BY content_type
     `
   ]);
-  
+
   return {
     totalGitHubTokens: parseInt(githubTokens.rows[0]?.total || '0'),
     activeGitHubTokens: parseInt(githubTokens.rows[0]?.active || '0'),
@@ -4225,9 +3671,9 @@ export async function getPSEOPublishStats(): Promise<{
     activeSites: parseInt(sites.rows[0]?.active || '0'),
     pendingSites: parseInt(sites.rows[0]?.pending || '0'),
     totalBindings: parseInt(bindings.rows[0]?.total || '0'),
-    platformBreakdown: platformBreakdown.rows.map(r => ({ 
-      platform: r.platform, 
-      count: parseInt(r.count) 
+    platformBreakdown: platformBreakdown.rows.map(r => ({
+      platform: r.platform,
+      count: parseInt(r.count)
     })),
     contentTypeBreakdown: contentBreakdown.rows.map(r => ({
       content_type: r.content_type,

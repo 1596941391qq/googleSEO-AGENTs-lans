@@ -41,8 +41,6 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
   miningMode = "blue-ocean", // 默认蓝海模式
   showHighPerformerToggle = false,
 }) => {
-  // 蓝海模式不显示DR对比列
-  const showDRComparison = miningMode === "existing-website-audit";
   // 跟踪哪个关键词的蓝海分数详细分解是展开的（默认折叠）
   const [expandedScoreBreakdownId, setExpandedScoreBreakdownId] =
     React.useState<string | null>(null);
@@ -64,11 +62,6 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
             <th className="px-4 py-4 w-10"></th>
             <th className="px-4 py-4">{t.colKw}</th>
             <th className="px-4 py-4">{t.colTrans}</th>
-            {showDRComparison && (
-              <th className="px-4 py-4">
-                {t.drComparison || (uiLanguage === "zh" ? "DR对比" : "DR Comp")}
-              </th>
-            )}
             <th className="px-4 py-4">{t.colVol}</th>
             <th className="px-4 py-4">{t.colType}</th>
             <th className="px-4 py-4 text-center">{t.colProb}</th>
@@ -110,34 +103,6 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                   >
                     {item.translation}
                   </td>
-                  {showDRComparison && (
-                    <td
-                      className={`px-4 py-4 ${
-                        isDarkTheme ? "text-white/80" : "text-gray-700"
-                      }`}
-                    >
-                      <div className="flex items-center gap-1">
-                        <span className="font-bold">
-                          {item.websiteDR !== undefined
-                            ? Math.round(item.websiteDR)
-                            : "???"}
-                        </span>
-                        <span className="text-[10px] text-slate-500 text-nowrap">
-                          vs
-                        </span>
-                        <span className="font-medium text-amber-400/80">
-                          {item.competitorDRs && item.competitorDRs.length > 0
-                            ? Math.round(
-                                item.competitorDRs.reduce(
-                                  (a: number, b: number) => a + b,
-                                  0
-                                ) / item.competitorDRs.length
-                              )
-                            : "???"}
-                        </span>
-                      </div>
-                    </td>
-                  )}
                   <td
                     className={`px-4 py-4 font-mono ${
                       isDarkTheme ? "text-white" : "text-gray-900"
@@ -247,7 +212,7 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                     }`}
                   >
                     <td
-                      colSpan={showDRComparison ? 8 : 7}
+                      colSpan={7}
                       className="px-4 py-6"
                     >
                       <div className="flex flex-col md:flex-row gap-6">
@@ -620,116 +585,6 @@ export const KeywordTable: React.FC<KeywordTableProps> = ({
                                         </div>
                                       </CardContent>
                                     </Card>
-                                    {showDRComparison && (
-                                      <>
-                                        <Card
-                                          className={cn(
-                                            isDarkTheme
-                                              ? "bg-black border-emerald-500/20"
-                                              : "bg-emerald-50 border-emerald-200"
-                                          )}
-                                        >
-                                          <CardContent className="p-4">
-                                            <div
-                                              className={cn(
-                                                "text-xs font-medium mb-1.5",
-                                                isDarkTheme
-                                                  ? "text-white/70"
-                                                  : "text-emerald-700"
-                                              )}
-                                            >
-                                              DR (YOU vs AVG)
-                                            </div>
-                                            <div
-                                              className={cn(
-                                                "text-xl font-bold",
-                                                isDarkTheme
-                                                  ? "text-white"
-                                                  : "text-slate-900"
-                                              )}
-                                            >
-                                              {item.websiteDR !== undefined
-                                                ? Math.round(item.websiteDR)
-                                                : "-"}
-                                              <span className="text-xs font-normal text-slate-500 mx-1">
-                                                /
-                                              </span>
-                                              {item.competitorDRs &&
-                                              item.competitorDRs.length > 0
-                                                ? Math.round(
-                                                    item.competitorDRs.reduce(
-                                                      (a: number, b: number) =>
-                                                        a + b,
-                                                      0
-                                                    ) /
-                                                      item.competitorDRs.length
-                                                  )
-                                                : "-"}
-                                            </div>
-                                            <div
-                                              className={cn(
-                                                "text-xs mt-1",
-                                                isDarkTheme
-                                                  ? "text-white/60"
-                                                  : "text-emerald-600/70"
-                                              )}
-                                            >
-                                              {uiLanguage === "zh"
-                                                ? "域名权重对比"
-                                                : "Domain authority"}
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-                                        <Card
-                                          className={cn(
-                                            isDarkTheme
-                                              ? "bg-black border-emerald-500/20"
-                                              : "bg-emerald-50 border-emerald-200"
-                                          )}
-                                        >
-                                          <CardContent className="p-4">
-                                            <div
-                                              className={cn(
-                                                "text-xs font-medium mb-1.5",
-                                                isDarkTheme
-                                                  ? "text-white/70"
-                                                  : "text-emerald-700"
-                                              )}
-                                            >
-                                              {uiLanguage === "zh"
-                                                ? "上首页概率"
-                                                : "TOP 10 PROB"}
-                                            </div>
-                                            <div
-                                              className={cn(
-                                                "text-xl font-bold",
-                                                item.top10Probability ===
-                                                  ProbabilityLevel.HIGH
-                                                  ? "text-emerald-400"
-                                                  : item.top10Probability ===
-                                                    ProbabilityLevel.MEDIUM
-                                                  ? "text-yellow-400"
-                                                  : "text-red-400"
-                                              )}
-                                            >
-                                              {item.top10Probability || "N/A"}
-                                            </div>
-                                            <div
-                                              className={cn(
-                                                "text-xs mt-1",
-                                                isDarkTheme
-                                                  ? "text-white/60"
-                                                  : "text-emerald-600/70"
-                                              )}
-                                            >
-                                              {uiLanguage === "zh"
-                                                ? "基于DR估算"
-                                                : "Based on DR"}
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-                                      </>
-                                    )}
                                   </div>
                                   {item.serankingData.history_trend &&
                                     Object.keys(

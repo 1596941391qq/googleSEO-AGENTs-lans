@@ -6,11 +6,13 @@ import { cn } from "../../lib/utils";
 interface MarkdownContentProps {
   content: string;
   isDarkTheme?: boolean;
+  onImageClick?: (url: string, alt?: string) => void;  // 新增：图片点击回调
 }
 
 export const MarkdownContent: React.FC<MarkdownContentProps> = ({
   content,
   isDarkTheme = false,
+  onImageClick,
 }) => {
   // 保护：如果内容是 JSON 格式，不渲染
   if (content && typeof content === "string") {
@@ -237,12 +239,20 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
           td: ({ children }) => (
             <td className={cn("px-4 py-2", textColor)}>{children}</td>
           ),
-          // 图片
+          // 图片 - 支持点击放大
           img: ({ src, alt }) => (
             <img
               src={src}
               alt={alt}
-              className="my-4 rounded-lg max-w-full h-auto"
+              className={cn(
+                "my-4 rounded-lg max-w-full h-auto shadow-lg",
+                onImageClick && "cursor-pointer hover:opacity-90 transition-opacity"
+              )}
+              onClick={() => {
+                if (onImageClick && src) {
+                  onImageClick(src, alt);
+                }
+              }}
             />
           ),
         }}

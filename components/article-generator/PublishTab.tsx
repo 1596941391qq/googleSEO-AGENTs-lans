@@ -32,9 +32,11 @@ interface Article {
   url_slug?: string;
   content: string;
   content_type?: 'informational' | 'commercial';
-  project_id?: string;
-  site_name?: string;
-  site_url?: string;
+  websiteId?: string; // 关联的用户网站 ID
+  websiteName?: string; // 用户网站域名
+  websiteUrl?: string; // 用户网站 URL
+  site_name?: string; // 发布站点名称
+  site_url?: string; // 发布站点 URL (访问链接)
   platform?: string;
 }
 
@@ -76,13 +78,13 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
     }
   };
 
-  const handlePublish = async (articleId: string, projectId?: string) => {
+  const handlePublish = async (articleId: string, websiteId?: string) => {
     try {
       setPublishingId(articleId);
       
       const response = await apiClient.post('/api/articles/publish', {
         articleId,
-        projectId
+        websiteId // 传递关联的用户网站 ID
       });
 
       if (response.success) {
@@ -288,6 +290,13 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                                 : (uiLanguage === 'zh' ? '📚 信息型' : '📚 Informational')}
                             </Badge>
                           )}
+                          {/* 关联的用户网站 */}
+                          {article.websiteName && (
+                            <Badge className="bg-purple-500/10 text-purple-400 font-medium text-[10px]">
+                              <Globe className="w-3 h-3 mr-1" />
+                              {article.websiteName}
+                            </Badge>
+                          )}
                           {article.platform && platformConfig && (
                             <Badge className="bg-zinc-500/10 text-zinc-400 font-medium text-[10px]">
                               <PlatformIcon className={cn("w-3 h-3 mr-1", platformConfig.color)} />
@@ -361,9 +370,10 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                         ) : (
                           <Button 
                             size="sm"
-                            disabled={publishingId === article.id}
-                            className="rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold"
-                            onClick={() => handlePublish(article.id, article.project_id)}
+                            disabled={publishingId === article.id || !article.websiteId}
+                            className="rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold disabled:opacity-50"
+                            onClick={() => handlePublish(article.id, article.websiteId)}
+                            title={!article.websiteId ? (uiLanguage === 'zh' ? '请先关联网站' : 'Please link a website first') : ''}
                           >
                             {publishingId === article.id ? (
                               <>

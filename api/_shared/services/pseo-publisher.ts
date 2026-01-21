@@ -22,7 +22,7 @@ import {
   incrementGitHubTokenUsage,
   incrementPlatformTokenUsage,
   decryptToken,
-  getProjectSiteBindings,
+  getWebsiteSiteBindings,
   GitHubToken,
   PlatformToken,
   PlatformSite,
@@ -343,9 +343,10 @@ function buildArticleUrl(siteUrl: string, slug: string): string {
 }
 
 /**
- * 获取项目的所有绑定站点
+ * 获取用户网站的所有绑定导流站点
+ * @param websiteId - 用户网站 ID (来自 user_websites 表)
  */
-export async function getProjectPublishingSites(projectId: string): Promise<{
+export async function getWebsitePublishingSites(websiteId: string): Promise<{
   informational: {
     site: PlatformSite;
     githubToken: GitHubToken;
@@ -357,7 +358,7 @@ export async function getProjectPublishingSites(projectId: string): Promise<{
     platformToken: PlatformToken | null;
   } | null;
 }> {
-  const bindings = await getProjectSiteBindings(projectId);
+  const bindings = await getWebsiteSiteBindings(websiteId);
   
   let informational = null;
   let commercial = null;
