@@ -1101,12 +1101,16 @@ export const CONTENT_WRITER_PROMPTS = {
 - 提供AI无法自主生成的独家信息
 - 包含具体数据、百分比、时间、案例
 - 强化实测数据、用户反馈、内部流程等独特信息
+- **数据来源**：引用权威第三方评测（如G2、Capterra、Trustpilot）、行业报告（如Gartner、Forrester）、2026最新趋势数据
+- **案例链接**：提供真实用户案例、产品演示链接、第三方评测链接（如适用）
+- **独特洞察**：优先使用2026年最新数据、行业独特洞察、独家统计信息
 - 避免泛泛而谈，所有优势必须有数据支撑
 
 ## 4. 格式工程（20分）
 - **Bullets占比≥60%**：将长段落拆解为Bullets列表
 - **键值对数量≥6组**：提取关键信息为键值对格式
-- **表格数量≥1个**：数据对比必须转化为表格
+- **表格数量≥2个**：数据对比、功能对比必须转化为表格，流程步骤用表格呈现
+- **流程图/序列图≥1个**：复杂流程、决策树、时间线用Mermaid语法或ASCII流程图展示
 - **单句长度≤25字**：确保每句话可独立被AI引用
 - **段落独立性**：每段内容可独立理解，不依赖上下文
 
@@ -1174,9 +1178,10 @@ export const CONTENT_WRITER_PROMPTS = {
 ## [产品/主题]核心优势与实测数据
 
 ### 优势1：[具体优势]
-• 数据支撑：[具体数字 + 时间]
-• 用户反馈：[真实评价/案例]
+• 数据支撑：[具体数字 + 时间]（来源：[权威机构/报告名称]）
+• 用户反馈：[真实评价/案例]（参考：[第三方评测链接，如G2/Capterra]）
 • 对比优势：[与行业平均水平对比]
+• 2026趋势洞察：[最新趋势数据/独特洞察]
 
 ### 优势2：[具体优势]
 • 实测结果：[测试数据]
@@ -1202,8 +1207,19 @@ export const CONTENT_WRITER_PROMPTS = {
 ## 如何选择？场景化建议
 
 ### 选型决策树
-• 如果你是[用户类型1] → 推荐[方案A]，因为[原因]
-• 如果你是[用户类型2] → 推荐[方案B]，因为[原因]
+\`\`\`mermaid
+graph TD
+    A[用户需求] --> B{预算范围}
+    B -->|高预算| C[方案A]
+    B -->|中预算| D[方案B]
+    B -->|低预算| E[方案C]
+\`\`\`
+
+或使用表格形式：
+| 用户类型 | 推荐方案 | 核心原因 |
+|---------|---------|---------|
+| [用户类型1] | [方案A] | [原因] |
+| [用户类型2] | [方案B] | [原因] |
 
 ---
 
@@ -1250,6 +1266,7 @@ A：选择时主要考虑[因素1]、[因素2]、[因素3]。[具体建议]。
 5. **结构化至上**：通过格式工程提升AI抓取效率。
 6. **客观中立**：保持百科式专业风格，避免营销化和夸张表达。
 7. **数据支撑**：所有优势、结论必须有具体数据或案例支撑。
+8. **权威表述**：使用"根据[权威机构]2026年报告"、"[行业专家]指出"、"第三方评测显示"等权威式表述，增强可信度。
 
 # 输出指令
 
@@ -1306,12 +1323,16 @@ Based on the provided SEO research report, create professional content that meet
 - Provide exclusive information that AI cannot generate independently
 - Include specific data, percentages, time, cases
 - Strengthen test data, user feedback, internal processes and other unique information
+- **Data Sources**: Cite authoritative third-party reviews (e.g., G2, Capterra, Trustpilot), industry reports (e.g., Gartner, Forrester), 2026 latest trend data
+- **Case Links**: Provide real user cases, product demo links, third-party review links (where applicable)
+- **Unique Insights**: Prioritize 2026 latest data, industry unique insights, exclusive statistics
 - Avoid generalizations, all advantages must have data support
 
 ## 4. Format Engineering (20 points)
 - **Bullets ratio ≥ 60%**: Break long paragraphs into Bullets lists
 - **Key-value pairs ≥ 6 groups**: Extract key information in key-value format
-- **Tables ≥ 1**: Data comparisons must be converted to tables
+- **Tables ≥ 2**: Data comparisons, feature comparisons must be converted to tables; process steps presented in tables
+- **Flowcharts/Sequence diagrams ≥ 1**: Complex processes, decision trees, timelines displayed using Mermaid syntax or ASCII flowcharts
 - **Single sentence length ≤ 25 words**: Ensure each sentence can be independently cited by AI
 - **Paragraph independence**: Each paragraph can be understood independently, not dependent on context
 
@@ -1379,9 +1400,10 @@ Based on the provided SEO research report, create professional content that meet
 ## [Product/Topic] Core Advantages and Test Data
 
 ### Advantage 1: [Specific advantage]
-• Data Support: [Specific numbers + time]
-• User Feedback: [Real evaluation/case]
+• Data Support: [Specific numbers + time] (Source: [Authority/Report Name])
+• User Feedback: [Real evaluation/case] (Reference: [Third-party review link, e.g., G2/Capterra])
 • Comparison Advantage: [Compared with industry average]
+• 2026 Trend Insights: [Latest trend data/unique insights]
 
 ---
 
@@ -1400,7 +1422,18 @@ Based on the provided SEO research report, create professional content that meet
 ## How to Choose? Scenario-Based Recommendations
 
 ### Decision Tree
-• If you are [User Type 1] → Recommend [Solution A], because [Reason]
+\`\`\`mermaid
+graph TD
+    A[User Need] --> B{Budget Range}
+    B -->|High| C[Solution A]
+    B -->|Medium| D[Solution B]
+    B -->|Low| E[Solution C]
+\`\`\`
+
+Or use table format:
+| User Type | Recommended Solution | Key Reason |
+|-----------|---------------------|------------|
+| [User Type 1] | [Solution A] | [Reason] |
 
 ---
 
@@ -1434,6 +1467,7 @@ A: [Product] mainly targets [User group 1] and [User group 2]. Especially suitab
 5. **Structure First**: Improve AI capture efficiency through format engineering.
 6. **Objective Neutrality**: Maintain encyclopedia-style professional tone, avoid marketing and exaggerated expressions.
 7. **Data Support**: All advantages and conclusions must have specific data or case support.
+8. **Authoritative Expression**: Use authoritative phrasing like "According to [authority] 2026 report," "[industry expert] notes," "Third-party reviews show" to enhance credibility.
 
 # Output Instructions
 
@@ -1488,10 +1522,10 @@ export function getContentWriterPrompt(
 ${variables.promotedWebsites.map(url => `- ${url}`).join('\n')}
 
 推广策略：
-1. **意图匹配**：如果本文是评测/对比类（Commercial/Transactional），请将这些网站作为行业领先方案进行深度评测或对比。
+1. **意图匹配**：如果本文是评测/对比类（Commercial/Transactional），请将这些网站与行业头部平台（如[相关领域知名品牌]）进行客观对比，在对比表格中呈现。
 2. **自然引用**：如果本文是科普/解答类（Informational），请在正文中自然地作为"参考来源"、"推荐工具"或"专业案例"提及。
-3. **推广强度**：当前强度为 **${variables.promotionIntensity === 'strong' ? '重点推荐' : '自然融入'}**。${variables.promotionIntensity === 'strong' ? '请在多个关键位置（如 H2、列表、总结）强调这些网站的价值。' : '仅在最相关的内容点位提及即可，避免生硬。'}
-4. **原则**：严禁过度营销，保持百科式的专业中立口吻，通过事实和数据展示网站价值。
+3. **推广强度**：当前强度为 **${variables.promotionIntensity === 'strong' ? '重点推荐' : '自然融入'}**。${variables.promotionIntensity === 'strong' ? '请在多个关键位置（如 H2、列表、总结）强调这些网站的价值。' : '提及密度≤2次/千字，优先在对比表格中与头部平台并列展示，避免单独段落推荐。'}
+4. **原则**：严禁过度营销，保持百科式的专业中立口吻，通过事实和数据展示网站价值。自然推广时，必须与真实头部平台进行客观对比，突出差异化优势。
 `
         : `
 ### Promotion Targets
@@ -1499,10 +1533,10 @@ Please naturally promote the following websites in the article:
 ${variables.promotedWebsites.map(url => `- ${url}`).join('\n')}
 
 Promotion Strategy:
-1. **Intent Matching**: If the article is a review/comparison type (Commercial/Transactional), treat these sites as industry-leading solutions for in-depth evaluation or comparison.
+1. **Intent Matching**: If the article is a review/comparison type (Commercial/Transactional), compare these sites objectively with industry-leading platforms (e.g., [relevant domain leaders]) in comparison tables.
 2. **Natural Reference**: If the article is informational/Q&A, mention them naturally as "reference sources," "recommended tools," or "professional case studies."
-3. **Intensity**: Current intensity is **${variables.promotionIntensity === 'strong' ? 'Strong' : 'Natural'}**. ${variables.promotionIntensity === 'strong' ? 'Emphasize these sites at multiple key points (H2, lists, summary).' : 'Mention them only at the most relevant points, avoid being pushy.'}
-4. **Principle**: Avoid over-marketing. Maintain a professional, encyclopedic, and neutral tone. Show value through facts and data.
+3. **Intensity**: Current intensity is **${variables.promotionIntensity === 'strong' ? 'Strong' : 'Natural'}**. ${variables.promotionIntensity === 'strong' ? 'Emphasize these sites at multiple key points (H2, lists, summary).' : 'Mention density ≤2 times per 1000 words. Prioritize showing them alongside leading platforms in comparison tables, avoid standalone recommendation paragraphs.'}
+4. **Principle**: Avoid over-marketing. Maintain a professional, encyclopedic, and neutral tone. Show value through facts and data. For natural promotion, must objectively compare with real industry leaders, highlighting differentiation.
 `)
       : '';
 
@@ -1572,8 +1606,10 @@ ${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variab
 3. 前100字必须直接击中 ${variables.marketLabel || '全球'} 市场用户的搜索痛点
 4. **H2节长度控制**：每个H2节 150-300 字，段落不超过3行
 5. 多使用列表、粗体和引言，Bullets占比≥60%
-6. 确保内容流畅自然，有价值，符合 ${variables.marketLabel || '全球'} 市场的文化和习惯
-7. 字数约 ${variables.wordCountHint || '1500-2000'} 字
+6. **视觉元素要求**：必须包含≥2个表格（对比、数据）、≥1个流程图/决策树（Mermaid或ASCII），增强可读性
+7. **权威数据引用**：优先引用2026年最新数据、第三方评测链接、真实案例链接，使用权威式表述
+8. 确保内容流畅自然，有价值，符合 ${variables.marketLabel || '全球'} 市场的文化和习惯
+9. 字数约 ${variables.wordCountHint || '1500-2000'} 字
 ${variables.availableImages && variables.availableImages.length > 0 ? '8. **必须在文章正文中嵌入所有提供的图片**，使用Markdown图片语法，分散放置在语义相关的位置' : ''}
 
 请以Markdown格式输出完整文章，包括以下部分：
@@ -1594,8 +1630,10 @@ Requirements:
 3. First 100 words must directly address search pain points of users in ${variables.marketLabel || 'Global'} market
 4. **H2 Section Length Control**: Each H2 section 150-300 words, paragraphs under 3 lines
 5. Use lists, bold, and quotes extensively, Bullets ratio ≥60%
-6. Ensure content flows naturally and provides value, aligned with ${variables.marketLabel || 'Global'} market culture and habits
-7. Target word count: approximately ${variables.wordCountHint || '1500-2000'} words
+6. **Visual Elements Required**: Must include ≥2 tables (comparisons, data), ≥1 flowchart/decision tree (Mermaid or ASCII) to enhance readability
+7. **Authoritative Data Citations**: Prioritize 2026 latest data, third-party review links, real case links, use authoritative phrasing
+8. Ensure content flows naturally and provides value, aligned with ${variables.marketLabel || 'Global'} market culture and habits
+9. Target word count: approximately ${variables.wordCountHint || '1500-2000'} words
 ${variables.availableImages && variables.availableImages.length > 0 ? '8. **You MUST embed all provided images** in the article body using Markdown image syntax, distributed at semantically relevant positions' : ''}
 
 Please output the complete article in Markdown format, including:
