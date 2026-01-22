@@ -503,8 +503,58 @@ Please naturally integrate introductions and recommendations for these websites 
         console.log('[Content Writer] Extracted from JSON - title:', extractedTitle?.substring(0, 50), 'content length:', markdownContent?.length);
       } catch (e: any) {
         console.log('[Content Writer] JSON parse failed:', e.message);
-        // JSON 解析失败，但内容可能仍然有价值，尝试提取
-        markdownContent = cleanedResponse;
+        // JSON 解析失败，尝试从不完整的 JSON 中提取各个字段
+        
+        // 尝试提取 article_body
+        const articleBodyMatch = cleanedResponse.match(/"article_body"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"(?:geo_score|logic_check|seo_meta)"|"\s*}$)/);
+        if (articleBodyMatch) {
+          let extractedBody = articleBodyMatch[1];
+          // 解码转义字符
+          try {
+            extractedBody = JSON.parse(`"${extractedBody}"`);
+          } catch {
+            extractedBody = extractedBody
+              .replace(/\\n/g, '\n')
+              .replace(/\\"/g, '"')
+              .replace(/\\t/g, '\t')
+              .replace(/\\\\/g, '\\');
+          }
+          markdownContent = extractedBody;
+          console.log('[Content Writer] Extracted article_body from incomplete JSON, length:', markdownContent?.length);
+        } else {
+          // 如果无法提取 article_body，使用原始响应
+          markdownContent = cleanedResponse;
+        }
+        
+        // 尝试提取 geo_score（即使 JSON 整体解析失败）
+        const geoScoreMatch = cleanedResponse.match(/"geo_score"\s*:\s*(\{[^}]+\})/);
+        if (geoScoreMatch) {
+          try {
+            geoScore = JSON.parse(geoScoreMatch[1]);
+            console.log('[Content Writer] Extracted geo_score from incomplete JSON');
+          } catch {
+            console.log('[Content Writer] Failed to parse geo_score');
+          }
+        }
+        
+        // 尝试提取 logic_check
+        const logicCheckMatch = cleanedResponse.match(/"logic_check"\s*:\s*"([^"]+)"/);
+        if (logicCheckMatch) {
+          logicCheck = logicCheckMatch[1];
+          console.log('[Content Writer] Extracted logic_check from incomplete JSON');
+        }
+        
+        // 尝试提取 seo_meta
+        const seoMetaMatch = cleanedResponse.match(/"seo_meta"\s*:\s*(\{[^}]+\})/);
+        if (seoMetaMatch) {
+          try {
+            seoMeta = JSON.parse(seoMetaMatch[1]);
+            extractedTitle = seoMeta?.title || '';
+            console.log('[Content Writer] Extracted seo_meta from incomplete JSON');
+          } catch {
+            console.log('[Content Writer] Failed to parse seo_meta');
+          }
+        }
       }
     } else {
       // 纯 Markdown 格式

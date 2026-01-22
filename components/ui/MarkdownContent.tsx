@@ -99,6 +99,21 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
     ? "border-l-emerald-500/50"
     : "border-l-emerald-600";
 
+  // 预处理内容：把 Unicode 列表符号转换成 Markdown 列表语法
+  const preprocessContent = (rawContent: string): string => {
+    if (!rawContent) return rawContent;
+    
+    // 把 • (Unicode bullet) 转换成 Markdown 列表
+    // 处理行首的 • 或带空格的 • 
+    let processed = rawContent
+      .replace(/^[•●○◦◆◇▪▫]\s*/gm, '- ')  // 行首的各种列表符号
+      .replace(/^\s+[•●○◦◆◇▪▫]\s*/gm, '  - ');  // 缩进的列表符号
+    
+    return processed;
+  };
+
+  const processedContent = preprocessContent(content);
+
   return (
     <div className={cn("markdown-content", textColor)}>
       <ReactMarkdown
@@ -257,7 +272,7 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
           ),
         }}
       >
-        {content}
+        {processedContent}
       </ReactMarkdown>
     </div>
   );

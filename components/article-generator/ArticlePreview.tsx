@@ -10,7 +10,6 @@ import {
   ChevronDown,
   ChevronUp,
   Target,
-  FileText,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "../ui/MarkdownContent";
@@ -88,11 +87,48 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
     });
   }, [finalArticle]);
 
-  // Handle Export
+  // Handle Export - 只导出 article_body（纯 Markdown）
   const handleExport = () => {
-    // Create a markdown file with title and content
-    const markdown = `# ${finalArticle.title}\n\n${finalArticle.content}`;
-    const blob = new Blob([markdown], { type: "text/markdown" });
+    // 优先使用 article_body，否则用 content
+    let articleBody = (finalArticle as any).article_body || finalArticle.content || '';
+    
+    // 清理可能的 JSON 格式内容
+    if (typeof articleBody === 'string') {
+      let cleaned = articleBody.trim();
+      
+      // 移除 ```json 或 ``` 包装
+      if (cleaned.startsWith('```json') || cleaned.startsWith('```')) {
+        cleaned = cleaned.replace(/^```(?:json)?\s*\n?/, '');
+        const lastBackticks = cleaned.lastIndexOf('```');
+        if (lastBackticks > 0) {
+          cleaned = cleaned.substring(0, lastBackticks).trim();
+        }
+      }
+      
+      // 如果是 JSON 格式，尝试提取 article_body 字段
+      if (cleaned.startsWith('{') && cleaned.includes('"article_body"')) {
+        try {
+          const parsed = JSON.parse(cleaned);
+          if (parsed.article_body) {
+            articleBody = parsed.article_body;
+          }
+        } catch {
+          // JSON 解析失败，尝试用正则提取
+          const match = cleaned.match(/"article_body"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"|"\s*})/);
+          if (match) {
+            articleBody = match[1]
+              .replace(/\\n/g, '\n')
+              .replace(/\\"/g, '"')
+              .replace(/\\t/g, '\t')
+              .replace(/\\\\/g, '\\');
+          }
+        }
+      } else {
+        articleBody = cleaned;
+      }
+    }
+    
+    const blob = new Blob([articleBody], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -379,7 +415,7 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
       qualityReview = fallbackData.qualityReview;
     }
 
-    // 如果还是没有 qualityReview，但从 geo_score 或 logic_check 存在，构建一个 qualityReview 对象
+    // 如果还是没有 qualityReview，但 geo_score 或 logic_check 存在，构建一个 qualityReview 对象
     if (!qualityReview) {
       const hasGeoScore = !!(
         finalArticle.geo_score ||
@@ -389,20 +425,15 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
         finalArticle.logic_check ||
         (fallbackData && fallbackData.logic_check)
       );
-      const hasSeoMeta = !!(
-        finalArticle.seo_meta ||
-        (fallbackData && fallbackData.seo_meta)
-      );
 
-      if (hasGeoScore || hasLogicCheck || hasSeoMeta) {
+      // 只在有 geo_score 或 logic_check 时才显示质量检查结果
+      if (hasGeoScore || hasLogicCheck) {
         qualityReview = {
           geo_score:
             finalArticle.geo_score || (fallbackData && fallbackData.geo_score),
           logic_check:
             finalArticle.logic_check ||
             (fallbackData && fallbackData.logic_check),
-          seo_meta:
-            finalArticle.seo_meta || (fallbackData && fallbackData.seo_meta),
         };
       }
     }
@@ -412,15 +443,9 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
       console.log("[ArticlePreview] renderQualityReview 检查:", {
         hasFinalArticleQualityReview: !!finalArticle.qualityReview,
         hasExtractedQualityReview: !!qualityReview,
-        finalArticleKeys: Object.keys(finalArticle),
         hasGeoScore: !!finalArticle.geo_score,
         hasLogicCheck: !!finalArticle.logic_check,
-        hasSeoMeta: !!finalArticle.seo_meta,
-        qualityReviewType: typeof qualityReview,
-        qualityReviewKeys:
-          qualityReview && typeof qualityReview === "object"
-            ? Object.keys(qualityReview)
-            : [],
+        geoScoreTotal: finalArticle.geo_score?.total_score,
       });
     }
 
@@ -428,10 +453,9 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
       return null;
     }
 
-    // 使用提取到的 qualityReview
+    // 使用提取到的 qualityReview - 只显示 geo_score 和 logic_check
     const geoScore = qualityReview.geo_score || finalArticle.geo_score;
     const logicCheck = qualityReview.logic_check || finalArticle.logic_check;
-    const seoMeta = qualityReview.seo_meta || finalArticle.seo_meta;
     const totalScore = geoScore?.total_score || 0;
 
     // Convert geo_score to QualityScore format
@@ -508,7 +532,7 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           {/* 可展开的内容区域 */}
           {isQualityReviewExpanded && (
             <div className="p-6 pt-0 space-y-4">
-              {/* Quality Score Card */}
+              {/* Quality Score Card - 只显示 geo_score */}
               {totalScore > 0 && (
                 <QualityScoreCard
                   scores={scores}
@@ -519,73 +543,7 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                 />
               )}
 
-              {/* SEO Meta */}
-              {seoMeta && (
-                <div className="space-y-2">
-                  <div
-                    className={cn(
-                      "text-xs font-bold uppercase tracking-wider flex items-center",
-                      isDarkTheme ? "text-blue-400" : "text-blue-600"
-                    )}
-                  >
-                    <FileText size={12} className="mr-1" />
-                    {uiLanguage === "zh" ? "SEO 元数据" : "SEO Meta"}
-                  </div>
-                  <div
-                    className={cn(
-                      "border rounded-lg p-3 space-y-2",
-                      isDarkTheme
-                        ? "bg-blue-500/5 border-blue-500/20"
-                        : "bg-blue-50 border-blue-200"
-                    )}
-                  >
-                    {seoMeta.title && (
-                      <div>
-                        <div
-                          className={cn(
-                            "text-xs font-semibold mb-1",
-                            isDarkTheme ? "text-blue-300" : "text-blue-700"
-                          )}
-                        >
-                          {uiLanguage === "zh" ? "标题 (Title)" : "Title"}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-sm leading-relaxed",
-                            isDarkTheme ? "text-gray-300" : "text-gray-700"
-                          )}
-                        >
-                          {seoMeta.title}
-                        </div>
-                      </div>
-                    )}
-                    {seoMeta.description && (
-                      <div>
-                        <div
-                          className={cn(
-                            "text-xs font-semibold mb-1",
-                            isDarkTheme ? "text-blue-300" : "text-blue-700"
-                          )}
-                        >
-                          {uiLanguage === "zh"
-                            ? "描述 (Description)"
-                            : "Description"}
-                        </div>
-                        <div
-                          className={cn(
-                            "text-sm leading-relaxed",
-                            isDarkTheme ? "text-gray-300" : "text-gray-700"
-                          )}
-                        >
-                          {seoMeta.description}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Logic Check */}
+              {/* Logic Check - 简短显示 */}
               {logicCheck && (
                 <div className="space-y-2">
                   <div
@@ -594,17 +552,20 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                       isDarkTheme ? "text-emerald-400/70" : "text-emerald-600"
                     )}
                   >
-                    {uiLanguage === "zh" ? "逻辑检查" : "Logic Check"}
+                    {uiLanguage === "zh" ? "优化说明" : "Optimization Notes"}
                   </div>
                   <div
                     className={cn(
-                      "border rounded-lg p-4 text-sm leading-relaxed",
+                      "border rounded-lg p-3 text-sm leading-relaxed",
                       isDarkTheme
                         ? "bg-emerald-500/5 border-emerald-500/20 text-gray-300"
                         : "bg-emerald-50 border-emerald-200 text-gray-700"
                     )}
                   >
-                    {logicCheck}
+                    {/* 限制显示长度，最多 200 字符 */}
+                    {logicCheck.length > 200 
+                      ? logicCheck.substring(0, 200) + "..." 
+                      : logicCheck}
                   </div>
                 </div>
               )}

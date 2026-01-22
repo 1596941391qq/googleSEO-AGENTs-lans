@@ -1268,7 +1268,7 @@ A：选择时主要考虑[因素1]、[因素2]、[因素3]。[具体建议]。
     "faq": "FAQ质量得分 (0-10)",
     "total_score": "总分 (0-100)"
   },
-  "logic_check": "解释你如何在文中布局了核心关键词、LSI词汇和GEO优化元素。"
+  "logic_check": "一句话总结主要优化点（不超过50字）"
 }
 `,
     en: `
@@ -1452,7 +1452,7 @@ Output in Markdown format (do not wrap entire article in code blocks, output Mar
     "faq": "FAQ quality score (0-10)",
     "total_score": "Total score (0-100)"
   },
-  "logic_check": "Explain how you laid out core keywords, LSI vocabulary, and GEO optimization elements in the article."
+  "logic_check": "One-sentence summary of main optimization points (max 50 chars)"
 }
 `
   }
