@@ -295,77 +295,77 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     // Generate AI images if needed (with error handling to ensure article generation continues)
     if (aiImageCount > 0) {
       try {
-        const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage, (msg) => emit('artist', 'log', msg));
-        
-        if (visualThemes.themes && visualThemes.themes.length > 0) {
-          const selectedThemes = visualThemes.themes.slice(0, aiImageCount);
-          // 传递关键词和文章标题以增强图像与主题的相关性
-          const prompts = await generateImagePrompts(
-            selectedThemes,
-            uiLanguage,
-            keyword,
-            pageTitle || undefined
-          );
+      const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage, (msg) => emit('artist', 'log', msg));
+      
+      if (visualThemes.themes && visualThemes.themes.length > 0) {
+        const selectedThemes = visualThemes.themes.slice(0, aiImageCount);
+        // 传递关键词和文章标题以增强图像与主题的相关性
+        const prompts = await generateImagePrompts(
+          selectedThemes,
+          uiLanguage,
+          keyword,
+          pageTitle || undefined
+        );
 
-          // Emit image-gen cards as "loading" with theme info
-          prompts.forEach((p, i) => {
-            const theme = selectedThemes[i];
-            emit('artist', 'card', undefined, 'image-gen', {
-              theme: theme?.title || theme?.id || `Theme ${i + 1}`,
-              prompt: p.prompt,
-              description: p.description,
-              imageUrl: null,
-              status: 'extracting',
-              progress: 0
-            });
+        // Emit image-gen cards as "loading" with theme info
+        prompts.forEach((p, i) => {
+          const theme = selectedThemes[i];
+          emit('artist', 'card', undefined, 'image-gen', {
+            theme: theme?.title || theme?.id || `Theme ${i + 1}`,
+            prompt: p.prompt,
+            description: p.description,
+            imageUrl: null,
+            status: 'extracting',
+            progress: 0
           });
+        });
 
-          // Generate images (parallel processing)
-          emit('artist', 'log', uiLanguage === 'zh' ? `正在生成 ${prompts.length} 张 AI 图片...` : `Generating ${prompts.length} AI images...`);
-          const imageResults = await generateImages(prompts);
+        // Generate images (parallel processing)
+        emit('artist', 'log', uiLanguage === 'zh' ? `正在生成 ${prompts.length} 张 AI 图片...` : `Generating ${prompts.length} AI images...`);
+        const imageResults = await generateImages(prompts);
 
-          const successCount = imageResults.filter(r => r.imageUrl).length;
-          const failCount = imageResults.filter(r => r.error).length;
-          emit('artist', 'log', `✓ ${uiLanguage === 'zh' ? `AI 图片生成完成: ${successCount} 成功, ${failCount} 失败` : `AI image generation complete: ${successCount} succeeded, ${failCount} failed`}`);
+        const successCount = imageResults.filter(r => r.imageUrl).length;
+        const failCount = imageResults.filter(r => r.error).length;
+        emit('artist', 'log', `✓ ${uiLanguage === 'zh' ? `AI 图片生成完成: ${successCount} 成功, ${failCount} 失败` : `AI image generation complete: ${successCount} succeeded, ${failCount} failed`}`);
 
-          generatedImages = imageResults.filter(r => r.imageUrl).map(r => ({
-            url: r.imageUrl,
-            prompt: r.theme,
-            placement: 'inline'
-          }));
+        generatedImages = imageResults.filter(r => r.imageUrl).map(r => ({
+          url: r.imageUrl,
+          prompt: r.theme,
+          placement: 'inline'
+        }));
 
-          // Update cards with results and progress
-          imageResults.forEach((res, i) => {
-            const theme = selectedThemes[i];
-            if (res.imageUrl) {
-              emit('artist', 'card',
-                uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`,
-                'image-gen',
-                {
-                  theme: theme?.title || theme?.id || res.theme,
-                  prompt: prompts[i]?.prompt || res.theme,
-                  description: prompts[i]?.description,
-                  imageUrl: res.imageUrl,
-                  status: 'completed',
-                  progress: 100
-                }
-              );
-            } else if (res.error) {
-              emit('artist', 'card',
-                uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`,
-                'image-gen',
-                {
-                  theme: theme?.title || theme?.id || res.theme,
-                  prompt: prompts[i]?.prompt || res.theme,
-                  description: prompts[i]?.description,
-                  imageUrl: null,
-                  status: 'failed',
-                  error: res.error,
-                  progress: 0
-                }
-              );
-            }
-          });
+        // Update cards with results and progress
+        imageResults.forEach((res, i) => {
+          const theme = selectedThemes[i];
+          if (res.imageUrl) {
+            emit('artist', 'card',
+              uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`,
+              'image-gen',
+              {
+                theme: theme?.title || theme?.id || res.theme,
+                prompt: prompts[i]?.prompt || res.theme,
+                description: prompts[i]?.description,
+                imageUrl: res.imageUrl,
+                status: 'completed',
+                progress: 100
+              }
+            );
+          } else if (res.error) {
+            emit('artist', 'card',
+              uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`,
+              'image-gen',
+              {
+                theme: theme?.title || theme?.id || res.theme,
+                prompt: prompts[i]?.prompt || res.theme,
+                description: prompts[i]?.description,
+                imageUrl: null,
+                status: 'failed',
+                error: res.error,
+                progress: 0
+              }
+            );
+          }
+        });
         }
       } catch (aiImageError: any) {
         // AI 图片生成失败不应阻止文章生成

@@ -396,13 +396,45 @@ Please naturally integrate introductions and recommendations for these websites 
     let geoScore: any = undefined;
     let logicCheck: string | undefined;
 
-    // 清理可能的 markdown 代码块包装
+    // 清理可能的 markdown 代码块包装 - 使用简单可靠的字符串处理
     let cleanedResponse = rawResponse.trim();
+    
+    console.log('[Content Writer] Before cleanup, starts with:', cleanedResponse.substring(0, 20), 'length:', cleanedResponse.length);
+    
+    // 检测并移除 ```json 或 ``` 包装
+    // 方法1：检查是否以 ```json 开头
     if (cleanedResponse.startsWith('```json')) {
-      cleanedResponse = cleanedResponse.replace(/^```json\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
-    } else if (cleanedResponse.startsWith('```')) {
-      cleanedResponse = cleanedResponse.replace(/^```\s*\n?/, '').replace(/\n?```\s*$/, '').trim();
+      // 移除开头的 ```json 和可能的换行
+      cleanedResponse = cleanedResponse.substring(7); // 移除 "```json"
+      if (cleanedResponse.startsWith('\n')) {
+        cleanedResponse = cleanedResponse.substring(1);
+      }
+      // 移除末尾的 ```
+      const lastBackticks = cleanedResponse.lastIndexOf('```');
+      if (lastBackticks !== -1) {
+        cleanedResponse = cleanedResponse.substring(0, lastBackticks).trim();
+      }
+      console.log('[Content Writer] Removed ```json wrapper, new length:', cleanedResponse.length);
+    } 
+    // 方法2：检查是否以 ``` 开头（但不是 ```json）
+    else if (cleanedResponse.startsWith('```')) {
+      // 移除开头的 ``` 和可能的语言标识和换行
+      cleanedResponse = cleanedResponse.substring(3); // 移除 "```"
+      // 移除语言标识（如果有的话，到第一个换行为止）
+      const firstNewline = cleanedResponse.indexOf('\n');
+      if (firstNewline !== -1) {
+        cleanedResponse = cleanedResponse.substring(firstNewline + 1);
+      }
+      // 移除末尾的 ```
+      const lastBackticks = cleanedResponse.lastIndexOf('```');
+      if (lastBackticks !== -1) {
+        cleanedResponse = cleanedResponse.substring(0, lastBackticks).trim();
+      }
+      console.log('[Content Writer] Removed ``` wrapper, new length:', cleanedResponse.length);
     }
+
+    cleanedResponse = cleanedResponse.trim();
+    console.log('[Content Writer] After cleanup, starts with:', cleanedResponse.substring(0, 50), 'ends with:', cleanedResponse.substring(cleanedResponse.length - 20));
 
     // 检查是否是 JSON 格式
     if (cleanedResponse.startsWith('{') && cleanedResponse.endsWith('}')) {
@@ -412,6 +444,35 @@ Please naturally integrate introductions and recommendations for these websites 
         
         // 提取 article_body 或 content 或 markdown
         markdownContent = jsonData.article_body || jsonData.content || jsonData.markdown || '';
+        
+        // 如果提取的内容仍然有问题，尝试进一步处理
+        if (typeof markdownContent === 'string') {
+          let contentToProcess = markdownContent.trim();
+          
+          // 检查是否被代码块包裹
+          if (contentToProcess.startsWith('```')) {
+            const mdCodeBlockMatch = contentToProcess.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n?```\s*$/);
+            if (mdCodeBlockMatch) {
+              contentToProcess = mdCodeBlockMatch[1].trim();
+              console.log('[Content Writer] Removed markdown code block from article_body');
+            }
+          }
+          
+          // 检查是否是嵌套的 JSON 字符串
+          if (contentToProcess.startsWith('{')) {
+            try {
+              const nestedJson = JSON.parse(contentToProcess);
+              if (nestedJson.article_body || nestedJson.content || nestedJson.markdown) {
+                contentToProcess = nestedJson.article_body || nestedJson.content || nestedJson.markdown || '';
+                console.log('[Content Writer] Extracted from nested JSON');
+              }
+            } catch (e) {
+              // 嵌套解析失败，保持原样
+            }
+          }
+          
+          markdownContent = contentToProcess;
+        }
         
         // 提取标题（优先从 seo_meta.title，然后从 title 字段）
         if (jsonData.seo_meta?.title) {
@@ -430,14 +491,15 @@ Please naturally integrate introductions and recommendations for these websites 
         }
         
         console.log('[Content Writer] Extracted from JSON - title:', extractedTitle?.substring(0, 50), 'content length:', markdownContent?.length);
-      } catch (e) {
-        console.log('[Content Writer] JSON parse failed, treating as Markdown');
-        markdownContent = rawResponse;
+      } catch (e: any) {
+        console.log('[Content Writer] JSON parse failed:', e.message);
+        // JSON 解析失败，但内容可能仍然有价值，尝试提取
+        markdownContent = cleanedResponse;
       }
     } else {
       // 纯 Markdown 格式
-      console.log('[Content Writer] Detected Markdown response');
-      markdownContent = rawResponse;
+      console.log('[Content Writer] Detected Markdown response (not JSON)');
+      markdownContent = cleanedResponse;
     }
 
     // 如果 markdownContent 仍然是空的，使用原始响应

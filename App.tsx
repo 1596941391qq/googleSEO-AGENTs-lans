@@ -80,7 +80,10 @@ import {
   KeywordMiningGuide,
   MiningConfig,
 } from "./components/workflow/KeywordMiningGuide";
-import { StrategySelector, StrategyConfig } from "./components/mining/StrategySelector";
+import {
+  StrategySelector,
+  StrategyConfig,
+} from "./components/mining/StrategySelector";
 import { fetchWithAuth, postWithAuth } from "./lib/api-client";
 import { ProxySwitcher } from "./components/ProxySwitcher";
 import {
@@ -765,7 +768,9 @@ const renderAgentDataTable = (
     | "firecrawl-result"
     | "dataforseo-competitors"
     | "dataforseo-keywords"
-    | "google-search-results",
+    | "google-search-results"
+    | "strategy-keywords-result"
+    | "keywords-extracted",
   isDarkTheme: boolean = true,
   uiLanguage: string = "zh",
   t: any = { analysisReasoning: "Analysis Reasoning" }
@@ -777,7 +782,9 @@ const renderAgentDataTable = (
     dataType === "firecrawl-result" ||
     dataType === "dataforseo-competitors" ||
     dataType === "dataforseo-keywords" ||
-    dataType === "google-search-results"
+    dataType === "google-search-results" ||
+    dataType === "strategy-keywords-result" ||
+    dataType === "keywords-extracted"
   ) {
     // 这些类型由 AgentStreamFeed 组件处理，这里返回 null
     return null;
@@ -1852,7 +1859,9 @@ const AgentStream = ({
                       dataType === "firecrawl-result" ||
                       dataType === "dataforseo-competitors" ||
                       dataType === "dataforseo-keywords" ||
-                      dataType === "google-search-results"
+                      dataType === "google-search-results" ||
+                      dataType === "strategy-keywords-result" ||
+                      dataType === "keywords-extracted"
                     ) {
                       // 创建 AgentStreamEvent 格式的数据
                       const event: AgentStreamEvent = {
@@ -4140,20 +4149,20 @@ export default function App() {
       // 初始化智能存储系统（IndexedDB）
       try {
         await smartStorage.init();
-        console.log('[App] Smart storage initialized');
+        console.log("[App] Smart storage initialized");
       } catch (e) {
-        console.warn('[App] Smart storage init failed, using fallback:', e);
+        console.warn("[App] Smart storage init failed, using fallback:", e);
       }
-      
+
       // 加载本地任务
       await loadTasksFromLocalStorage();
-      
+
       // 如果已登录，从后端加载任务
       if (authenticated) {
         loadTasksFromBackend();
       }
     };
-    
+
     initAndLoad();
   }, [authenticated]);
 
@@ -5214,7 +5223,7 @@ export default function App() {
     additionalUpdates?: (prev: AppState) => Partial<AppState>
   ) => {
     let tasksToSave: TaskState[] | null = null;
-    
+
     setState((prev) => {
       const currentActiveTaskId = prev.taskManager.activeTaskId;
       let updatedTasks = prev.taskManager.tasks;
@@ -5280,13 +5289,49 @@ export default function App() {
     try {
       // 使用智能存储系统加载任务（自动处理迁移和降级）
       const tasks = await loadTasksCompat();
-      
+
       if (tasks && tasks.length > 0) {
         // 确保所有任务都不是active，默认显示"我的网站"
-        const tasksWithNoActive = tasks.map((t) => ({
-          ...t,
-          isActive: false,
-        }));
+        // 同时修正 isGenerating 状态：如果有 finalArticle 或 isMining 但页面已刷新，应该停止"进行中"状态
+        const tasksWithNoActive = tasks.map((t) => {
+          const correctedTask = {
+            ...t,
+            isActive: false,
+          };
+
+          // 修正 article-generator 任务的 isGenerating 状态
+          if (t.type === "article-generator" && t.articleGeneratorState) {
+            const hasFinalArticle =
+              t.articleGeneratorState.finalArticle &&
+              (t.articleGeneratorState.finalArticle.title ||
+                t.articleGeneratorState.finalArticle.content);
+
+            // 如果有 finalArticle，或者页面刷新后应该停止生成状态
+            // 因为刷新后 SSE 连接已断开，不可能继续生成
+            correctedTask.articleGeneratorState = {
+              ...t.articleGeneratorState,
+              isGenerating: false, // 刷新后总是停止生成状态
+            };
+          }
+
+          // 修正 mining 任务的 isMining 状态
+          if (t.type === "mining" && t.miningState?.isMining) {
+            correctedTask.miningState = {
+              ...t.miningState,
+              isMining: false, // 刷新后总是停止挖掘状态
+            };
+          }
+
+          // 修正 batch 任务的状态
+          if (t.type === "batch" && t.batchState) {
+            correctedTask.batchState = {
+              ...t.batchState,
+              // 如果有进行中的批量分析，刷新后停止
+            };
+          }
+
+          return correctedTask;
+        });
 
         // 查找是否有 article-generator 任务且有 finalArticle
         const articleTaskWithResult = tasksWithNoActive.find(
@@ -6412,7 +6457,9 @@ export default function App() {
               targetLanguage: state.targetLanguage,
               uiLanguage: state.uiLanguage,
               // 非策略模式使用 wordsPerRound，策略模式下此参数被忽略
-              wordsPerRound: useStrategyMode ? undefined : (state.wordsPerRound || 10),
+              wordsPerRound: useStrategyMode
+                ? undefined
+                : state.wordsPerRound || 10,
               miningStrategy: state.miningStrategy || "horizontal",
               industry: state.miningConfig?.industry,
               additionalSuggestions: state.miningConfig?.additionalSuggestions,
@@ -6420,7 +6467,9 @@ export default function App() {
               useStrategyMode: useStrategyMode,
               strategies: useStrategyMode ? strategyConfig : undefined,
               // 策略模式：使用各模块 count 之和；非策略模式：使用 wordsPerRound
-              maxTotalKeywords: useStrategyMode ? strategyTotalKeywords : (state.wordsPerRound || 10),
+              maxTotalKeywords: useStrategyMode
+                ? strategyTotalKeywords
+                : state.wordsPerRound || 10,
             },
             {
               signal: controller.signal,
@@ -6533,12 +6582,33 @@ export default function App() {
               if (event.type === "log" && event.message) {
                 addLog(event.message, "info", currentTaskId);
               } else if (event.type === "card" && event.cardType) {
+                // 根据 cardType 和 stage 决定用 generation 还是 analysis
+                // - keywords-extracted: 生成阶段
+                // - strategy-keywords-result + stage='generated': 生成阶段
+                // - strategy-keywords-result + stage='analyzed': 分析阶段
+                // - website-audit-report + stage='analyzed': 分析阶段
+                // - 其他: 根据 agentId 判断
+                let thoughtType: "generation" | "analysis" | "decision" =
+                  "analysis";
+
+                if (event.cardType === "keywords-extracted") {
+                  thoughtType = "generation";
+                } else if (event.cardType === "strategy-keywords-result") {
+                  thoughtType =
+                    event.data?.stage === "analyzed"
+                      ? "analysis"
+                      : "generation";
+                } else if (event.cardType === "website-audit-report") {
+                  thoughtType =
+                    event.data?.stage === "analyzed"
+                      ? "analysis"
+                      : "generation";
+                } else if (event.agentId === "strategist") {
+                  thoughtType = "generation";
+                }
+
                 addThought(
-                  event.agentId === "researcher"
-                    ? "analysis"
-                    : event.agentId === "strategist"
-                    ? "generation"
-                    : "analysis",
+                  thoughtType,
                   event.message || "",
                   {
                     data: event.data,
@@ -6714,15 +6784,23 @@ export default function App() {
                   result.competitorKeywordsPool;
               }
               // 策略模式：第一轮关键词已由后端生成并完成 SERP 分析，直接保存
-              if (useStrategyMode && result.keywords && result.keywords.length > 0) {
+              if (
+                useStrategyMode &&
+                result.keywords &&
+                result.keywords.length > 0
+              ) {
                 task.miningState.keywords = result.keywords;
               }
             }
             return task;
           });
-          
+
           // 策略模式：同步更新全局 keywords 状态
-          if (useStrategyMode && result.keywords && result.keywords.length > 0) {
+          if (
+            useStrategyMode &&
+            result.keywords &&
+            result.keywords.length > 0
+          ) {
             return {
               ...prev,
               keywords: result.keywords,
@@ -6732,7 +6810,7 @@ export default function App() {
               },
             };
           }
-          
+
           return {
             ...prev,
             taskManager: {
@@ -6752,15 +6830,107 @@ export default function App() {
             "success",
             currentTaskId
           );
-          
-          // 策略模式：使用策略专用循环挖掘（每轮都调用后端 API，遵循策略配置）
-          await runStrategyMiningLoop(
-            currentTaskId,
-            websiteToUse,
-            websiteDomain,
-            strategyConfig,
-            1 // 从第二轮开始（startRound = 1 表示已完成第一轮）
+
+          // 检查第一轮是否已经找到高概率关键词
+          const firstRoundHighProbKeywords = (
+            result.keywords as KeywordData[]
+          ).filter(
+            (k) =>
+              k.probability === "High" ||
+              k.probability === ProbabilityLevel.HIGH
           );
+
+          if (firstRoundHighProbKeywords.length > 0) {
+            // 第一轮就找到高概率词，停止挖掘并显示成功提示
+            const highProbCandidate = firstRoundHighProbKeywords[0];
+
+            addThought(
+              "decision",
+              state.uiLanguage === "zh"
+                ? `发现高概率关键词: "${highProbCandidate.keyword}"。停止挖掘。`
+                : `Found HIGH probability opportunity: "${highProbCandidate.keyword}". Stopping.`,
+              undefined,
+              currentTaskId
+            );
+            addLog(
+              state.uiLanguage === "zh"
+                ? `🎉 成功！第一轮就发现 ${firstRoundHighProbKeywords.length} 个高概率关键词！`
+                : `🎉 Success! Found ${firstRoundHighProbKeywords.length} high probability keywords in round 1!`,
+              "success",
+              currentTaskId
+            );
+
+            // 设置挖掘成功状态并显示提示窗口
+            setState((prev) => {
+              const updatedTasks = prev.taskManager.tasks.map((task) => {
+                if (task.id === currentTaskId && task.miningState) {
+                  return {
+                    ...task,
+                    miningState: {
+                      ...task.miningState,
+                      isMining: false,
+                      miningSuccess: true,
+                      showSuccessPrompt: true,
+                    },
+                  };
+                }
+                return task;
+              });
+
+              // 保存归档
+              saveToArchive(prev);
+
+              if (currentTaskId === prev.taskManager.activeTaskId) {
+                return {
+                  ...prev,
+                  isMining: false,
+                  miningSuccess: true,
+                  showSuccessPrompt: true,
+                  taskManager: {
+                    ...prev.taskManager,
+                    tasks: updatedTasks,
+                  },
+                };
+              }
+              return {
+                ...prev,
+                taskManager: {
+                  ...prev.taskManager,
+                  tasks: updatedTasks,
+                },
+              };
+            });
+
+            // 清除思考状态
+            setThinkingStatus(false, "", "idle");
+
+            // 播放完成提示音
+            playCompletionSound();
+
+            // 滚动到顶部
+            if (currentTaskId === state.taskManager.activeTaskId) {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+            // 不进入循环挖掘
+          } else {
+            // 第一轮没有找到高概率词，继续循环挖掘
+            addLog(
+              state.uiLanguage === "zh"
+                ? `📊 第一轮未发现高概率词，继续下一轮挖掘...`
+                : `📊 No high probability keywords in round 1, continuing to next round...`,
+              "info",
+              currentTaskId
+            );
+
+            // 策略模式：使用策略专用循环挖掘（每轮都调用后端 API，遵循策略配置）
+            await runStrategyMiningLoop(
+              currentTaskId,
+              websiteToUse,
+              websiteDomain,
+              strategyConfig,
+              1 // 从第二轮开始（startRound = 1 表示已完成第一轮）
+            );
+          }
         } else {
           // 非策略模式：使用旧的循环挖掘（使用竞争对手关键词池）
           await runWebsiteAuditMiningLoop(
@@ -6921,7 +7091,9 @@ export default function App() {
       // 检查是否需要停止（在长时间操作之前）
       if (stopMiningRef.current) {
         addLog(
-          state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+          state.uiLanguage === "zh"
+            ? "⏹️ 用户请求停止挖词"
+            : "⏹️ User requested stop",
           "warning",
           taskId
         );
@@ -6964,7 +7136,9 @@ export default function App() {
         // 检查是否需要停止（在异步操作之后）
         if (stopMiningRef.current) {
           addLog(
-            state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+            state.uiLanguage === "zh"
+              ? "⏹️ 用户请求停止挖词"
+              : "⏹️ User requested stop",
             "warning",
             taskId
           );
@@ -7558,7 +7732,9 @@ export default function App() {
       // 检查停止信号
       if (stopMiningRef.current) {
         addLog(
-          state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+          state.uiLanguage === "zh"
+            ? "⏹️ 用户请求停止挖词"
+            : "⏹️ User requested stop",
           "warning",
           taskId
         );
@@ -7626,13 +7802,34 @@ export default function App() {
                 if (event.type === "log" && event.message) {
                   addLog(event.message, "info", taskId);
                 } else if (event.type === "card" && event.cardType) {
+                  // 根据 cardType 和 stage 决定用 generation 还是 analysis
+                  // - keywords-extracted: 生成阶段
+                  // - strategy-keywords-result + stage='generated': 生成阶段
+                  // - strategy-keywords-result + stage='analyzed': 分析阶段
+                  // - website-audit-report + stage='analyzed': 分析阶段
+                  // - 其他: 根据 agentId 判断
+                  let thoughtType: "generation" | "analysis" | "decision" =
+                    "analysis";
+
+                  if (event.cardType === "keywords-extracted") {
+                    thoughtType = "generation";
+                  } else if (event.cardType === "strategy-keywords-result") {
+                    thoughtType =
+                      event.data?.stage === "analyzed"
+                        ? "analysis"
+                        : "generation";
+                  } else if (event.cardType === "website-audit-report") {
+                    thoughtType =
+                      event.data?.stage === "analyzed"
+                        ? "analysis"
+                        : "generation";
+                  } else if (event.agentId === "strategist") {
+                    thoughtType = "generation";
+                  }
+
                   // 添加可视化卡片到 Agent Thoughts（使用当前轮次）
                   addThought(
-                    event.agentId === "researcher"
-                      ? "analysis"
-                      : event.agentId === "strategist"
-                      ? "generation"
-                      : "analysis",
+                    thoughtType,
                     event.message || "",
                     {
                       data: event.data,
@@ -7674,7 +7871,9 @@ export default function App() {
 
           // 检测高概率关键词
           const highProbKeywords = newKeywords.filter(
-            (k) => k.probability === "High" || k.probability === ProbabilityLevel.HIGH
+            (k) =>
+              k.probability === "High" ||
+              k.probability === ProbabilityLevel.HIGH
           );
 
           // 更新关键词列表（累加到已有关键词）
@@ -7683,9 +7882,11 @@ export default function App() {
               if (task.id === taskId && task.miningState) {
                 // 合并去重
                 const existingKeywords = task.miningState.keywords || [];
-                const existingSet = new Set(existingKeywords.map(k => k.keyword.toLowerCase()));
+                const existingSet = new Set(
+                  existingKeywords.map((k) => k.keyword.toLowerCase())
+                );
                 const uniqueNewKeywords = newKeywords.filter(
-                  k => !existingSet.has(k.keyword.toLowerCase())
+                  (k) => !existingSet.has(k.keyword.toLowerCase())
                 );
                 return {
                   ...task,
@@ -7701,9 +7902,11 @@ export default function App() {
             // 同步更新全局状态
             if (taskId === prev.taskManager.activeTaskId) {
               const existingKeywords = prev.keywords || [];
-              const existingSet = new Set(existingKeywords.map(k => k.keyword.toLowerCase()));
+              const existingSet = new Set(
+                existingKeywords.map((k) => k.keyword.toLowerCase())
+              );
               const uniqueNewKeywords = newKeywords.filter(
-                k => !existingSet.has(k.keyword.toLowerCase())
+                (k) => !existingSet.has(k.keyword.toLowerCase())
               );
               return {
                 ...prev,
@@ -7726,7 +7929,7 @@ export default function App() {
           // 如果发现高概率词，停止挖掘并显示成功提示
           if (highProbKeywords.length > 0) {
             const highProbCandidate = highProbKeywords[0];
-            
+
             addThought(
               "decision",
               state.uiLanguage === "zh"
@@ -7808,7 +8011,7 @@ export default function App() {
           );
 
           // 短暂延迟后继续下一轮
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         } else {
           // 没有新关键词，记录并继续
           addLog(
@@ -7819,7 +8022,7 @@ export default function App() {
             taskId
           );
           // 短暂延迟后继续
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       } catch (error: any) {
         if (error.name === "AbortError" || stopMiningRef.current) {
@@ -7830,7 +8033,7 @@ export default function App() {
           );
           break;
         }
-        
+
         addLog(
           state.uiLanguage === "zh"
             ? `❌ [轮次 ${currentRound}] 错误: ${error.message}`
@@ -7838,9 +8041,9 @@ export default function App() {
           "error",
           taskId
         );
-        
+
         // 出错后等待一段时间再重试
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 3000));
       }
     }
 
@@ -8193,7 +8396,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           // 检查是否需要停止（在长时间操作之前）
           if (stopMiningRef.current) {
             addLog(
-              state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+              state.uiLanguage === "zh"
+                ? "⏹️ 用户请求停止挖词"
+                : "⏹️ User requested stop",
               "warning",
               taskId
             );
@@ -8225,7 +8430,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           // 检查是否需要停止（在异步操作之后）
           if (stopMiningRef.current) {
             addLog(
-              state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+              state.uiLanguage === "zh"
+                ? "⏹️ 用户请求停止挖词"
+                : "⏹️ User requested stop",
               "warning",
               taskId
             );
@@ -8273,7 +8480,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         // 检查是否需要停止（在 SERP 分析之前）
         if (stopMiningRef.current) {
           addLog(
-            state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+            state.uiLanguage === "zh"
+              ? "⏹️ 用户请求停止挖词"
+              : "⏹️ User requested stop",
             "warning",
             taskId
           );
@@ -8312,7 +8521,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         // 检查是否需要停止（在 SERP 分析之后）
         if (stopMiningRef.current) {
           addLog(
-            state.uiLanguage === "zh" ? "⏹️ 用户请求停止挖词" : "⏹️ User requested stop",
+            state.uiLanguage === "zh"
+              ? "⏹️ 用户请求停止挖词"
+              : "⏹️ User requested stop",
             "warning",
             taskId
           );
@@ -8326,7 +8537,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     ...task,
                     miningState: {
                       ...task.miningState,
-                      keywords: [...task.miningState.keywords, ...analyzedBatch],
+                      keywords: [
+                        ...task.miningState.keywords,
+                        ...analyzedBatch,
+                      ],
                     },
                   };
                 }
@@ -8334,9 +8548,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               });
               return {
                 ...prev,
-                keywords: taskId === prev.taskManager.activeTaskId 
-                  ? [...prev.keywords, ...analyzedBatch] 
-                  : prev.keywords,
+                keywords:
+                  taskId === prev.taskManager.activeTaskId
+                    ? [...prev.keywords, ...analyzedBatch]
+                    : prev.keywords,
                 taskManager: {
                   ...prev.taskManager,
                   tasks: updatedTasks,
@@ -8668,7 +8883,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     // 停止挖词循环
     stopMiningRef.current = true;
     setThinkingStatus(false, "", "idle");
-    
+
     setState((prev) => {
       // 更新任务状态
       const updatedTasks = prev.taskManager.tasks.map((task) => {
@@ -8684,10 +8899,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         }
         return task;
       });
-      
-      return { 
-        ...prev, 
-        step: "results", 
+
+      return {
+        ...prev,
+        step: "results",
         isMining: false,
         miningSuccess: false,
         showSuccessPrompt: false,
@@ -11401,29 +11616,29 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     <>
                       {/* Refine Industry Button - 仅在非策略模式下显示（策略模式有行业上下文模块） */}
                       {!useStrategyMode && (
-                      <div className="mb-4 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <BrainCircuit className="w-5 h-5 text-emerald-400" />
-                          <span
-                            className={`text-sm font-semibold ${
-                              isDarkTheme ? "text-white" : "text-gray-900"
-                            }`}
+                        <div className="mb-4 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                            <span
+                              className={`text-sm font-semibold ${
+                                isDarkTheme ? "text-white" : "text-gray-900"
+                              }`}
+                            >
+                              {state.uiLanguage === "zh"
+                                ? "需要帮助？"
+                                : "Need Help?"}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => setShowMiningGuide(true)}
+                            className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
                           >
+                            <Lightbulb className="w-3.5 h-3.5" />
                             {state.uiLanguage === "zh"
-                              ? "需要帮助？"
-                              : "Need Help?"}
-                          </span>
+                              ? "精确行业"
+                              : "Refine Industry"}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => setShowMiningGuide(true)}
-                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
-                        >
-                          <Lightbulb className="w-3.5 h-3.5" />
-                          {state.uiLanguage === "zh"
-                            ? "精确行业"
-                            : "Refine Industry"}
-                        </button>
-                      </div>
                       )}
 
                       {/* Display Saved Mining Configuration - 仅在非策略模式下显示 */}
@@ -11776,7 +11991,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                             <h3
                               className={cn(
                                 "text-[10px] font-black uppercase tracking-[0.2em]",
-                                isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                                isDarkTheme
+                                  ? "text-neutral-400"
+                                  : "text-gray-600"
                               )}
                             >
                               {state.uiLanguage === "zh"
@@ -11786,204 +12003,209 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           </div>
                         </div>
                         {/* 策略模式选择器（存量拓新始终使用策略模式） */}
-                          <div
-                            className={cn(
-                              "p-4 rounded-lg border",
-                              isDarkTheme
-                                ? "bg-black/40 border-emerald-500/20"
-                                : "bg-white border-emerald-500/30"
-                            )}
-                          >
-                            <StrategySelector
-                              value={strategyConfig}
-                              onChange={setStrategyConfig}
-                              maxTotalKeywords={50}
-                              language={state.uiLanguage}
-                              hasHighPerformerKeywords={false}
-                              isDarkTheme={isDarkTheme}
-                            />
-                          </div>
-                      </section>
-
-                      {/* Mining Settings Panel - Same as blue-ocean mode */}
-                      {!useStrategyMode && (
-                      <section className="space-y-4 mt-8">
-                        <div className="flex items-center space-x-2 px-2">
-                          <Settings
-                            size={14}
-                            className={cn(
-                              isDarkTheme
-                                ? "text-emerald-500"
-                                : "text-emerald-600"
-                            )}
-                          />
-                          <h3
-                            className={cn(
-                              "text-[10px] font-black uppercase tracking-[0.2em]",
-                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                            )}
-                          >
-                            {state.uiLanguage === "zh"
-                              ? "挖词设置"
-                              : "Mining Settings"}
-                          </h3>
-                        </div>
                         <div
                           className={cn(
-                            "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
+                            "p-4 rounded-lg border",
                             isDarkTheme
                               ? "bg-black/40 border-emerald-500/20"
                               : "bg-white border-emerald-500/30"
                           )}
                         >
-                          {/* Words Per Round */}
-                          <div className="space-y-2">
-                            <label
+                          <StrategySelector
+                            value={strategyConfig}
+                            onChange={setStrategyConfig}
+                            maxTotalKeywords={50}
+                            language={state.uiLanguage}
+                            hasHighPerformerKeywords={false}
+                            isDarkTheme={isDarkTheme}
+                          />
+                        </div>
+                      </section>
+
+                      {/* Mining Settings Panel - Same as blue-ocean mode */}
+                      {!useStrategyMode && (
+                        <section className="space-y-4 mt-8">
+                          <div className="flex items-center space-x-2 px-2">
+                            <Settings
+                              size={14}
                               className={cn(
-                                "flex items-center gap-2 text-xs font-semibold",
                                 isDarkTheme
-                                  ? "text-neutral-400"
-                                  : "text-gray-600"
-                              )}
-                            >
-                              <Cpu
-                                size={14}
-                                className={cn(
-                                  isDarkTheme
-                                    ? "text-emerald-500"
-                                    : "text-emerald-600"
-                                )}
-                              />
-                              {state.uiLanguage === "zh"
-                                ? "每轮词语数"
-                                : "Words Per Round"}
-                            </label>
-                            <Input
-                              type="number"
-                              min="5"
-                              max="20"
-                              value={state.wordsPerRound}
-                              onChange={(e) =>
-                                setState((prev) => ({
-                                  ...prev,
-                                  wordsPerRound: Math.max(
-                                    5,
-                                    Math.min(20, parseInt(e.target.value) || 10)
-                                  ),
-                                }))
-                              }
-                              className={cn(
-                                "text-sm font-medium h-10",
-                                isDarkTheme
-                                  ? "border-white/10 bg-white/5 text-white"
-                                  : "border-gray-200 bg-white text-gray-900"
+                                  ? "text-emerald-500"
+                                  : "text-emerald-600"
                               )}
                             />
-                            <p
+                            <h3
                               className={cn(
-                                "text-[10px]",
-                                isDarkTheme
-                                  ? "text-neutral-600"
-                                  : "text-gray-500"
-                              )}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "范围: 5-20"
-                                : "Range: 5-20"}
-                            </p>
-                          </div>
-
-                          {/* Mining Strategy */}
-                          <div className="space-y-2">
-                            <label
-                              className={cn(
-                                "flex items-center gap-2 text-xs font-semibold",
+                                "text-[10px] font-black uppercase tracking-[0.2em]",
                                 isDarkTheme
                                   ? "text-neutral-400"
                                   : "text-gray-600"
                               )}
                             >
-                              <LayoutGrid
-                                size={14}
-                                className={cn(
-                                  isDarkTheme
-                                    ? "text-emerald-500"
-                                    : "text-emerald-600"
-                                )}
-                              />
                               {state.uiLanguage === "zh"
-                                ? "挖掘策略"
-                                : "Mining Strategy"}
-                            </label>
-                            <Select
-                              value={state.miningStrategy}
-                              onValueChange={(value) =>
-                                setState((prev) => ({
-                                  ...prev,
-                                  miningStrategy: value as
-                                    | "horizontal"
-                                    | "vertical",
-                                }))
-                              }
-                            >
-                              <SelectTrigger
+                                ? "挖词设置"
+                                : "Mining Settings"}
+                            </h3>
+                          </div>
+                          <div
+                            className={cn(
+                              "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
+                              isDarkTheme
+                                ? "bg-black/40 border-emerald-500/20"
+                                : "bg-white border-emerald-500/30"
+                            )}
+                          >
+                            {/* Words Per Round */}
+                            <div className="space-y-2">
+                              <label
+                                className={cn(
+                                  "flex items-center gap-2 text-xs font-semibold",
+                                  isDarkTheme
+                                    ? "text-neutral-400"
+                                    : "text-gray-600"
+                                )}
+                              >
+                                <Cpu
+                                  size={14}
+                                  className={cn(
+                                    isDarkTheme
+                                      ? "text-emerald-500"
+                                      : "text-emerald-600"
+                                  )}
+                                />
+                                {state.uiLanguage === "zh"
+                                  ? "每轮词语数"
+                                  : "Words Per Round"}
+                              </label>
+                              <Input
+                                type="number"
+                                min="5"
+                                max="20"
+                                value={state.wordsPerRound}
+                                onChange={(e) =>
+                                  setState((prev) => ({
+                                    ...prev,
+                                    wordsPerRound: Math.max(
+                                      5,
+                                      Math.min(
+                                        20,
+                                        parseInt(e.target.value) || 10
+                                      )
+                                    ),
+                                  }))
+                                }
                                 className={cn(
                                   "text-sm font-medium h-10",
                                   isDarkTheme
                                     ? "border-white/10 bg-white/5 text-white"
                                     : "border-gray-200 bg-white text-gray-900"
                                 )}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent
+                              />
+                              <p
                                 className={cn(
+                                  "text-[10px]",
                                   isDarkTheme
-                                    ? "bg-black/90 border-emerald-500/30"
-                                    : "bg-white border-emerald-500/30"
+                                    ? "text-neutral-600"
+                                    : "text-gray-500"
                                 )}
                               >
-                                <SelectItem
-                                  value="horizontal"
+                                {state.uiLanguage === "zh"
+                                  ? "范围: 5-20"
+                                  : "Range: 5-20"}
+                              </p>
+                            </div>
+
+                            {/* Mining Strategy */}
+                            <div className="space-y-2">
+                              <label
+                                className={cn(
+                                  "flex items-center gap-2 text-xs font-semibold",
+                                  isDarkTheme
+                                    ? "text-neutral-400"
+                                    : "text-gray-600"
+                                )}
+                              >
+                                <LayoutGrid
+                                  size={14}
                                   className={cn(
                                     isDarkTheme
-                                      ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                      : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                      ? "text-emerald-500"
+                                      : "text-emerald-600"
+                                  )}
+                                />
+                                {state.uiLanguage === "zh"
+                                  ? "挖掘策略"
+                                  : "Mining Strategy"}
+                              </label>
+                              <Select
+                                value={state.miningStrategy}
+                                onValueChange={(value) =>
+                                  setState((prev) => ({
+                                    ...prev,
+                                    miningStrategy: value as
+                                      | "horizontal"
+                                      | "vertical",
+                                  }))
+                                }
+                              >
+                                <SelectTrigger
+                                  className={cn(
+                                    "text-sm font-medium h-10",
+                                    isDarkTheme
+                                      ? "border-white/10 bg-white/5 text-white"
+                                      : "border-gray-200 bg-white text-gray-900"
                                   )}
                                 >
-                                  {state.uiLanguage === "zh"
-                                    ? "横向挖掘(广泛主题)"
-                                    : "Horizontal Mining (Broad Topics)"}
-                                </SelectItem>
-                                <SelectItem
-                                  value="vertical"
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent
                                   className={cn(
                                     isDarkTheme
-                                      ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                      : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                      ? "bg-black/90 border-emerald-500/30"
+                                      : "bg-white border-emerald-500/30"
                                   )}
                                 >
-                                  {state.uiLanguage === "zh"
-                                    ? "纵向挖掘(深度挖掘)"
-                                    : "Vertical Mining (Deep Dive)"}
-                                </SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <p
-                              className={cn(
-                                "text-[10px]",
-                                isDarkTheme
-                                  ? "text-neutral-600"
-                                  : "text-gray-500"
-                              )}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "探索不同的平行主题"
-                                : "Explore different parallel topics"}
-                            </p>
+                                  <SelectItem
+                                    value="horizontal"
+                                    className={cn(
+                                      isDarkTheme
+                                        ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                        : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                    )}
+                                  >
+                                    {state.uiLanguage === "zh"
+                                      ? "横向挖掘(广泛主题)"
+                                      : "Horizontal Mining (Broad Topics)"}
+                                  </SelectItem>
+                                  <SelectItem
+                                    value="vertical"
+                                    className={cn(
+                                      isDarkTheme
+                                        ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                        : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                    )}
+                                  >
+                                    {state.uiLanguage === "zh"
+                                      ? "纵向挖掘(深度挖掘)"
+                                      : "Vertical Mining (Deep Dive)"}
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <p
+                                className={cn(
+                                  "text-[10px]",
+                                  isDarkTheme
+                                    ? "text-neutral-600"
+                                    : "text-gray-500"
+                                )}
+                              >
+                                {state.uiLanguage === "zh"
+                                  ? "探索不同的平行主题"
+                                  : "Explore different parallel topics"}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </section>
+                        </section>
                       )}
                     </>
                   )}

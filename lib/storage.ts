@@ -401,9 +401,21 @@ export class SmartStorage {
       request.onerror = () => reject(request.error);
     });
 
-    // 添加新的关键词
+    // 添加新的关键词 - 确保每个 keyword 都有有效的 id
+    let skippedCount = 0;
     for (const keyword of keywords) {
+      // 验证 id 是否为有效的 IndexedDB key（string 或 number）
+      if (keyword.id === undefined || keyword.id === null || 
+          (typeof keyword.id !== 'string' && typeof keyword.id !== 'number')) {
+        skippedCount++;
+        console.warn('[SmartStorage] Skipping keyword without valid id:', keyword.keyword);
+        continue;
+      }
       store.put({ ...keyword, taskId });
+    }
+    
+    if (skippedCount > 0) {
+      console.warn(`[SmartStorage] Skipped ${skippedCount} keywords without valid id for task ${taskId}`);
     }
   }
 

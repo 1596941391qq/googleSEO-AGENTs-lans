@@ -65,6 +65,29 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
     prompt?: string;
   } | null>(null);
 
+  // 诊断日志：打印收到的 finalArticle 完整结构
+  React.useEffect(() => {
+    console.log("[ArticlePreview] 收到的 finalArticle 完整结构:", {
+      keys: Object.keys(finalArticle),
+      title: finalArticle.title,
+      titleLength: finalArticle.title?.length || 0,
+      contentType: typeof finalArticle.content,
+      contentLength: finalArticle.content?.length || 0,
+      contentPreview: finalArticle.content?.substring(0, 300),
+      contentStartsWith: finalArticle.content?.substring(0, 50),
+      imagesCount: finalArticle.images?.length || 0,
+      hasGeoScore: !!finalArticle.geo_score,
+      hasQualityReview: !!finalArticle.qualityReview,
+      hasSeoMeta: !!finalArticle.seo_meta,
+      hasLogicCheck: !!finalArticle.logic_check,
+      // 检查是否有其他字段
+      hasArticleBody: !!(finalArticle as any).article_body,
+      hasMarkdown: !!(finalArticle as any).markdown,
+      articleBodyLength: (finalArticle as any).article_body?.length || 0,
+      markdownLength: (finalArticle as any).markdown?.length || 0,
+    });
+  }, [finalArticle]);
+
   // Handle Export
   const handleExport = () => {
     // Create a markdown file with title and content
@@ -158,12 +181,26 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
     if (typeof data === "string") {
       let trimmed = data.trim();
 
-      // 处理以 "json\n" 或 "```json\n" 开头的情况
-      if (trimmed.startsWith("json\n") || trimmed.startsWith("```json\n")) {
-        // 移除 "json\n" 或 "```json\n" 前缀
-        trimmed = trimmed.replace(/^```?json\n?/, "").trim();
-        // 移除可能的 "```" 后缀
-        trimmed = trimmed.replace(/```$/, "").trim();
+      // 更强健的 ```json 代码块处理
+      const jsonCodeBlockMatch = trimmed.match(/^```json\s*\n([\s\S]*?)\n?```\s*$/);
+      const codeBlockMatch = trimmed.match(/^```\s*\n([\s\S]*?)\n?```\s*$/);
+      
+      if (jsonCodeBlockMatch) {
+        trimmed = jsonCodeBlockMatch[1].trim();
+        console.log("[ArticlePreview extractArticleData] Removed ```json wrapper");
+      } else if (codeBlockMatch) {
+        trimmed = codeBlockMatch[1].trim();
+        console.log("[ArticlePreview extractArticleData] Removed ``` wrapper");
+      } else if (trimmed.startsWith("```json") || trimmed.startsWith("json\n")) {
+        // 备用方案
+        trimmed = trimmed.replace(/^```?json\s*\n?/, "");
+        const lastBackticks = trimmed.lastIndexOf("```");
+        if (lastBackticks > 0) {
+          trimmed = trimmed.substring(0, lastBackticks).trim();
+        } else {
+          trimmed = trimmed.replace(/\n?```\s*$/, "").trim();
+        }
+        console.log("[ArticlePreview extractArticleData] Removed ```json with fallback");
       }
 
       // 检查是否是 JSON 格式
@@ -174,6 +211,7 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
         try {
           const parsed = JSON.parse(trimmed);
           if (typeof parsed === "object" && parsed !== null) {
+            console.log("[ArticlePreview extractArticleData] Parsed JSON, keys:", Object.keys(parsed));
             // 递归处理，因为可能有多层嵌套
             return extractArticleData(parsed, depth + 1);
           }
@@ -203,21 +241,33 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
       if (typeof content === "string") {
         let trimmedContent = content.trim();
 
-        // 处理以 "json\n" 或 "```json\n" 开头的情况
-        if (
-          trimmedContent.startsWith("json\n") ||
-          trimmedContent.startsWith("```json\n")
-        ) {
-          // 移除 "json\n" 或 "```json\n" 前缀
-          trimmedContent = trimmedContent.replace(/^```?json\n?/, "").trim();
-          // 移除可能的 "```" 后缀
-          trimmedContent = trimmedContent.replace(/```$/, "").trim();
+        // 更强健的 ```json 代码块处理
+        const jsonCodeBlockMatch = trimmedContent.match(/^```json\s*\n([\s\S]*?)\n?```\s*$/);
+        const codeBlockMatch = trimmedContent.match(/^```\s*\n([\s\S]*?)\n?```\s*$/);
+        
+        if (jsonCodeBlockMatch) {
+          trimmedContent = jsonCodeBlockMatch[1].trim();
+          console.log("[ArticlePreview] Removed ```json wrapper from content field");
+        } else if (codeBlockMatch) {
+          trimmedContent = codeBlockMatch[1].trim();
+          console.log("[ArticlePreview] Removed ``` wrapper from content field");
+        } else if (trimmedContent.startsWith("```json") || trimmedContent.startsWith("json\n")) {
+          // 备用方案
+          trimmedContent = trimmedContent.replace(/^```?json\s*\n?/, "");
+          const lastBackticks = trimmedContent.lastIndexOf("```");
+          if (lastBackticks > 0) {
+            trimmedContent = trimmedContent.substring(0, lastBackticks).trim();
+          } else {
+            trimmedContent = trimmedContent.replace(/\n?```\s*$/, "").trim();
+          }
+          console.log("[ArticlePreview] Removed ```json from content with fallback");
         }
 
-        if (trimmedContent.startsWith("{")) {
+        if (trimmedContent.startsWith("{") && trimmedContent.endsWith("}")) {
           try {
             const parsedContent = JSON.parse(trimmedContent);
             if (typeof parsedContent === "object" && parsedContent !== null) {
+              console.log("[ArticlePreview] Parsed nested JSON, keys:", Object.keys(parsedContent));
               const nestedData = extractArticleData(parsedContent, depth + 1);
               // 合并嵌套的 seo_meta 和其他元数据
               return {
@@ -232,18 +282,17 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
               };
             }
           } catch (e) {
-            // 解析失败，检查内容是否看起来像JSON
-            // 如果是JSON格式但解析失败，不应该显示
-            if (
-              trimmedContent.startsWith("{") &&
-              trimmedContent.includes('"')
-            ) {
-              console.warn(
-                "[ArticlePreview] article_body 是JSON格式但解析失败，跳过显示"
-              );
-              content = "";
-            }
+            // 解析失败 - 不要清空内容！
+            // 可能只是内容中包含了 { 和 } 字符，不一定是 JSON
+            console.warn(
+              "[ArticlePreview] article_body 以 { 开头但不是有效 JSON，保留原始内容"
+            );
+            // 保留 trimmedContent 作为内容
+            content = trimmedContent;
           }
+        } else {
+          // 内容不是 JSON，使用清理后的内容
+          content = trimmedContent;
         }
       }
 
@@ -271,11 +320,11 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
             };
           }
         } catch (e) {
-          // 如果最终解析也失败，清空内容，避免显示JSON字符串
+          // 解析失败 - 不要清空内容！保留原样
           console.warn(
-            "[ArticlePreview] 最终内容检查发现JSON格式字符串，已跳过显示"
+            "[ArticlePreview] 最终检查：内容以 { 开头但不是有效 JSON，保留原始内容，长度:",
+            content.length
           );
-          content = "";
         }
       }
 
@@ -704,14 +753,33 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
   // Simple helper to inject images into content
   // This is a naive implementation; production would use a proper parser
   const renderContent = () => {
+    // 诊断日志：检查 finalArticle.content 的原始值
+    console.log("[ArticlePreview renderContent] 开始处理，原始内容:", {
+      contentType: typeof finalArticle.content,
+      contentLength: finalArticle.content?.length || 0,
+      contentStartsWith: finalArticle.content?.substring(0, 100),
+      hasArticleBody: !!(finalArticle as any).article_body,
+      articleBodyLength: (finalArticle as any).article_body?.length || 0,
+    });
+
     // 使用统一的解析函数提取文章内容和元数据
     let articleData = extractArticleData(finalArticle.content);
     let content = articleData.content;
 
+    console.log("[ArticlePreview renderContent] extractArticleData(content) 结果:", {
+      contentLength: content?.length || 0,
+      contentPreview: content?.substring(0, 100),
+    });
+
     // 如果解析后仍然没有内容，尝试从 finalArticle 对象本身提取
     if (!content || content.trim() === "") {
+      console.log("[ArticlePreview renderContent] content 为空，尝试从 finalArticle 对象提取");
       const fallbackData = extractArticleData(finalArticle);
       content = fallbackData.content;
+      console.log("[ArticlePreview renderContent] fallback 结果:", {
+        contentLength: content?.length || 0,
+        contentPreview: content?.substring(0, 100),
+      });
       // 合并 seo_meta（优先使用解析出的）
       if (fallbackData.seo_meta && !articleData.seo_meta) {
         articleData.seo_meta = fallbackData.seo_meta;
@@ -727,23 +795,37 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
     if (content && typeof content === "string") {
       let trimmedContent = content.trim();
 
-      // 处理以 "json\n" 或 "```json\n" 开头的情况
-      if (
-        trimmedContent.startsWith("json\n") ||
-        trimmedContent.startsWith("```json\n")
-      ) {
-        // 移除 "json\n" 或 "```json\n" 前缀
-        trimmedContent = trimmedContent.replace(/^```?json\n?/, "").trim();
-        // 移除可能的 "```" 后缀
-        trimmedContent = trimmedContent.replace(/```$/, "").trim();
+      // 更强健的 ```json 代码块处理
+      const jsonCodeBlockMatch = trimmedContent.match(/^```json\s*\n([\s\S]*?)\n?```\s*$/);
+      const codeBlockMatch = trimmedContent.match(/^```\s*\n([\s\S]*?)\n?```\s*$/);
+      
+      if (jsonCodeBlockMatch) {
+        trimmedContent = jsonCodeBlockMatch[1].trim();
+        console.log("[ArticlePreview renderContent] Removed ```json wrapper");
+      } else if (codeBlockMatch) {
+        trimmedContent = codeBlockMatch[1].trim();
+        console.log("[ArticlePreview renderContent] Removed ``` wrapper");
+      } else if (trimmedContent.startsWith("```json") || trimmedContent.startsWith("json\n")) {
+        // 备用方案
+        trimmedContent = trimmedContent.replace(/^```?json\s*\n?/, "");
+        const lastBackticks = trimmedContent.lastIndexOf("```");
+        if (lastBackticks > 0) {
+          trimmedContent = trimmedContent.substring(0, lastBackticks).trim();
+        } else {
+          trimmedContent = trimmedContent.replace(/\n?```\s*$/, "").trim();
+        }
+        console.log("[ArticlePreview renderContent] Removed ```json with fallback");
+      }
 
-        // 尝试解析并提取内容
+      // 如果清理后的内容是 JSON，尝试解析并提取
+      if (trimmedContent.startsWith("{") && trimmedContent.endsWith("}")) {
         try {
           const parsedAfterClean = JSON.parse(trimmedContent);
           if (
             typeof parsedAfterClean === "object" &&
             parsedAfterClean !== null
           ) {
+            console.log("[ArticlePreview renderContent] Parsed JSON, keys:", Object.keys(parsedAfterClean));
             // 如果解析成功，重新提取内容
             const cleanedData = extractArticleData(parsedAfterClean);
             if (cleanedData.content && cleanedData.content.trim().length > 0) {
@@ -753,59 +835,30 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
                 articleData.seo_meta = cleanedData.seo_meta;
               }
               console.log(
-                "[ArticlePreview] 成功解析 json 前缀内容，提取的内容长度:",
+                "[ArticlePreview] 成功解析 json 内容，提取的内容长度:",
                 content.length
               );
             } else {
+              // JSON 解析成功但没有有效内容 - 保留原始 trimmedContent
               console.warn(
-                "[ArticlePreview] json 前缀内容解析后没有有效内容，已过滤"
+                "[ArticlePreview] json 解析成功但没提取到内容，保留原始内容，长度:",
+                trimmedContent.length
               );
-              content = "";
+              // 不清空，保留 trimmedContent
+              content = trimmedContent;
             }
           }
         } catch (e) {
-          console.warn("[ArticlePreview] 清理 json 前缀后解析失败:", e);
-          content = "";
+          // 解析失败 - 保留原始内容
+          console.warn("[ArticlePreview] 清理 json 后解析失败，保留原始内容:", e);
+          // 不清空，保留 trimmedContent
+          content = trimmedContent;
         }
-      } else {
-        // 如果内容看起来像JSON对象或数组，尝试解析
-        if (
-          (trimmedContent.startsWith("{") && trimmedContent.endsWith("}")) ||
-          (trimmedContent.startsWith("[") && trimmedContent.endsWith("]"))
-        ) {
-          try {
-            const testParsed = JSON.parse(trimmedContent);
-            // 如果解析成功，说明这是JSON，尝试提取内容
-            if (typeof testParsed === "object" && testParsed !== null) {
-              const extractedData = extractArticleData(testParsed);
-              if (
-                extractedData.content &&
-                extractedData.content.trim().length > 0
-              ) {
-                content = extractedData.content;
-                if (extractedData.seo_meta && !articleData.seo_meta) {
-                  articleData.seo_meta = extractedData.seo_meta;
-                }
-                console.log(
-                  "[ArticlePreview] 从 JSON 中提取内容成功，长度:",
-                  content.length
-                );
-              } else {
-                console.warn(
-                  "[ArticlePreview] 检测到JSON格式的内容，已过滤，避免直接显示"
-                );
-                content = "";
-              }
-            }
-          } catch (e) {
-            // 解析失败，可能是格式化的JSON文本，但为了安全起见，也过滤掉
-            if (trimmedContent.includes('"') && trimmedContent.includes(":")) {
-              console.warn("[ArticlePreview] 检测到类似JSON格式的内容，已过滤");
-              content = "";
-            }
-          }
-        }
+      } else if (trimmedContent !== content.trim()) {
+        // 内容被清理过但不是 JSON，使用清理后的内容
+        content = trimmedContent;
       }
+
     }
 
     // If content is empty or invalid, show placeholder

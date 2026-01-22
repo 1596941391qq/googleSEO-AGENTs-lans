@@ -1014,6 +1014,385 @@ const WebsiteAuditReportCard: React.FC<{
   );
 };
 
+// 策略挖词结果卡片 - 显示生成和分析阶段的关键词
+const StrategyKeywordsResultCard: React.FC<{
+  data: any;
+  uiLanguage: UILanguage;
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
+  const keywords = data.keywords || [];
+  const totalCount = data.totalCount || keywords.length;
+  const stage = data.stage || "generated"; // 'generated' 或 'analyzed'
+  const enabledStrategies = data.enabledStrategies || [];
+
+  const isAnalyzed = stage === "analyzed";
+  const title = isAnalyzed
+    ? uiLanguage === "zh"
+      ? "SERP 分析完成"
+      : "SERP Analysis Complete"
+    : uiLanguage === "zh"
+    ? "策略挖词结果"
+    : "Strategy Mining Results";
+
+  // 统计高概率词数量
+  const highProbCount = keywords.filter(
+    (kw: any) => kw.probability === "High" || kw.probability === "high"
+  ).length;
+  const mediumProbCount = keywords.filter(
+    (kw: any) => kw.probability === "Medium" || kw.probability === "medium"
+  ).length;
+  const lowProbCount = keywords.filter(
+    (kw: any) => kw.probability === "Low" || kw.probability === "low"
+  ).length;
+
+  return (
+    <div
+      className={cn(
+        "border rounded-lg p-4 space-y-3 mt-2",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <h4
+          className={cn(
+            "text-xs font-bold uppercase tracking-widest flex items-center",
+            isAnalyzed
+              ? isDarkTheme
+                ? "text-emerald-400"
+                : "text-emerald-600"
+              : isDarkTheme
+              ? "text-blue-400"
+              : "text-blue-600"
+          )}
+        >
+          {isAnalyzed ? (
+            <CheckCircle size={12} className="mr-1" />
+          ) : (
+            <Target size={12} className="mr-1" />
+          )}
+          {title}
+        </h4>
+        <div
+          className={cn(
+            "flex items-center gap-2 text-[10px]",
+            isDarkTheme ? "text-gray-500" : "text-gray-600"
+          )}
+        >
+          <span
+            className={cn(
+              "px-2 py-0.5 rounded",
+              isAnalyzed
+                ? isDarkTheme
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-emerald-100 text-emerald-600"
+                : isDarkTheme
+                ? "bg-blue-500/20 text-blue-400"
+                : "bg-blue-100 text-blue-600"
+            )}
+          >
+            {totalCount} {uiLanguage === "zh" ? "个关键词" : "keywords"}
+          </span>
+          {isAnalyzed && (
+            <span
+              className={cn(
+                "px-2 py-0.5 rounded",
+                isDarkTheme
+                  ? "bg-emerald-500/20 text-emerald-300"
+                  : "bg-emerald-100 text-emerald-700"
+              )}
+            >
+              ✓ {uiLanguage === "zh" ? "已分析" : "Analyzed"}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* 分析完成阶段 - 显示概率统计 */}
+      {isAnalyzed && (highProbCount > 0 || mediumProbCount > 0 || lowProbCount > 0) && (
+        <div className="flex items-center gap-3 text-[10px]">
+          {highProbCount > 0 && (
+            <span className={cn("flex items-center gap-1", isDarkTheme ? "text-green-400" : "text-green-600")}>
+              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              High: {highProbCount}
+            </span>
+          )}
+          {mediumProbCount > 0 && (
+            <span className={cn("flex items-center gap-1", isDarkTheme ? "text-yellow-400" : "text-yellow-600")}>
+              <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+              Medium: {mediumProbCount}
+            </span>
+          )}
+          {lowProbCount > 0 && (
+            <span className={cn("flex items-center gap-1", isDarkTheme ? "text-red-400" : "text-red-600")}>
+              <span className="w-2 h-2 rounded-full bg-red-500"></span>
+              Low: {lowProbCount}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* 关键词列表 */}
+      {keywords.length > 0 && (
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="grid gap-2">
+            {keywords.slice(0, isAnalyzed ? 15 : 10).map((kw: any, i: number) => {
+              const probability = kw.probability || "Unknown";
+              const probabilityColor =
+                probability === "High" || probability === "high"
+                  ? isDarkTheme
+                    ? "text-green-400"
+                    : "text-green-600"
+                  : probability === "Medium" || probability === "medium"
+                  ? isDarkTheme
+                    ? "text-yellow-400"
+                    : "text-yellow-600"
+                  : probability === "Low" || probability === "low"
+                  ? isDarkTheme
+                    ? "text-red-400"
+                    : "text-red-600"
+                  : isDarkTheme
+                  ? "text-gray-400"
+                  : "text-gray-600";
+
+              const probabilityBg =
+                probability === "High" || probability === "high"
+                  ? isDarkTheme
+                    ? "bg-green-500/10 border-green-500/30"
+                    : "bg-green-50 border-green-200"
+                  : probability === "Medium" || probability === "medium"
+                  ? isDarkTheme
+                    ? "bg-yellow-500/10 border-yellow-500/30"
+                    : "bg-yellow-50 border-yellow-200"
+                  : probability === "Low" || probability === "low"
+                  ? isDarkTheme
+                    ? "bg-red-500/10 border-red-500/30"
+                    : "bg-red-50 border-red-200"
+                  : isDarkTheme
+                  ? "bg-black/20 border-white/5"
+                  : "bg-gray-100 border-gray-200";
+
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    "p-3 rounded border transition-colors",
+                    isAnalyzed ? probabilityBg : (isDarkTheme ? "bg-black/20 border-white/5" : "bg-gray-100 border-gray-200")
+                  )}
+                >
+                  {/* Header Row */}
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className={cn(
+                          "text-xs font-semibold truncate",
+                          isDarkTheme ? "text-emerald-300" : "text-emerald-600"
+                        )}
+                        title={kw.keyword}
+                      >
+                        {kw.keyword}
+                      </div>
+                      {kw.translation && (
+                        <div
+                          className={cn(
+                            "text-[10px] mt-0.5",
+                            isDarkTheme ? "text-gray-400" : "text-gray-600"
+                          )}
+                        >
+                          {kw.translation}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {probability !== "Unknown" && (
+                        <span
+                          className={cn(
+                            "px-2 py-0.5 rounded text-[10px] font-medium",
+                            probabilityColor,
+                            isDarkTheme ? "bg-black/30" : "bg-gray-200"
+                          )}
+                        >
+                          {probability}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Metadata Row - 分析完成阶段显示更多信息 */}
+                  {isAnalyzed && (
+                    <div className="grid grid-cols-2 gap-2 text-[10px] mt-2">
+                      {kw.volume !== undefined && kw.volume > 0 && (
+                        <div className="flex items-center gap-1">
+                          <span className={cn(isDarkTheme ? "text-gray-500" : "text-gray-600")}>
+                            {uiLanguage === "zh" ? "搜索量" : "Volume"}:
+                          </span>
+                          <span className={cn(isDarkTheme ? "text-emerald-400" : "text-emerald-600")}>
+                            {kw.volume.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {kw.topDomainType && (
+                        <div className="flex items-center gap-1">
+                          <span className={cn(isDarkTheme ? "text-gray-500" : "text-gray-600")}>
+                            {uiLanguage === "zh" ? "顶部域名" : "Top Domain"}:
+                          </span>
+                          <span className={cn(isDarkTheme ? "text-blue-400" : "text-blue-600")}>
+                            {kw.topDomainType}
+                          </span>
+                        </div>
+                      )}
+                      {kw.serpResultCount !== undefined && (
+                        <div className="flex items-center gap-1">
+                          <span className={cn(isDarkTheme ? "text-gray-500" : "text-gray-600")}>
+                            {uiLanguage === "zh" ? "SERP结果" : "SERP Results"}:
+                          </span>
+                          <span className={cn(isDarkTheme ? "text-purple-400" : "text-purple-600")}>
+                            {kw.serpResultCount === -1 ? "Many" : kw.serpResultCount.toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                      {kw.intent && (
+                        <div className="flex items-center gap-1">
+                          <span className={cn(isDarkTheme ? "text-gray-500" : "text-gray-600")}>
+                            {uiLanguage === "zh" ? "意图" : "Intent"}:
+                          </span>
+                          <span className={cn(isDarkTheme ? "text-cyan-400" : "text-cyan-600")}>
+                            {kw.intent}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Reasoning - 分析完成阶段显示原因 */}
+                  {isAnalyzed && kw.reasoning && (
+                    <div
+                      className={cn(
+                        "mt-2 pt-2 border-t",
+                        isDarkTheme ? "border-white/5" : "border-gray-300"
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "text-[10px] mb-1",
+                          isDarkTheme ? "text-gray-500" : "text-gray-600"
+                        )}
+                      >
+                        {uiLanguage === "zh" ? "分析原因" : "Reasoning"}:
+                      </div>
+                      <div
+                        className={cn(
+                          "text-[10px] leading-relaxed line-clamp-2",
+                          isDarkTheme ? "text-gray-300" : "text-gray-700"
+                        )}
+                      >
+                        {kw.reasoning}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 非分析阶段只显示搜索量 */}
+                  {!isAnalyzed && kw.volume !== undefined && kw.volume > 0 && (
+                    <div className="text-[10px] mt-1">
+                      <span className={cn(isDarkTheme ? "text-gray-500" : "text-gray-500")}>
+                        {uiLanguage === "zh" ? "搜索量" : "Vol"}: {kw.volume.toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {keywords.length > (isAnalyzed ? 15 : 10) && (
+            <div
+              className={cn(
+                "text-center text-[10px] py-1",
+                isDarkTheme ? "text-gray-500" : "text-gray-500"
+              )}
+            >
+              {uiLanguage === "zh"
+                ? `还有 ${keywords.length - (isAnalyzed ? 15 : 10)} 个关键词...`
+                : `${keywords.length - (isAnalyzed ? 15 : 10)} more keywords...`}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 关键词提取卡片 - 显示从网站审计中提取的关键词
+const KeywordsExtractedCard: React.FC<{
+  data: any;
+  uiLanguage: UILanguage;
+  isDarkTheme?: boolean;
+}> = ({ data, uiLanguage, isDarkTheme = true }) => {
+  const keywords = data.keywords || [];
+  const totalCount = data.totalCount || keywords.length;
+
+  return (
+    <div
+      className={cn(
+        "border rounded-lg p-4 space-y-3 mt-2",
+        isDarkTheme
+          ? "bg-white/5 border-white/10"
+          : "bg-gray-50 border-gray-200"
+      )}
+    >
+      <div className="flex items-center justify-between">
+        <h4
+          className={cn(
+            "text-xs font-bold uppercase tracking-widest flex items-center",
+            isDarkTheme ? "text-blue-400" : "text-blue-600"
+          )}
+        >
+          <Target size={12} className="mr-1" />
+          {uiLanguage === "zh" ? "关键词提取完成" : "Keywords Extracted"}
+        </h4>
+        <span
+          className={cn(
+            "text-[10px] px-2 py-0.5 rounded",
+            isDarkTheme
+              ? "bg-blue-500/20 text-blue-400"
+              : "bg-blue-100 text-blue-600"
+          )}
+        >
+          {totalCount} {uiLanguage === "zh" ? "个" : ""}
+        </span>
+      </div>
+
+      {keywords.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {keywords.slice(0, 15).map((kw: any, i: number) => (
+            <span
+              key={i}
+              className={cn(
+                "px-2 py-0.5 rounded text-[10px]",
+                isDarkTheme
+                  ? "bg-blue-500/10 text-blue-300 border border-blue-500/20"
+                  : "bg-blue-50 text-blue-700 border border-blue-200"
+              )}
+            >
+              {kw.keyword}
+            </span>
+          ))}
+          {keywords.length > 15 && (
+            <span
+              className={cn(
+                "px-2 py-0.5 rounded text-[10px]",
+                isDarkTheme ? "text-gray-500" : "text-gray-500"
+              )}
+            >
+              +{keywords.length - 15}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const GoogleSearchResultsCard: React.FC<{
   data: any;
   uiLanguage: UILanguage;
@@ -2322,6 +2701,22 @@ export const StreamEventDetails: React.FC<{
     case "website-audit-report":
       return (
         <WebsiteAuditReportCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
+      );
+    case "strategy-keywords-result":
+      return (
+        <StrategyKeywordsResultCard
+          data={event.data}
+          uiLanguage={uiLanguage}
+          isDarkTheme={isDarkTheme}
+        />
+      );
+    case "keywords-extracted":
+      return (
+        <KeywordsExtractedCard
           data={event.data}
           uiLanguage={uiLanguage}
           isDarkTheme={isDarkTheme}
