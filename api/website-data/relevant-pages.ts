@@ -114,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 从数据库缓存读取
     console.log('[relevant-pages] 📦 Using database cache');
-    pages = cacheResult.rows.map((row: any) => ({
+    const pages = cacheResult.rows.map((row: any) => ({
       url: row.page_url,
       organicTraffic: Number(row.organic_traffic) || 0,
       keywordsCount: row.keywords_count,

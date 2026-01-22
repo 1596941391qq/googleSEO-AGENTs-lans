@@ -215,16 +215,37 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
             // 递归处理，因为可能有多层嵌套
             return extractArticleData(parsed, depth + 1);
           }
-        } catch (e) {
-          // 解析失败，检查是否是有效的Markdown内容
-          // 如果看起来像JSON但解析失败，可能是格式化的JSON文本，不应该直接显示
-          if (trimmed.startsWith("{") && trimmed.includes('"')) {
-            console.warn(
-              "[ArticlePreview] 检测到JSON格式的字符串但解析失败，跳过显示"
-            );
-            return { content: "" };
+        } catch (e: any) {
+          // JSON 解析失败，尝试提取部分内容
+          console.warn(
+            "[ArticlePreview] JSON解析失败，尝试提取部分内容:",
+            e?.message
+          );
+          
+          // 尝试从不完整的 JSON 中提取 article_body 或 content 字段
+          const articleBodyMatch = trimmed.match(/"article_body"\s*:\s*"([\s\S]*?)(?:"\s*[,}]|$)/);
+          const contentMatch = trimmed.match(/"content"\s*:\s*"([\s\S]*?)(?:"\s*[,}]|$)/);
+          const markdownMatch = trimmed.match(/"markdown"\s*:\s*"([\s\S]*?)(?:"\s*[,}]|$)/);
+          
+          let extractedContent = articleBodyMatch?.[1] || contentMatch?.[1] || markdownMatch?.[1];
+          
+          if (extractedContent) {
+            // 解码可能的转义字符
+            try {
+              extractedContent = JSON.parse(`"${extractedContent}"`);
+            } catch {
+              // 如果解析失败，尝试手动处理常见转义
+              extractedContent = extractedContent
+                .replace(/\\n/g, '\n')
+                .replace(/\\"/g, '"')
+                .replace(/\\t/g, '\t')
+                .replace(/\\\\/g, '\\');
+            }
+            console.log("[ArticlePreview] 从不完整JSON中提取到内容，长度:", extractedContent.length);
+            return { content: extractedContent };
           }
-          // 返回原始字符串作为内容（可能是Markdown）
+          
+          // 如果无法提取，返回原始字符串（可能是Markdown）
           return { content: data };
         }
       }

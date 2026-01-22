@@ -291,13 +291,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         
         if (cached && cached.content) {
           console.log(`[visual-article] Using cached website content (${cached.content.length} chars)`);
-          // 使用缓存的网站内容
+          
+          // 从缓存的 metadata 中提取截图
+          let cachedScreenshot: string | undefined;
+          if (cached.metadata) {
+            const metadata = typeof cached.metadata === 'string' ? JSON.parse(cached.metadata) : cached.metadata;
+            cachedScreenshot = metadata.screenshot;
+          }
+          
+          // 如果缓存中没有截图，尝试重新获取截图（但不重新抓取内容）
+          if (!cachedScreenshot) {
+            console.log(`[visual-article] Cache has no screenshot, fetching screenshot only...`);
+            try {
+              const scrapeResult = await scrapeWebsite(websiteUrl, true);
+              cachedScreenshot = scrapeResult.screenshot;
+              
+              // 更新缓存，添加截图到 metadata
+              if (cachedScreenshot) {
+                const updatedMetadata = {
+                  ...(cached.metadata || {}),
+                  screenshot: cachedScreenshot,
+                  screenshotUpdatedAt: new Date().toISOString(),
+                };
+                await saveWebsiteContentCache(
+                  websiteId,
+                  cached.content,
+                  'scraped_content',
+                  cached.title || undefined,
+                  updatedMetadata,
+                  24
+                );
+                console.log(`[visual-article] Updated cache with screenshot`);
+              }
+            } catch (screenshotError: any) {
+              console.warn(`[visual-article] Failed to fetch screenshot: ${screenshotError.message}`);
+            }
+          }
+          
+          // 使用缓存的网站内容（包含截图）
           processedPromotedWebsites.push({
             url: websiteUrl,
             content: cached.content.substring(0, 10000), // 限制内容长度
             title: cached.title || undefined,
-            // 缓存中没有 screenshot，需要时可以重新获取
+            screenshot: cachedScreenshot,
           });
+          
+          console.log(`[visual-article] Website info ready: content=${cached.content.length} chars, hasScreenshot=${!!cachedScreenshot}`);
         } else {
           console.log(`[visual-article] No valid cache found, will scrape website: ${websiteUrl}`);
           // 缓存不存在或已过期，抓取并缓存
@@ -305,7 +344,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const scrapeResult = await scrapeWebsite(websiteUrl, true);
             const websiteContent = cleanMarkdown(scrapeResult.markdown || '', 15000);
             
-            // 保存到缓存
+            // 保存到缓存（包含截图）
             await saveWebsiteContentCache(
               websiteId,
               websiteContent,
@@ -313,6 +352,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               scrapeResult.title,
               {
                 images: scrapeResult.images || [],
+                screenshot: scrapeResult.screenshot || undefined, // 保存截图到缓存
                 scrapedAt: new Date().toISOString(),
                 url: websiteUrl
               },
@@ -326,7 +366,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               screenshot: scrapeResult.screenshot || undefined,
             });
             
-            console.log(`[visual-article] Scraped and cached website content (${websiteContent.length} chars)`);
+            console.log(`[visual-article] Scraped and cached website content (${websiteContent.length} chars), hasScreenshot=${!!scrapeResult.screenshot}`);
           } catch (scrapeError: any) {
             console.error(`[visual-article] Failed to scrape website ${websiteUrl}:`, scrapeError.message);
           }

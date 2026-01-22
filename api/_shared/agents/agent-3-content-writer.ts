@@ -364,12 +364,22 @@ Please naturally integrate introductions and recommendations for these websites 
       
       console.log('[Content Writer] Calling Gemini API with prompt length:', prompt.length);
       response = await callGeminiAPI(prompt, systemInstruction, {
+        // 不设置 maxOutputTokens 限制，让 API 使用模型支持的最大值
+        // 这样可以确保长文章不会被截断
         onRetry: (attempt, error, delay) => {
           onProgress?.(contentLanguage === 'zh'
             ? `⚠️ 内容撰写连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
             : `⚠️ Content drafting connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
         }
       });
+      
+      // 检查是否被截断
+      if (response.finishReason === 'LENGTH' || response.finishReason === 'MAX_TOKENS') {
+        console.warn('[Content Writer] ⚠️ Response was truncated! finishReason:', response.finishReason);
+        onProgress?.(contentLanguage === 'zh' 
+          ? `⚠️ 警告: AI 输出被截断，可能影响文章完整性` 
+          : `⚠️ Warning: AI output was truncated, article may be incomplete`);
+      }
       
       onProgress?.(contentLanguage === 'zh' ? `✅ 内容初稿撰写完成` : `✅ Content draft completed`);
       console.log('[Content Writer] API response received, text length:', response.text?.length || 0);

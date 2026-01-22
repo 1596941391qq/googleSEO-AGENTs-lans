@@ -295,6 +295,8 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
   const requestBody: any = {
     contents: contents,
     generationConfig: {
+      // Gemini 2.5 Flash/Pro 支持最大 65536 输出 tokens
+      // 设置足够大的默认值以避免截断长内容
       maxOutputTokens: config?.maxOutputTokens ?? 65536,
       reasoningMode: config?.reasoningMode ?? 'none'
     }

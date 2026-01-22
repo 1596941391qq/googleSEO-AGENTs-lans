@@ -132,13 +132,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       websiteId: string;
       websiteUrl: string;
       websiteDomain: string;
-      targetLanguage?: string;
+      targetLanguage?: 'en' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar' | 'zh';
       uiLanguage?: 'zh' | 'en';
       industry?: string;
       wordsPerRound?: number;
       miningStrategy?: 'horizontal' | 'vertical';
       additionalSuggestions?: string;
-      searchEngine?: string;
+      searchEngine?: 'google' | 'baidu' | 'bing' | 'yandex';
       skipCreditsCheck?: boolean;
       strategies?: StrategyConfig;
       maxTotalKeywords?: number;

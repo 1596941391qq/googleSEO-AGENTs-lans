@@ -201,7 +201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Combine: 缓存中的关键词 + 新分析的关键词
     const allKeywords = [...keywordsFromCache, ...analyzedKeywords];
 
-    console.log(`[Batch Translate-Analyze] Analysis complete for ${allKeywords.length} keywords (${analyzedKeywords.length} analyzed, ${skippedKeywords.length} skipped)`);
+    console.log(`[Batch Translate-Analyze] Analysis complete for ${allKeywords.length} keywords (${analyzedKeywords.length} analyzed, ${keywordsFromCache.length} from cache)`);
     console.log(`[Batch Translate-Analyze] Source breakdown: ${allKeywords.filter(k => k.source === 'website-audit').length} from website-audit, ${allKeywords.filter(k => k.source === 'manual').length} from manual input`);
 
     return res.json({

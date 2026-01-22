@@ -602,7 +602,7 @@ async function handleBatchTranslation(
         searchEngine,
         undefined, // onProgress
         body.websiteId, // 传递 websiteId 以便 Agent 2 内部处理缓存
-        industry // 传递industry参数，用于行业过滤
+        body.industry // 传递industry参数，用于行业过滤
       );
     }
 

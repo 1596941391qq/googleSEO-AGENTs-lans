@@ -16,7 +16,7 @@ import { callGeminiAPI } from '../gemini.js';
 import { scrapeWebsite, cleanMarkdown } from '../tools/firecrawl.js';
 import { getDomainKeywords, getDomainCompetitors } from '../tools/dataforseo-domain.js';
 import { getDataForSEOLocationAndLanguage, fetchKeywordData } from '../tools/dataforseo.js';
-import { KeywordData, TargetLanguage } from '../types.js';
+import { KeywordData, TargetLanguage, IntentType } from '../types.js';
 import { getExistingWebsiteAuditPrompt } from '../../../services/prompts/index.js';
 import { analyzeRankingProbability } from './agent-2-seo-researcher.js';
 
@@ -1023,11 +1023,11 @@ export async function auditWebsiteWithStrategies(
             : `Website Ranked Keywords (${contexts.website_ranked.length})`,
             'dataforseo-keywords', {
               domain: websiteDomain,
-              keywords: keywords.slice(0, 20).map(k => ({
+              keywords: keywords.slice(0, 20).map((k: any) => ({
                 keyword: k.keyword,
-                position: k.position,
-                volume: k.volume,
-                traffic: k.traffic,
+                position: k.currentPosition ?? k.position,
+                volume: k.searchVolume ?? k.volume,
+                traffic: k.trafficPercentage ?? k.traffic,
                 url: k.url
               })),
               totalCount: contexts.website_ranked.length
@@ -1304,7 +1304,7 @@ export async function auditWebsiteWithStrategies(
         id: `strategy-${timestamp}-${idx}-${Math.random().toString(36).substring(7)}`,
         keyword: kw.keyword,
         translation: kw.translation || '',
-        intent: kw.intent || 'Informational',
+        intent: (kw.intent || IntentType.INFORMATIONAL) as IntentType,
         volume: kw.volume || 0,
         difficulty: kw.difficulty,
         probability: 'Medium' as const,
@@ -1346,9 +1346,9 @@ export async function auditWebsiteWithStrategies(
         return kw;
       });
       
-      const highProbCount = keywords.filter(k => k.probability === 'High').length;
-      const mediumProbCount = keywords.filter(k => k.probability === 'Medium').length;
-      const lowProbCount = keywords.filter(k => k.probability === 'Low').length;
+      const highProbCount = keywords.filter(k => (k as any).probability === 'High').length;
+      const mediumProbCount = keywords.filter(k => (k as any).probability === 'Medium').length;
+      const lowProbCount = keywords.filter(k => (k as any).probability === 'Low').length;
       
       emit('strategist', 'log', uiLanguage === 'zh'
         ? `✓ SERP 分析完成：高概率 ${highProbCount} 个，中概率 ${mediumProbCount} 个，低概率 ${lowProbCount} 个`
