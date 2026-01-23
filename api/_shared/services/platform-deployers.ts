@@ -8,6 +8,8 @@ interface PlatformDeployConfig {
   repoOwner: string;
   repoName: string;
   siteName: string;
+  buildCommand?: string;
+  publishDir?: string;
 }
 
 interface PlatformDeployResult {
@@ -90,7 +92,7 @@ export async function deployToCloudflarePages(
 ): Promise<PlatformDeployResult> {
   try {
     const projectName = config.siteName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    
+
     const response = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/pages/projects`,
       {
@@ -174,8 +176,8 @@ export async function deployToNetlify(config: PlatformDeployConfig): Promise<Pla
           repo: `${config.repoOwner}/${config.repoName}`,
           private: false,
           branch: 'main',
-          cmd: 'mkdocs build',
-          dir: 'site',
+          cmd: config.buildCommand ?? 'mkdocs build',
+          dir: config.publishDir ?? 'site',
         },
       }),
     });
@@ -222,7 +224,7 @@ export async function deployToNetlify(config: PlatformDeployConfig): Promise<Pla
 export async function deployToVercel(config: PlatformDeployConfig): Promise<PlatformDeployResult> {
   try {
     const projectName = config.siteName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    
+
     // 创建项目并连接 Git 仓库
     const response = await fetch('https://api.vercel.com/v9/projects', {
       method: 'POST',

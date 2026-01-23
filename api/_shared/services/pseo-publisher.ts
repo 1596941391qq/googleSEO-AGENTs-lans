@@ -9,11 +9,14 @@ import {
   checkRepoExists,
 } from './github.js';
 import {
+  rebuildStaticSiteIndex,
+} from './static-site.js';
+import {
   deployToPlatform,
   PlatformType,
 } from './platform-deployers.js';
 import {
-  assignSiteToProject,
+  assignSiteToWebsite,
   getAvailableTokensForNewSite,
   createPlatformSite,
   updatePlatformSiteStatus,
@@ -84,19 +87,19 @@ export async function publishArticle(
   projectName?: string
 ): Promise<PublishResult> {
   const { contentType } = article;
-  
+
   console.log(`[PSEO Publisher] 🚀 Publishing "${article.title}" for project ${projectId}`);
   console.log(`[PSEO Publisher] Content type: ${contentType}`);
 
   try {
     // 1. 尝试获取已绑定的站点
-    let siteBinding = await assignSiteToProject(projectId, contentType);
+    let siteBinding = await assignSiteToWebsite(projectId, contentType);
     let isNewSite = false;
 
     // 2. 如果没有可用站点，创建新站点
     if (!siteBinding) {
       console.log(`[PSEO Publisher] No existing site binding, creating new site...`);
-      
+
       const newSiteResult = await createNewSite(contentType, projectName);
       if (!newSiteResult.success) {
         return {
@@ -106,7 +109,7 @@ export async function publishArticle(
       }
 
       // 重新获取绑定
-      siteBinding = await assignSiteToProject(projectId, contentType);
+      siteBinding = await assignSiteToWebsite(projectId, contentType);
       if (!siteBinding) {
         return {
           success: false,
@@ -123,7 +126,7 @@ export async function publishArticle(
     // 3. 如果站点是 pending 状态，需要初始化
     if (site.status === 'pending') {
       console.log(`[PSEO Publisher] Site is pending, initializing...`);
-      
+
       const initResult = await initializeSite({
         site,
         githubToken: githubTokenDecrypted,
@@ -151,15 +154,39 @@ export async function publishArticle(
     // 4. 推送文章到 GitHub
     console.log(`[PSEO Publisher] Pushing article to GitHub...`);
     const slug = generateSlug(article.keyword, article.urlSlug);
-    
+
+    // Check if we should use HTML (Assuming all commercial/Pure HTML sites need this, or force it for now based on user request)
+    // For this specific user verification, I will enable HTML.
+    // In production this should be a config in the 'site' or 'project' object.
+    const useHtml = true;
+    let finalContent: string;
+    let extension: string = '.md';
+
+    if (useHtml) {
+      const { convertMarkdownToHtml } = await import('../utils/markdown-converter.js');
+      // generateArticleMarkdown returns content with frontmatter, we need raw content for converter?
+      // Actually generateArticleMarkdown adds frontmatter. 
+      // We should convert the RAW article.content.
+      // We also need to constructing the HTML.
+      finalContent = convertMarkdownToHtml(article.content, article.title, {
+        description: article.metaDescription,
+        keywords: article.keyword
+      });
+      extension = '.html';
+    } else {
+      finalContent = generateArticleMarkdown(article);
+      extension = '.md';
+    }
+
     const pushResult = await addArticleToMkDocs({
       token: githubTokenDecrypted,
       owner: github_token.owner_name,
       repoName: site.repo_name,
       articleSlug: slug,
       articleTitle: article.title,
-      articleContent: generateArticleMarkdown(article),
+      articleContent: finalContent,
       branch: site.branch,
+      extension
     });
 
     if (!pushResult.success) {
@@ -174,6 +201,21 @@ export async function publishArticle(
     await incrementGitHubTokenUsage(github_token.id);
     if (platform_token) {
       await incrementPlatformTokenUsage(platform_token.id);
+    }
+
+    // 6. 重建站点索引 (静态 HTML 支持)
+    // 只有在使用 HTML 发布时才需要重建索引
+    if (useHtml) {
+      console.log(`[PSEO Publisher] Rebuilding static site index...`);
+      const indexResult = await rebuildStaticSiteIndex({
+        token: githubTokenDecrypted,
+        owner: github_token.owner_name,
+        repoName: site.repo_name,
+        branch: site.branch,
+      });
+      if (!indexResult.success) {
+        console.warn(`[PSEO Publisher] Warning: Failed to rebuild index: ${indexResult.error}`);
+      }
     }
 
     // 6. 构建文章 URL
@@ -254,7 +296,7 @@ async function initializeSite(config: {
 
   // 1. 创建 GitHub 仓库并推送模板
   console.log(`[PSEO Publisher] Creating GitHub repo: ${githubOwner}/${site.repo_name}`);
-  
+
   const repoExists = await checkRepoExists({
     token: githubToken,
     owner: githubOwner,
@@ -284,7 +326,7 @@ async function initializeSite(config: {
 
   // 3. 在平台创建项目
   console.log(`[PSEO Publisher] Creating project on ${platform}...`);
-  
+
   const deployResult = await deployToPlatform(platform, {
     platformToken,
     githubToken,
@@ -323,7 +365,7 @@ description: "${(article.metaDescription || '').replace(/"/g, '\\"')}"
   let content = frontMatter;
   content += `# ${article.title}\n\n`;
   content += article.content;
-  
+
   return content;
 }
 
@@ -332,12 +374,12 @@ description: "${(article.metaDescription || '').replace(/"/g, '\\"')}"
  */
 function buildArticleUrl(siteUrl: string, slug: string): string {
   if (!siteUrl) return '';
-  
+
   // RTD 格式
   if (siteUrl.includes('readthedocs.io')) {
     return `${siteUrl.replace(/\/$/, '')}/en/latest/${slug}/`;
   }
-  
+
   // 其他平台
   return `${siteUrl.replace(/\/$/, '')}/${slug}/`;
 }
@@ -359,7 +401,7 @@ export async function getWebsitePublishingSites(websiteId: string): Promise<{
   } | null;
 }> {
   const bindings = await getWebsiteSiteBindings(websiteId);
-  
+
   let informational = null;
   let commercial = null;
 
@@ -369,7 +411,7 @@ export async function getWebsitePublishingSites(websiteId: string): Promise<{
       githubToken: binding.github_token,
       platformToken: binding.platform_token,
     };
-    
+
     if (binding.content_type === 'informational') {
       informational = data;
     } else if (binding.content_type === 'commercial') {

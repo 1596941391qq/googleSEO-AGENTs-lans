@@ -122,7 +122,7 @@ async function getFileSha(config: {
         },
       }
     );
-    
+
     if (!response.ok) return null;
     const data = await response.json();
     return data.sha;
@@ -209,7 +209,7 @@ export async function createMultipleFiles(config: {
   branch?: string;
 }): Promise<{ success: boolean; errors?: string[] }> {
   const errors: string[] = [];
-  
+
   for (const file of config.files) {
     const result = await createOrUpdateFile({
       token: config.token,
@@ -220,15 +220,15 @@ export async function createMultipleFiles(config: {
       message: config.message,
       branch: config.branch,
     });
-    
+
     if (!result.success) {
       errors.push(`${file.path}: ${result.error}`);
     }
-    
+
     // 短暂延迟避免 rate limiting
     await new Promise(resolve => setTimeout(resolve, 100));
   }
-  
+
   return {
     success: errors.length === 0,
     errors: errors.length > 0 ? errors : undefined,
@@ -387,13 +387,15 @@ export async function addArticleToMkDocs(config: {
   articleTitle: string;
   articleContent: string;
   branch?: string;
+  extension?: string;
 }): Promise<{
   success: boolean;
   articlePath?: string;
   error?: string;
 }> {
-  const articlePath = `docs/${config.articleSlug}.md`;
-  
+  const ext = config.extension || '.md';
+  const articlePath = `docs/${config.articleSlug}${ext}`;
+
   // 添加文章内容
   const result = await createOrUpdateFile({
     token: config.token,
@@ -412,15 +414,18 @@ export async function addArticleToMkDocs(config: {
     };
   }
 
-  // 更新 mkdocs.yml 的 nav 部分
-  await updateMkDocsNav({
-    token: config.token,
-    owner: config.owner,
-    repoName: config.repoName,
-    articleSlug: config.articleSlug,
-    articleTitle: config.articleTitle,
-    branch: config.branch,
-  });
+  // 只有 Markdown 文件才添加到 MkDocs 导航
+  if (ext === '.md') {
+    // 更新 mkdocs.yml 的 nav 部分
+    await updateMkDocsNav({
+      token: config.token,
+      owner: config.owner,
+      repoName: config.repoName,
+      articleSlug: config.articleSlug,
+      articleTitle: config.articleTitle,
+      branch: config.branch,
+    });
+  }
 
   return {
     success: true,
@@ -455,7 +460,7 @@ async function updateMkDocsNav(config: {
 
     const data = await response.json();
     const currentContent = Buffer.from(data.content, 'base64').toString('utf-8');
-    
+
     // 检查文章是否已在 nav 中
     const navEntry = `  - "${config.articleTitle}": ${config.articleSlug}.md`;
     if (currentContent.includes(config.articleSlug)) {
@@ -487,5 +492,48 @@ async function updateMkDocsNav(config: {
     });
   } catch (error) {
     console.error('[updateMkDocsNav] Error:', error);
+  }
+}
+
+/**
+ * 列出仓库内容
+ */
+export async function listRepoContents(config: {
+  token: string;
+  owner: string;
+  repoName: string;
+  path?: string;
+  branch?: string;
+}): Promise<{ success: boolean; files?: any[]; error?: string }> {
+  try {
+    const path = config.path || '';
+    const response = await fetch(
+      `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${path}?ref=${config.branch || 'main'}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      return {
+        success: false,
+        error: error.message || `GitHub API error: ${response.status}`,
+      };
+    }
+
+    const data = await response.json();
+    return {
+      success: true,
+      files: Array.isArray(data) ? data : [data],
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to list repo contents',
+    };
   }
 }

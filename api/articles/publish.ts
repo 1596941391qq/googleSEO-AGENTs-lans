@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { sql, initPublishedArticlesTable } from '../lib/database.js';
 import { authenticateRequest } from '../_shared/auth.js';
-import { publishArticle, getProjectPublishingSites } from '../_shared/services/pseo-publisher.js';
+import { publishArticle, getWebsitePublishingSites } from '../_shared/services/pseo-publisher.js';
 
 /**
  * 发布文章 API (v2)
@@ -51,15 +51,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const article = articleResult.rows[0];
-    
+
     // 2. 确定内容类型（从文章或使用默认值）
     const contentType: 'informational' | 'commercial' = article.content_type || 'informational';
-    
+
     // 3. 获取项目 ID（从参数或文章关联）
-    const actualProjectId = projectId || article.project_id;
-    
+    let actualProjectId = projectId || article.project_id;
+
     if (!actualProjectId) {
-      return sendErrorResponse(res, null, 'Project ID is required for publishing', 400);
+      // 尝试从用户的默认网站或任意一个活跃网站作为 fallback
+      console.log('[Publish] Project ID missing, searching for a fallback website/project...');
+      const fallbackResult = await sql`
+        SELECT id FROM user_websites 
+        WHERE user_id = ${authResult.userId} 
+        AND is_active = true 
+        ORDER BY is_default DESC, created_at DESC 
+        LIMIT 1
+      `;
+      if (fallbackResult.rows.length > 0) {
+        actualProjectId = fallbackResult.rows[0].id;
+        console.log('[Publish] Found fallback Project ID:', actualProjectId);
+      }
+    }
+
+    if (!actualProjectId) {
+      return sendErrorResponse(res, null, '未找到关联的项目或网站。请先在“我的网站”中绑定一个站点。', 400);
     }
 
     // 4. 生成 URL slug
@@ -86,13 +102,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!publishResult.success) {
       return sendErrorResponse(
-        res, 
-        null, 
-        publishResult.error || 'Failed to publish article', 
+        res,
+        null,
+        publishResult.error || 'Failed to publish article',
         publishResult.error?.includes('No available') ? 503 : 500
       );
     }
-
     // 6. 更新文章状态
     await sql`
       UPDATE published_articles
@@ -140,7 +155,7 @@ export async function getProjectSites(req: VercelRequest, res: VercelResponse) {
       return sendErrorResponse(res, null, 'projectId is required', 400);
     }
 
-    const sites = await getProjectPublishingSites(projectId);
+    const sites = await getWebsitePublishingSites(projectId);
 
     return res.json({
       success: true,

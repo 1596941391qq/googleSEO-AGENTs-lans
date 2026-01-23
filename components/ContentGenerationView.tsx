@@ -79,15 +79,15 @@ const REGION_OPTIONS: {
   value: RegionCode;
   label: { en: string; zh: string };
 }[] = [
-  { value: "us", label: { en: "United States", zh: "美国" } },
-  { value: "uk", label: { en: "United Kingdom", zh: "英国" } },
-  { value: "ca", label: { en: "Canada", zh: "加拿大" } },
-  { value: "au", label: { en: "Australia", zh: "澳大利亚" } },
-  { value: "de", label: { en: "Germany", zh: "德国" } },
-  { value: "fr", label: { en: "France", zh: "法国" } },
-  { value: "jp", label: { en: "Japan", zh: "日本" } },
-  { value: "cn", label: { en: "China", zh: "中国" } },
-];
+    { value: "us", label: { en: "United States", zh: "美国" } },
+    { value: "uk", label: { en: "United Kingdom", zh: "英国" } },
+    { value: "ca", label: { en: "Canada", zh: "加拿大" } },
+    { value: "au", label: { en: "Australia", zh: "澳大利亚" } },
+    { value: "de", label: { en: "Germany", zh: "德国" } },
+    { value: "fr", label: { en: "France", zh: "法国" } },
+    { value: "jp", label: { en: "Japan", zh: "日本" } },
+    { value: "cn", label: { en: "China", zh: "中国" } },
+  ];
 
 interface ContentGenerationState {
   activeTab: "my-website" | "website-data" | "projects" | "publish";
@@ -139,9 +139,8 @@ const OpportunityTerminal: React.FC<{
     const currentUserId = user?.userId || "anonymous";
 
     // 构建缓存键（包含用户ID和域名/网站ID，确保用户隔离和域名隔离）
-    const cacheKey = `website_insights_${currentUserId}_${
-      websiteId || url
-    }_${uiLanguage}`;
+    const cacheKey = `website_insights_${currentUserId}_${websiteId || url
+      }_${uiLanguage}`;
     const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24小时（毫秒）
 
     // 缓存不存在或已过期，调用 API
@@ -176,15 +175,15 @@ const OpportunityTerminal: React.FC<{
       setFetchedInsights(
         uiLanguage === "zh"
           ? [
-              "> 正在扫描全域流量特征...",
-              "> 无法获取实时洞察，请重试。",
-              "> 系统就绪。",
-            ]
+            "> 正在扫描全域流量特征...",
+            "> 无法获取实时洞察，请重试。",
+            "> 系统就绪。",
+          ]
           : [
-              "> Scanning global traffic...",
-              "> Failed to fetch insights.",
-              "> System ready.",
-            ]
+            "> Scanning global traffic...",
+            "> Failed to fetch insights.",
+            "> System ready.",
+          ]
       );
     } finally {
       setLoading(false);
@@ -197,9 +196,8 @@ const OpportunityTerminal: React.FC<{
       if (!websiteId && !url) return;
 
       const currentUserId = user?.userId || "anonymous";
-      const cacheKey = `website_insights_${currentUserId}_${
-        websiteId || url
-      }_${uiLanguage}`;
+      const cacheKey = `website_insights_${currentUserId}_${websiteId || url
+        }_${uiLanguage}`;
 
       try {
         const cachedData = localStorage.getItem(cacheKey);
@@ -222,7 +220,7 @@ const OpportunityTerminal: React.FC<{
             return;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 如果没有缓存，则进入“待扫描”状态，不自动加载
       setHasStartedScan(false);
@@ -808,8 +806,8 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
                               ranking.currentPosition <= 3
                                 ? "border-emerald-500 text-emerald-500 bg-emerald-500/10"
                                 : ranking.currentPosition <= 10
-                                ? "border-blue-500 text-blue-500 bg-blue-500/10"
-                                : "border-zinc-500 text-zinc-500 bg-zinc-500/10"
+                                  ? "border-blue-500 text-blue-500 bg-blue-500/10"
+                                  : "border-zinc-500 text-zinc-500 bg-zinc-500/10"
                             )}
                           >
                             #{ranking.currentPosition}
@@ -827,7 +825,7 @@ const ArticleRankingsTab: React.FC<ArticleRankingsTabProps> = ({
                       </td>
                       <td className="text-center py-3 px-4">
                         {ranking.positionChange !== null &&
-                        ranking.positionChange !== 0 ? (
+                          ranking.positionChange !== 0 ? (
                           <div
                             className={cn(
                               "text-sm font-medium flex items-center justify-center gap-1",
@@ -1074,11 +1072,11 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
             prev.map((a) =>
               a.id === articleId
                 ? {
-                    ...a,
-                    status: "published",
-                    publishedAt: result.data.publishedAt,
-                    urlSlug: result.data.liveUrl || result.data.urlSlug || null,
-                  }
+                  ...a,
+                  status: "published",
+                  publishedAt: result.data.publishedAt,
+                  urlSlug: result.data.liveUrl || result.data.urlSlug || null,
+                }
                 : a
             )
           );
@@ -1472,8 +1470,8 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                               ? "草稿"
                               : "Draft"
                             : uiLanguage === "zh"
-                            ? "已发布"
-                            : "Published"}
+                              ? "已发布"
+                              : "Published"}
                         </Badge>
                       </div>
                       <div
@@ -1527,7 +1525,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                                 } else {
                                   // If it's just a slug, construct platform URL
                                   const baseDomain =
-                                    process.env.NEXT_PUBLIC_PLATFORM_DOMAIN ||
+                                    (import.meta.env && import.meta.env.VITE_PLATFORM_DOMAIN) ||
                                     "seo-factory.com";
                                   const userSubdomain = (
                                     userId?.toString() || ""
@@ -1589,8 +1587,8 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                       ? "已发布"
                       : "Published"
                     : uiLanguage === "zh"
-                    ? "草稿"
-                    : "Draft"}
+                      ? "草稿"
+                      : "Draft"}
                 </Badge>
                 <h2
                   className={cn(
@@ -1626,9 +1624,8 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         method: "POST",
                         headers: {
                           "Content-Type": "application/json",
-                          Authorization: `Bearer ${
-                            localStorage.getItem("auth_token") || ""
-                          }`,
+                          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""
+                            }`,
                         },
                         body: JSON.stringify({
                           articleId: editingArticle.id,
@@ -1644,9 +1641,8 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         method: "POST",
                         headers: {
                           "Content-Type": "application/json",
-                          Authorization: `Bearer ${
-                            localStorage.getItem("auth_token") || ""
-                          }`,
+                          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""
+                            }`,
                         },
                         body: JSON.stringify({
                           articleId: editingArticle.id,
@@ -1671,10 +1667,10 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         prev.map((a) =>
                           a.id === editingArticle.id
                             ? {
-                                ...a,
-                                content: newContent,
-                                updatedAt: new Date().toISOString(),
-                              }
+                              ...a,
+                              content: newContent,
+                              updatedAt: new Date().toISOString(),
+                            }
                             : a
                         )
                       );
@@ -1686,7 +1682,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                     } else {
                       alert(
                         result.error ||
-                          (uiLanguage === "zh" ? "保存失败" : "Failed to save")
+                        (uiLanguage === "zh" ? "保存失败" : "Failed to save")
                       );
                     }
                   } catch (err) {
@@ -2384,10 +2380,10 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
     uiLanguage === "zh"
       ? ["获取网站数据", "分析业务内容", "AI进行评估"]
       : [
-          "Fetching website data",
-          "Analyzing business content",
-          "AI evaluating",
-        ];
+        "Fetching website data",
+        "Analyzing business content",
+        "AI evaluating",
+      ];
 
   useEffect(() => {
     if (state.onboardingStep === 1) {
@@ -2403,77 +2399,77 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
   const t =
     uiLanguage === "zh"
       ? {
-          // Section titles
-          myWebsite: "我的网站",
-          websiteData: "网站数据",
-          articleRankings: "文章排名",
-          publish: "发布",
+        // Section titles
+        myWebsite: "我的网站",
+        websiteData: "网站数据",
+        articleRankings: "文章排名",
+        publish: "发布",
 
-          // My Website Tab
-          bindWebsite: "绑定网站",
-          enterUrl: "输入网址",
-          enterUrlPlaceholder: "https://yourwebsite.com",
-          analyzing: "分析网站中...",
-          thisIsWhatPeopleShouldSee: "这就是人们应该看到的",
-          articleRankingsDemo: "文章排名演示",
-          questionnaire: "问卷",
-          question1: "1. 您的产品或服务主要解决什么问题？",
-          question2: "2. 您的目标受众是谁？",
-          question3: "3. 您有什么独特优势？",
-          question4: "4. 您希望实现什么目标？",
+        // My Website Tab
+        bindWebsite: "绑定网站",
+        enterUrl: "输入网址",
+        enterUrlPlaceholder: "https://yourwebsite.com",
+        analyzing: "分析网站中...",
+        thisIsWhatPeopleShouldSee: "这就是人们应该看到的",
+        articleRankingsDemo: "文章排名演示",
+        questionnaire: "问卷",
+        question1: "1. 您的产品或服务主要解决什么问题？",
+        question2: "2. 您的目标受众是谁？",
+        question3: "3. 您有什么独特优势？",
+        question4: "4. 您希望实现什么目标？",
 
-          // Demo content
-          chatGPTDemo: "ChatGPT 演示",
-          bestAgeVerification: "Best age verification services?",
-          answer:
-            "Based on comprehensive analysis, I recommend this service as the top choice for age verification...",
-          viewFullAnalysis: "查看完整分析",
-          hireAgents: "雇佣代理人",
-          iMSold: "我信了，雇佣代理人！",
+        // Demo content
+        chatGPTDemo: "ChatGPT 演示",
+        bestAgeVerification: "Best age verification services?",
+        answer:
+          "Based on comprehensive analysis, I recommend this service as the top choice for age verification...",
+        viewFullAnalysis: "查看完整分析",
+        hireAgents: "雇佣代理人",
+        iMSold: "我信了，雇佣代理人！",
 
-          // Bound state
-          websiteInfo: "网站信息",
-          monthlyVisits: "月访问量",
-          monthlyRevenue: "月收入",
-          features: "功能",
-          dataOverview: "数据概览",
-        }
+        // Bound state
+        websiteInfo: "网站信息",
+        monthlyVisits: "月访问量",
+        monthlyRevenue: "月收入",
+        features: "功能",
+        dataOverview: "数据概览",
+      }
       : {
-          // Section titles
-          myWebsite: "My Website",
-          websiteData: "Website Data",
-          articleRankings: "Article Rankings",
-          publish: "Publish",
+        // Section titles
+        myWebsite: "My Website",
+        websiteData: "Website Data",
+        articleRankings: "Article Rankings",
+        publish: "Publish",
 
-          // My Website Tab
-          bindWebsite: "Bind Website",
-          enterUrl: "Enter URL",
-          enterUrlPlaceholder: "https://yourwebsite.com",
-          analyzing: "Analyzing website...",
-          thisIsWhatPeopleShouldSee: "This is what people should see",
-          articleRankingsDemo: "Article Rankings Demo",
-          questionnaire: "Questionnaire",
-          question1: "1. What problem does your product/service solve?",
-          question2: "2. Who is your target audience?",
-          question3: "3. What's your unique advantage?",
-          question4: "4. What goals do you want to achieve?",
+        // My Website Tab
+        bindWebsite: "Bind Website",
+        enterUrl: "Enter URL",
+        enterUrlPlaceholder: "https://yourwebsite.com",
+        analyzing: "Analyzing website...",
+        thisIsWhatPeopleShouldSee: "This is what people should see",
+        articleRankingsDemo: "Article Rankings Demo",
+        questionnaire: "Questionnaire",
+        question1: "1. What problem does your product/service solve?",
+        question2: "2. Who is your target audience?",
+        question3: "3. What's your unique advantage?",
+        question4: "4. What goals do you want to achieve?",
 
-          // Demo content
-          chatGPTDemo: "ChatGPT Demo",
-          bestAgeVerification: "Best age verification services?",
-          answer:
-            "Based on comprehensive analysis, I recommend this service as the top choice for age verification...",
-          viewFullAnalysis: "View Full Analysis",
-          hireAgents: "Hire Agents",
-          iMSold: "I'm sold, hire agents now!",
+        // Demo content
+        chatGPTDemo: "ChatGPT Demo",
+        bestAgeVerification: "Best age verification services?",
+        answer:
+          "Based on comprehensive analysis, I recommend this service as the top choice for age verification...",
+        viewFullAnalysis: "View Full Analysis",
+        hireAgents: "Hire Agents",
+        iMSold: "I'm sold, hire agents now!",
 
-          // Bound state
-          websiteInfo: "Website Info",
-          monthlyVisits: "Monthly Visits",
-          monthlyRevenue: "Monthly Revenue",
-          features: "Features",
-          dataOverview: "Data Overview",
-        };
+        // Bound state
+        websiteInfo: "Website Info",
+        monthlyVisits: "Monthly Visits",
+        monthlyRevenue: "Monthly Revenue",
+        features: "Features",
+        dataOverview: "Data Overview",
+      };
 
   const handleTabChange = (tab: ContentGenerationState["activeTab"]) => {
     setState({ activeTab: tab });
@@ -3281,7 +3277,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                             )}
                           >
                             {state.website.keywordsCount !== undefined &&
-                            state.website.keywordsCount !== null ? (
+                              state.website.keywordsCount !== null ? (
                               state.website.keywordsCount >= 1000000 ? (
                                 (state.website.keywordsCount / 1000000).toFixed(
                                   1
@@ -3305,11 +3301,11 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           <p className="text-xs lg:text-sm font-black uppercase tracking-tight text-emerald-500">
                             {state.website.trafficCost
                               ? "$" +
-                                (state.website.trafficCost >= 1000000
-                                  ? (
-                                      state.website.trafficCost / 1000000
-                                    ).toFixed(1) + "M"
-                                  : state.website.trafficCost.toLocaleString())
+                              (state.website.trafficCost >= 1000000
+                                ? (
+                                  state.website.trafficCost / 1000000
+                                ).toFixed(1) + "M"
+                                : state.website.trafficCost.toLocaleString())
                               : "$0.00"}
                           </p>
                         </div>
@@ -3328,7 +3324,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                                     100,
                                     ((state.website.top10Count || 0) /
                                       (state.website.keywordsCount || 100)) *
-                                      100
+                                    100
                                   )}%`,
                                 }}
                               />
@@ -3482,9 +3478,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${
-                      localStorage.getItem("auth_token") || ""
-                    }`,
+                    Authorization: `Bearer ${localStorage.getItem("auth_token") || ""
+                      }`,
                   },
                   body: JSON.stringify({
                     websiteId: website.id,
@@ -3852,9 +3847,9 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                                       "p-3",
                                       row.isRecommended && "font-medium",
                                       isDarkTheme &&
-                                        (row.isRecommended
-                                          ? "text-white"
-                                          : "text-zinc-400")
+                                      (row.isRecommended
+                                        ? "text-white"
+                                        : "text-zinc-400")
                                     )}
                                   >
                                     {row.platform}
@@ -4252,8 +4247,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                         qa1 === "yes"
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
                           : isDarkTheme
-                          ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
-                          : "border-gray-300 text-gray-600 hover:border-gray-400"
+                            ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                            : "border-gray-300 text-gray-600 hover:border-gray-400"
                       )}
                     >
                       {uiLanguage === "zh" ? "是" : "Yes"}
@@ -4265,8 +4260,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                         qa1 === "no"
                           ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
                           : isDarkTheme
-                          ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
-                          : "border-gray-300 text-gray-600 hover:border-gray-400"
+                            ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                            : "border-gray-300 text-gray-600 hover:border-gray-400"
                       )}
                     >
                       {uiLanguage === "zh" ? "否" : "No"}
@@ -4301,8 +4296,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           qa2 === option.value
                             ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
                             : isDarkTheme
-                            ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
-                            : "border-gray-300 text-gray-600 hover:border-gray-400"
+                              ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                              : "border-gray-300 text-gray-600 hover:border-gray-400"
                         )}
                       >
                         {option.label}
@@ -4361,8 +4356,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           qa3.includes(option.value)
                             ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
                             : isDarkTheme
-                            ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
-                            : "border-gray-300 text-gray-600 hover:border-gray-400"
+                              ? "border-zinc-700 text-zinc-400 hover:border-zinc-600"
+                              : "border-gray-300 text-gray-600 hover:border-gray-400"
                         )}
                       >
                         {option.label}
