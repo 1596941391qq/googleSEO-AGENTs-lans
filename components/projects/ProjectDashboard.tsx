@@ -6,7 +6,7 @@ import { ProjectListTable } from './ProjectListTable';
 import { ProjectKeywordTable } from './ProjectKeywordTable';
 import { RichTextEditor } from './RichTextEditor';
 import { Button } from '../ui/button';
-import { ArrowLeft, Loader2, Plus, RefreshCw, X, Search, Sparkles, Languages, CheckCircle2, CircleDashed, AlertCircle, Clock, Trash2, Folder, Circle, Globe, Compass, Waves, Archive } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, RefreshCw, X, Search, Sparkles, Languages, CheckCircle2, CircleDashed, AlertCircle, Clock, Trash2, Folder, Circle, Globe, Compass, Waves, Archive, Copy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserId } from '../website-data/utils';
@@ -16,6 +16,7 @@ interface ProjectDashboardProps {
   uiLanguage: 'en' | 'zh';
   onGenerateContent: (keyword: KeywordWithStatus) => void;
   onViewDraft: (keyword: KeywordWithStatus) => void;
+  onReuseSettings?: (project: ProjectWithStats) => void;
 }
 
 export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
@@ -23,6 +24,7 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
   uiLanguage,
   onGenerateContent,
   onViewDraft,
+  onReuseSettings,
 }) => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<ProjectWithStats[]>([]);
@@ -336,20 +338,40 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                             {project.name}
                           </h4>
                         </div>
-                        {!project.is_archived && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              "h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity",
-                              isDarkTheme ? "text-zinc-500 hover:text-red-400" : "text-gray-400 hover:text-red-500"
-                            )}
-                            onClick={(e) => handleDelete(project, e)}
-                            title={uiLanguage === 'zh' ? '归档任务' : 'Archive task'}
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {/* 一键复用设置按钮 */}
+                          {project.task_type === 'mining' && onReuseSettings && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                "h-7 w-7 transition-opacity",
+                                isDarkTheme ? "text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10" : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onReuseSettings(project);
+                              }}
+                              title={uiLanguage === 'zh' ? '复用设置' : 'Reuse Settings'}
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                          {!project.is_archived && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                "h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity",
+                                isDarkTheme ? "text-zinc-500 hover:text-red-400" : "text-gray-400 hover:text-red-500"
+                              )}
+                              onClick={(e) => handleDelete(project, e)}
+                              title={uiLanguage === 'zh' ? '归档任务' : 'Archive task'}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex flex-wrap gap-2">
@@ -411,21 +433,9 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
                             {project.keyword_count} {uiLanguage === 'zh' ? '关键词' : 'KWs'}
                           </div>
                         )}
-                        {project.draft_count > 0 && (
-                          <div className={cn(
-                            "text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1",
-                            isDarkTheme ? "bg-purple-500/10 text-purple-400" : "bg-purple-50 text-purple-700"
-                          )}>
-                            <Sparkles className="w-3 h-3" />
-                            {project.draft_count} {uiLanguage === 'zh' ? '草稿' : 'Drafts'}
-                          </div>
-                        )}
                       </div>
 
-                      <div className="flex items-center justify-between pt-1">
-                        <span className={cn("text-[10px] font-medium", isDarkTheme ? "text-zinc-500" : "text-gray-400")}>
-                          {new Date(project.updated_at).toLocaleDateString(uiLanguage === 'zh' ? 'zh-CN' : 'en-US')}
-                        </span>
+                      <div className="flex items-center justify-end pt-1">
                         <div className={cn(
                           "text-[10px] font-bold px-2 py-0.5 rounded-full border",
                           getStatusColor(project.status || 'completed')
@@ -480,13 +490,13 @@ export const ProjectDashboard: React.FC<ProjectDashboardProps> = ({
           )}
           <div className="space-y-1">
             <h1 className={cn('text-2xl font-bold tracking-tight', isDarkTheme ? 'text-white' : 'text-gray-900')}>
-              {selectedProject 
-                ? selectedProject.name 
-                : (uiLanguage === 'zh' ? '任务进度看板' : 'Task Progress Kanban')}
+              {selectedProject
+                ? selectedProject.name
+                : (uiLanguage === 'zh' ? '关键词管理' : 'Keyword Manager')}
             </h1>
             {!selectedProject && (
               <p className={cn("text-xs font-medium uppercase tracking-wider", isDarkTheme ? "text-zinc-500" : "text-gray-500")}>
-                {uiLanguage === 'zh' ? '自动追踪所有关键词挖掘与内容生成任务' : 'Auto-track all mining and generation tasks'}
+                {uiLanguage === 'zh' ? '浏览历史关键词任务，一键复用设置' : 'Browse historical keywords, reuse settings'}
               </p>
             )}
           </div>

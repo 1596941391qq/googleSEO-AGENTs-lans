@@ -157,8 +157,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ? {
           myWebsite: "我的网站",
           websiteData: "网站数据",
-          projects: "任务看板",
-          publish: "发布",
+          projects: "关键词管理",
+          publish: "发布管理",
           visualArticle: "AI 图文工场",
           activeTasks: "进行中的任务",
           options: "配置选项",
@@ -170,8 +170,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       : {
           myWebsite: "My Website",
           websiteData: "Website Data",
-          projects: "Projects",
-          publish: "Publish",
+          projects: "Keyword Manager",
+          publish: "Publish Manager",
           visualArticle: "AI Visual Article",
           activeTasks: "Active Tasks",
           options: "Options",
