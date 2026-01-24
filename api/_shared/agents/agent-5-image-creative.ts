@@ -82,7 +82,7 @@ export async function extractVisualThemes(
     // 提取标题
     const title = typeof content === 'string'
       ? ''
-      : content.title || content.seo_meta?.title || '';
+      : content.title || '';
 
     // 构建提取提示
     const prompt = language === 'zh'
@@ -242,7 +242,7 @@ export async function generateImages(
   // 使用代理配置
   const proxyInfo = getCurrentProxyInfo();
   const API_BASE_URL = proxyInfo.baseUrl;
-  const API_KEY = proxyInfo.provider === 'tuzi' 
+  const API_KEY = proxyInfo.provider === 'tuzi'
     ? (process.env.GEMINI_TUZI_API_KEY || process.env.GEMINI_API_KEY)
     : process.env.GEMINI_API_KEY;
 

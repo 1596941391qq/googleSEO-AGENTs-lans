@@ -1455,7 +1455,7 @@ CRITICAL:
               ),
               serpResultCount: partialJSON.serpResultCount !== undefined ? partialJSON.serpResultCount : (serpResultCount > 0 ? serpResultCount : -1),
               topDomainType: partialJSON.topDomainType || "Unknown",
-              probability: partialJSON.probability || "Medium",
+              probability: (partialJSON.probability as ProbabilityLevel) || ProbabilityLevel.MEDIUM,
               reasoning: getFriendlyReasoning(partialJSON.reasoning),
               topSerpSnippets: []
             };
@@ -1481,7 +1481,7 @@ CRITICAL:
             intentAssessment: defaultIntentAssessment,
             serpResultCount: serpResultCount > 0 ? serpResultCount : -1,
             topDomainType: "Unknown",
-            probability: "Medium", // 默认中等概率
+            probability: ProbabilityLevel.MEDIUM, // 默认中等概率
             reasoning: defaultReasoning,
             topSerpSnippets: []
           };

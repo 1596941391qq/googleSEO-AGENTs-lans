@@ -81,11 +81,11 @@ export async function reviewQuality(
     // 提取标题和元描述
     const title = typeof content === 'string' 
       ? '' 
-      : content.title || content.seo_meta?.title || '';
+      : content.title || '';
     
     const metaDescription = typeof content === 'string' 
       ? '' 
-      : content.metaDescription || content.seo_meta?.description || '';
+      : content.metaDescription || '';
 
     // 构建审查提示
     const prompt = language === 'zh'

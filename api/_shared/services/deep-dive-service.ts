@@ -350,7 +350,7 @@ export async function generateImagesForDeepDive(
 
   // 提取标题（如果content是对象）
   const title = typeof content === 'object' && content !== null
-    ? (content.title || content.seo_meta?.title || articleTitle)
+    ? (content.title || articleTitle)
     : articleTitle;
 
   // 生成图像提示词，传递关键词和标题以增强相关性
