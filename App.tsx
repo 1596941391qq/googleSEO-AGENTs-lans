@@ -5745,11 +5745,19 @@ export default function App() {
       deleteTaskFromBackend(taskId);
     }
 
+    // Remove from local storage to avoid reappearing after refresh
+    smartStorage.deleteTask(taskId).catch((err) => {
+      console.error("Failed to delete task from storage:", err);
+    });
+
+    let remainingTasksSnapshot: TaskState[] = [];
+    let wasActive = false;
+
     setState((prev) => {
       const remainingTasks = prev.taskManager.tasks.filter(
         (t) => t.id !== taskId
       );
-      const wasActive = prev.taskManager.activeTaskId === taskId;
+      wasActive = prev.taskManager.activeTaskId === taskId;
 
       // If deleting active task, switch to most recent task
       let newActiveId = prev.taskManager.activeTaskId;
@@ -5762,40 +5770,37 @@ export default function App() {
         newActiveId = null;
       }
 
+      remainingTasksSnapshot = remainingTasks.map((t) => ({
+        ...t,
+        isActive: t.id === newActiveId,
+      }));
+
       return {
         ...prev,
         taskManager: {
           ...prev.taskManager,
-          tasks: remainingTasks.map((t) => ({
-            ...t,
-            isActive: t.id === newActiveId,
-          })),
+          tasks: remainingTasksSnapshot,
           activeTaskId: newActiveId,
         },
       };
     });
 
-    const wasActive = state.taskManager.activeTaskId === taskId;
-    const remainingTasks = state.taskManager.tasks.filter(
-      (t) => t.id !== taskId
-    );
+    saveTasksCompat(remainingTasksSnapshot).catch((err) => {
+      console.error("Failed to save tasks after delete:", err);
+    });
 
-    if (wasActive && remainingTasks.length > 0) {
-      const sortedTasks = remainingTasks.sort(
+    if (wasActive && remainingTasksSnapshot.length > 0) {
+      const sortedTasks = [...remainingTasksSnapshot].sort(
         (a, b) => b.updatedAt - a.updatedAt
       );
       setTimeout(() => {
         hydrateTask(sortedTasks[0].id);
-        saveTasksToLocalStorage();
       }, 0);
-    } else if (remainingTasks.length === 0) {
+    } else if (remainingTasksSnapshot.length === 0) {
       // No tasks left, go to content generation screen
       setTimeout(() => {
         setState((prev) => ({ ...prev, step: "content-generation" }));
-        saveTasksToLocalStorage();
       }, 0);
-    } else {
-      setTimeout(() => saveTasksToLocalStorage(), 0);
     }
   };
 

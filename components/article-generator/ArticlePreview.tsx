@@ -7,15 +7,11 @@ import {
   Save,
   CheckCircle,
   Maximize2,
-  ChevronDown,
-  ChevronUp,
-  Target,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { MarkdownContent } from "../ui/MarkdownContent";
 import { ImageRevealAnimation } from "./ImageRevealAnimation";
 import { ImageLightbox } from "./ImageLightbox";
-import { QualityScoreCard } from "./QualityScoreCard";
 import { useAuth } from "../../contexts/AuthContext";
 import { getUserId } from "../website-data/utils";
 // We'll use a markdown library or just simple HTML rendering
@@ -27,11 +23,6 @@ interface ArticlePreviewProps {
     title: string;
     content: string;
     images: { url: string; prompt: string; placement: string }[];
-    // Optional: Additional data for quality scores and GEO analysis
-    geo_score?: any;
-    qualityReview?: any;
-    seo_meta?: any;
-    logic_check?: string;
     contentType?: "informational" | "commercial"; // AI 标记的内容类型
   };
   onClose: () => void;
@@ -58,7 +49,6 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
   const currentUserId = getUserId(user);
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [isQualityReviewExpanded, setIsQualityReviewExpanded] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<{
     url: string;
     prompt?: string;
@@ -75,10 +65,6 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
       contentPreview: finalArticle.content?.substring(0, 300),
       contentStartsWith: finalArticle.content?.substring(0, 50),
       imagesCount: finalArticle.images?.length || 0,
-      hasGeoScore: !!finalArticle.geo_score,
-      hasQualityReview: !!finalArticle.qualityReview,
-      hasSeoMeta: !!finalArticle.seo_meta,
-      hasLogicCheck: !!finalArticle.logic_check,
       // 检查是否有其他字段
       hasArticleBody: !!(finalArticle as any).article_body,
       hasMarkdown: !!(finalArticle as any).markdown,
@@ -202,10 +188,6 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
     depth: number = 0
   ): {
     content: string;
-    seo_meta?: { title?: string; description?: string };
-    qualityReview?: any;
-    geo_score?: any;
-    logic_check?: string;
   } => {
     // 防止无限递归
     if (depth > 5) {
@@ -326,16 +308,8 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
             if (typeof parsedContent === "object" && parsedContent !== null) {
               console.log("[ArticlePreview] Parsed nested JSON, keys:", Object.keys(parsedContent));
               const nestedData = extractArticleData(parsedContent, depth + 1);
-              // 合并嵌套的 seo_meta 和其他元数据
               return {
                 content: nestedData.content || "",
-                seo_meta: nestedData.seo_meta || data.seo_meta,
-                qualityReview:
-                  nestedData.qualityReview ||
-                  data.qualityReview ||
-                  data.quality_review,
-                geo_score: nestedData.geo_score || data.geo_score,
-                logic_check: nestedData.logic_check || data.logic_check,
               };
             }
           } catch (e) {
@@ -367,13 +341,6 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
             const finalData = extractArticleData(finalParsed, depth + 1);
             return {
               content: finalData.content || "",
-              seo_meta: finalData.seo_meta || data.seo_meta,
-              qualityReview:
-                finalData.qualityReview ||
-                data.qualityReview ||
-                data.quality_review,
-              geo_score: finalData.geo_score || data.geo_score,
-              logic_check: finalData.logic_check || data.logic_check,
             };
           }
         } catch (e) {
@@ -387,349 +354,10 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
 
       return {
         content: content || "",
-        seo_meta: data.seo_meta,
-        qualityReview: data.qualityReview || data.quality_review,
-        geo_score: data.geo_score,
-        logic_check: data.logic_check,
       };
     }
 
     return { content: "" };
-  };
-
-  // Render Quality Review Card
-  const renderQualityReview = () => {
-    // 首先尝试从 finalArticle 直接获取
-    let qualityReview = finalArticle.qualityReview;
-    let fallbackData: any = null;
-
-    // 如果不存在，尝试从 content 中解析
-    if (!qualityReview) {
-      const articleData = extractArticleData(finalArticle.content);
-      qualityReview = articleData.qualityReview;
-    }
-
-    // 如果还是不存在，尝试从 finalArticle 对象本身解析
-    if (!qualityReview) {
-      fallbackData = extractArticleData(finalArticle);
-      qualityReview = fallbackData.qualityReview;
-    }
-
-    // 如果还是没有 qualityReview，但 geo_score 或 logic_check 存在，构建一个 qualityReview 对象
-    if (!qualityReview) {
-      const hasGeoScore = !!(
-        finalArticle.geo_score ||
-        (fallbackData && fallbackData.geo_score)
-      );
-      const hasLogicCheck = !!(
-        finalArticle.logic_check ||
-        (fallbackData && fallbackData.logic_check)
-      );
-
-      // 只在有 geo_score 或 logic_check 时才显示质量检查结果
-      if (hasGeoScore || hasLogicCheck) {
-        qualityReview = {
-          geo_score:
-            finalArticle.geo_score || (fallbackData && fallbackData.geo_score),
-          logic_check:
-            finalArticle.logic_check ||
-            (fallbackData && fallbackData.logic_check),
-        };
-      }
-    }
-
-    // 调试日志
-    if (process.env.NODE_ENV === "development") {
-      console.log("[ArticlePreview] renderQualityReview 检查:", {
-        hasFinalArticleQualityReview: !!finalArticle.qualityReview,
-        hasExtractedQualityReview: !!qualityReview,
-        hasGeoScore: !!finalArticle.geo_score,
-        hasLogicCheck: !!finalArticle.logic_check,
-        geoScoreTotal: finalArticle.geo_score?.total_score,
-      });
-    }
-
-    if (!qualityReview) {
-      return null;
-    }
-
-    // 使用提取到的 qualityReview - 只显示 geo_score 和 logic_check
-    const geoScore = qualityReview.geo_score || finalArticle.geo_score;
-    const logicCheck = qualityReview.logic_check || finalArticle.logic_check;
-    const totalScore = geoScore?.total_score || 0;
-
-    // Convert geo_score to QualityScore format
-    const scores = geoScore
-      ? {
-          title_standard: parseInt(geoScore.title_standard || "0", 10),
-          summary: parseInt(geoScore.summary || "0", 10),
-          information_gain: parseInt(geoScore.information_gain || "0", 10),
-          format_engineering: parseInt(geoScore.format_engineering || "0", 10),
-          entity_engineering: parseInt(geoScore.entity_engineering || "0", 10),
-          comparison: parseInt(geoScore.comparison || "0", 10),
-          faq: parseInt(geoScore.faq || "0", 10),
-        }
-      : {
-          title_standard: 0,
-          summary: 0,
-          information_gain: 0,
-          format_engineering: 0,
-          entity_engineering: 0,
-          comparison: 0,
-          faq: 0,
-        };
-
-    // Determine rating
-    const rating =
-      totalScore >= 90
-        ? "master-copy"
-        : totalScore >= 80
-        ? "ai-summary-ready"
-        : totalScore >= 70
-        ? "usable"
-        : "needs-optimization";
-
-    return (
-      <div className="mb-8">
-        <div
-          className={cn(
-            "border rounded-lg overflow-hidden",
-            isDarkTheme
-              ? "bg-white/5 border-white/10"
-              : "bg-gray-50 border-gray-200"
-          )}
-        >
-          {/* 可点击的标题栏 */}
-          <button
-            onClick={() => setIsQualityReviewExpanded(!isQualityReviewExpanded)}
-            className={cn(
-              "w-full p-4 flex items-center justify-between transition-colors",
-              isDarkTheme ? "hover:bg-white/10" : "hover:bg-gray-100"
-            )}
-          >
-            <h4
-              className={cn(
-                "text-sm font-bold uppercase tracking-widest flex items-center",
-                isDarkTheme ? "text-gray-400" : "text-gray-600"
-              )}
-            >
-              <Target size={16} className="mr-2" />
-              {uiLanguage === "zh" ? "质量审查结果" : "Quality Review Results"}
-            </h4>
-            {isQualityReviewExpanded ? (
-              <ChevronUp
-                size={20}
-                className={cn(isDarkTheme ? "text-gray-400" : "text-gray-600")}
-              />
-            ) : (
-              <ChevronDown
-                size={20}
-                className={cn(isDarkTheme ? "text-gray-400" : "text-gray-600")}
-              />
-            )}
-          </button>
-
-          {/* 可展开的内容区域 */}
-          {isQualityReviewExpanded && (
-            <div className="p-6 pt-0 space-y-4">
-              {/* Quality Score Card - 只显示 geo_score */}
-              {totalScore > 0 && (
-                <QualityScoreCard
-                  scores={scores}
-                  totalScore={totalScore}
-                  rating={rating}
-                  uiLanguage={uiLanguage}
-                  isDarkTheme={isDarkTheme}
-                />
-              )}
-
-              {/* Logic Check - 简短显示 */}
-              {logicCheck && (
-                <div className="space-y-2">
-                  <div
-                    className={cn(
-                      "text-xs font-semibold uppercase tracking-wider",
-                      isDarkTheme ? "text-emerald-400/70" : "text-emerald-600"
-                    )}
-                  >
-                    {uiLanguage === "zh" ? "优化说明" : "Optimization Notes"}
-                  </div>
-                  <div
-                    className={cn(
-                      "border rounded-lg p-3 text-sm leading-relaxed",
-                      isDarkTheme
-                        ? "bg-emerald-500/5 border-emerald-500/20 text-gray-300"
-                        : "bg-emerald-50 border-emerald-200 text-gray-700"
-                    )}
-                  >
-                    {/* 限制显示长度，最多 200 字符 */}
-                    {logicCheck.length > 200 
-                      ? logicCheck.substring(0, 200) + "..." 
-                      : logicCheck}
-                  </div>
-                </div>
-              )}
-
-              {/* Other Quality Checks */}
-              {qualityReview.other_checks && (
-                <div className="space-y-2">
-                  <div
-                    className={cn(
-                      "text-xs font-semibold uppercase tracking-wider",
-                      isDarkTheme ? "text-blue-400/70" : "text-blue-600"
-                    )}
-                  >
-                    {uiLanguage === "zh"
-                      ? "其他质量检查"
-                      : "Other Quality Checks"}
-                  </div>
-                  <div
-                    className={cn(
-                      "border rounded-lg p-4 space-y-2 text-sm",
-                      isDarkTheme
-                        ? "bg-blue-500/5 border-blue-500/20"
-                        : "bg-blue-50 border-blue-200"
-                    )}
-                  >
-                    {qualityReview.other_checks.authenticity && (
-                      <div>
-                        <span
-                          className={cn(
-                            isDarkTheme ? "text-blue-400/70" : "text-blue-600"
-                          )}
-                        >
-                          {uiLanguage === "zh" ? "真实性:" : "Authenticity:"}
-                        </span>{" "}
-                        <span
-                          className={
-                            qualityReview.other_checks.authenticity.passed
-                              ? isDarkTheme
-                                ? "text-emerald-400"
-                                : "text-emerald-600"
-                              : isDarkTheme
-                              ? "text-red-400"
-                              : "text-red-600"
-                          }
-                        >
-                          {qualityReview.other_checks.authenticity.passed
-                            ? uiLanguage === "zh"
-                              ? "通过"
-                              : "Passed"
-                            : uiLanguage === "zh"
-                            ? "未通过"
-                            : "Failed"}
-                        </span>
-                      </div>
-                    )}
-                    {qualityReview.other_checks.seo_depth && (
-                      <div>
-                        <span
-                          className={cn(
-                            isDarkTheme ? "text-blue-400/70" : "text-blue-600"
-                          )}
-                        >
-                          {uiLanguage === "zh" ? "SEO深度:" : "SEO Depth:"}
-                        </span>{" "}
-                        <span
-                          className={cn(
-                            isDarkTheme ? "text-gray-300" : "text-gray-700"
-                          )}
-                        >
-                          {uiLanguage === "zh"
-                            ? "关键词密度"
-                            : "Keyword Density"}
-                          :{" "}
-                          {qualityReview.other_checks.seo_depth
-                            .keyword_density || "N/A"}
-                          %
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Fix List */}
-              {qualityReview.fix_list && qualityReview.fix_list.length > 0 && (
-                <div className="space-y-2">
-                  <div
-                    className={cn(
-                      "text-xs font-semibold uppercase tracking-wider",
-                      isDarkTheme ? "text-amber-400/70" : "text-amber-600"
-                    )}
-                  >
-                    {uiLanguage === "zh" ? "需要修复的问题" : "Issues to Fix"}
-                  </div>
-                  <div className="space-y-2">
-                    {qualityReview.fix_list.map((fix: any, i: number) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          "border rounded-lg p-4 text-sm",
-                          isDarkTheme
-                            ? "bg-amber-500/5 border-amber-500/20"
-                            : "bg-amber-50 border-amber-200"
-                        )}
-                      >
-                        {typeof fix === "string" ? (
-                          <div
-                            className={cn(
-                              isDarkTheme ? "text-gray-300" : "text-gray-700"
-                            )}
-                          >
-                            {fix}
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            {fix.priority && (
-                              <div
-                                className={cn(
-                                  isDarkTheme
-                                    ? "text-amber-400/70"
-                                    : "text-amber-600"
-                                )}
-                              >
-                                {uiLanguage === "zh" ? "优先级:" : "Priority:"}{" "}
-                                {fix.priority}
-                              </div>
-                            )}
-                            {fix.issue && (
-                              <div
-                                className={cn(
-                                  isDarkTheme
-                                    ? "text-gray-300"
-                                    : "text-gray-700"
-                                )}
-                              >
-                                {uiLanguage === "zh" ? "问题:" : "Issue:"}{" "}
-                                {fix.issue}
-                              </div>
-                            )}
-                            {fix.suggestion && (
-                              <div
-                                className={cn(
-                                  "italic",
-                                  isDarkTheme
-                                    ? "text-gray-400"
-                                    : "text-gray-600"
-                                )}
-                              >
-                                {uiLanguage === "zh" ? "建议:" : "Suggestion:"}{" "}
-                                {fix.suggestion}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
   };
 
   // Simple helper to inject images into content
@@ -762,15 +390,6 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
         contentLength: content?.length || 0,
         contentPreview: content?.substring(0, 100),
       });
-      // 合并 seo_meta（优先使用解析出的）
-      if (fallbackData.seo_meta && !articleData.seo_meta) {
-        articleData.seo_meta = fallbackData.seo_meta;
-      }
-    }
-
-    // 如果 finalArticle 本身有 seo_meta，优先使用它
-    if (finalArticle.seo_meta && !articleData.seo_meta) {
-      articleData.seo_meta = finalArticle.seo_meta;
     }
 
     // 最终安全检查：确保content不是JSON格式的字符串
@@ -812,10 +431,6 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
             const cleanedData = extractArticleData(parsedAfterClean);
             if (cleanedData.content && cleanedData.content.trim().length > 0) {
               content = cleanedData.content;
-              // 更新 seo_meta
-              if (cleanedData.seo_meta && !articleData.seo_meta) {
-                articleData.seo_meta = cleanedData.seo_meta;
-              }
               console.log(
                 "[ArticlePreview] 成功解析 json 内容，提取的内容长度:",
                 content.length
@@ -933,136 +548,6 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           isDarkTheme={isDarkTheme} 
           onImageClick={(url, alt) => setLightboxImage({ url, prompt: alt })}
         />
-
-        {/* SEO Meta Card */}
-        {(articleData.seo_meta || finalArticle.seo_meta) && (
-          <div className="mt-8">
-            <div
-              className={cn(
-                "border rounded-lg p-4",
-                isDarkTheme
-                  ? "bg-blue-500/5 border-blue-500/20"
-                  : "bg-blue-50 border-blue-200"
-              )}
-            >
-              <div
-                className={cn(
-                  "text-sm font-bold uppercase tracking-wider mb-3 flex items-center",
-                  isDarkTheme ? "text-blue-400" : "text-blue-600"
-                )}
-              >
-                <svg
-                  className="w-4 h-4 mr-2"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-                {uiLanguage === "zh" ? "SEO 元数据" : "SEO Meta Data"}
-              </div>
-              <div className="space-y-3">
-                {(articleData.seo_meta?.title ||
-                  finalArticle.seo_meta?.title) && (
-                  <div>
-                    <div
-                      className={cn(
-                        "text-xs font-semibold mb-1",
-                        isDarkTheme ? "text-blue-300" : "text-blue-700"
-                      )}
-                    >
-                      {uiLanguage === "zh" ? "标题 (Title)" : "Title"}
-                    </div>
-                    <div
-                      className={cn(
-                        "text-sm leading-relaxed",
-                        isDarkTheme ? "text-gray-300" : "text-gray-700"
-                      )}
-                    >
-                      {articleData.seo_meta?.title ||
-                        finalArticle.seo_meta?.title}
-                    </div>
-                  </div>
-                )}
-                {(articleData.seo_meta?.description ||
-                  finalArticle.seo_meta?.description) && (
-                  <div>
-                    <div
-                      className={cn(
-                        "text-xs font-semibold mb-1",
-                        isDarkTheme ? "text-blue-300" : "text-blue-700"
-                      )}
-                    >
-                      {uiLanguage === "zh"
-                        ? "描述 (Description)"
-                        : "Description"}
-                    </div>
-                    <div
-                      className={cn(
-                        "text-sm leading-relaxed",
-                        isDarkTheme ? "text-gray-300" : "text-gray-700"
-                      )}
-                    >
-                      {articleData.seo_meta?.description ||
-                        finalArticle.seo_meta?.description}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* GEO Score (if not in quality review) */}
-        {finalArticle.geo_score && !finalArticle.qualityReview && (
-          <div className="mt-8 space-y-2">
-            <div
-              className={cn(
-                "text-sm font-bold uppercase tracking-wider",
-                isDarkTheme ? "text-blue-400" : "text-blue-600"
-              )}
-            >
-              {uiLanguage === "zh" ? "GEO 质量评分" : "GEO Quality Score"}
-            </div>
-            <QualityScoreCard
-              scores={{
-                title_standard: parseInt(
-                  finalArticle.geo_score.title_standard || "0",
-                  10
-                ),
-                summary: parseInt(finalArticle.geo_score.summary || "0", 10),
-                information_gain: parseInt(
-                  finalArticle.geo_score.information_gain || "0",
-                  10
-                ),
-                format_engineering: parseInt(
-                  finalArticle.geo_score.format_engineering || "0",
-                  10
-                ),
-                entity_engineering: parseInt(
-                  finalArticle.geo_score.entity_engineering || "0",
-                  10
-                ),
-                comparison: parseInt(
-                  finalArticle.geo_score.comparison || "0",
-                  10
-                ),
-                faq: parseInt(finalArticle.geo_score.faq || "0", 10),
-              }}
-              totalScore={parseInt(
-                finalArticle.geo_score.total_score || "0",
-                10
-              )}
-              uiLanguage={uiLanguage}
-              isDarkTheme={isDarkTheme}
-            />
-          </div>
-        )}
       </div>
     );
   };
@@ -1155,9 +640,6 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           >
             {finalArticle.title}
           </h1>
-
-          {/* Quality Review Card - 显示在标题下方 */}
-          {renderQualityReview()}
 
           {renderContent()}
         </div>

@@ -19,22 +19,7 @@ export interface ContentGenerationResult {
   metaDescription?: string;
   content?: string;
   structure?: string[];
-  seo_meta?: {
-    title?: string;
-    description?: string;
-  };
   article_body?: string;
-  logic_check?: string;
-  geo_score?: {
-    title_standard?: string;
-    summary?: string;
-    information_gain?: string;
-    format_engineering?: string;
-    entity_engineering?: string;
-    comparison?: string;
-    faq?: string;
-    total_score?: string;
-  };
   appliedOptimizations?: {
     keywords?: Array<{
       position?: string;
@@ -74,6 +59,306 @@ export interface AvailableImage {
   description?: string;
   isScreenshot?: boolean;
   sourceUrl?: string;  // 如果是推广截图，附带来源URL
+}
+
+const MAX_SEO_CONTEXT_CHARS = 1800;
+const MAX_REFERENCE_CHARS = 1600;
+const MAX_PROMOTED_SITE_CHARS = 600;
+
+function clampText(text: string, maxChars: number): string {
+  if (!text) return '';
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return trimmed.slice(0, Math.max(0, maxChars - 3)).trim() + '...';
+}
+
+function normalizeLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function summarizeObject(value: any, maxItems: number = 3, maxValueChars: number = 120): string {
+  if (!value) return '';
+  if (Array.isArray(value)) {
+    return value
+      .filter(Boolean)
+      .slice(0, maxItems)
+      .map((item) => clampText(String(item), maxValueChars))
+      .join('; ');
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value)
+      .slice(0, maxItems)
+      .map(([key, val]) => `${key}: ${clampText(String(val), maxValueChars)}`)
+      .join('; ');
+  }
+  return clampText(String(value), maxValueChars);
+}
+
+function extractOutlineFromMarkdown(markdown: string, maxItems: number = 10) {
+  const lines = markdown.split(/\r?\n/);
+  const outline: Array<{ header: string; description: string }> = [];
+  for (let i = 0; i < lines.length && outline.length < maxItems; i += 1) {
+    const line = lines[i].trim();
+    if (line.startsWith('## ')) {
+      const header = line.replace(/^##\s+/, '').trim();
+      let description = '';
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const nextLine = normalizeLine(lines[j]);
+        if (nextLine) {
+          description = clampText(nextLine, 140);
+          break;
+        }
+      }
+      outline.push({ header, description });
+    }
+  }
+  return outline;
+}
+
+function extractKeywordList(line: string, maxItems: number = 10): string[] {
+  if (!line) return [];
+  return line
+    .split(/[,，;；]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function buildSeoSummaryFromMarkdown(markdown: string, contentLanguage: 'zh' | 'en') {
+  const keywordMatch = markdown.match(/(?:目标关键词|Target Keyword|关键词)[:：]\s*(.+?)(?:\n|$)/i);
+  const intentMatch = markdown.match(/(?:用户意图|User Intent|Intent)[:：]\s*(.+?)(?:\n|$)/i);
+  const wordCountMatch = markdown.match(/(?:推荐字数|Recommended Word Count|Word Count)[:：]\s*(\d+.*?)(?:\n|$)/i);
+  const longTailMatch = markdown.match(/(?:长尾关键词|Long-tail Keywords)[:：]\s*(.+?)(?:\n|$)/i);
+
+  const targetKeyword = keywordMatch ? keywordMatch[1].trim() : '';
+  const userIntent = intentMatch ? intentMatch[1].trim() : '';
+  const wordCountHint = wordCountMatch ? wordCountMatch[1].trim() : '';
+  const outline = extractOutlineFromMarkdown(markdown);
+  const longTail = longTailMatch ? extractKeywordList(longTailMatch[1]) : [];
+
+  return {
+    targetKeyword,
+    userIntent,
+    wordCountHint,
+    outline,
+    longTail,
+    language: contentLanguage
+  };
+}
+
+function buildSeoSummaryFromStructured(report: SEOStrategyReport, contentLanguage: 'zh' | 'en') {
+  const outline = (report.contentStructure || []).slice(0, 10).map((section) => ({
+    header: section.header || '',
+    description: clampText(section.description || '', 140)
+  }));
+  return {
+    targetKeyword: report.targetKeyword || '',
+    userIntent: report.userIntentSummary || '',
+    wordCountHint: report.recommendedWordCount ? `${report.recommendedWordCount}` : '',
+    outline,
+    longTail: (report.longTailKeywords || []).slice(0, 10),
+    language: contentLanguage
+  };
+}
+
+function buildSeoContext(summary: {
+  targetKeyword: string;
+  userIntent: string;
+  wordCountHint: string;
+  outline: Array<{ header: string; description: string }>;
+  longTail: string[];
+  language: 'zh' | 'en';
+}): string {
+  const outlineLines = summary.outline
+    .filter((item) => item.header)
+    .map((item, index) => `${index + 1}. ${item.header}${item.description ? ` — ${item.description}` : ''}`)
+    .join('\n');
+
+  const longTailText = summary.longTail.length > 0 ? summary.longTail.join(', ') : (summary.language === 'zh' ? '暂无' : 'N/A');
+
+  const header = summary.language === 'zh' ? 'SEO 策略要点' : 'SEO Strategy Summary';
+  const keywordLabel = summary.language === 'zh' ? '目标关键词' : 'Target Keyword';
+  const intentLabel = summary.language === 'zh' ? '用户意图' : 'User Intent';
+  const wordCountLabel = summary.language === 'zh' ? '推荐字数' : 'Recommended Word Count';
+  const outlineLabel = summary.language === 'zh' ? '结构大纲' : 'Outline';
+  const longTailLabel = summary.language === 'zh' ? '核心长尾关键词（Top 10）' : 'Core Long-tail Keywords (Top 10)';
+
+  const context = `
+${header}:
+- ${keywordLabel}: ${summary.targetKeyword || (summary.language === 'zh' ? '待定' : 'TBD')}
+- ${intentLabel}: ${summary.userIntent || (summary.language === 'zh' ? '未提供' : 'Not provided')}
+- ${wordCountLabel}: ${summary.wordCountHint || (summary.language === 'zh' ? '未提供' : 'Not provided')}
+- ${outlineLabel}:
+${outlineLines || (summary.language === 'zh' ? '暂无' : 'N/A')}
+- ${longTailLabel}: ${longTailText}
+`;
+
+  return clampText(context, MAX_SEO_CONTEXT_CHARS);
+}
+
+function buildSearchPreferencesContext(
+  searchPreferences: SearchPreferencesResult,
+  contentLanguage: 'zh' | 'en'
+): string {
+  const rules: string[] = [];
+
+  if (searchPreferences.semantic_landscape) {
+    rules.push(
+      contentLanguage === 'zh'
+        ? `语义覆盖重点：${clampText(searchPreferences.semantic_landscape, 160)}`
+        : `Semantic coverage focus: ${clampText(searchPreferences.semantic_landscape, 160)}`
+    );
+  }
+
+  if (searchPreferences.engine_strategies?.google) {
+    rules.push(
+      contentLanguage === 'zh'
+        ? `Google 可执行策略：${summarizeObject(searchPreferences.engine_strategies.google)}`
+        : `Google execution tips: ${summarizeObject(searchPreferences.engine_strategies.google)}`
+    );
+  }
+
+  if (searchPreferences.engine_strategies?.perplexity) {
+    rules.push(
+      contentLanguage === 'zh'
+        ? `Perplexity 可执行策略：${summarizeObject(searchPreferences.engine_strategies.perplexity)}`
+        : `Perplexity execution tips: ${summarizeObject(searchPreferences.engine_strategies.perplexity)}`
+    );
+  }
+
+  if (searchPreferences.searchPreferences && rules.length < 3) {
+    const summary = summarizeObject(searchPreferences.searchPreferences);
+    if (summary) {
+      rules.push(
+        contentLanguage === 'zh'
+          ? `通用偏好提示：${summary}`
+          : `General preference hint: ${summary}`
+      );
+    }
+  }
+
+  const topRules = rules.filter(Boolean).slice(0, 3);
+  if (topRules.length === 0) return '';
+
+  const header = contentLanguage === 'zh'
+    ? '搜索偏好（3条可执行准则）'
+    : 'Search Preferences (3 Actionable Rules)';
+
+  return `\n${header}:\n- ${topRules.join('\n- ')}\n`;
+}
+
+function buildCompetitorContext(
+  competitorAnalysis: CompetitorAnalysisResult,
+  contentLanguage: 'zh' | 'en'
+): string {
+  const winningFormula = competitorAnalysis.winning_formula || '';
+  const contentGaps =
+    competitorAnalysis.competitorAnalysis?.contentGaps ||
+    (competitorAnalysis as any).contentGaps ||
+    [];
+
+  const competitorBenchmark = competitorAnalysis.competitor_benchmark || [];
+  const topBenchmarks = competitorBenchmark.slice(0, 3).map((competitor: any) => {
+    const title = competitor.title || competitor.content_title || competitor.domain || '';
+    const angle = competitor.content_angle || competitor.angle || '';
+    const combined = [title, angle].filter(Boolean).join(' — ');
+    return clampText(combined || title || angle || '', 120);
+  }).filter(Boolean);
+
+  const header = contentLanguage === 'zh' ? '竞争对手摘要' : 'Competitor Summary';
+  const formulaLabel = contentLanguage === 'zh' ? '制胜公式' : 'Winning Formula';
+  const gapsLabel = contentLanguage === 'zh' ? '内容缺口（Top 3）' : 'Content Gaps (Top 3)';
+  const anglesLabel = contentLanguage === 'zh' ? '竞品标题/角度（Top 3）' : 'Competitor Titles/Angles (Top 3)';
+
+  const gapsText = contentGaps.slice(0, 3).map((gap: string) => clampText(String(gap), 140));
+
+  return `
+${header}:
+- ${formulaLabel}: ${clampText(winningFormula || (contentLanguage === 'zh' ? '未提供' : 'Not provided'), 200)}
+- ${gapsLabel}: ${gapsText.length > 0 ? gapsText.join('; ') : (contentLanguage === 'zh' ? '暂无' : 'N/A')}
+- ${anglesLabel}: ${topBenchmarks.length > 0 ? topBenchmarks.join('; ') : (contentLanguage === 'zh' ? '暂无' : 'N/A')}
+`;
+}
+
+function extractRelevantReference(
+  content: string,
+  keyword: string,
+  maxChars: number = MAX_REFERENCE_CHARS
+): string {
+  if (!content) return '';
+  const safeKeyword = keyword?.trim();
+  const lines = content.split(/\r?\n/);
+  const matchedLines: string[] = [];
+  const usedIndexes = new Set<number>();
+
+  if (safeKeyword) {
+    const keywordLower = safeKeyword.toLowerCase();
+    lines.forEach((line, index) => {
+      if (line.toLowerCase().includes(keywordLower)) {
+        for (let i = Math.max(0, index - 1); i <= Math.min(lines.length - 1, index + 1); i += 1) {
+          if (!usedIndexes.has(i)) {
+            const normalized = normalizeLine(lines[i]);
+            if (normalized) {
+              matchedLines.push(normalized);
+              usedIndexes.add(i);
+            }
+          }
+        }
+      }
+    });
+  }
+
+  let excerpt = matchedLines.join('\n');
+  if (!excerpt) {
+    const fallback: string[] = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      const normalized = normalizeLine(lines[i]);
+      if (normalized) {
+        fallback.push(normalized);
+      }
+      if (fallback.join('\n').length >= maxChars) break;
+    }
+    excerpt = fallback.join('\n');
+  }
+
+  return clampText(excerpt, maxChars);
+}
+
+function extractSentences(content: string): string[] {
+  if (!content) return [];
+  return content
+    .replace(/\r?\n+/g, ' ')
+    .split(/(?<=[.!?。！？])\s+/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+}
+
+function summarizePromotedWebsite(site: ProcessedPromotedWebsite): string {
+  const title = site.title || site.url;
+  const sentences = extractSentences(site.content);
+  const valueSentence = sentences[0] ? clampText(sentences[0], 160) : '';
+
+  const bulletCandidates = site.content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => /^[-*•]\s+/.test(line))
+    .map((line) => line.replace(/^[-*•]\s+/, '').trim());
+
+  const features = [
+    ...bulletCandidates,
+    ...sentences.slice(1, 4)
+  ]
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((item) => clampText(item, 120));
+
+  const combined = [
+    `标题: ${title}`,
+    `价值描述: ${valueSentence || (title ? `${title} offers clear value for the target topic.` : 'Value summary unavailable.')}`,
+    `功能点: ${features.length > 0 ? features.join('；') : '暂无'}`
+  ].join('\n');
+
+  return clampText(combined, MAX_PROMOTED_SITE_CHARS);
 }
 
 /**
@@ -149,122 +434,74 @@ export async function generateContent(
       targetKeyword = structuredReport.targetKeyword || 'the target keyword';
     }
 
-    // 构建SEO研究上下文
+    // 构建SEO研究上下文（压缩为可行动要点）
     let seoContext = '';
     if (isMarkdownStrategy) {
-      // Use Markdown strategy directly
-      seoContext = `
-SEO Strategy Report (Markdown Format):
-
-${seoStrategyReport.markdown}
-`;
+      const summary = buildSeoSummaryFromMarkdown(seoStrategyReport.markdown, contentLanguage);
+      seoContext = buildSeoContext(summary);
     } else {
-      // Use old structured format
       const structuredReport = seoStrategyReport as SEOStrategyReport;
-      seoContext = `
-SEO Strategy Report:
-- Target Keyword: ${structuredReport.targetKeyword}
-- Page Title (H1): ${structuredReport.pageTitleH1}
-- Meta Description: ${structuredReport.metaDescription}
-- URL Slug: ${structuredReport.urlSlug}
-- User Intent: ${structuredReport.userIntentSummary}
-- Recommended Word Count: ${structuredReport.recommendedWordCount} words
-- Long-tail Keywords: ${structuredReport.longTailKeywords?.join(', ') || 'N/A'}
-
-Content Structure:
-${structuredReport.contentStructure.map((section, i) =>
-        `${i + 1}. ${section.header}\n   ${section.description}`
-      ).join('\n\n')}
-`;
+      const summary = buildSeoSummaryFromStructured(structuredReport, contentLanguage);
+      seoContext = buildSeoContext(summary);
     }
 
     // 添加搜索引擎偏好分析上下文（如果提供）
     let searchPreferencesContext = '';
     if (searchPreferences) {
-      if (contentLanguage === 'zh') {
-        searchPreferencesContext = `
-搜索引擎偏好分析：
-${searchPreferences.semantic_landscape ? `- 语义分布：${searchPreferences.semantic_landscape}\n` : ''}
-${searchPreferences.engine_strategies?.google ? `- Google策略：${JSON.stringify(searchPreferences.engine_strategies.google, null, 2)}\n` : ''}
-${searchPreferences.engine_strategies?.perplexity ? `- Perplexity策略：${JSON.stringify(searchPreferences.engine_strategies.perplexity, null, 2)}\n` : ''}
-`;
-      } else {
-        searchPreferencesContext = `
-Search Engine Preferences:
-${searchPreferences.searchPreferences ? JSON.stringify(searchPreferences.searchPreferences, null, 2) : ''}
-`;
-      }
+      searchPreferencesContext = buildSearchPreferencesContext(searchPreferences, contentLanguage);
     }
 
     // 添加竞争对手分析上下文（如果提供）
     let competitorContext = '';
     if (competitorAnalysis) {
-      if (contentLanguage === 'zh') {
-        competitorContext = `
-竞争对手分析：
-${competitorAnalysis.winning_formula ? `- 制胜公式：${competitorAnalysis.winning_formula}\n` : ''}
-${competitorAnalysis.recommended_structure ? `- 推荐结构：${competitorAnalysis.recommended_structure.join('\n')}\n` : ''}
-${competitorAnalysis.competitor_benchmark ? `- 竞争对手基准：${JSON.stringify(competitorAnalysis.competitor_benchmark.slice(0, 3), null, 2)}\n` : ''}
-`;
-      } else {
-        competitorContext = `
-Competitor Analysis:
-${competitorAnalysis.competitorAnalysis ? JSON.stringify(competitorAnalysis.competitorAnalysis, null, 2) : ''}
-`;
-      }
+      competitorContext = buildCompetitorContext(competitorAnalysis, contentLanguage);
     }
 
     // 添加参考资料上下文（如果提供）
     let referenceContext = '';
     if (reference) {
       if (reference.type === 'document' && reference.document) {
-        // For writer, provide full content (or summary if too long)
-        const docContent = reference.document.content.length > 10000
-          ? reference.document.content.substring(0, 10000) + '...'
-          : reference.document.content;
+        const excerpt = extractRelevantReference(reference.document.content, targetKeyword, MAX_REFERENCE_CHARS);
         if (contentLanguage === 'zh') {
           referenceContext = `
-用户参考文档：
+参考文档要点（关键词相关片段）：
 文件名：${reference.document.filename}
-内容：
-${docContent}
+内容摘录：
+${excerpt}
 
-重要提示：虽然用户提供了参考文档，但文章的核心主题必须是"${targetKeyword}"。从文档中提取与关键词相关的信息、数据和案例，但如果文档内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${targetKeyword}"展开。
+重要提示：仅使用与"${targetKeyword}"相关的信息，忽略无关内容。
 `;
         } else {
           referenceContext = `
-User Reference Document:
+Reference Document Highlights (keyword-focused):
 Filename: ${reference.document.filename}
-Content:
-${docContent}
+Excerpt:
+${excerpt}
 
-IMPORTANT: While the user provided this reference document, the core theme of the article must be "${targetKeyword}". Extract relevant information, data, and examples from the document that relate to the keyword. If the document content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${targetKeyword}".
+IMPORTANT: Only use content relevant to "${targetKeyword}" and ignore unrelated parts.
 `;
         }
       } else if (reference.type === 'url' && reference.url?.content && reference.url?.url) {
-        // For writer, provide full content (or summary if too long)
-        const urlContent = reference.url.content.length > 10000
-          ? reference.url.content.substring(0, 10000) + '...'
-          : reference.url.content;
+        const excerpt = extractRelevantReference(reference.url.content, targetKeyword, MAX_REFERENCE_CHARS);
         const urlString = typeof reference.url.url === 'string' ? reference.url.url : 'N/A';
         const titleString = reference.url.title && typeof reference.url.title === 'string' ? reference.url.title : '';
         if (contentLanguage === 'zh') {
           referenceContext = `
-用户参考URL：
+参考URL要点（关键词相关片段）：
 URL：${urlString}
-${titleString ? `标题：${titleString}\n` : ''}内容：
-${urlContent}
+${titleString ? `标题：${titleString}\n` : ''}内容摘录：
+${excerpt}
 
-重要提示：虽然用户提供了参考URL，但文章的核心主题必须是"${targetKeyword}"。从URL中提取与关键词相关的信息、数据和案例，但如果URL内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${targetKeyword}"展开。
+重要提示：仅使用与"${targetKeyword}"相关的信息，忽略无关内容。
 `;
         } else {
           referenceContext = `
-User Reference URL:
+Reference URL Highlights (keyword-focused):
 URL: ${urlString}
-${titleString ? `Title: ${titleString}\n` : ''}Content:
-${urlContent}
+${titleString ? `Title: ${titleString}\n` : ''}Excerpt:
+${excerpt}
 
-IMPORTANT: While the user provided this reference URL, the core theme of the article must be "${targetKeyword}". Extract relevant information, data, and examples from the URL that relate to the keyword. If the URL content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${targetKeyword}".
+IMPORTANT: Only use content relevant to "${targetKeyword}" and ignore unrelated parts.
 `;
         }
       }
@@ -275,40 +512,25 @@ IMPORTANT: While the user provided this reference URL, the core theme of the art
     if (processedPromotedWebsites && processedPromotedWebsites.length > 0) {
       const sitesWithContent = processedPromotedWebsites.filter(p => p.content && p.content.trim().length > 0);
       if (sitesWithContent.length > 0) {
+        const summaries = sitesWithContent.map((site, index) => {
+          const summary = summarizePromotedWebsite(site);
+          return `${contentLanguage === 'zh' ? `网站 ${index + 1}` : `Website ${index + 1}`}:\n${summary}\nURL: ${site.url}`;
+        });
         if (contentLanguage === 'zh') {
           promotedWebsitesContext = `
 
-### 推广网站详细内容
-以下是用户希望在文章中推广的网站及其抓取的内容。请根据这些内容在文章中自然地介绍和推荐这些网站：
+### 推广网站摘要
+${summaries.join('\n\n')}
 
-${sitesWithContent.map((site, index) => {
-  const siteContent = site.content.length > 3000 ? site.content.substring(0, 3000) + '...' : site.content;
-  return `**网站 ${index + 1}: ${site.title || site.url}**
-URL: ${site.url}
-内容摘要：
-${siteContent}
-`;
-}).join('\n---\n')}
-
-请在文章中自然地融入对这些网站的介绍和推荐，基于它们的实际内容和功能来描述。`;
+请基于以上要点自然融入推广信息，避免直接复制原文。`;
         } else {
           promotedWebsitesContext = `
 
-### Promoted Websites Content
-Below are the websites the user wants to promote in the article, along with their scraped content. Please naturally introduce and recommend these websites based on this content:
+### Promoted Websites Summary
+${summaries.join('\n\n')}
 
-${sitesWithContent.map((site, index) => {
-  const siteContent = site.content.length > 3000 ? site.content.substring(0, 3000) + '...' : site.content;
-  return `**Website ${index + 1}: ${site.title || site.url}**
-URL: ${site.url}
-Content Summary:
-${siteContent}
-`;
-}).join('\n---\n')}
-
-Please naturally integrate introductions and recommendations for these websites in the article, describing them based on their actual content and features.`;
+Please weave these sites in naturally based on the summaries above, without copying raw source text.`;
         }
-        console.log(`[Content Writer] Added ${sitesWithContent.length} promoted websites content to context`);
       }
     }
 
@@ -362,7 +584,6 @@ Please naturally integrate introductions and recommendations for these websites 
     try {
       onProgress?.(contentLanguage === 'zh' ? `✍️ AI 专家正在撰写深度内容，请稍候（这通常需要 30-60 秒）...` : `✍️ AI expert is drafting deep content, please wait (this usually takes 30-60 seconds)...`);
       
-      console.log('[Content Writer] Calling Gemini API with prompt length:', prompt.length);
       response = await callGeminiAPI(prompt, systemInstruction, {
         // 不设置 maxOutputTokens 限制，让 API 使用模型支持的最大值
         // 这样可以确保长文章不会被截断
@@ -375,14 +596,12 @@ Please naturally integrate introductions and recommendations for these websites 
       
       // 检查是否被截断
       if (response.finishReason === 'LENGTH' || response.finishReason === 'MAX_TOKENS') {
-        console.warn('[Content Writer] ⚠️ Response was truncated! finishReason:', response.finishReason);
         onProgress?.(contentLanguage === 'zh' 
           ? `⚠️ 警告: AI 输出被截断，可能影响文章完整性` 
           : `⚠️ Warning: AI output was truncated, article may be incomplete`);
       }
       
       onProgress?.(contentLanguage === 'zh' ? `✅ 内容初稿撰写完成` : `✅ Content draft completed`);
-      console.log('[Content Writer] API response received, text length:', response.text?.length || 0);
     } catch (apiError: any) {
       console.error('[Content Writer] API call failed:', apiError.message);
       throw new Error(`Failed to call Gemini API: ${apiError.message}`);
@@ -396,201 +615,47 @@ Please naturally integrate introductions and recommendations for these websites 
       throw new Error('Empty response from Gemini API');
     }
 
-    console.log('[Content Writer] Raw response preview:', rawResponse.substring(0, 200));
-    console.log('[Content Writer] Response starts with:', rawResponse.trim().charAt(0));
-
-    // 尝试解析 JSON 格式的响应（AI 有时会返回 JSON 而不是纯 Markdown）
-    let markdownContent = '';
-    let extractedTitle = '';
-    let seoMeta: { title?: string; description?: string } | undefined;
-    let geoScore: any = undefined;
-    let logicCheck: string | undefined;
-
-    // 清理可能的 markdown 代码块包装 - 使用简单可靠的字符串处理
+    // 清理可能的 markdown 代码块包装
     let cleanedResponse = rawResponse.trim();
     
-    console.log('[Content Writer] Before cleanup, starts with:', cleanedResponse.substring(0, 20), 'length:', cleanedResponse.length);
-    
     // 检测并移除 ```json 或 ``` 包装
-    // 方法1：检查是否以 ```json 开头
     if (cleanedResponse.startsWith('```json')) {
-      // 移除开头的 ```json 和可能的换行
-      cleanedResponse = cleanedResponse.substring(7); // 移除 "```json"
+      cleanedResponse = cleanedResponse.substring(7);
       if (cleanedResponse.startsWith('\n')) {
         cleanedResponse = cleanedResponse.substring(1);
       }
-      // 移除末尾的 ```
       const lastBackticks = cleanedResponse.lastIndexOf('```');
       if (lastBackticks !== -1) {
         cleanedResponse = cleanedResponse.substring(0, lastBackticks).trim();
       }
-      console.log('[Content Writer] Removed ```json wrapper, new length:', cleanedResponse.length);
-    } 
-    // 方法2：检查是否以 ``` 开头（但不是 ```json）
-    else if (cleanedResponse.startsWith('```')) {
-      // 移除开头的 ``` 和可能的语言标识和换行
-      cleanedResponse = cleanedResponse.substring(3); // 移除 "```"
-      // 移除语言标识（如果有的话，到第一个换行为止）
+    } else if (cleanedResponse.startsWith('```')) {
+      cleanedResponse = cleanedResponse.substring(3);
       const firstNewline = cleanedResponse.indexOf('\n');
       if (firstNewline !== -1) {
         cleanedResponse = cleanedResponse.substring(firstNewline + 1);
       }
-      // 移除末尾的 ```
       const lastBackticks = cleanedResponse.lastIndexOf('```');
       if (lastBackticks !== -1) {
         cleanedResponse = cleanedResponse.substring(0, lastBackticks).trim();
       }
-      console.log('[Content Writer] Removed ``` wrapper, new length:', cleanedResponse.length);
     }
 
-    cleanedResponse = cleanedResponse.trim();
-    console.log('[Content Writer] After cleanup, starts with:', cleanedResponse.substring(0, 50), 'ends with:', cleanedResponse.substring(cleanedResponse.length - 20));
+    const markdownContent = cleanedResponse.trim();
 
-    // 检查是否是 JSON 格式
-    if (cleanedResponse.startsWith('{') && cleanedResponse.endsWith('}')) {
-      try {
-        const jsonData = JSON.parse(cleanedResponse);
-        console.log('[Content Writer] Detected JSON response, keys:', Object.keys(jsonData));
-        
-        // 提取 article_body 或 content 或 markdown
-        markdownContent = jsonData.article_body || jsonData.content || jsonData.markdown || '';
-        
-        // 如果提取的内容仍然有问题，尝试进一步处理
-        if (typeof markdownContent === 'string') {
-          let contentToProcess = markdownContent.trim();
-          
-          // 检查是否被代码块包裹
-          if (contentToProcess.startsWith('```')) {
-            const mdCodeBlockMatch = contentToProcess.match(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n?```\s*$/);
-            if (mdCodeBlockMatch) {
-              contentToProcess = mdCodeBlockMatch[1].trim();
-              console.log('[Content Writer] Removed markdown code block from article_body');
-            }
-          }
-          
-          // 检查是否是嵌套的 JSON 字符串
-          if (contentToProcess.startsWith('{')) {
-            try {
-              const nestedJson = JSON.parse(contentToProcess);
-              if (nestedJson.article_body || nestedJson.content || nestedJson.markdown) {
-                contentToProcess = nestedJson.article_body || nestedJson.content || nestedJson.markdown || '';
-                console.log('[Content Writer] Extracted from nested JSON');
-              }
-            } catch (e) {
-              // 嵌套解析失败，保持原样
-            }
-          }
-          
-          markdownContent = contentToProcess;
-        }
-        
-        // 提取标题（优先从 seo_meta.title，然后从 title 字段）
-        if (jsonData.seo_meta?.title) {
-          extractedTitle = jsonData.seo_meta.title;
-          seoMeta = jsonData.seo_meta;
-        } else if (jsonData.title) {
-          extractedTitle = jsonData.title;
-        }
-        
-        // 提取其他元数据
-        if (jsonData.geo_score) {
-          geoScore = jsonData.geo_score;
-        }
-        if (jsonData.logic_check) {
-          logicCheck = jsonData.logic_check;
-        }
-        
-        console.log('[Content Writer] Extracted from JSON - title:', extractedTitle?.substring(0, 50), 'content length:', markdownContent?.length);
-      } catch (e: any) {
-        console.log('[Content Writer] JSON parse failed:', e.message);
-        // JSON 解析失败，尝试从不完整的 JSON 中提取各个字段
-        
-        // 尝试提取 article_body
-        const articleBodyMatch = cleanedResponse.match(/"article_body"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"(?:geo_score|logic_check|seo_meta)"|"\s*}$)/);
-        if (articleBodyMatch) {
-          let extractedBody = articleBodyMatch[1];
-          // 解码转义字符
-          try {
-            extractedBody = JSON.parse(`"${extractedBody}"`);
-          } catch {
-            extractedBody = extractedBody
-              .replace(/\\n/g, '\n')
-              .replace(/\\"/g, '"')
-              .replace(/\\t/g, '\t')
-              .replace(/\\\\/g, '\\');
-          }
-          markdownContent = extractedBody;
-          console.log('[Content Writer] Extracted article_body from incomplete JSON, length:', markdownContent?.length);
-        } else {
-          // 如果无法提取 article_body，使用原始响应
-          markdownContent = cleanedResponse;
-        }
-        
-        // 尝试提取 geo_score（即使 JSON 整体解析失败）
-        const geoScoreMatch = cleanedResponse.match(/"geo_score"\s*:\s*(\{[^}]+\})/);
-        if (geoScoreMatch) {
-          try {
-            geoScore = JSON.parse(geoScoreMatch[1]);
-            console.log('[Content Writer] Extracted geo_score from incomplete JSON');
-          } catch {
-            console.log('[Content Writer] Failed to parse geo_score');
-          }
-        }
-        
-        // 尝试提取 logic_check
-        const logicCheckMatch = cleanedResponse.match(/"logic_check"\s*:\s*"([^"]+)"/);
-        if (logicCheckMatch) {
-          logicCheck = logicCheckMatch[1];
-          console.log('[Content Writer] Extracted logic_check from incomplete JSON');
-        }
-        
-        // 尝试提取 seo_meta
-        const seoMetaMatch = cleanedResponse.match(/"seo_meta"\s*:\s*(\{[^}]+\})/);
-        if (seoMetaMatch) {
-          try {
-            seoMeta = JSON.parse(seoMetaMatch[1]);
-            extractedTitle = seoMeta?.title || '';
-            console.log('[Content Writer] Extracted seo_meta from incomplete JSON');
-          } catch {
-            console.log('[Content Writer] Failed to parse seo_meta');
-          }
-        }
-      }
-    } else {
-      // 纯 Markdown 格式
-      console.log('[Content Writer] Detected Markdown response (not JSON)');
-      markdownContent = cleanedResponse;
-    }
-
-    // 如果 markdownContent 仍然是空的，使用原始响应
-    if (!markdownContent || markdownContent.trim().length === 0) {
-      console.warn('[Content Writer] No content extracted, using raw response');
-      markdownContent = rawResponse;
-    }
-
-    // 从 Markdown 中提取标题（第一个 # 标题）- 仅当还没有提取到标题时
-    if (!extractedTitle) {
-      const titleMatch = markdownContent.match(/^#\s+(.+)$/m);
-      extractedTitle = titleMatch ? titleMatch[1].trim() : '';
-      console.log('[Content Writer] Title from Markdown H1:', extractedTitle?.substring(0, 50));
-    }
+    // 从 Markdown 中提取标题（第一个 # 标题）
+    const titleMatch = markdownContent.match(/^#\s+(.+)$/m);
+    const extractedTitle = titleMatch ? titleMatch[1].trim() : '';
 
     // 移除 H1 标题后的内容（用于正文部分）
-    const titleMatch = markdownContent.match(/^#\s+.+$/m);
     const contentBody = titleMatch
       ? markdownContent.replace(/^#\s+.+$/m, '').trim()
       : markdownContent;
-
-    console.log('[Content Writer] Final result - title:', extractedTitle?.substring(0, 50), 'content length:', contentBody?.length);
 
     return {
       markdown: markdownContent,
       content: contentBody,
       article_body: contentBody,
-      title: extractedTitle,
-      seo_meta: seoMeta,
-      geo_score: geoScore,
-      logic_check: logicCheck
+      title: extractedTitle
     };
   } catch (error: any) {
     console.error('Generate Content Error:', error);

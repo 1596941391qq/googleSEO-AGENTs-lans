@@ -30,10 +30,6 @@ function extractArticleData(
   depth: number = 0
 ): {
   content: string;
-  seo_meta?: { title?: string; description?: string };
-  geo_score?: any;
-  qualityReview?: any;
-  logic_check?: string;
 } {
   // 防止无限递归
   if (depth > 5) {
@@ -135,11 +131,8 @@ function extractArticleData(
           if (typeof parsedContent === "object" && parsedContent !== null) {
             console.log("[extractArticleData] Parsed nested JSON, keys:", Object.keys(parsedContent));
             const nestedData = extractArticleData(parsedContent, depth + 1);
-            // 合并嵌套的 seo_meta 和 geo_score
             return {
               content: nestedData.content || "",
-              seo_meta: nestedData.seo_meta || data.seo_meta,
-              geo_score: nestedData.geo_score || data.geo_score,
             };
           }
         } catch (e) {
@@ -171,13 +164,6 @@ function extractArticleData(
           const finalData = extractArticleData(finalParsed, depth + 1);
           return {
             content: finalData.content || "",
-            seo_meta: finalData.seo_meta || data.seo_meta,
-            geo_score: finalData.geo_score || data.geo_score,
-            qualityReview:
-              finalData.qualityReview ||
-              data.qualityReview ||
-              data.quality_review,
-            logic_check: finalData.logic_check || data.logic_check,
           };
         }
       } catch (e) {
@@ -194,14 +180,10 @@ function extractArticleData(
     console.log("[extractArticleData] 最终返回内容:", {
       contentLength: content?.length || 0,
       contentPreview: content?.substring(0, 100),
-      hasSeoMeta: !!data.seo_meta,
-      hasGeoScore: !!data.geo_score,
     });
 
     return {
       content: content || "",
-      seo_meta: data.seo_meta,
-      geo_score: data.geo_score,
     };
   }
 
@@ -305,11 +287,6 @@ interface ArticleGeneratorLayoutProps {
         title: string;
         content: string;
         images: { url: string; prompt: string; placement: string }[];
-        // Optional: Additional data for SEO and quality scores
-        geo_score?: any;
-        qualityReview?: any;
-        seo_meta?: { title?: string; description?: string };
-        logic_check?: string;
         contentType?: "informational" | "commercial";
       } | null;
     }>
@@ -675,7 +652,6 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                 hasContent: !!articleContent,
                 contentLength: articleContent?.length || 0,
                 contentPreview: articleContent?.substring(0, 200),
-                hasSeoMeta: !!articleData.seo_meta,
               });
 
               // 最终安全检查：确保articleContent不是JSON格式的字符串
@@ -705,10 +681,6 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                       // 如果解析成功，重新提取内容
                       const cleanedData = extractArticleData(parsedAfterClean);
                       articleContent = cleanedData.content || "";
-                      // 更新 articleData 的 seo_meta
-                      if (cleanedData.seo_meta) {
-                        articleData.seo_meta = cleanedData.seo_meta;
-                      }
                       // 标记内容已处理，避免后续再次检查
                       contentProcessed = true;
                       console.log(
@@ -747,9 +719,6 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                           extractedData.content.trim().length > 0
                         ) {
                           articleContent = extractedData.content;
-                          if (extractedData.seo_meta) {
-                            articleData.seo_meta = extractedData.seo_meta;
-                          }
                           console.log(
                             "[ArticleGeneratorLayout] 从 JSON 中提取内容成功，长度:",
                             articleContent.length
@@ -777,12 +746,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
               }
 
               // 确保 title 和 content 都有值
-              // 优先使用解析出的 seo_meta.title，其次使用 finalData 中的 title
-              const articleTitle =
-                articleData.seo_meta?.title ||
-                finalData.title ||
-                finalData.seo_meta?.title ||
-                "";
+              const articleTitle = finalData.title || "";
 
               console.log("[ArticleGeneratorLayout] 解析文章内容:", {
                 hasArticleBody: !!finalData.article_body,
@@ -805,38 +769,10 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                     : finalData.article_body,
               });
 
-              // 构建 qualityReview 对象（如果不存在，从 geo_score 和 logic_check 构建）
-              let qualityReview =
-                articleData.qualityReview ||
-                finalData.qualityReview ||
-                finalData.quality_review;
-
-              // 如果没有 qualityReview，但从 geo_score 或 logic_check 存在，构建一个
-              if (!qualityReview) {
-                const geoScore = articleData.geo_score || finalData.geo_score;
-                const logicCheck =
-                  articleData.logic_check || finalData.logic_check;
-                const seoMeta = articleData.seo_meta || finalData.seo_meta;
-
-                if (geoScore || logicCheck || seoMeta) {
-                  qualityReview = {
-                    geo_score: geoScore,
-                    logic_check: logicCheck,
-                    seo_meta: seoMeta,
-                  };
-                }
-              }
-
               const finalArticle = {
                 title: articleTitle,
                 content: articleContent,
                 images: Array.isArray(finalData.images) ? finalData.images : [],
-                // Include additional data for quality scores and GEO analysis
-                // 优先使用解析出的元数据，其次使用 finalData 中的元数据
-                geo_score: articleData.geo_score || finalData.geo_score,
-                qualityReview: qualityReview,
-                seo_meta: articleData.seo_meta || finalData.seo_meta,
-                logic_check: articleData.logic_check || finalData.logic_check,
               };
 
               console.log("[ArticleGeneratorLayout] 构建 finalArticle:", {
@@ -849,20 +785,8 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                 finalDataKeys: Object.keys(finalData),
                 finalDataArticleBody: !!finalData.article_body,
                 finalDataArticleBodyLength: finalData.article_body?.length || 0,
-                hasQualityReview: !!finalArticle.qualityReview,
-                hasFinalDataQualityReview: !!(
-                  finalData.qualityReview || finalData.quality_review
-                ),
-                finalDataQualityReviewKeys: finalData.qualityReview
-                  ? Object.keys(finalData.qualityReview)
-                  : finalData.quality_review
-                  ? Object.keys(finalData.quality_review)
-                  : [],
-                hasGeoScore: !!finalArticle.geo_score,
-                hasSeoMeta: !!finalArticle.seo_meta,
-                hasLogicCheck: !!finalArticle.logic_check,
                 articleDataKeys: Object.keys(articleData),
-                hasArticleDataQualityReview: !!articleData.qualityReview,
+                hasArticleDataQualityReview: false,
               });
 
               // Also add a final-article card event to the stream

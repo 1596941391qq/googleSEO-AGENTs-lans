@@ -7,7 +7,6 @@ import {
   CompetitorAnalysisResult
 } from '../agents/agent-2-seo-researcher.js';
 import { generateContent, ContentGenerationResult, AvailableImage } from '../agents/agent-3-content-writer.js';
-import { reviewQuality, QualityReviewResult } from '../agents/agent-4-quality-reviewer.js';
 import {
   extractVisualThemes,
   generateImagePrompts,
@@ -565,13 +564,6 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       article_body: articleContent,
       markdown: contentResult!.markdown || articleContent,
       images: Array.isArray(generatedImages) ? generatedImages : [],
-      // Include metadata from Content Writer if available
-      seo_meta: contentResult!.seo_meta || (strategyReport?.metaDescription ? {
-        title: articleTitle,
-        description: strategyReport.metaDescription
-      } : undefined),
-      geo_score: contentResult!.geo_score,
-      logic_check: contentResult!.logic_check,
     };
 
     // Log final article for debugging - 详细日志
@@ -585,8 +577,6 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       hasMarkdown: !!finalArticle.markdown,
       imagesCount: finalArticle.images?.length || 0,
       imagesUrls: finalArticle.images?.map((i: any) => i.url?.substring(0, 50)),
-      hasSeoMeta: !!finalArticle.seo_meta,
-      hasGeoScore: !!finalArticle.geo_score,
     });
 
     // 如果内容仍然为空，记录警告

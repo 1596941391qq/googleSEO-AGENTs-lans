@@ -57,9 +57,7 @@ export function setRequestModel(model: string | null): void {
  * 获取当前使用的模型
  */
 export function getCurrentModel(): string {
-  const result = requestModelOverride || MODEL;
-  console.log(`[Gemini] getCurrentModel: override=${requestModelOverride}, default=${MODEL}, result=${result}`);
-  return result;
+  return requestModelOverride || MODEL;
 }
 
 /**
@@ -274,7 +272,6 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
   // 优先级：config.model > requestModelOverride > 环境变量 MODEL
   const modelName = config?.model || getCurrentModel();
   const url = buildApiUrl(modelName);
-  console.log(`[Gemini API] Using proxy: ${proxyInfo.provider}, model: ${modelName}, URL: ${url}`);
 
   const contents: any[] = [];
   if (systemInstruction) {
@@ -325,7 +322,6 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
   const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 minutes
 
   try {
-    console.log(`[Gemini API] Requesting ${config?.model || MODEL} with timeout 240s`);
     const response = await fetch(url, {
       method: 'POST',
       headers: {

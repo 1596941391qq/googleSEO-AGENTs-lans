@@ -1,4 +1,4 @@
-﻿/**
+/**
  * AI Agent Prompt配置
  *
  * 所有Agent的默认Prompt都在这里配置
@@ -1270,23 +1270,7 @@ A：选择时主要考虑[因素1]、[因素2]、[因素3]。[具体建议]。
 
 # 输出指令
 
-请以 Markdown 格式输出（不要使用代码块包裹整篇文章，直接输出Markdown）。
-
-{
-  "seo_meta": { "title": "...", "description": "..." },
-  "article_body": "Markdown 格式正文（直接Markdown，不用代码块包裹）...",
-  "geo_score": {
-    "title_standard": "标题规范得分 (0-10)",
-    "summary": "首屏摘要得分 (0-15)",
-    "information_gain": "信息增益得分 (0-25)",
-    "format_engineering": "格式工程得分 (0-20)",
-    "entity_engineering": "实体工程得分 (0-10)",
-    "comparison": "对比区得分 (0-10)",
-    "faq": "FAQ质量得分 (0-10)",
-    "total_score": "总分 (0-100)"
-  },
-  "logic_check": "一句话总结主要优化点（不超过50字）"
-}
+请直接以 Markdown 格式输出完整文章内容（不要使用代码块包裹，不要输出 JSON 格式，直接输出 Markdown 文本）。
 `,
     en: `
 # Role
@@ -1471,23 +1455,7 @@ A: [Product] mainly targets [User group 1] and [User group 2]. Especially suitab
 
 # Output Instructions
 
-Output in Markdown format (do not wrap entire article in code blocks, output Markdown directly).
-
-{
-  "seo_meta": { "title": "...", "description": "..." },
-  "article_body": "Article content in Markdown (direct Markdown, no code block wrapping)...",
-  "geo_score": {
-    "title_standard": "Title standard score (0-10)",
-    "summary": "First-screen summary score (0-15)",
-    "information_gain": "Information gain score (0-25)",
-    "format_engineering": "Format engineering score (0-20)",
-    "entity_engineering": "Entity engineering score (0-10)",
-    "comparison": "Comparison section score (0-10)",
-    "faq": "FAQ quality score (0-10)",
-    "total_score": "Total score (0-100)"
-  },
-  "logic_check": "One-sentence summary of main optimization points (max 50 chars)"
-}
+Output the complete article directly in Markdown format (do not wrap in code blocks, do not output JSON format, output Markdown text directly).
 `
   }
 };
@@ -1544,50 +1512,28 @@ Promotion Strategy:
     const imageInstructions = variables.availableImages && variables.availableImages.length > 0
       ? (language === 'zh'
         ? `
-### 图片插入规范 (Image Embedding)
-你有以下可用图片资源，请在文章中**必须**插入这些图片：
-
+### 图片插入（精简版）
 ${variables.availableImages.map((img, i) => `**图片 ${i + 1}**: ${img.theme}
 - URL: ${img.url}
-- 描述: ${img.description || img.theme}
-${img.isScreenshot ? `- 类型: 推广截图 (来源: ${img.sourceUrl || '推广网站'})` : '- 类型: AI生成图'}`).join('\n\n')}
+- Alt建议: ${img.description || img.theme}`).join('\n\n')}
 
-**插入要求：**
-1. **必须使用标准Markdown图片语法**：\`![alt描述](图片URL)\`
-2. **每张图片只使用一次**，不要重复插入同一张图片
-3. **位置选择策略**：
-   - 在"核心要点"或首段之后插入第一张图片
-   - 在重要的H2章节开头或结尾处插入图片
-   - 推广截图应放在介绍对应网站/工具的段落附近
-   - AI生成图应放在与其主题最相关的内容节点
-4. **alt文本要求**：
-   - 包含核心关键词，有助于图片SEO
-   - 准确描述图片内容，不要使用"图片"、"image"等无意义词汇
-   - 示例：\`![best project management tools comparison 2026](URL)\`
-5. **严禁**将图片全部堆在文章开头或结尾，必须分散嵌入到正文中
+规则（仅3-5条）：
+1. 使用标准 Markdown 语法：\`![alt](URL)\`
+2. 每张图仅使用一次，分散嵌入到相关段落
+3. 优先放在关键 H2 段落附近
+4. Alt 必须包含核心关键词并描述语义
 `
         : `
-### Image Embedding Guidelines
-You have the following images available. You **MUST** embed these images in the article:
-
+### Image Embedding (Condensed)
 ${variables.availableImages.map((img, i) => `**Image ${i + 1}**: ${img.theme}
 - URL: ${img.url}
-- Description: ${img.description || img.theme}
-${img.isScreenshot ? `- Type: Promotion Screenshot (Source: ${img.sourceUrl || 'promoted website'})` : '- Type: AI Generated'}`).join('\n\n')}
+- Alt suggestion: ${img.description || img.theme}`).join('\n\n')}
 
-**Embedding Requirements:**
-1. **Use standard Markdown image syntax**: \`![alt description](image URL)\`
-2. **Use each image only once** - do not duplicate images
-3. **Placement Strategy**:
-   - Insert the first image after "Key Takeaways" or the opening paragraph
-   - Place images at the beginning or end of important H2 sections
-   - Promotion screenshots should be near paragraphs discussing that website/tool
-   - AI-generated images should be placed at content nodes most relevant to their theme
-4. **Alt Text Requirements**:
-   - Include core keywords for image SEO
-   - Accurately describe image content, avoid generic words like "image" or "picture"
-   - Example: \`![best project management tools comparison 2026](URL)\`
-5. **DO NOT** pile all images at the beginning or end - they must be distributed throughout the article body
+Rules (3-5 only):
+1. Use Markdown syntax: \`![alt](URL)\`
+2. Use each image once, distribute across relevant sections
+3. Place near key H2 sections
+4. Alt must include core keyword and semantic description
 `)
       : '';
 
