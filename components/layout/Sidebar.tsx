@@ -231,18 +231,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside
-      className={`relative border-r flex flex-col shrink-0 transition-all duration-500 ease-out ${
-        isCollapsed ? "w-16" : "w-72"
-      } ${
-        isDarkTheme ? "border-white/10 bg-[#0a0a0a]" : "border-gray-200 bg-white"
-      }`}
-    >
+    <>
+      {/* 移动端遮罩层 */}
+      {!isCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+          onClick={onToggleCollapse}
+        />
+      )}
+
+      <aside
+        className={`relative border-r flex flex-col shrink-0 transition-all duration-500 ease-out z-50 ${
+          isCollapsed
+            ? "w-0 md:w-16 -translate-x-full md:translate-x-0"
+            : "w-72 translate-x-0"
+        } ${
+          isDarkTheme ? "border-white/10 bg-[#0a0a0a]" : "border-gray-200 bg-white"
+        } fixed md:relative h-full`}
+      >
       {/* Sidebar Toggle Button - Enhanced Visibility */}
       <button
         onClick={onToggleCollapse}
         className={cn(
-          "absolute -right-3 top-32 w-8 h-8 rounded-full border z-[60] flex items-center justify-center transition-all duration-500 ease-out shadow-[0_8px_30px_rgb(0,0,0,0.3)] group/btn backdrop-blur-sm",
+          "absolute top-32 w-8 h-8 rounded-full border z-[60] flex items-center justify-center transition-all duration-500 ease-out shadow-[0_8px_30px_rgb(0,0,0,0.3)] group/btn backdrop-blur-sm",
+          isCollapsed ? "-right-3 md:-right-3" : "right-4 md:-right-3",
           isDarkTheme
             ? "bg-[#111]/90 border-white/20 text-white/70 hover:text-white hover:border-emerald-400/50 hover:bg-emerald-400/10 hover:shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:scale-110"
             : "bg-white border-gray-300 text-gray-500 hover:text-emerald-600 hover:border-emerald-600 shadow-sm hover:scale-110"
@@ -484,5 +496,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {labels.version}
       </div>
     </aside>
+    </>
   );
 };
