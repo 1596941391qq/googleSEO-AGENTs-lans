@@ -1156,7 +1156,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
               isDarkTheme ? "text-white" : "text-zinc-900"
             )}
           >
-            {uiLanguage === "zh" ? "内容发布中心" : "Content Publishing"}
+            {uiLanguage === "zh" ? "发布管理" : "Publish Manager"}
           </h2>
           <p
             className={cn(
