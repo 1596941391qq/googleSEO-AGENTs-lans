@@ -18,7 +18,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   return (
     <header
       className={cn(
-        "md:hidden fixed top-0 left-0 right-0 z-30 border-b backdrop-blur-xl transition-all duration-300",
+        "md:hidden fixed top-0 left-0 right-0 z-[100] border-b backdrop-blur-xl transition-all duration-300",
         isDarkTheme
           ? "bg-[#0a0a0a]/90 border-white/10"
           : "bg-white/90 border-gray-200"
