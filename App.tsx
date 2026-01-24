@@ -63,6 +63,8 @@ import { Badge } from "./components/ui/badge";
 import { cn } from "./lib/utils";
 import { useAuth } from "./contexts/AuthContext";
 import { Sidebar } from "./components/layout/Sidebar";
+import { MobileHeader } from "./components/layout/MobileHeader";
+import { MobileBottomNav } from "./components/layout/MobileBottomNav";
 import { TaskMenuModal } from "./components/layout/TaskMenuModal";
 import { StrategyModal } from "./components/workflow/StrategyModal";
 import { StepItem } from "./components/layout/StepItem";
@@ -3957,6 +3959,14 @@ export default function App() {
           ...prev,
           isSidebarCollapsed: savedCollapsed === "true",
         }));
+      } else {
+        // 移动端默认收起侧边栏
+        if (typeof window !== "undefined" && window.innerWidth < 768) {
+          setState((prev) => ({
+            ...prev,
+            isSidebarCollapsed: true,
+          }));
+        }
       }
       const savedUiLanguage = localStorage.getItem("ui_language");
       if (savedUiLanguage === "zh" || savedUiLanguage === "en") {
@@ -10571,12 +10581,51 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     });
   };
 
+  // 移动端侧边栏打开时锁定背景滚动
+  useEffect(() => {
+    if (!state.isSidebarCollapsed && typeof window !== "undefined" && window.innerWidth < 768) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [state.isSidebarCollapsed]);
+
+  // 监听窗口大小变化，移动端默认收起侧边栏
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== "undefined" && window.innerWidth < 768) {
+        setState((prev) => {
+          if (!prev.isSidebarCollapsed) {
+            return { ...prev, isSidebarCollapsed: true };
+          }
+          return prev;
+        });
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+  }, []);
+
   return (
     <div
-      className={`flex h-screen overflow-hidden ${
-        isDarkTheme ? "bg-[#050505] text-[#e5e5e5]" : "bg-gray-50 text-gray-900"
+      className={`flex h-screen overflow-hidden ${ isDarkTheme ? "bg-[#050505] text-[#e5e5e5]" : "bg-gray-50 text-gray-900"
       }`}
     >
+      {/* 移动端顶部导航栏 */}
+      <MobileHeader
+        isDarkTheme={isDarkTheme}
+        isMenuOpen={!state.isSidebarCollapsed}
+        onMenuToggle={handleToggleSidebar}
+        title="Niche Digger"
+      />
+
       <Sidebar
         tasks={state.taskManager.tasks}
         activeTaskId={state.taskManager.activeTaskId}
@@ -10687,11 +10736,11 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       />
 
       {/* Main Container */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 pt-16 md:pt-0 pb-20 md:pb-0">
         {/* Header: Process Indicators & User Info */}
         {state.step !== "article-generator" && (
           <header
-            className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-8 shrink-0 ${
+            className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0 ${
               isDarkTheme
                 ? "border-white/5 bg-[#0a0a0a]/50"
                 : "border-gray-200 bg-white/80"
@@ -16119,6 +16168,99 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           </div>
         )}
       </div>
+
+      {/* 移动端底部导航栏 */}
+      <MobileBottomNav
+        isDarkTheme={isDarkTheme}
+        activeTab={state.contentGeneration.activeTab}
+        onTabChange={(tab) => {
+          setState((prev) => {
+            const currentActiveTaskId = prev.taskManager.activeTaskId;
+            let updatedTasks = prev.taskManager.tasks;
+
+            if (currentActiveTaskId) {
+              const currentTask = updatedTasks.find(
+                (t) => t.id === currentActiveTaskId
+              );
+              if (currentTask) {
+                updatedTasks = updatedTasks.map((task) => {
+                  if (task.id === currentActiveTaskId) {
+                    return {
+                      ...snapshotCurrentTask(prev, task),
+                      isActive: false,
+                    };
+                  }
+                  return {
+                    ...task,
+                    isActive: false,
+                  };
+                });
+              } else {
+                updatedTasks = updatedTasks.map((task) => ({
+                  ...task,
+                  isActive: false,
+                }));
+              }
+            } else {
+              updatedTasks = updatedTasks.map((task) => ({
+                ...task,
+                isActive: false,
+              }));
+            }
+
+            try {
+              localStorage.setItem(
+                STORAGE_KEYS.TASKS,
+                JSON.stringify(updatedTasks)
+              );
+            } catch (e) {
+              console.error("Failed to save tasks", e);
+            }
+
+            if (currentActiveTaskId && authenticated) {
+              const taskToSync = updatedTasks.find(
+                (t) => t.id === currentActiveTaskId
+              );
+              if (taskToSync && !taskToSync.id.startsWith("task-")) {
+                syncTaskToBackend(taskToSync);
+              }
+            }
+
+            // 移动端切换标签时，自动收起侧边栏
+            if (window.innerWidth < 768) {
+              return {
+                ...prev,
+                step: "content-generation",
+                isSidebarCollapsed: true,
+                taskManager: {
+                  ...prev.taskManager,
+                  activeTaskId: null,
+                  tasks: updatedTasks,
+                },
+                contentGeneration: {
+                  ...prev.contentGeneration,
+                  activeTab: tab,
+                },
+              };
+            }
+
+            return {
+              ...prev,
+              step: "content-generation",
+              taskManager: {
+                ...prev.taskManager,
+                activeTaskId: null,
+                tasks: updatedTasks,
+              },
+              contentGeneration: {
+                ...prev.contentGeneration,
+                activeTab: tab,
+              },
+            };
+          });
+        }}
+        uiLanguage={state.uiLanguage}
+      />
     </div>
   );
 }
