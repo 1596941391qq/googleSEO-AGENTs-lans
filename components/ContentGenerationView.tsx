@@ -1156,7 +1156,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
               isDarkTheme ? "text-white" : "text-zinc-900"
             )}
           >
-            {uiLanguage === "zh" ? "内容发布中心" : "Content Publishing"}
+            {uiLanguage === "zh" ? "发布管理" : "Publish Manager"}
           </h2>
           <p
             className={cn(
@@ -4623,6 +4623,35 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           }}
           onViewDraft={(kw) => {
             // Draft viewing logic is inside ProjectDashboard
+          }}
+          onReuseSettings={(project) => {
+            // Store settings in localStorage for reuse
+            const reuseSettings = {
+              seedKeyword: project.seed_keyword || '',
+              websiteUrl: project.website_url || '',
+              websiteDomain: project.website_domain || '',
+              targetLanguage: project.target_language || 'en',
+              miningMode: project.mining_mode || 'blue-ocean',
+              timestamp: Date.now(),
+            };
+
+            try {
+              localStorage.setItem('reuse_mining_settings', JSON.stringify(reuseSettings));
+
+              // Show success notification
+              alert(
+                uiLanguage === 'zh'
+                  ? '设置已复制！请前往挖词页面，系统将自动填充这些设置。'
+                  : 'Settings copied! Go to the mining page, and the system will auto-fill these settings.'
+              );
+            } catch (error) {
+              console.error('Failed to save reuse settings:', error);
+              alert(
+                uiLanguage === 'zh'
+                  ? '保存设置失败，请重试。'
+                  : 'Failed to save settings. Please try again.'
+              );
+            }
           }}
         />
       )}

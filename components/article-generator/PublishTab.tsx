@@ -150,7 +150,7 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
             "text-3xl font-black tracking-tight",
             isDarkTheme ? "text-white" : "text-zinc-900"
           )}>
-            {uiLanguage === 'zh' ? '内容发布中心' : 'Content Publishing'}
+            {uiLanguage === 'zh' ? '发布管理' : 'Publish Manager'}
           </h2>
           <p className={cn(
             "text-sm font-medium opacity-60",
