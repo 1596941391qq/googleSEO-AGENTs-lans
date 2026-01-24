@@ -5033,7 +5033,6 @@ export default function App() {
             websiteUrl: updated.miningState.websiteUrl,
             websiteDomain: updated.miningState.websiteDomain,
             miningMode: currentState.miningMode,
-            miningConfig: currentState.miningConfig,
             selectedWebsite: currentState.selectedWebsite,
             websiteAnalysis: updated.miningState.websiteAnalysis,
             competitorAnalysis: updated.miningState.competitorAnalysis,

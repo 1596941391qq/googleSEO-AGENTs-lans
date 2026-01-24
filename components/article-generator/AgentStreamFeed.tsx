@@ -1817,7 +1817,8 @@ const SearchPreferencesCard: React.FC<{
               </div>
             </div>
           )
-        ))}
+        )
+      )}
     </div>
   );
 };
