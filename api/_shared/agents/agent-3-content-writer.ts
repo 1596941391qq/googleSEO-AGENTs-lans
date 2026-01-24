@@ -155,7 +155,6 @@ export async function generateContent(
       // 压缩 Markdown 策略：只保留关键信息
       const markdown = seoStrategyReport.markdown;
       // 提取关键部分：目标关键词、用户意图、推荐字数、结构大纲、核心长尾词
-      const keywordMatch = markdown.match(/(?:目标关键词|Target Keyword|关键词)[:：]\s*(.+?)(?:\n|$)/i);
       const intentMatch = markdown.match(/(?:用户意图|User Intent|搜索意图)[:：]\s*(.+?)(?:\n|$)/i);
       const wordCountMatch = markdown.match(/(?:推荐字数|Recommended Word Count|字数)[:：]\s*(\d+)/i);
       const structureMatch = markdown.match(/(?:内容结构|Content Structure|大纲)[:：]?\s*([\s\S]*?)(?:\n##|\n---|\n\*\*|$)/i);
@@ -163,7 +162,7 @@ export async function generateContent(
 
       seoContext = `
 SEO Strategy (Compressed):
-- Target Keyword: ${keywordMatch ? keywordMatch[1].trim() : targetKeyword}
+- Target Keyword: ${targetKeyword}
 - User Intent: ${intentMatch ? intentMatch[1].trim().substring(0, 100) : 'N/A'}
 - Word Count: ${wordCountMatch ? wordCountMatch[1] : '1500-2000'} words
 - Structure Outline: ${structureMatch ? structureMatch[1].trim().substring(0, 500) : 'See H2 sections'}
