@@ -12,11 +12,11 @@
     />
     <style>
       html {
-        font-size: 14px;
+        font-size: 15px;
       }
       @media (min-width: 1280px) {
         html {
-          font-size: 15px;
+          font-size: 16px;
         }
       }
       @media (min-width: 1536px) {
@@ -33,16 +33,18 @@
         font-family: "Inter", sans-serif;
         background-color: #0a0a0a;
         font-size: 1rem;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
       .font-mono {
         font-family: "JetBrains Mono", monospace;
       }
-      /* Grid overlay effect */
+      /* Grid overlay effect - 更精致 */
       .grid-overlay {
-        background-image: 
-          linear-gradient(rgba(34, 197, 94, 0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(34, 197, 94, 0.03) 1px, transparent 1px);
-        background-size: 40px 40px;
+        background-image:
+          linear-gradient(rgba(52, 211, 153, 0.02) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(52, 211, 153, 0.02) 1px, transparent 1px);
+        background-size: 50px 50px;
         background-position: 0 0, 0 0;
       }
       /* Hide all scrollbars while maintaining scroll functionality */
@@ -53,7 +55,7 @@
       *::-webkit-scrollbar {
         display: none;  /* Chrome, Safari and Opera */
       }
-      
+
       /* Legacy custom-scrollbar class - now also hidden */
       .custom-scrollbar {
         -ms-overflow-style: none;  /* IE and Edge */
@@ -67,23 +69,23 @@
       .visible-scrollbar {
         -ms-overflow-style: auto !important;
         scrollbar-width: thin !important;
-        scrollbar-color: rgba(16, 185, 129, 0.3) transparent !important;
+        scrollbar-color: rgba(52, 211, 153, 0.3) transparent !important;
       }
       .visible-scrollbar::-webkit-scrollbar {
         display: block !important;
-        width: 4px !important;
+        width: 6px !important;
       }
       .visible-scrollbar::-webkit-scrollbar-track {
         background: transparent !important;
       }
       .visible-scrollbar::-webkit-scrollbar-thumb {
-        background-color: rgba(16, 185, 129, 0.3) !important;
+        background-color: rgba(52, 211, 153, 0.3) !important;
         border-radius: 20px !important;
       }
       .visible-scrollbar::-webkit-scrollbar-thumb:hover {
-        background-color: rgba(16, 185, 129, 0.6) !important;
+        background-color: rgba(52, 211, 153, 0.6) !important;
       }
-      
+
       /* Shimmer animation for energy flow effect */
       @keyframes shimmer {
         0% {
@@ -92,6 +94,78 @@
         100% {
           transform: translateX(100%);
         }
+      }
+
+      /* Apple-like spring animation */
+      @keyframes spring-in {
+        0% {
+          opacity: 0;
+          transform: scale(0.9) translateY(10px);
+        }
+        50% {
+          transform: scale(1.02) translateY(-2px);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1) translateY(0);
+        }
+      }
+
+      /* Fade in with slide */
+      @keyframes fade-slide-in {
+        0% {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Glow pulse animation */
+      @keyframes glow-pulse {
+        0%, 100% {
+          box-shadow: 0 0 20px rgba(52, 211, 153, 0.3);
+        }
+        50% {
+          box-shadow: 0 0 30px rgba(52, 211, 153, 0.5);
+        }
+      }
+
+      /* Apply animations */
+      .animate-spring-in {
+        animation: spring-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+
+      .animate-fade-slide-in {
+        animation: fade-slide-in 0.4s ease-out;
+      }
+
+      .animate-glow-pulse {
+        animation: glow-pulse 2s ease-in-out infinite;
+      }
+
+      /* Smooth transitions for all interactive elements */
+      button, a, input, select, textarea {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      /* Glass morphism utility */
+      .glass {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      /* Performance optimization */
+      .will-change-transform {
+        will-change: transform;
+      }
+
+      .will-change-opacity {
+        will-change: opacity;
       }
     </style>
     <script type="importmap">
