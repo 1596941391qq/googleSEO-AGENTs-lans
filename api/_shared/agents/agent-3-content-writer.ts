@@ -149,128 +149,221 @@ export async function generateContent(
       targetKeyword = structuredReport.targetKeyword || 'the target keyword';
     }
 
-    // 构建SEO研究上下文
+    // 构建SEO研究上下文（压缩版）
     let seoContext = '';
     if (isMarkdownStrategy) {
-      // Use Markdown strategy directly
-      seoContext = `
-SEO Strategy Report (Markdown Format):
+      // 压缩 Markdown 策略：只保留关键信息
+      const markdown = seoStrategyReport.markdown;
+      // 提取关键部分：目标关键词、用户意图、推荐字数、结构大纲、核心长尾词
+      const keywordMatch = markdown.match(/(?:目标关键词|Target Keyword|关键词)[:：]\s*(.+?)(?:\n|$)/i);
+      const intentMatch = markdown.match(/(?:用户意图|User Intent|搜索意图)[:：]\s*(.+?)(?:\n|$)/i);
+      const wordCountMatch = markdown.match(/(?:推荐字数|Recommended Word Count|字数)[:：]\s*(\d+)/i);
+      const structureMatch = markdown.match(/(?:内容结构|Content Structure|大纲)[:：]?\s*([\s\S]*?)(?:\n##|\n---|\n\*\*|$)/i);
+      const longtailMatch = markdown.match(/(?:长尾关键词|Long-tail Keywords|LSI)[:：]?\s*(.{0,200}?)(?:\n##|\n---|\n\*\*|$)/i);
 
-${seoStrategyReport.markdown}
+      seoContext = `
+SEO Strategy (Compressed):
+- Target Keyword: ${keywordMatch ? keywordMatch[1].trim() : targetKeyword}
+- User Intent: ${intentMatch ? intentMatch[1].trim().substring(0, 100) : 'N/A'}
+- Word Count: ${wordCountMatch ? wordCountMatch[1] : '1500-2000'} words
+- Structure Outline: ${structureMatch ? structureMatch[1].trim().substring(0, 500) : 'See H2 sections'}
+- Top Long-tail Keywords: ${longtailMatch ? longtailMatch[1].trim().substring(0, 150) : 'N/A'}
 `;
     } else {
-      // Use old structured format
+      // 压缩结构化格式：只保留可行动的要点
       const structuredReport = seoStrategyReport as SEOStrategyReport;
-      seoContext = `
-SEO Strategy Report:
-- Target Keyword: ${structuredReport.targetKeyword}
-- Page Title (H1): ${structuredReport.pageTitleH1}
-- Meta Description: ${structuredReport.metaDescription}
-- URL Slug: ${structuredReport.urlSlug}
-- User Intent: ${structuredReport.userIntentSummary}
-- Recommended Word Count: ${structuredReport.recommendedWordCount} words
-- Long-tail Keywords: ${structuredReport.longTailKeywords?.join(', ') || 'N/A'}
+      // 只保留 H2 标题和简短说明（每个限制 50 字）
+      const compressedStructure = structuredReport.contentStructure
+        .map((section, i) => `${i + 1}. ${section.header}: ${section.description.substring(0, 50)}${section.description.length > 50 ? '...' : ''}`)
+        .join('\n');
+      // 只保留前 10 个长尾关键词
+      const topLongtail = structuredReport.longTailKeywords?.slice(0, 10).join(', ') || 'N/A';
 
-Content Structure:
-${structuredReport.contentStructure.map((section, i) =>
-        `${i + 1}. ${section.header}\n   ${section.description}`
-      ).join('\n\n')}
+      seoContext = `
+SEO Strategy (Compressed):
+- Target Keyword: ${structuredReport.targetKeyword}
+- User Intent: ${structuredReport.userIntentSummary.substring(0, 100)}
+- Word Count: ${structuredReport.recommendedWordCount} words
+- Structure Outline:
+${compressedStructure}
+- Top 10 Long-tail Keywords: ${topLongtail}
 `;
     }
 
-    // 添加搜索引擎偏好分析上下文（如果提供）
+    // 添加搜索引擎偏好分析上下文（压缩版：提炼成 3 条可执行准则）
     let searchPreferencesContext = '';
     if (searchPreferences) {
-      if (contentLanguage === 'zh') {
-        searchPreferencesContext = `
-搜索引擎偏好分析：
-${searchPreferences.semantic_landscape ? `- 语义分布：${searchPreferences.semantic_landscape}\n` : ''}
-${searchPreferences.engine_strategies?.google ? `- Google策略：${JSON.stringify(searchPreferences.engine_strategies.google, null, 2)}\n` : ''}
-${searchPreferences.engine_strategies?.perplexity ? `- Perplexity策略：${JSON.stringify(searchPreferences.engine_strategies.perplexity, null, 2)}\n` : ''}
-`;
-      } else {
-        searchPreferencesContext = `
-Search Engine Preferences:
-${searchPreferences.searchPreferences ? JSON.stringify(searchPreferences.searchPreferences, null, 2) : ''}
-`;
+      // 提取关键策略点，限制为 3 条简短准则
+      const guidelines: string[] = [];
+
+      if (searchPreferences.semantic_landscape) {
+        guidelines.push(searchPreferences.semantic_landscape.substring(0, 120));
+      }
+
+      if (searchPreferences.engine_strategies?.google) {
+        const googleStrategy = searchPreferences.engine_strategies.google;
+        if (typeof googleStrategy === 'string') {
+          guidelines.push(`Google: ${googleStrategy.substring(0, 120)}`);
+        } else if (typeof googleStrategy === 'object') {
+          const strategyText = JSON.stringify(googleStrategy).substring(0, 120);
+          guidelines.push(`Google: ${strategyText}`);
+        }
+      }
+
+      if (searchPreferences.engine_strategies?.perplexity) {
+        const perplexityStrategy = searchPreferences.engine_strategies.perplexity;
+        if (typeof perplexityStrategy === 'string') {
+          guidelines.push(`AI Search: ${perplexityStrategy.substring(0, 120)}`);
+        } else if (typeof perplexityStrategy === 'object') {
+          const strategyText = JSON.stringify(perplexityStrategy).substring(0, 120);
+          guidelines.push(`AI Search: ${strategyText}`);
+        }
+      }
+
+      if (guidelines.length > 0) {
+        searchPreferencesContext = contentLanguage === 'zh'
+          ? `\n搜索偏好准则（3条）：\n${guidelines.slice(0, 3).map((g, i) => `${i + 1}. ${g}`).join('\n')}\n`
+          : `\nSearch Preferences (3 Guidelines):\n${guidelines.slice(0, 3).map((g, i) => `${i + 1}. ${g}`).join('\n')}\n`;
       }
     }
 
-    // 添加竞争对手分析上下文（如果提供）
+    // 添加竞争对手分析上下文（压缩版：只保留 winning_formula + 3 个缺口 + 3 个标题）
     let competitorContext = '';
     if (competitorAnalysis) {
+      const winningFormula = competitorAnalysis.winning_formula?.substring(0, 200) || '';
+      const contentGaps = competitorAnalysis.content_gaps?.slice(0, 3).join('; ') || '';
+      const topTitles = competitorAnalysis.competitor_benchmark
+        ?.slice(0, 3)
+        .map(c => c.title || c.url)
+        .join('; ') || '';
+
       if (contentLanguage === 'zh') {
         competitorContext = `
-竞争对手分析：
-${competitorAnalysis.winning_formula ? `- 制胜公式：${competitorAnalysis.winning_formula}\n` : ''}
-${competitorAnalysis.recommended_structure ? `- 推荐结构：${competitorAnalysis.recommended_structure.join('\n')}\n` : ''}
-${competitorAnalysis.competitor_benchmark ? `- 竞争对手基准：${JSON.stringify(competitorAnalysis.competitor_benchmark.slice(0, 3), null, 2)}\n` : ''}
+竞品分析（压缩）：
+- 制胜公式：${winningFormula}
+- 内容缺口（Top 3）：${contentGaps}
+- 竞品标题参考（Top 3）：${topTitles}
 `;
       } else {
         competitorContext = `
-Competitor Analysis:
-${competitorAnalysis.competitorAnalysis ? JSON.stringify(competitorAnalysis.competitorAnalysis, null, 2) : ''}
+Competitor Analysis (Compressed):
+- Winning Formula: ${winningFormula}
+- Content Gaps (Top 3): ${contentGaps}
+- Competitor Titles (Top 3): ${topTitles}
 `;
       }
     }
 
-    // 添加参考资料上下文（如果提供）
+    // 添加参考资料上下文（压缩版：只抽取关键词相关段落，上限 1800 字）
     let referenceContext = '';
     if (reference) {
       if (reference.type === 'document' && reference.document) {
-        // For writer, provide full content (or summary if too long)
-        const docContent = reference.document.content.length > 10000
-          ? reference.document.content.substring(0, 10000) + '...'
-          : reference.document.content;
+        // 压缩文档内容：提取与关键词相关的段落
+        const docContent = reference.document.content;
+        let extractedContent = '';
+
+        // 简单的关键词匹配提取（不使用额外 LLM）
+        const keywordLower = targetKeyword.toLowerCase();
+        const paragraphs = docContent.split(/\n\n+/);
+        const relevantParagraphs: string[] = [];
+
+        // 提取包含关键词的段落及其上下文
+        for (let i = 0; i < paragraphs.length; i++) {
+          if (paragraphs[i].toLowerCase().includes(keywordLower)) {
+            // 添加前一段、当前段、后一段
+            if (i > 0 && !relevantParagraphs.includes(paragraphs[i - 1])) {
+              relevantParagraphs.push(paragraphs[i - 1]);
+            }
+            if (!relevantParagraphs.includes(paragraphs[i])) {
+              relevantParagraphs.push(paragraphs[i]);
+            }
+            if (i < paragraphs.length - 1 && !relevantParagraphs.includes(paragraphs[i + 1])) {
+              relevantParagraphs.push(paragraphs[i + 1]);
+            }
+          }
+        }
+
+        // 如果没有匹配，取前 1800 字
+        if (relevantParagraphs.length === 0) {
+          extractedContent = docContent.substring(0, 1800);
+        } else {
+          extractedContent = relevantParagraphs.join('\n\n').substring(0, 1800);
+        }
+
         if (contentLanguage === 'zh') {
           referenceContext = `
-用户参考文档：
+用户参考文档（压缩）：
 文件名：${reference.document.filename}
-内容：
-${docContent}
+相关内容摘要（${extractedContent.length} 字）：
+${extractedContent}${extractedContent.length >= 1800 ? '...' : ''}
 
-重要提示：虽然用户提供了参考文档，但文章的核心主题必须是"${targetKeyword}"。从文档中提取与关键词相关的信息、数据和案例，但如果文档内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${targetKeyword}"展开。
+提示：文章核心主题必须是"${targetKeyword}"，从文档中提取相关信息。
 `;
         } else {
           referenceContext = `
-User Reference Document:
+User Reference Document (Compressed):
 Filename: ${reference.document.filename}
-Content:
-${docContent}
+Relevant Content Extract (${extractedContent.length} chars):
+${extractedContent}${extractedContent.length >= 1800 ? '...' : ''}
 
-IMPORTANT: While the user provided this reference document, the core theme of the article must be "${targetKeyword}". Extract relevant information, data, and examples from the document that relate to the keyword. If the document content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${targetKeyword}".
+Note: Article core theme must be "${targetKeyword}". Extract relevant info from document.
 `;
         }
       } else if (reference.type === 'url' && reference.url?.content && reference.url?.url) {
-        // For writer, provide full content (or summary if too long)
-        const urlContent = reference.url.content.length > 10000
-          ? reference.url.content.substring(0, 10000) + '...'
-          : reference.url.content;
+        // 压缩 URL 内容：同样提取关键词相关段落
+        const urlContent = reference.url.content;
+        let extractedContent = '';
+
+        const keywordLower = targetKeyword.toLowerCase();
+        const paragraphs = urlContent.split(/\n\n+/);
+        const relevantParagraphs: string[] = [];
+
+        for (let i = 0; i < paragraphs.length; i++) {
+          if (paragraphs[i].toLowerCase().includes(keywordLower)) {
+            if (i > 0 && !relevantParagraphs.includes(paragraphs[i - 1])) {
+              relevantParagraphs.push(paragraphs[i - 1]);
+            }
+            if (!relevantParagraphs.includes(paragraphs[i])) {
+              relevantParagraphs.push(paragraphs[i]);
+            }
+            if (i < paragraphs.length - 1 && !relevantParagraphs.includes(paragraphs[i + 1])) {
+              relevantParagraphs.push(paragraphs[i + 1]);
+            }
+          }
+        }
+
+        if (relevantParagraphs.length === 0) {
+          extractedContent = urlContent.substring(0, 1800);
+        } else {
+          extractedContent = relevantParagraphs.join('\n\n').substring(0, 1800);
+        }
+
         const urlString = typeof reference.url.url === 'string' ? reference.url.url : 'N/A';
         const titleString = reference.url.title && typeof reference.url.title === 'string' ? reference.url.title : '';
+
         if (contentLanguage === 'zh') {
           referenceContext = `
-用户参考URL：
+用户参考URL（压缩）：
 URL：${urlString}
-${titleString ? `标题：${titleString}\n` : ''}内容：
-${urlContent}
+${titleString ? `标题：${titleString}\n` : ''}相关内容摘要（${extractedContent.length} 字）：
+${extractedContent}${extractedContent.length >= 1800 ? '...' : ''}
 
-重要提示：虽然用户提供了参考URL，但文章的核心主题必须是"${targetKeyword}"。从URL中提取与关键词相关的信息、数据和案例，但如果URL内容与关键词无关，请忽略不相关内容，只使用有用的部分。确保文章围绕"${targetKeyword}"展开。
+提示：文章核心主题必须是"${targetKeyword}"，从URL中提取相关信息。
 `;
         } else {
           referenceContext = `
-User Reference URL:
+User Reference URL (Compressed):
 URL: ${urlString}
-${titleString ? `Title: ${titleString}\n` : ''}Content:
-${urlContent}
+${titleString ? `Title: ${titleString}\n` : ''}Relevant Content Extract (${extractedContent.length} chars):
+${extractedContent}${extractedContent.length >= 1800 ? '...' : ''}
 
-IMPORTANT: While the user provided this reference URL, the core theme of the article must be "${targetKeyword}". Extract relevant information, data, and examples from the URL that relate to the keyword. If the URL content is not relevant to the keyword, ignore irrelevant parts and only use useful portions. Ensure the article is centered around "${targetKeyword}".
+Note: Article core theme must be "${targetKeyword}". Extract relevant info from URL.
 `;
         }
       }
     }
 
-    // 添加推广网站的抓取内容（如果有）
+    // 添加推广网站的抓取内容（压缩版：每个网站只保留标题 + 1 句描述 + 2 条功能点，上限 600 字/站）
     let promotedWebsitesContext = '';
     if (processedPromotedWebsites && processedPromotedWebsites.length > 0) {
       const sitesWithContent = processedPromotedWebsites.filter(p => p.content && p.content.trim().length > 0);
@@ -278,37 +371,77 @@ IMPORTANT: While the user provided this reference URL, the core theme of the art
         if (contentLanguage === 'zh') {
           promotedWebsitesContext = `
 
-### 推广网站详细内容
-以下是用户希望在文章中推广的网站及其抓取的内容。请根据这些内容在文章中自然地介绍和推荐这些网站：
+### 推广网站详细内容（压缩）
+以下是用户希望在文章中推广的网站及其核心信息：
 
 ${sitesWithContent.map((site, index) => {
-  const siteContent = site.content.length > 3000 ? site.content.substring(0, 3000) + '...' : site.content;
-  return `**网站 ${index + 1}: ${site.title || site.url}**
-URL: ${site.url}
-内容摘要：
-${siteContent}
-`;
-}).join('\n---\n')}
+  // 压缩内容：提取标题、简短描述、关键功能点
+  const siteContent = site.content;
+  const title = site.title || site.url;
 
-请在文章中自然地融入对这些网站的介绍和推荐，基于它们的实际内容和功能来描述。`;
+  // 提取第一句作为描述（限制 100 字）
+  const firstSentence = siteContent.split(/[。.!！\n]/)[0].substring(0, 100);
+
+  // 提取前 2 个要点（查找列表项或段落）
+  const bulletPoints: string[] = [];
+  const lines = siteContent.split('\n');
+  for (const line of lines) {
+    if (line.match(/^[-*•]\s/) || line.match(/^\d+\.\s/)) {
+      bulletPoints.push(line.trim().substring(0, 80));
+      if (bulletPoints.length >= 2) break;
+    }
+  }
+
+  // 如果没有找到列表项，提取前 2 个短段落
+  if (bulletPoints.length === 0) {
+    const paragraphs = siteContent.split(/\n\n+/).filter(p => p.length > 20 && p.length < 200);
+    bulletPoints.push(...paragraphs.slice(0, 2).map(p => p.substring(0, 80)));
+  }
+
+  return `**网站 ${index + 1}: ${title}**
+URL: ${site.url}
+描述：${firstSentence}
+核心功能：
+${bulletPoints.map(bp => `- ${bp}`).join('\n')}`;
+}).join('\n\n---\n\n')}
+
+请在文章中自然地融入对这些网站的介绍和推荐。`;
         } else {
           promotedWebsitesContext = `
 
-### Promoted Websites Content
-Below are the websites the user wants to promote in the article, along with their scraped content. Please naturally introduce and recommend these websites based on this content:
+### Promoted Websites Content (Compressed)
+Below are the websites the user wants to promote with their core information:
 
 ${sitesWithContent.map((site, index) => {
-  const siteContent = site.content.length > 3000 ? site.content.substring(0, 3000) + '...' : site.content;
-  return `**Website ${index + 1}: ${site.title || site.url}**
-URL: ${site.url}
-Content Summary:
-${siteContent}
-`;
-}).join('\n---\n')}
+  const siteContent = site.content;
+  const title = site.title || site.url;
 
-Please naturally integrate introductions and recommendations for these websites in the article, describing them based on their actual content and features.`;
+  const firstSentence = siteContent.split(/[.!?\n]/)[0].substring(0, 100);
+
+  const bulletPoints: string[] = [];
+  const lines = siteContent.split('\n');
+  for (const line of lines) {
+    if (line.match(/^[-*•]\s/) || line.match(/^\d+\.\s/)) {
+      bulletPoints.push(line.trim().substring(0, 80));
+      if (bulletPoints.length >= 2) break;
+    }
+  }
+
+  if (bulletPoints.length === 0) {
+    const paragraphs = siteContent.split(/\n\n+/).filter(p => p.length > 20 && p.length < 200);
+    bulletPoints.push(...paragraphs.slice(0, 2).map(p => p.substring(0, 80)));
+  }
+
+  return `**Website ${index + 1}: ${title}**
+URL: ${site.url}
+Description: ${firstSentence}
+Key Features:
+${bulletPoints.map(bp => `- ${bp}`).join('\n')}`;
+}).join('\n\n---\n\n')}
+
+Please naturally integrate these websites in the article.`;
         }
-        console.log(`[Content Writer] Added ${sitesWithContent.length} promoted websites content to context`);
+        console.log(`[Content Writer] Added ${sitesWithContent.length} promoted websites (compressed) to context`);
       }
     }
 

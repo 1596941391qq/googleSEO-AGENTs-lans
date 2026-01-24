@@ -1270,23 +1270,12 @@ A：选择时主要考虑[因素1]、[因素2]、[因素3]。[具体建议]。
 
 # 输出指令
 
-请以 Markdown 格式输出（不要使用代码块包裹整篇文章，直接输出Markdown）。
+请以 Markdown 格式输出完整文章（不要使用代码块包裹整篇文章，直接输出Markdown）。
 
-{
-  "seo_meta": { "title": "...", "description": "..." },
-  "article_body": "Markdown 格式正文（直接Markdown，不用代码块包裹）...",
-  "geo_score": {
-    "title_standard": "标题规范得分 (0-10)",
-    "summary": "首屏摘要得分 (0-15)",
-    "information_gain": "信息增益得分 (0-25)",
-    "format_engineering": "格式工程得分 (0-20)",
-    "entity_engineering": "实体工程得分 (0-10)",
-    "comparison": "对比区得分 (0-10)",
-    "faq": "FAQ质量得分 (0-10)",
-    "total_score": "总分 (0-100)"
-  },
-  "logic_check": "一句话总结主要优化点（不超过50字）"
-}
+文章应包含：
+- H1 标题（文章主标题）
+- 文章正文（使用 H2、H3 标题组织结构）
+- 关键要点总结（在文章末尾）
 `,
     en: `
 # Role
@@ -1473,21 +1462,10 @@ A: [Product] mainly targets [User group 1] and [User group 2]. Especially suitab
 
 Output in Markdown format (do not wrap entire article in code blocks, output Markdown directly).
 
-{
-  "seo_meta": { "title": "...", "description": "..." },
-  "article_body": "Article content in Markdown (direct Markdown, no code block wrapping)...",
-  "geo_score": {
-    "title_standard": "Title standard score (0-10)",
-    "summary": "First-screen summary score (0-15)",
-    "information_gain": "Information gain score (0-25)",
-    "format_engineering": "Format engineering score (0-20)",
-    "entity_engineering": "Entity engineering score (0-10)",
-    "comparison": "Comparison section score (0-10)",
-    "faq": "FAQ quality score (0-10)",
-    "total_score": "Total score (0-100)"
-  },
-  "logic_check": "One-sentence summary of main optimization points (max 50 chars)"
-}
+The article should include:
+- H1 Title (main article title)
+- Article Body (organized with H2, H3 headings)
+- Key Takeaways (at the end of the article)
 `
   }
 };
