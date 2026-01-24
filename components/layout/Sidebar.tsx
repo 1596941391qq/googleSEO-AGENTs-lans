@@ -42,21 +42,21 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({
   <button
     id={id}
     onClick={onClick}
-    className={`w-full flex items-center px-3 py-2 rounded transition-all text-xs lg:text-sm font-bold uppercase tracking-wider relative ${
+    className={`w-full flex items-center px-4 py-3 rounded-xl transition-all duration-300 ease-out text-xs lg:text-sm font-semibold tracking-wide relative ${
       isCollapsed ? "justify-center space-x-0" : "space-x-3"
     } ${
       active
         ? isDarkTheme
-          ? "text-white bg-white/5 border border-white/10 shadow-lg"
-          : "text-gray-900 bg-emerald-50 border border-emerald-200"
+          ? "text-white/90 bg-white/8 border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] scale-[1.02]"
+          : "text-gray-900 bg-emerald-50 border border-emerald-200 shadow-sm"
         : isDarkTheme
-        ? "text-neutral-500 hover:text-white hover:bg-white/5 border border-transparent"
+        ? "text-white/60 hover:text-white/90 hover:bg-white/5 border border-transparent hover:scale-[1.01]"
         : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent"
     }`}
     title={isCollapsed ? label : ""}
   >
     <span
-      className={`shrink-0 relative flex items-center justify-center ${
+      className={`shrink-0 relative flex items-center justify-center transition-opacity duration-300 ${
         active ? "opacity-100" : "opacity-60"
       }`}
     >
@@ -87,18 +87,18 @@ const OptionButton: React.FC<{
   <button
     onClick={onClick}
     className={cn(
-      "p-2 rounded transition-all relative flex items-center justify-center group/opt",
+      "p-3 rounded-xl transition-all duration-300 ease-out relative flex items-center justify-center group/opt min-h-[44px] min-w-[44px]",
       active
         ? isDarkTheme
-          ? "text-white bg-white/5 border border-white/10 shadow-lg"
+          ? "text-white/90 bg-white/8 border border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
           : "text-gray-900 bg-emerald-50 border border-emerald-200"
         : isDarkTheme
-        ? "text-neutral-500 hover:text-white hover:bg-white/5 border border-transparent"
+        ? "text-white/60 hover:text-white/90 hover:bg-white/5 border border-transparent hover:scale-[1.05]"
         : "text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-transparent"
     )}
     title={label}
   >
-    <span className="opacity-70 group-hover/opt:opacity-100 transition-opacity">
+    <span className="opacity-70 group-hover/opt:opacity-100 transition-opacity duration-300">
       {icon}
     </span>
     {showBadge && (
@@ -231,41 +231,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside
-      className={`relative border-r flex flex-col shrink-0 transition-all duration-300 ease-in-out ${
-        isCollapsed ? "w-16" : "w-64"
-      } ${
-        isDarkTheme ? "border-white/5 bg-[#0a0a0a]" : "border-gray-200 bg-white"
-      }`}
-    >
+    <>
+      {/* 移动端遮罩层 */}
+      {!isCollapsed && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 md:hidden"
+          onClick={onToggleCollapse}
+        />
+      )}
+
+      <aside
+        className={`border-r flex flex-col shrink-0 transition-all duration-500 ease-out z-50 ${
+          isCollapsed
+            ? "w-0 md:w-16 -translate-x-full md:translate-x-0 pointer-events-none md:pointer-events-auto"
+            : "w-72 translate-x-0 pointer-events-auto"
+        } ${
+          isDarkTheme ? "border-white/10 bg-[#0a0a0a]" : "border-gray-200 bg-white"
+        } fixed md:relative h-full overflow-hidden`}
+      >
       {/* Sidebar Toggle Button - Enhanced Visibility */}
       <button
         onClick={onToggleCollapse}
         className={cn(
-          "absolute -right-3 top-32 w-7 h-7 rounded-full border z-[60] flex items-center justify-center transition-all duration-300 shadow-[0_0_15px_rgba(0,0,0,0.5)] group/btn",
+          "absolute top-32 w-8 h-8 rounded-full border z-[60] flex items-center justify-center transition-all duration-500 ease-out shadow-[0_8px_30px_rgb(0,0,0,0.3)] group/btn backdrop-blur-sm pointer-events-auto",
+          isCollapsed ? "left-4 md:-right-3" : "right-4 md:-right-3",
           isDarkTheme
-            ? "bg-[#111] border-white/20 text-white/70 hover:text-white hover:border-emerald-500/50 hover:bg-emerald-500/10"
-            : "bg-white border-gray-300 text-gray-500 hover:text-emerald-600 hover:border-emerald-600 shadow-sm"
+            ? "bg-[#111]/90 border-white/20 text-white/70 hover:text-white hover:border-emerald-400/50 hover:bg-emerald-400/10 hover:shadow-[0_0_20px_rgba(52,211,153,0.3)] hover:scale-110"
+            : "bg-white border-gray-300 text-gray-500 hover:text-emerald-600 hover:border-emerald-600 shadow-sm hover:scale-110"
         )}
       >
         <TrendingUp
-          size={12}
+          size={14}
           className={cn(
-            "transition-transform duration-500",
+            "transition-all duration-500 ease-out",
             isCollapsed
               ? "rotate-90 scale-125"
-              : "-rotate-90 group-hover/btn:-translate-y-0.5"
+              : "-rotate-90 group-hover/btn:-translate-y-0.5 group-hover/btn:scale-110"
           )}
         />
         {/* Hover ring */}
-        <div className="absolute inset-0 rounded-full border border-emerald-500/0 group-hover/btn:scale-125 group-hover/btn:border-emerald-500/30 transition-all duration-300 pointer-events-none"></div>
+        <div className="absolute inset-0 rounded-full border border-emerald-400/0 group-hover/btn:scale-125 group-hover/btn:border-emerald-400/30 transition-all duration-500 pointer-events-none"></div>
       </button>
 
       <div
         className={cn(
-          "p-6 border-b transition-all duration-300",
-          isCollapsed ? "px-4" : "p-6",
-          isDarkTheme ? "border-white/5" : "border-gray-200"
+          "p-8 border-b transition-all duration-500",
+          isCollapsed ? "px-4" : "p-8",
+          isDarkTheme ? "border-white/10" : "border-gray-200"
         )}
       >
         <div className="flex items-center space-x-3">
@@ -280,13 +292,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
               <h1
                 className={cn(
-                  "text-xs lg:text-sm font-black tracking-widest leading-none",
-                  isDarkTheme ? "text-white" : "text-gray-900"
+                  "text-xs lg:text-sm font-bold tracking-wide leading-tight",
+                  isDarkTheme ? "text-white/90" : "text-gray-900"
                 )}
               >
                 Niche Digger
               </h1>
-              <p className="text-[9px] lg:text-xs text-emerald-500 font-bold tracking-tight uppercase mt-1">
+              <p className="text-[9px] lg:text-xs text-emerald-400 font-semibold tracking-tight mt-1">
                 Mine Hidden Alpha
               </p>
             </div>
@@ -294,7 +306,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto py-6 px-3 space-y-6">
+      <div className="flex-1 overflow-y-auto py-8 px-4 space-y-8">
         {onContentGeneration && (
           <div className="space-y-1">
             <SidebarLink
@@ -347,10 +359,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <div id="driver-active-tasks-section">
           {!isCollapsed && (
-            <div className="flex items-center justify-between px-3 mb-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between px-4 mb-4 animate-in fade-in duration-500">
               <span
-                className={`text-[10px] lg:text-xs font-black uppercase tracking-widest ${
-                  isDarkTheme ? "text-neutral-500" : "text-gray-500"
+                className={`text-[10px] lg:text-xs font-semibold tracking-wide ${
+                  isDarkTheme ? "text-white/60" : "text-gray-500"
                 }`}
               >
                 {labels.activeTasks}
@@ -359,7 +371,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   id="driver-add-task"
                   onClick={onTaskAdd}
-                  className="text-emerald-500 hover:text-emerald-400 p-1 transition-colors"
+                  className="text-emerald-400 hover:text-emerald-300 p-1.5 transition-all duration-300 hover:scale-110 rounded-lg hover:bg-emerald-400/10"
                 >
                   <Plus size={14} />
                 </button>
@@ -371,14 +383,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <div
                 key={task.id}
                 className={cn(
-                  "group flex items-center justify-between p-3 rounded transition-all border",
-                  isCollapsed ? "justify-center px-1" : "p-3",
+                  "group flex items-center justify-between p-4 rounded-xl transition-all duration-300 ease-out border",
+                  isCollapsed ? "justify-center px-2" : "p-4",
                   activeTaskId === task.id
                     ? isDarkTheme
-                      ? "bg-white/5 border-white/10 shadow-lg"
-                      : "bg-emerald-50 border-emerald-200"
+                      ? "bg-white/8 border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.12)] scale-[1.02]"
+                      : "bg-emerald-50 border-emerald-200 shadow-sm"
                     : isDarkTheme
-                    ? "border-transparent hover:bg-white/[0.02]"
+                    ? "border-transparent hover:bg-white/5 hover:border-white/5"
                     : "border-transparent hover:bg-gray-50"
                 )}
                 title={isCollapsed ? task.name : task.name}
@@ -393,13 +405,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   {getTaskIcon(task)}
                   {!isCollapsed && (
                     <span
-                      className={`text-xs lg:text-sm font-bold truncate min-w-0 ${
+                      className={`text-xs lg:text-sm font-semibold truncate min-w-0 transition-colors duration-300 ${
                         activeTaskId === task.id
                           ? isDarkTheme
-                            ? "text-white"
+                            ? "text-white/90"
                             : "text-gray-900"
                           : isDarkTheme
-                          ? "text-neutral-400"
+                          ? "text-white/60"
                           : "text-gray-600"
                       }`}
                       title={task.name}
@@ -411,13 +423,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {!isCollapsed && (
                   <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
                     {activeTaskId === task.id && (
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] flex-shrink-0" />
+                      <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.6)] flex-shrink-0 animate-pulse" />
                     )}
                     <button
                       onClick={(e) => onTaskDelete(task.id, e)}
-                      className={`p-1 rounded transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0 ${
+                      className={`p-1.5 rounded-lg transition-all duration-300 opacity-0 group-hover:opacity-100 flex-shrink-0 hover:scale-110 ${
                         isDarkTheme
-                          ? "text-neutral-500 hover:text-red-400 hover:bg-red-500/10"
+                          ? "text-white/60 hover:text-red-400 hover:bg-red-400/10"
                           : "text-gray-400 hover:text-red-500 hover:bg-red-50"
                       }`}
                       title={uiLanguage === "zh" ? "关闭任务" : "Close task"}
@@ -443,16 +455,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div>
           {!isCollapsed && (
             <span
-              className={`text-[10px] lg:text-xs font-black uppercase tracking-widest px-3 block mb-4 animate-in fade-in duration-300 ${
-                isDarkTheme ? "text-neutral-500" : "text-gray-500"
+              className={`text-[10px] lg:text-xs font-semibold tracking-wide px-4 block mb-4 animate-in fade-in duration-500 ${
+                isDarkTheme ? "text-white/60" : "text-gray-500"
               }`}
             >
               {labels.options}
             </span>
           )}
           <div className={cn(
-            "flex",
-            isCollapsed ? "flex-col items-center space-y-2" : "flex-row items-center px-3 space-x-2"
+            "flex gap-2",
+            isCollapsed ? "flex-col items-center" : "flex-row items-center px-4"
           )}>
             <OptionButton
               icon={
@@ -475,14 +487,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       <div
-        className={`p-4 border-t text-[10px] lg:text-xs font-bold uppercase tracking-widest text-center ${
+        className={`p-6 border-t text-[10px] lg:text-xs font-semibold tracking-wide text-center transition-colors duration-300 ${
           isDarkTheme
-            ? "border-white/5 text-neutral-600"
+            ? "border-white/10 text-white/40"
             : "border-gray-200 text-gray-500"
         }`}
       >
         {labels.version}
       </div>
     </aside>
+    </>
   );
 };
