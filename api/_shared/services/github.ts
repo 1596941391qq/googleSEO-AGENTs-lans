@@ -307,7 +307,6 @@ docs_dir: docs
 use_directory_urls: true
 
 nav:
-  - Home: index.md
 # 新文章将在此处自动添加
 
 markdown_extensions:
@@ -316,14 +315,8 @@ markdown_extensions:
       permalink: true
 `;
 
-  const indexMd = `# Welcome to ${config.siteName}
-
-${config.siteDescription}
-
----
-
-*Content will be added automatically.*
-`;
+  // index.md 不需要了，通过 index_file 配置指向第一篇文章
+  const indexMd = ``;
 
   const requirementsTxt = `mkdocs>=1.5
 mkdocs-material>=9.0
@@ -346,7 +339,6 @@ python:
 
   return [
     { path: 'mkdocs.yml', content: mkdocsYml },
-    { path: 'docs/index.md', content: indexMd },
     { path: 'requirements.txt', content: requirementsTxt },
     { path: '.readthedocs.yaml', content: readthedocsYaml },
   ];
@@ -481,6 +473,7 @@ export async function addArticleToMkDocs(config: {
 
 /**
  * 更新 mkdocs.yml 的 nav 部分
+ * 极简方案：直接添加文章，格式为 "标题前N字: 文档路径.md"
  */
 async function updateMkDocsNav(config: {
   token: string;
@@ -491,6 +484,8 @@ async function updateMkDocsNav(config: {
   branch?: string;
 }): Promise<void> {
   try {
+    console.log(`[GitHub updateMkDocsNav] Updating navigation for: ${config.articleTitle}`);
+
     // 获取当前 mkdocs.yml
     const response = await fetch(
       `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/mkdocs.yml?ref=${config.branch || 'main'}`,
@@ -502,19 +497,27 @@ async function updateMkDocsNav(config: {
       }
     );
 
-    if (!response.ok) return;
+    if (!response.ok) {
+      console.warn(`[GitHub updateMkDocsNav] Could not fetch mkdocs.yml: ${response.status}`);
+      return;
+    }
 
     const data = await response.json();
     const currentContent = Buffer.from(data.content, 'base64').toString('utf-8');
 
     // 检查文章是否已在 nav 中
-    const navEntry = `  - "${config.articleTitle}": ${config.articleSlug}.md`;
-    if (currentContent.includes(config.articleSlug)) {
+    if (currentContent.includes(`${config.articleSlug}.md`)) {
+      console.log(`[GitHub updateMkDocsNav] Article already in navigation, skipping`);
       return; // 已存在
     }
 
-    // 在 nav 末尾添加新文章（在 "# 新文章将在此处自动添加" 之前）
+    // 极简导航条目：标题前10个字: 文档路径.md
+    const shortTitle = config.articleTitle.substring(0, 10);
+    const navEntry = `  - "${shortTitle}": ${config.articleSlug}.md`;
+
     let updatedContent = currentContent;
+
+    // 在标记之前添加
     const marker = '# 新文章将在此处自动添加';
     if (currentContent.includes(marker)) {
       updatedContent = currentContent.replace(
@@ -523,11 +526,29 @@ async function updateMkDocsNav(config: {
       );
     } else {
       // 如果没有标记，在 nav 部分末尾添加
-      updatedContent = currentContent.trimEnd() + `\n${navEntry}\n`;
+      const navEndPattern = /\nmarkdown_extensions:/;
+      if (navEndPattern.test(currentContent)) {
+        updatedContent = currentContent.replace(
+          navEndPattern,
+          `\n${navEntry}\n\nmarkdown_extensions:`
+        );
+      } else {
+        updatedContent = currentContent.trimEnd() + `\n${navEntry}\n`;
+      }
+    }
+
+    // 检查是否需要设置 index_file（如果是第一篇文章）
+    if (!currentContent.includes('index_file:')) {
+      // 在 use_directory_urls 后面添加 index_file 配置
+      updatedContent = updatedContent.replace(
+        /use_directory_urls: true/,
+        `use_directory_urls: true\nindex_file: ${config.articleSlug}.md`
+      );
+      console.log(`[GitHub updateMkDocsNav] Set index_file to first article: ${config.articleSlug}.md`);
     }
 
     // 更新文件
-    await createOrUpdateFile({
+    const updateResult = await createOrUpdateFile({
       token: config.token,
       owner: config.owner,
       repoName: config.repoName,
@@ -536,8 +557,14 @@ async function updateMkDocsNav(config: {
       message: `Add "${config.articleTitle}" to navigation`,
       branch: config.branch,
     });
-  } catch (error) {
-    console.error('[updateMkDocsNav] Error:', error);
+
+    if (updateResult.success) {
+      console.log(`[GitHub updateMkDocsNav] ✅ Navigation updated successfully`);
+    } else {
+      console.error(`[GitHub updateMkDocsNav] ❌ Failed to update navigation: ${updateResult.error}`);
+    }
+  } catch (error: any) {
+    console.error('[GitHub updateMkDocsNav] Error:', error.message);
   }
 }
 
