@@ -104,38 +104,41 @@ export async function checkRepoExists(config: {
 
 /**
  * 获取文件的 SHA（用于更新）
+ * - 404: 返回 null，表示文件不存在，可创建
+ * - 成功: 返回 sha，表示需更新
+ * - fetch 异常: 重试一次后仍失败则抛出，避免误走「创建」逻辑导致 422
  */
-async function getFileSha(config: {
-  token: string;
-  owner: string;
-  repoName: string;
-  path: string;
-  branch?: string;
-}): Promise<string | null> {
-  try {
-    const url = `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${config.path}?ref=${config.branch || 'main'}`;
-    console.log(`[GitHub getFileSha] Checking file: ${config.path}`);
-    console.log(`[GitHub getFileSha] URL: ${url}`);
+async function getFileSha(
+  config: {
+    token: string;
+    owner: string;
+    repoName: string;
+    path: string;
+    branch?: string;
+  },
+  isRetry = false
+): Promise<string | null> {
+  const url = `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${config.path}?ref=${config.branch || 'main'}`;
+  console.log(`[GitHub getFileSha] Checking file: ${config.path}`);
+  console.log(`[GitHub getFileSha] URL: ${url}`);
 
-    const response = await fetch(
-      url,
-      {
-        headers: {
-          'Authorization': `Bearer ${config.token}`,
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      }
-    );
+  try {
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        Accept: 'application/vnd.github.v3+json',
+      },
+    });
 
     console.log(`[GitHub getFileSha] Response status: ${response.status}`);
 
     if (!response.ok) {
       if (response.status === 404) {
         console.log(`[GitHub getFileSha] File not found (404) - will create new file`);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        console.log(`[GitHub getFileSha] Error response:`, errorData);
+        return null;
       }
+      const errorData = await response.json().catch(() => ({}));
+      console.log(`[GitHub getFileSha] Error response:`, errorData);
       return null;
     }
 
@@ -144,7 +147,14 @@ async function getFileSha(config: {
     return data.sha;
   } catch (error: any) {
     console.error(`[GitHub getFileSha] Exception:`, error.message);
-    return null;
+    if (!isRetry) {
+      console.log(`[GitHub getFileSha] Retrying once after fetch failure...`);
+      await new Promise((r) => setTimeout(r, 1500));
+      return getFileSha(config, true);
+    }
+    throw new Error(
+      `getFileSha failed (fetch error): ${error.message}. Cannot determine if file exists; retry later.`
+    );
   }
 }
 
@@ -175,14 +185,23 @@ export async function createOrUpdateFile(config: {
       };
     }
 
-    // 获取现有文件的 SHA（如果存在）
-    const existingSha = await getFileSha({
-      token: config.token,
-      owner: config.owner,
-      repoName: config.repoName,
-      path: config.path,
-      branch: config.branch,
-    });
+    // 获取现有文件的 SHA（如果存在）。404 → 创建；有 sha → 更新；fetch 异常 → 抛错不误走创建
+    let existingSha: string | null = null;
+    try {
+      existingSha = await getFileSha({
+        token: config.token,
+        owner: config.owner,
+        repoName: config.repoName,
+        path: config.path,
+        branch: config.branch,
+      });
+    } catch (e: any) {
+      console.error(`[GitHub] ❌ getFileSha failed:`, e.message);
+      return {
+        success: false,
+        error: e.message || 'Could not verify if file exists; please retry.',
+      };
+    }
 
     if (existingSha) {
       console.log(`[GitHub] File exists, updating with SHA: ${existingSha}`);
@@ -190,36 +209,75 @@ export async function createOrUpdateFile(config: {
       console.log(`[GitHub] File does not exist, creating new file`);
     }
 
-    const body: any = {
+    const body: Record<string, string> = {
       message: config.message,
       content: Buffer.from(config.content).toString('base64'),
       branch: config.branch || 'main',
     };
-
     if (existingSha) {
       body.sha = existingSha;
     }
 
-    const response = await fetch(
-      `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${config.path}`,
-      {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${config.token}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      }
-    );
+    const putUrl = `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${config.path}`;
+    const putHeaders = {
+      Authorization: `Bearer ${config.token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    };
 
+    let response = await fetch(putUrl, {
+      method: 'PUT',
+      headers: putHeaders,
+      body: JSON.stringify(body),
+    });
+
+    // 422 "sha wasn't supplied"：文件实际存在但 getFileSha 曾失败，误走了创建。重试取 sha 再更新。
     if (!response.ok) {
-      const error = await response.json();
-      console.error(`[GitHub] ❌ API error: ${response.status}`, error);
-      return {
-        success: false,
-        error: error.message || `GitHub API error: ${response.status}`,
-      };
+      const errJson = await response.json().catch(() => ({}));
+      const msg = typeof errJson?.message === 'string' ? errJson.message : '';
+      const is422ShaRequired =
+        response.status === 422 && msg.includes('sha') && msg.includes("wasn't supplied");
+
+      if (is422ShaRequired) {
+        console.log(
+          `[GitHub] 422 sha required — file exists but SHA was missing. Retrying getFileSha + update.`
+        );
+        try {
+          const retrySha = await getFileSha({
+            token: config.token,
+            owner: config.owner,
+            repoName: config.repoName,
+            path: config.path,
+            branch: config.branch,
+          });
+          if (retrySha) {
+            body.sha = retrySha;
+            response = await fetch(putUrl, {
+              method: 'PUT',
+              headers: putHeaders,
+              body: JSON.stringify(body),
+            });
+          }
+        } catch (retryErr: any) {
+          console.error(`[GitHub] ❌ Retry getFileSha failed:`, retryErr.message);
+          return {
+            success: false,
+            error: `File likely exists; could not fetch SHA: ${retryErr.message}. Please retry.`,
+          };
+        }
+      }
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        console.error(`[GitHub] ❌ API error: ${response.status}`, errBody);
+        return {
+          success: false,
+          error:
+            (typeof errBody?.message === 'string' ? errBody.message : null) ||
+            (typeof errJson?.message === 'string' ? errJson.message : null) ||
+            `GitHub API error: ${response.status}`,
+        };
+      }
     }
 
     const data = await response.json();
