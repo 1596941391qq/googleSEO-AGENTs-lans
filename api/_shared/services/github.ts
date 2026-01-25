@@ -307,7 +307,6 @@ docs_dir: docs
 use_directory_urls: true
 
 nav:
-  - Home: index.md
 # 新文章将在此处自动添加
 
 markdown_extensions:
@@ -316,25 +315,8 @@ markdown_extensions:
       permalink: true
 `;
 
-  const indexMd = `# ${config.siteName}
-
-${config.siteDescription}
-
-## Welcome
-
-This site contains high-quality, SEO-optimized content covering various topics. Browse the navigation menu to explore our articles.
-
-## Categories
-
-- **Guides**: Comprehensive guides and tutorials
-- **Comparisons**: In-depth product and service comparisons
-- **Tools**: Useful tools and resources
-- **Lab**: Experimental content and research
-
----
-
-*This site is powered by [MkDocs](https://www.mkdocs.org/) and automatically updated.*
-`;
+  // index.md 不需要了，通过 index_file 配置指向第一篇文章
+  const indexMd = ``;
 
   const requirementsTxt = `mkdocs>=1.5
 mkdocs-material>=9.0
@@ -357,7 +339,6 @@ python:
 
   return [
     { path: 'mkdocs.yml', content: mkdocsYml },
-    { path: 'docs/index.md', content: indexMd },
     { path: 'requirements.txt', content: requirementsTxt },
     { path: '.readthedocs.yaml', content: readthedocsYaml },
   ];
@@ -492,7 +473,7 @@ export async function addArticleToMkDocs(config: {
 
 /**
  * 更新 mkdocs.yml 的 nav 部分
- * 支持按类别组织文章（lab, guide, compare, tool）
+ * 极简方案：直接添加文章，格式为 "标题前N字: 文档路径.md"
  */
 async function updateMkDocsNav(config: {
   token: string;
@@ -530,58 +511,40 @@ async function updateMkDocsNav(config: {
       return; // 已存在
     }
 
-    // 确定文章类别（从 slug 中提取，如果有前缀的话）
-    let category = 'Articles'; // 默认类别
-    let displaySlug = config.articleSlug;
-
-    // 检测常见的 fast/slow knife 路径前缀
-    if (config.articleSlug.startsWith('lab/') || config.articleSlug.startsWith('test/')) {
-      category = 'Lab (Experimental)';
-    } else if (config.articleSlug.startsWith('guide/')) {
-      category = 'Guides';
-    } else if (config.articleSlug.startsWith('compare/')) {
-      category = 'Comparisons';
-    } else if (config.articleSlug.startsWith('tool/')) {
-      category = 'Tools';
-    }
-
-    // 构建导航条目
-    const navEntry = `    - "${config.articleTitle}": ${config.articleSlug}.md`;
+    // 极简导航条目：标题前10个字: 文档路径.md
+    const shortTitle = config.articleTitle.substring(0, 10);
+    const navEntry = `  - "${shortTitle}": ${config.articleSlug}.md`;
 
     let updatedContent = currentContent;
 
-    // 查找或创建类别部分
-    const categoryPattern = new RegExp(`  - ${category}:\\s*\\n`, 'i');
-    const hasCategory = categoryPattern.test(currentContent);
-
-    if (hasCategory) {
-      // 在现有类别下添加
+    // 在标记之前添加
+    const marker = '# 新文章将在此处自动添加';
+    if (currentContent.includes(marker)) {
       updatedContent = currentContent.replace(
-        categoryPattern,
-        `  - ${category}:\n${navEntry}\n`
+        marker,
+        `${navEntry}\n${marker}`
       );
-      console.log(`[GitHub updateMkDocsNav] Added to existing category: ${category}`);
     } else {
-      // 创建新类别（在标记之前添加）
-      const marker = '# 新文章将在此处自动添加';
-      if (currentContent.includes(marker)) {
-        const newCategory = `  - ${category}:\n${navEntry}\n${marker}`;
-        updatedContent = currentContent.replace(marker, newCategory);
-        console.log(`[GitHub updateMkDocsNav] Created new category: ${category}`);
+      // 如果没有标记，在 nav 部分末尾添加
+      const navEndPattern = /\nmarkdown_extensions:/;
+      if (navEndPattern.test(currentContent)) {
+        updatedContent = currentContent.replace(
+          navEndPattern,
+          `\n${navEntry}\n\nmarkdown_extensions:`
+        );
       } else {
-        // 如果没有标记，在 nav 部分末尾添加
-        const navEndPattern = /\nmarkdown_extensions:/;
-        if (navEndPattern.test(currentContent)) {
-          updatedContent = currentContent.replace(
-            navEndPattern,
-            `\n  - ${category}:\n${navEntry}\n\nmarkdown_extensions:`
-          );
-        } else {
-          // 最后的备选方案：直接追加到文件末尾
-          updatedContent = currentContent.trimEnd() + `\n  - ${category}:\n${navEntry}\n`;
-        }
-        console.log(`[GitHub updateMkDocsNav] Added new category at end: ${category}`);
+        updatedContent = currentContent.trimEnd() + `\n${navEntry}\n`;
       }
+    }
+
+    // 检查是否需要设置 index_file（如果是第一篇文章）
+    if (!currentContent.includes('index_file:')) {
+      // 在 use_directory_urls 后面添加 index_file 配置
+      updatedContent = updatedContent.replace(
+        /use_directory_urls: true/,
+        `use_directory_urls: true\nindex_file: ${config.articleSlug}.md`
+      );
+      console.log(`[GitHub updateMkDocsNav] Set index_file to first article: ${config.articleSlug}.md`);
     }
 
     // 更新文件
