@@ -144,6 +144,20 @@ export async function createOrUpdateFile(config: {
   branch?: string;
 }): Promise<{ success: boolean; sha?: string; error?: string }> {
   try {
+    console.log(`[GitHub] Creating/updating file: ${config.path}`);
+    console.log(`[GitHub] Repository: ${config.owner}/${config.repoName}`);
+    console.log(`[GitHub] Branch: ${config.branch || 'main'}`);
+    console.log(`[GitHub] Content length: ${config.content?.length || 0} characters`);
+
+    // 验证内容不为空
+    if (!config.content || config.content.trim().length === 0) {
+      console.error(`[GitHub] ❌ Content is empty for file: ${config.path}`);
+      return {
+        success: false,
+        error: 'File content is empty. Cannot push empty file to GitHub.',
+      };
+    }
+
     // 获取现有文件的 SHA（如果存在）
     const existingSha = await getFileSha({
       token: config.token,
@@ -152,6 +166,12 @@ export async function createOrUpdateFile(config: {
       path: config.path,
       branch: config.branch,
     });
+
+    if (existingSha) {
+      console.log(`[GitHub] File exists, updating with SHA: ${existingSha}`);
+    } else {
+      console.log(`[GitHub] File does not exist, creating new file`);
+    }
 
     const body: any = {
       message: config.message,
@@ -178,6 +198,7 @@ export async function createOrUpdateFile(config: {
 
     if (!response.ok) {
       const error = await response.json();
+      console.error(`[GitHub] ❌ API error: ${response.status}`, error);
       return {
         success: false,
         error: error.message || `GitHub API error: ${response.status}`,
@@ -185,11 +206,13 @@ export async function createOrUpdateFile(config: {
     }
 
     const data = await response.json();
+    console.log(`[GitHub] ✅ File pushed successfully: ${data.content?.html_url || config.path}`);
     return {
       success: true,
       sha: data.content?.sha,
     };
   } catch (error: any) {
+    console.error(`[GitHub] ❌ Exception:`, error);
     return {
       success: false,
       error: error.message || 'Failed to create/update file',
@@ -507,6 +530,8 @@ export async function listRepoContents(config: {
 }): Promise<{ success: boolean; files?: any[]; error?: string }> {
   try {
     const path = config.path || '';
+    console.log(`[GitHub] Listing contents: ${config.owner}/${config.repoName}/${path || '(root)'}`);
+
     const response = await fetch(
       `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${path}?ref=${config.branch || 'main'}`,
       {
@@ -519,6 +544,7 @@ export async function listRepoContents(config: {
 
     if (!response.ok) {
       const error = await response.json();
+      console.error(`[GitHub] ❌ Failed to list contents: ${response.status}`, error);
       return {
         success: false,
         error: error.message || `GitHub API error: ${response.status}`,
@@ -526,6 +552,7 @@ export async function listRepoContents(config: {
     }
 
     const data = await response.json();
+    console.log(`[GitHub] ✅ Found ${Array.isArray(data) ? data.length : 1} items`);
     return {
       success: true,
       files: Array.isArray(data) ? data : [data],

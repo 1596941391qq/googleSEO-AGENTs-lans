@@ -1,7 +1,7 @@
 
 /**
  * Simple Markdown to HTML converter
- * 
+ *
  * Includes basic support for:
  * - Headers (h1-h6)
  * - Bold/Italic
@@ -12,6 +12,16 @@
  * - Paragraphs
  */
 export function convertMarkdownToHtml(markdown: string, title: string, metadata: { description?: string; keywords?: string } = {}): string {
+    console.log(`[Markdown Converter] Converting markdown to HTML`);
+    console.log(`[Markdown Converter] Input length: ${markdown?.length || 0} characters`);
+    console.log(`[Markdown Converter] Title: "${title}"`);
+
+    // 验证输入
+    if (!markdown || markdown.trim().length === 0) {
+        console.error(`[Markdown Converter] ❌ Input markdown is empty!`);
+        throw new Error('Markdown content is empty. Cannot convert empty content to HTML.');
+    }
+
     // 1. Basic Markdown Parsing
     let htmlContent = markdown;
 
@@ -59,6 +69,14 @@ export function convertMarkdownToHtml(markdown: string, title: string, metadata:
         }
         return `<p>${section.replace(/\n/g, '<br>')}</p>`;
     }).join('\n');
+
+    // 验证输出
+    if (!htmlContent || htmlContent.trim().length === 0) {
+        console.error(`[Markdown Converter] ❌ HTML content is empty after conversion!`);
+        throw new Error('HTML conversion resulted in empty content.');
+    }
+
+    console.log(`[Markdown Converter] ✅ Conversion successful. Output length: ${htmlContent.length} characters`);
 
     // 2. Wrap in Full HTML Template
     return `<!DOCTYPE html>
