@@ -1241,7 +1241,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
               "text-xs font-black uppercase tracking-widest",
               isDarkTheme ? "text-zinc-400 opacity-80" : "text-gray-700"
             )}>
-              {uiLanguage === "zh" ? "待发布文章" : "Pending Articles"}
+              {uiLanguage === "zh" ? "已保存文章" : "Articles"}
             </span>
           </div>
 

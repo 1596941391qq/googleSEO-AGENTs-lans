@@ -12,7 +12,8 @@
       "WebFetch(domain:bolt.new)",
       "WebSearch",
       "Bash(vercel logs:*)",
-      "WebFetch(domain:docs.dataforseo.com)"
+      "WebFetch(domain:docs.dataforseo.com)",
+      "Bash(netstat:*)"
     ]
   }
 }
