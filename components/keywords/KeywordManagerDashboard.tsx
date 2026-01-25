@@ -224,7 +224,7 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
       totalPages,
       currentPage: Math.min(prev.currentPage, totalPages || 1),
     }));
-  }, [keywords, filters, sortConfig, pagination.pageSize]);
+  }, [keywords, filters, sortConfig, pagination.pageSize, favoritedIds]);
 
   // Get paginated keywords
   const paginatedKeywords = filteredKeywords.slice(
@@ -239,34 +239,19 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
     }));
   };
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(paginatedKeywords.map(k => k.id));
-    } else {
-      setSelectedIds([]);
-    }
-  };
-
-  const handleSelectOne = (id: string, checked: boolean) => {
-    if (checked) {
-      setSelectedIds(prev => [...prev, id]);
-    } else {
-      setSelectedIds(prev => prev.filter(i => i !== id));
-    }
-  };
 
   const handleExport = () => {
     // Export to CSV
-    const headers = ['Keyword', 'Translation', 'Intent', 'Volume', 'Difficulty', 'Probability', 'Project', 'Created'];
+    const headers = ['Keyword', 'Source', 'Volume', 'Difficulty', 'Probability', 'Project', 'Created', 'Favorited'];
     const rows = filteredKeywords.map(k => [
       k.keyword,
-      k.translation || '',
-      k.intent,
+      k.source || 'manual',
       k.volume || '',
       k.difficulty || '',
       k.probability,
       k.project_name || '',
       k.created_at || '',
+      favoritedIds.has(k.id) ? 'Yes' : 'No',
     ]);
 
     const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
@@ -277,41 +262,6 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
     a.download = `keywords-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const handleBatchDelete = async () => {
-    if (selectedIds.length === 0) return;
-
-    const confirmMessage = uiLanguage === 'zh'
-      ? `确定要删除选中的 ${selectedIds.length} 个关键词吗？`
-      : `Are you sure you want to delete ${selectedIds.length} selected keywords?`;
-
-    if (!confirm(confirmMessage)) return;
-
-    try {
-      const response = await fetch('/api/keywords/batch-delete', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
-        },
-        body: JSON.stringify({
-          keywordIds: selectedIds,
-          userId: currentUserId,
-        }),
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        setSelectedIds([]);
-        fetchData();
-      } else {
-        alert(result.error || 'Failed to delete keywords');
-      }
-    } catch (error) {
-      console.error('Failed to delete keywords:', error);
-      alert('Failed to delete keywords');
-    }
   };
 
   if (loading) {
@@ -343,8 +293,6 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
         onFiltersChange={setFilters}
         onRefresh={fetchData}
         onExport={handleExport}
-        onBatchDelete={handleBatchDelete}
-        selectedCount={selectedIds.length}
         isDarkTheme={isDarkTheme}
         uiLanguage={uiLanguage}
         projects={projects}
@@ -355,9 +303,8 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
         <CardContent className="p-0">
           <KeywordDataTable
             keywords={paginatedKeywords}
-            selectedIds={selectedIds}
-            onSelectAll={handleSelectAll}
-            onSelectOne={handleSelectOne}
+            favoritedIds={favoritedIds}
+            onToggleFavorite={handleToggleFavorite}
             onSort={handleSort}
             sortConfig={sortConfig}
             onGenerate={onGenerateContent}
