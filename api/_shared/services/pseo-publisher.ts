@@ -14,6 +14,7 @@ import {
 import {
   deployToPlatform,
   PlatformType,
+  triggerPlatformRebuild,
 } from './platform-deployers.js';
 import {
   assignSiteToWebsite,
@@ -21,6 +22,7 @@ import {
   createPlatformSite,
   updatePlatformSiteStatus,
   updatePlatformSiteUrl,
+  updatePlatformSiteProjectId,
   incrementSiteUsage,
   incrementGitHubTokenUsage,
   incrementPlatformTokenUsage,
@@ -213,7 +215,29 @@ export async function publishArticle(
       await incrementPlatformTokenUsage(platform_token.id);
     }
 
-    // 6. 构建文章 URL
+    // 6. 触发平台重新构建（不依赖 GitHub webhook）
+    console.log(`[PSEO Publisher] Triggering platform rebuild...`);
+    const rebuildResult = await triggerPlatformRebuild(
+      site.platform as PlatformType,
+      {
+        platformToken: platformTokenDecrypted,
+        githubToken: githubTokenDecrypted,
+        repoOwner: github_token.owner_name,
+        repoName: site.repo_name,
+        projectId: site.platform_project_id || undefined,
+        projectSlug: site.platform_project_id || site.site_name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        cfAccountId: platform_token?.metadata?.accountId as string | undefined,
+      }
+    );
+
+    if (!rebuildResult.success) {
+      console.warn(`[PSEO Publisher] ⚠️ Platform rebuild failed: ${rebuildResult.error}`);
+      // 不阻断发布流程，只是警告
+    } else {
+      console.log(`[PSEO Publisher] ✅ Platform rebuild triggered. Build ID: ${rebuildResult.buildId}`);
+    }
+
+    // 7. 构建文章 URL
     const articleUrl = buildArticleUrl(site.site_url, slug);
 
     console.log(`[PSEO Publisher] ✅ Published successfully!`);
@@ -338,6 +362,12 @@ async function initializeSite(config: {
       success: true,
       siteUrl: `https://${githubOwner}.github.io/${site.repo_name}`,
     };
+  }
+
+  // 保存平台项目 ID（用于后续触发重新构建）
+  if (deployResult.projectId) {
+    await updatePlatformSiteProjectId(site.id, deployResult.projectId);
+    console.log(`[PSEO Publisher] Saved platform project ID: ${deployResult.projectId}`);
   }
 
   return {
@@ -524,7 +554,31 @@ export async function updatePublishedArticle(
       };
     }
 
-    // 5. 返回站点首页 URL（更新操作不需要跳转到具体文章）
+    // 5. 触发平台重新构建
+    console.log(`[PSEO Publisher] Triggering platform rebuild after update...`);
+    const platformTokenDecrypted = platform_token ? decryptToken(platform_token.token_encrypted) : null;
+
+    const rebuildResult = await triggerPlatformRebuild(
+      site.platform as PlatformType,
+      {
+        platformToken: platformTokenDecrypted,
+        githubToken: githubTokenDecrypted,
+        repoOwner: github_token.owner_name,
+        repoName: site.repo_name,
+        projectId: site.platform_project_id || undefined,
+        projectSlug: site.platform_project_id || site.site_name.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+        cfAccountId: platform_token?.metadata?.accountId as string | undefined,
+      }
+    );
+
+    if (!rebuildResult.success) {
+      console.warn(`[PSEO Publisher] ⚠️ Platform rebuild failed: ${rebuildResult.error}`);
+      // 不阻断更新流程
+    } else {
+      console.log(`[PSEO Publisher] ✅ Platform rebuild triggered. Build ID: ${rebuildResult.buildId}`);
+    }
+
+    // 6. 返回站点首页 URL（更新操作不需要跳转到具体文章）
     const siteHomeUrl = getSiteHomeUrl(site.site_url);
 
     console.log(`[PSEO Publisher] ✅ Updated successfully!`);
