@@ -3026,8 +3026,8 @@ export async function initPSEOPublishTables() {
       // 5. 给 published_articles 表添加新字段
       try {
         await sql`
-          DO $$ 
-          BEGIN 
+          DO $$
+          BEGIN
             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'published_articles' AND column_name = 'content_type') THEN
               ALTER TABLE published_articles ADD COLUMN content_type VARCHAR(20);
             END IF;
@@ -3041,6 +3041,21 @@ export async function initPSEOPublishTables() {
         `;
       } catch (e: any) {
         console.warn('[initPSEOPublishTables] Migration warning:', e.message);
+      }
+
+      // 5.1 给 platform_sites_v2 表添加 platform_project_id 字段（用于触发重新构建）
+      try {
+        await sql`
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'platform_sites_v2' AND column_name = 'platform_project_id') THEN
+              ALTER TABLE platform_sites_v2 ADD COLUMN platform_project_id VARCHAR(200);
+            END IF;
+          END $$;
+        `;
+        console.log('[initPSEOPublishTables] ✅ Added platform_project_id column to platform_sites_v2');
+      } catch (e: any) {
+        console.warn('[initPSEOPublishTables] Migration warning for platform_project_id:', e.message);
       }
 
       // 6. 创建索引
@@ -3426,8 +3441,25 @@ export async function updatePlatformSiteUrl(
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
-    UPDATE platform_sites_v2 
+    UPDATE platform_sites_v2
     SET site_url = ${siteUrl}, updated_at = NOW()
+    WHERE id = ${siteId}
+    RETURNING *
+  `;
+  return result.rows[0] || null;
+}
+
+/**
+ * 更新站点的平台项目 ID（用于触发重新构建）
+ */
+export async function updatePlatformSiteProjectId(
+  siteId: string,
+  projectId: string
+): Promise<PlatformSite | null> {
+  await initPSEOPublishTables();
+  const result = await sql<PlatformSite>`
+    UPDATE platform_sites_v2
+    SET platform_project_id = ${projectId}, updated_at = NOW()
     WHERE id = ${siteId}
     RETURNING *
   `;
