@@ -361,7 +361,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="flex items-center justify-between px-4 mb-4 animate-in fade-in duration-500">
               <span
                 className={`text-[10px] lg:text-xs font-semibold tracking-wide ${
-                  isDarkTheme ? "text-white/60" : "text-gray-500"
+                  isDarkTheme ? "text-white/60" : "text-gray-700"
                 }`}
               >
                 {labels.activeTasks}
@@ -370,7 +370,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   id="driver-add-task"
                   onClick={onTaskAdd}
-                  className="text-emerald-400 hover:text-emerald-300 p-1.5 transition-all duration-300 hover:scale-110 rounded-lg hover:bg-emerald-400/10"
+                  className={cn(
+                    "p-1.5 transition-all duration-300 hover:scale-110 rounded-lg",
+                    isDarkTheme
+                      ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-400/10"
+                      : "text-emerald-600 hover:text-emerald-500 hover:bg-emerald-500/10"
+                  )}
                 >
                   <Plus size={14} />
                 </button>
@@ -411,7 +416,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             : "text-gray-900"
                           : isDarkTheme
                           ? "text-white/60"
-                          : "text-gray-600"
+                          : "text-gray-700"
                       }`}
                       title={task.name}
                     >
@@ -455,7 +460,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {!isCollapsed && (
             <span
               className={`text-[10px] lg:text-xs font-semibold tracking-wide px-4 block mb-4 animate-in fade-in duration-500 ${
-                isDarkTheme ? "text-white/60" : "text-gray-500"
+                isDarkTheme ? "text-white/60" : "text-gray-700"
               }`}
             >
               {labels.options}
@@ -489,7 +494,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         className={`p-6 border-t text-[10px] lg:text-xs font-semibold tracking-wide text-center transition-colors duration-300 ${
           isDarkTheme
             ? "border-white/10 text-white/40"
-            : "border-gray-200 text-gray-500"
+            : "border-gray-200 text-gray-600"
         }`}
       >
         {labels.version}

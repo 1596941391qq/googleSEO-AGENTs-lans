@@ -10977,6 +10977,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 promotedWebsites: state.articleGeneratorState.promotedWebsites,
                 promotionIntensity:
                   state.articleGeneratorState.promotionIntensity,
+                websiteId: state.articleGeneratorState.websiteId,
+                websiteUrl: state.articleGeneratorState.websiteUrl,
                 isGenerating: state.articleGeneratorState.isGenerating,
                 progress: state.articleGeneratorState.progress,
                 currentStage: state.articleGeneratorState.currentStage,

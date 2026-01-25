@@ -633,6 +633,8 @@ export interface ArticleGeneratorState {
   targetMarket: string;
   promotedWebsites?: string[];
   promotionIntensity?: "natural" | "strong";
+  websiteId?: string;
+  websiteUrl?: string;
 
   isGenerating: boolean;
   progress: number; // 0-100

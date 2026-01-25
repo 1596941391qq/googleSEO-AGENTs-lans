@@ -24,7 +24,6 @@ import {
   Link2,
   Edit3,
   X,
-  Type,
   Settings,
 } from "lucide-react";
 import { driver } from "driver.js";
@@ -1011,15 +1010,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const [isLoading, setIsLoading] = React.useState(true);
   const [publishingId, setPublishingId] = React.useState<string | null>(null);
   const [editingArticle, setEditingArticle] = React.useState<any | null>(null);
-  const [platform, setPlatform] = React.useState<
-    "platform" | "wordpress" | "medium"
-  >("platform");
-  const [config, setConfig] = React.useState({
-    wpUrl: "",
-    wpUsername: "",
-    wpPassword: "",
-    mediumToken: "",
-  });
+  const platform = "platform" as const;
 
   const loadArticles = React.useCallback(async () => {
     try {
@@ -1056,7 +1047,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
           body: JSON.stringify({
             articleId,
             platform,
-            config: platform === "platform" ? {} : config,
+            config: {},
           }),
         });
 
@@ -1101,7 +1092,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
         setPublishingId(null);
       }
     },
-    [loadArticles, uiLanguage, platform, config]
+    [loadArticles, uiLanguage]
   );
 
   React.useEffect(() => {
@@ -1133,10 +1124,10 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
       <div
         className={cn(
           "text-center py-16",
-          isDarkTheme ? "text-zinc-500" : "text-gray-500"
+          isDarkTheme ? "text-zinc-500" : "text-gray-600"
         )}
       >
-        <Send className="w-16 h-16 mx-auto mb-4 opacity-50" />
+        <Send className={cn("w-16 h-16 mx-auto mb-4", isDarkTheme ? "opacity-50" : "opacity-60 text-gray-500")} />
         <p className="text-sm">
           {uiLanguage === "zh"
             ? "还没有保存的文章，去AI图文工厂生成一篇吧！"
@@ -1160,13 +1151,13 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
           </h2>
           <p
             className={cn(
-              "text-sm font-medium opacity-60",
-              isDarkTheme ? "text-zinc-400" : "text-zinc-600"
+              "text-sm font-medium",
+              isDarkTheme ? "text-zinc-400 opacity-80" : "text-gray-600"
             )}
           >
             {uiLanguage === "zh"
-              ? "一键分发内容到您的 PSEO 站、WordPress 或 Medium"
-              : "One-click distribute content to your PSEO site, WordPress or Medium"}
+              ? "一键分发内容到您的 PSEO 平台托管站"
+              : "One-click distribute to your PSEO platform hosted site"}
           </p>
         </div>
       </div>
@@ -1188,11 +1179,11 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                 </CardTitle>
               </div>
               <CardDescription
-                className={cn(isDarkTheme ? "text-zinc-400" : "text-zinc-600")}
+                className={cn(isDarkTheme ? "text-zinc-400" : "text-gray-600")}
               >
                 {uiLanguage === "zh"
-                  ? "选择目标平台并配置 API 信息"
-                  : "Select target platform and configure API"}
+                  ? "平台托管站 (PSEO) 已就绪，文章将自动部署"
+                  : "Platform hosted (PSEO) ready, articles auto-deploy"}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1200,164 +1191,27 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                 <label
                   className={cn(
                     "text-xs font-black uppercase tracking-widest",
-                    isDarkTheme ? "text-zinc-300" : "text-zinc-600 opacity-60"
+                    isDarkTheme ? "text-zinc-300" : "text-gray-700"
                   )}
                 >
                   {uiLanguage === "zh" ? "目标平台" : "Target Platform"}
                 </label>
-                <Select
-                  value={platform}
-                  onValueChange={(v: any) => setPlatform(v)}
+                <div
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-3 rounded-2xl border-2 font-bold bg-transparent",
+                    isDarkTheme ? "border-zinc-800" : "border-zinc-200"
+                  )}
                 >
-                  <SelectTrigger className="rounded-2xl border-2 font-bold bg-transparent">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent
-                    className={
-                      isDarkTheme ? "bg-zinc-900 border-zinc-800" : "bg-white"
-                    }
-                  >
-                    <SelectItem
-                      value="platform"
-                      className={cn(
-                        isDarkTheme
-                          ? "text-zinc-200 focus:text-emerald-400"
-                          : "text-gray-900"
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Layout className="w-4 h-4" />
-                        <span>
-                          {uiLanguage === "zh"
-                            ? "平台托管站 (PSEO)"
-                            : "Platform Hosted (PSEO)"}
-                        </span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem
-                      value="wordpress"
-                      className={cn(
-                        isDarkTheme
-                          ? "text-zinc-200 focus:text-emerald-400"
-                          : "text-gray-900"
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Globe className="w-4 h-4" />
-                        <span>WordPress</span>
-                      </div>
-                    </SelectItem>
-                    <SelectItem
-                      value="medium"
-                      className={cn(
-                        isDarkTheme
-                          ? "text-zinc-200 focus:text-emerald-400"
-                          : "text-gray-900"
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Type className="w-4 h-4" />
-                        <span>Medium</span>
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                  <Layout className="w-4 h-4 text-emerald-500" />
+                  <span className={cn(isDarkTheme ? "text-zinc-200" : "text-gray-900")}>
+                    {uiLanguage === "zh"
+                      ? "平台托管站 (PSEO)"
+                      : "Platform Hosted (PSEO)"}
+                  </span>
+                </div>
               </div>
 
-              {platform === "wordpress" && (
-                <div className="space-y-4 animate-in slide-in-from-top-2">
-                  <div className="space-y-2">
-                    <label
-                      className={cn(
-                        "text-xs font-bold",
-                        isDarkTheme
-                          ? "text-zinc-300"
-                          : "text-zinc-600 opacity-60"
-                      )}
-                    >
-                      Site URL
-                    </label>
-                    <Input
-                      placeholder="https://example.com"
-                      value={config.wpUrl}
-                      onChange={(e) =>
-                        setConfig({ ...config, wpUrl: e.target.value })
-                      }
-                      className="rounded-xl border-zinc-200 dark:border-zinc-800"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label
-                      className={cn(
-                        "text-xs font-bold",
-                        isDarkTheme
-                          ? "text-zinc-300"
-                          : "text-zinc-600 opacity-60"
-                      )}
-                    >
-                      Username
-                    </label>
-                    <Input
-                      placeholder="admin"
-                      value={config.wpUsername}
-                      onChange={(e) =>
-                        setConfig({ ...config, wpUsername: e.target.value })
-                      }
-                      className="rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label
-                      className={cn(
-                        "text-xs font-bold",
-                        isDarkTheme
-                          ? "text-zinc-300"
-                          : "text-zinc-600 opacity-60"
-                      )}
-                    >
-                      Application Password
-                    </label>
-                    <Input
-                      type="password"
-                      placeholder="xxxx xxxx xxxx xxxx"
-                      value={config.wpPassword}
-                      onChange={(e) =>
-                        setConfig({ ...config, wpPassword: e.target.value })
-                      }
-                      className="rounded-xl"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {platform === "medium" && (
-                <div className="space-y-4 animate-in slide-in-from-top-2">
-                  <div className="space-y-2">
-                    <label
-                      className={cn(
-                        "text-xs font-bold",
-                        isDarkTheme
-                          ? "text-zinc-300"
-                          : "text-zinc-600 opacity-60"
-                      )}
-                    >
-                      Integration Token
-                    </label>
-                    <Input
-                      type="password"
-                      placeholder="Enter Medium API token"
-                      value={config.mediumToken}
-                      onChange={(e) =>
-                        setConfig({ ...config, mediumToken: e.target.value })
-                      }
-                      className="rounded-xl"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {platform === "platform" && (
-                <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
+              <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
                   <div className="flex items-center gap-2 text-emerald-500">
                     <CheckCircle className="w-4 h-4" />
                     <span className="text-xs font-bold">
@@ -1366,13 +1220,15 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         : "Platform Managed Mode Ready"}
                     </span>
                   </div>
-                  <p className="text-[10px] leading-relaxed opacity-60 font-medium">
+                  <p className={cn(
+                    "text-[10px] leading-relaxed font-medium",
+                    isDarkTheme ? "text-zinc-400 opacity-80" : "text-gray-600"
+                  )}>
                     {uiLanguage === "zh"
                       ? "文章将自动部署到您的子域名，并通过 Google Indexing API 秒级推送索引。"
                       : "Articles will be automatically deployed to your subdomain and indexed via Google Indexing API in seconds."}
                   </p>
                 </div>
-              )}
             </CardContent>
           </Card>
         </div>
@@ -1381,7 +1237,10 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
         <div className="lg:col-span-2 space-y-6">
           <div className="flex items-center gap-2">
             <div className="w-1 h-4 bg-emerald-500 rounded-full" />
-            <span className="text-xs font-black uppercase tracking-widest opacity-60">
+            <span className={cn(
+              "text-xs font-black uppercase tracking-widest",
+              isDarkTheme ? "text-zinc-400 opacity-80" : "text-gray-700"
+            )}>
               {uiLanguage === "zh" ? "待发布文章" : "Pending Articles"}
             </span>
           </div>
@@ -1400,19 +1259,28 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
               >
                 <CardHeader>
                   <div className="flex items-start justify-between mb-2">
-                    <CardTitle className="text-lg line-clamp-2 group-hover:text-emerald-500 transition-colors">
+                    <CardTitle className={cn(
+                      "text-lg line-clamp-2 group-hover:text-emerald-500 transition-colors",
+                      isDarkTheme ? "text-white" : "text-gray-900"
+                    )}>
                       {article.title}
                     </CardTitle>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-2">
                     {article.keyword && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge
+                        variant="outline"
+                        className={cn("text-xs", !isDarkTheme && "border-gray-300 text-gray-700")}
+                      >
                         <Hash className="w-3 h-3 mr-1" />
                         {article.keyword}
                       </Badge>
                     )}
                     {article.tone && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge
+                        variant="outline"
+                        className={cn("text-xs", !isDarkTheme && "border-gray-300 text-gray-700")}
+                      >
                         {article.tone}
                       </Badge>
                     )}
@@ -1425,10 +1293,13 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         {article.images
                           .slice(0, 2)
                           .map((img: any, idx: number) => (
-                            <div
-                              key={idx}
-                              className="aspect-video rounded-lg overflow-hidden bg-zinc-800"
-                            >
+                        <div
+                          key={idx}
+                          className={cn(
+                            "aspect-video rounded-lg overflow-hidden",
+                            isDarkTheme ? "bg-zinc-800" : "bg-gray-200"
+                          )}
+                        >
                               <img
                                 src={img.url}
                                 alt={img.prompt || "Article image"}
@@ -1447,7 +1318,10 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         __html: article.content.substring(0, 150) + "...",
                       }}
                     />
-                    <div className="space-y-2 pt-2 border-t border-zinc-800">
+                    <div className={cn(
+                      "space-y-2 pt-2 border-t",
+                      isDarkTheme ? "border-zinc-800" : "border-gray-200"
+                    )}>
                       <div className="flex items-center justify-between text-xs">
                         <span
                           className={cn(
@@ -1481,7 +1355,10 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         <Button
                           size="sm"
                           variant="outline"
-                          className="flex-1 text-xs h-7"
+                          className={cn(
+                            "flex-1 text-xs h-7",
+                            !isDarkTheme && "border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-emerald-500 hover:text-emerald-600"
+                          )}
                           onClick={(e) => {
                             e.stopPropagation();
                             setEditingArticle(article);
@@ -1511,7 +1388,12 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="flex-1 text-xs h-7 border-emerald-500/20 text-emerald-500 font-bold rounded-xl"
+                            className={cn(
+                              "flex-1 text-xs h-7 font-bold rounded-xl",
+                              isDarkTheme
+                                ? "border-emerald-500/20 text-emerald-500"
+                                : "border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500"
+                            )}
                             onClick={(e) => {
                               e.stopPropagation();
                               // Try to open published URL if available

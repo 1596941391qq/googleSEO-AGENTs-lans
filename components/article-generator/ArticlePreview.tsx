@@ -129,11 +129,21 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
 
   // Handle Save
   const handleSave = async () => {
+    const websiteId = articleConfig?.websiteId || null;
+    if (!websiteId) {
+      alert(
+        uiLanguage === "zh"
+          ? "无法保存：请先在生成前选择推广网站（Promotion website）"
+          : "Cannot save: Please select a promotion website before generating."
+      );
+      return;
+    }
+
     setIsSaving(true);
     try {
       // 从 finalArticle 中提取 contentType（AI 在生成时标记的）
       const contentType = finalArticle.contentType || "informational"; // 默认为信息型
-      
+
       const response = await fetch("/api/articles/save", {
         method: "POST",
         headers: {
@@ -149,13 +159,15 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           visualStyle: articleConfig?.visualStyle || null,
           targetAudience: articleConfig?.targetAudience || null,
           targetMarket: articleConfig?.targetMarket || null,
-          websiteId: articleConfig?.websiteId || null, // 关联的用户网站 ID
-          contentType: contentType, // AI 标记的内容类型
+          websiteId,
+          contentType,
         }),
       });
 
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error("Failed to save article");
+        const msg = (data?.error as string) || "Failed to save article";
+        throw new Error(msg);
       }
 
       // 触发文章保存事件，通知 publish 页面刷新
@@ -168,11 +180,8 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
       }, 3000);
     } catch (error: any) {
       console.error("Error saving article:", error);
-      alert(
-        uiLanguage === "zh"
-          ? "保存失败，请重试"
-          : "Failed to save article. Please try again."
-      );
+      const message = error?.message || (uiLanguage === "zh" ? "保存失败，请重试" : "Failed to save article. Please try again.");
+      alert(message);
     } finally {
       setIsSaving(false);
     }
@@ -598,13 +607,19 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
         </button>
         <button
           onClick={handleSave}
-          disabled={isSaving}
+          disabled={isSaving || !(articleConfig?.websiteId)}
           className={cn(
             "p-3 rounded-lg text-white bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30",
             "transition-all flex items-center space-x-2 shadow-lg backdrop-blur-sm",
             "hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           )}
-          title="Save Article"
+          title={
+            !articleConfig?.websiteId
+              ? uiLanguage === "zh"
+                ? "请先在生成前选择推广网站"
+                : "Select a promotion website before generating"
+              : "Save Article"
+          }
         >
           {isSaving ? (
             <>
