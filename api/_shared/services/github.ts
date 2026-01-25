@@ -113,8 +113,12 @@ async function getFileSha(config: {
   branch?: string;
 }): Promise<string | null> {
   try {
+    const url = `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${config.path}?ref=${config.branch || 'main'}`;
+    console.log(`[GitHub getFileSha] Checking file: ${config.path}`);
+    console.log(`[GitHub getFileSha] URL: ${url}`);
+
     const response = await fetch(
-      `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${config.path}?ref=${config.branch || 'main'}`,
+      url,
       {
         headers: {
           'Authorization': `Bearer ${config.token}`,
@@ -123,10 +127,23 @@ async function getFileSha(config: {
       }
     );
 
-    if (!response.ok) return null;
+    console.log(`[GitHub getFileSha] Response status: ${response.status}`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log(`[GitHub getFileSha] File not found (404) - will create new file`);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        console.log(`[GitHub getFileSha] Error response:`, errorData);
+      }
+      return null;
+    }
+
     const data = await response.json();
+    console.log(`[GitHub getFileSha] Found existing file with SHA: ${data.sha}`);
     return data.sha;
-  } catch {
+  } catch (error: any) {
+    console.error(`[GitHub getFileSha] Exception:`, error.message);
     return null;
   }
 }
@@ -411,6 +428,7 @@ export async function addArticleToMkDocs(config: {
   articleContent: string;
   branch?: string;
   extension?: string;
+  isUpdate?: boolean; // 新增：标识是否为更新操作
 }): Promise<{
   success: boolean;
   articlePath?: string;
@@ -419,6 +437,9 @@ export async function addArticleToMkDocs(config: {
   const ext = config.extension || '.md';
   const articlePath = `docs/${config.articleSlug}${ext}`;
 
+  console.log(`[GitHub addArticleToMkDocs] Article path: ${articlePath}`);
+  console.log(`[GitHub addArticleToMkDocs] Is update: ${config.isUpdate || false}`);
+
   // 添加文章内容
   const result = await createOrUpdateFile({
     token: config.token,
@@ -426,7 +447,9 @@ export async function addArticleToMkDocs(config: {
     repoName: config.repoName,
     path: articlePath,
     content: config.articleContent,
-    message: `Add article: ${config.articleTitle}`,
+    message: config.isUpdate
+      ? `Update article: ${config.articleTitle}`
+      : `Add article: ${config.articleTitle}`,
     branch: config.branch,
   });
 

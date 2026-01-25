@@ -25,6 +25,7 @@ import {
   Edit3,
   X,
   Settings,
+  RefreshCw,
 } from "lucide-react";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
@@ -1009,6 +1010,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const [articles, setArticles] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [publishingId, setPublishingId] = React.useState<string | null>(null);
+  const [updatingId, setUpdatingId] = React.useState<string | null>(null);
   const [editingArticle, setEditingArticle] = React.useState<any | null>(null);
   const platform = "platform" as const;
 
@@ -1067,13 +1069,14 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                   status: "published",
                   publishedAt: result.data.publishedAt,
                   urlSlug: result.data.liveUrl || result.data.urlSlug || null,
+                  siteUrl: result.data.siteUrl || null, // 保存站点首页 URL
                 }
                 : a
             )
           );
 
-          if (result.data.liveUrl) {
-            window.open(result.data.liveUrl, "_blank");
+          if (result.data.siteUrl) {
+            window.open(result.data.siteUrl, "_blank");
           }
         } else {
           throw new Error(result.error || "Publishing failed");
@@ -1090,6 +1093,58 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
         );
       } finally {
         setPublishingId(null);
+      }
+    },
+    [loadArticles, uiLanguage]
+  );
+
+  const handleUpdate = React.useCallback(
+    async (articleId: string) => {
+      setUpdatingId(articleId);
+      try {
+        const response = await fetch("/api/articles/update-published", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("auth_token") || ""}`,
+          },
+          body: JSON.stringify({
+            articleId,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to update article");
+        }
+
+        const result = await response.json();
+        if (result.success) {
+          alert(
+            uiLanguage === "zh"
+              ? "文章已成功更新到发布站点！"
+              : "Article updated successfully!"
+          );
+
+          // 打开站点首页
+          if (result.data.siteUrl) {
+            window.open(result.data.siteUrl, "_blank");
+          }
+
+          // 刷新列表
+          await loadArticles();
+        } else {
+          throw new Error(result.error || "Update failed");
+        }
+      } catch (error: any) {
+        console.error("Error updating article:", error);
+        alert(
+          uiLanguage === "zh"
+            ? `更新失败: ${error.message || "请重试"}`
+            : `Update failed: ${error.message || "Please try again"}`
+        );
+      } finally {
+        setUpdatingId(null);
       }
     },
     [loadArticles, uiLanguage]
@@ -1385,48 +1440,52 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                             {uiLanguage === "zh" ? "立即发布" : "Publish"}
                           </Button>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className={cn(
-                              "flex-1 text-xs h-7 font-bold rounded-xl",
-                              isDarkTheme
-                                ? "border-emerald-500/20 text-emerald-500"
-                                : "border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500"
-                            )}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Try to open published URL if available
-                              const url =
-                                (article as any).urlSlug ||
-                                (article as any).url_slug;
-                              if (url && typeof url === "string") {
-                                // If it's already a full URL, use it directly
-                                if (url.startsWith("http")) {
-                                  window.open(url, "_blank");
-                                } else {
-                                  // If it's just a slug, construct platform URL
-                                  const baseDomain =
-                                    (import.meta.env && import.meta.env.VITE_PLATFORM_DOMAIN) ||
-                                    "seo-factory.com";
-                                  const userSubdomain = (
-                                    userId?.toString() || ""
-                                  ).substring(0, 8);
-                                  window.open(
-                                    `https://${userSubdomain}.${baseDomain}/p/${url}`,
-                                    "_blank"
-                                  );
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={cn(
+                                "flex-1 text-xs h-7 font-bold rounded-xl",
+                                isDarkTheme
+                                  ? "border-blue-500/20 text-blue-500"
+                                  : "border-blue-500/50 text-blue-600 hover:bg-blue-500/10 hover:border-blue-500"
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdate(article.id);
+                              }}
+                              disabled={updatingId === article.id}
+                            >
+                              {updatingId === article.id ? (
+                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                              ) : (
+                                <RefreshCw className="w-3 h-3 mr-1" />
+                              )}
+                              {uiLanguage === "zh" ? "更新" : "Update"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={cn(
+                                "flex-1 text-xs h-7 font-bold rounded-xl",
+                                isDarkTheme
+                                  ? "border-emerald-500/20 text-emerald-500"
+                                  : "border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500"
+                              )}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // 打开站点首页
+                                const siteUrl = (article as any).siteUrl;
+                                if (siteUrl && typeof siteUrl === "string") {
+                                  window.open(siteUrl, "_blank");
                                 }
-                              }
-                            }}
-                            disabled={
-                              !(article as any).urlSlug &&
-                              !(article as any).url_slug
-                            }
-                          >
-                            <ExternalLink className="w-3 h-3 mr-1" />
-                            {uiLanguage === "zh" ? "查看" : "View"}
-                          </Button>
+                              }}
+                              disabled={!(article as any).siteUrl}
+                            >
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              {uiLanguage === "zh" ? "查看" : "View"}
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>

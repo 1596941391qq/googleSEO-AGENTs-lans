@@ -403,13 +403,34 @@ description: "${(article.metaDescription || '').replace(/"/g, '\\"')}"
 function buildArticleUrl(siteUrl: string, slug: string): string {
   if (!siteUrl) return '';
 
+  // 清理 siteUrl，移除末尾的斜杠和可能的路径
+  let cleanUrl = siteUrl.replace(/\/$/, '');
+
+  // 如果 URL 已经包含 /en/latest/，移除它
+  cleanUrl = cleanUrl.replace(/\/en\/latest\/?$/, '');
+
   // RTD 格式
-  if (siteUrl.includes('readthedocs.io')) {
-    return `${siteUrl.replace(/\/$/, '')}/en/latest/${slug}/`;
+  if (cleanUrl.includes('readthedocs.io')) {
+    return `${cleanUrl}/en/latest/${slug}/`;
   }
 
   // 其他平台
-  return `${siteUrl.replace(/\/$/, '')}/${slug}/`;
+  return `${cleanUrl}/${slug}/`;
+}
+
+/**
+ * 获取站点首页 URL（不包含文章路径）
+ */
+function getSiteHomeUrl(siteUrl: string): string {
+  if (!siteUrl) return '';
+
+  // 清理 URL，只保留域名部分
+  let cleanUrl = siteUrl.replace(/\/$/, '');
+
+  // 移除 /en/latest/ 等路径
+  cleanUrl = cleanUrl.replace(/\/en\/latest\/?$/, '');
+
+  return cleanUrl;
 }
 
 /**
@@ -453,23 +474,41 @@ export async function getWebsitePublishingSites(websiteId: string): Promise<{
 /**
  * 更新已发布的文章
  * 将修改后的内容推送到已绑定的 GitHub 仓库
+ * 注意：此函数只更新已存在的发布，不会创建新的站点绑定
  */
 export async function updatePublishedArticle(
   projectId: string,
   article: ArticleForPublish
 ): Promise<PublishResult> {
   console.log(`[PSEO Publisher] 🔄 Updating "${article.title}" for project ${projectId}`);
+  console.log(`[PSEO Publisher] Content type: ${article.contentType}`);
 
   try {
-    // 1. 获取已绑定的站点（必须已存在）
-    const siteBinding = await assignSiteToWebsite(projectId, article.contentType);
+    // 1. 直接查询已绑定的站点（不使用 assignSiteToWebsite，避免自动创建新绑定）
+    const siteBindings = await getWebsiteSiteBindings(projectId);
+
+    let siteBinding = null;
+    for (const binding of siteBindings) {
+      if (binding.content_type === article.contentType) {
+        siteBinding = {
+          site: binding.site,
+          github_token: binding.github_token,
+          platform_token: binding.platform_token,
+        };
+        break;
+      }
+    }
 
     if (!siteBinding) {
+      console.error(`[PSEO Publisher] ❌ No published site found for project ${projectId} with content type ${article.contentType}`);
       return {
         success: false,
-        error: 'No published site found for this project. Please publish the article first.',
+        error: 'No published site found for this project. Please publish the article first before updating.',
       };
     }
+
+    console.log(`[PSEO Publisher] Found existing site: ${siteBinding.site.site_name}`);
+    console.log(`[PSEO Publisher] Repository: ${siteBinding.github_token.owner_name}/${siteBinding.site.repo_name}`);
 
     const { site, github_token, platform_token } = siteBinding;
 
@@ -512,7 +551,8 @@ export async function updatePublishedArticle(
       articleTitle: article.title,
       articleContent: finalContent,
       branch: site.branch,
-      extension
+      extension,
+      isUpdate: true, // 标识这是更新操作
     });
 
     if (!pushResult.success) {
@@ -536,16 +576,16 @@ export async function updatePublishedArticle(
       }
     }
 
-    // 6. 构建文章 URL
-    const articleUrl = buildArticleUrl(site.site_url, slug);
+    // 6. 返回站点首页 URL（更新操作不需要跳转到具体文章）
+    const siteHomeUrl = getSiteHomeUrl(site.site_url);
 
     console.log(`[PSEO Publisher] ✅ Updated successfully!`);
-    console.log(`[PSEO Publisher] Article URL: ${articleUrl}`);
+    console.log(`[PSEO Publisher] Site URL: ${siteHomeUrl}`);
 
     return {
       success: true,
-      articleUrl,
-      siteUrl: site.site_url,
+      articleUrl: siteHomeUrl, // 返回站点首页
+      siteUrl: siteHomeUrl,
       repoUrl: `https://github.com/${github_token.owner_name}/${site.repo_name}`,
       siteName: site.site_name,
       platform: site.platform,

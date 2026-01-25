@@ -302,8 +302,7 @@ const TEXT = {
     // Content Generation Tabs
     tabMyWebsite: "My Website",
     tabWebsiteData: "Website Data",
-    tabArticleRankings: "Projects",
-    tabProjects: "Projects",
+    tabProjects: "keywords",
     tabPublish: "Publish",
     contentStrategy: "Content Strategy",
   },
@@ -470,8 +469,7 @@ const TEXT = {
     // Content Generation Tabs
     tabMyWebsite: "我的网站",
     tabWebsiteData: "网站数据",
-    tabArticleRankings: "内容项目",
-    tabProjects: "内容项目",
+    tabProjects: "关键词",
     tabPublish: "发布",
     contentStrategy: "内容策略",
   },
