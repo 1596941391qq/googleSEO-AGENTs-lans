@@ -107,8 +107,7 @@ export const KeywordFiltersBar: React.FC<KeywordFiltersBarProps> = ({
           <SelectContent>
             <SelectItem value="all">{uiLanguage === 'zh' ? '全部来源' : 'All Source'}</SelectItem>
             <SelectItem value="website-audit">{uiLanguage === 'zh' ? '存量拓新' : 'Website Audit'}</SelectItem>
-            <SelectItem value="manual">{uiLanguage === 'zh' ? '手动添加' : 'Manual'}</SelectItem>
-            <SelectItem value="blue-ocean">{uiLanguage === 'zh' ? '蓝海模式' : 'Blue Ocean'}</SelectItem>
+            <SelectItem value="manual">{uiLanguage === 'zh' ? '蓝海发现' : 'Blue Ocean Discovery'}</SelectItem>
           </SelectContent>
         </Select>
 

@@ -51,8 +51,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ) THEN true ELSE false END as has_draft
       FROM keyword_analysis_cache kac
       LEFT JOIN user_websites uw ON kac.website_id = uw.id
-      WHERE (uw.user_id::text = ${userId.toString()} OR kac.website_id IS NULL)
-      AND kac.cache_expires_at > NOW()
+      WHERE (
+        -- 公共关键词：website_id 为 NULL 的，所有用户都能看到
+        kac.website_id IS NULL
+        OR
+        -- 私有关键词：website_id 不为 NULL 的，只有网站所有者能看到
+        (kac.website_id IS NOT NULL AND uw.user_id::text = ${userId.toString()})
+      )
       ORDER BY kac.created_at DESC
     `;
 

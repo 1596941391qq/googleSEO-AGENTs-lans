@@ -77,12 +77,11 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
     switch (source) {
       case 'website-audit':
         return isDarkTheme ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700';
-      case 'blue-ocean':
-        return isDarkTheme ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700';
       case 'manual':
-        return isDarkTheme ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-700';
+        return isDarkTheme ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700';
       default:
-        return isDarkTheme ? 'bg-zinc-500/10 text-zinc-400' : 'bg-gray-50 text-gray-700';
+        // 默认处理：如果不是 website-audit，则视为蓝海发现
+        return isDarkTheme ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700';
     }
   };
 
@@ -90,12 +89,10 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
     switch (source) {
       case 'website-audit':
         return uiLanguage === 'zh' ? '存量拓新' : 'Website Audit';
-      case 'blue-ocean':
-        return uiLanguage === 'zh' ? '蓝海模式' : 'Blue Ocean';
       case 'manual':
-        return uiLanguage === 'zh' ? '手动添加' : 'Manual';
       default:
-        return source || '-';
+        // 默认处理：如果不是 website-audit，则视为蓝海发现
+        return uiLanguage === 'zh' ? '蓝海发现' : 'Blue Ocean Discovery';
     }
   };
 
@@ -306,7 +303,11 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                           <p className={cn('text-xs font-medium mb-1', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
                             {uiLanguage === 'zh' ? 'CPC' : 'CPC'}
                           </p>
-                          <p className="font-semibold">{keyword.cpc ? `$${keyword.cpc.toFixed(2)}` : '-'}</p>
+                          <p className="font-semibold">
+                            {keyword.cpc != null && !isNaN(Number(keyword.cpc)) 
+                              ? `$${Number(keyword.cpc).toFixed(2)}` 
+                              : '-'}
+                          </p>
                         </div>
                         <div>
                           <p className={cn('text-xs font-medium mb-1', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
