@@ -50,7 +50,7 @@ import { cn } from "../lib/utils";
 import { KeywordData } from "../types";
 
 // 定义本地类型
-import { ProjectDashboard } from "./projects/ProjectDashboard";
+import { KeywordManagerDashboard } from "./keywords/KeywordManagerDashboard";
 import { RichTextEditor } from "./projects/RichTextEditor";
 
 interface WebsiteBinding {
@@ -4546,7 +4546,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
         />
       )}
       {state.activeTab === "projects" && (
-        <ProjectDashboard
+        <KeywordManagerDashboard
           isDarkTheme={isDarkTheme}
           uiLanguage={uiLanguage}
           onGenerateContent={(kw) => {
@@ -4563,17 +4563,10 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             }
           }}
           onViewDraft={(kw) => {
-            // Draft viewing logic is inside ProjectDashboard
+            // Draft viewing logic is inside KeywordManagerDashboard
           }}
-          onReuseSettings={(project) => {
-            // Store settings in localStorage for reuse
-            const reuseSettings = {
-              seedKeyword: project.seed_keyword || '',
-              websiteUrl: project.website_url || '',
-              websiteDomain: project.website_domain || '',
-              targetLanguage: project.target_language || 'en',
-              miningMode: project.mining_mode || 'blue-ocean',
-              timestamp: Date.now(),
+        />
+      )}
             };
 
             try {
