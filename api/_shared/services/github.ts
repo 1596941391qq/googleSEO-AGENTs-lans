@@ -316,13 +316,24 @@ markdown_extensions:
       permalink: true
 `;
 
-  const indexMd = `# Welcome to ${config.siteName}
+  const indexMd = `# ${config.siteName}
 
 ${config.siteDescription}
 
+## Welcome
+
+This site contains high-quality, SEO-optimized content covering various topics. Browse the navigation menu to explore our articles.
+
+## Categories
+
+- **Guides**: Comprehensive guides and tutorials
+- **Comparisons**: In-depth product and service comparisons
+- **Tools**: Useful tools and resources
+- **Lab**: Experimental content and research
+
 ---
 
-*Content will be added automatically.*
+*This site is powered by [MkDocs](https://www.mkdocs.org/) and automatically updated.*
 `;
 
   const requirementsTxt = `mkdocs>=1.5
@@ -481,6 +492,7 @@ export async function addArticleToMkDocs(config: {
 
 /**
  * 更新 mkdocs.yml 的 nav 部分
+ * 支持按类别组织文章（lab, guide, compare, tool）
  */
 async function updateMkDocsNav(config: {
   token: string;
@@ -491,6 +503,8 @@ async function updateMkDocsNav(config: {
   branch?: string;
 }): Promise<void> {
   try {
+    console.log(`[GitHub updateMkDocsNav] Updating navigation for: ${config.articleTitle}`);
+
     // 获取当前 mkdocs.yml
     const response = await fetch(
       `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/mkdocs.yml?ref=${config.branch || 'main'}`,
@@ -502,32 +516,76 @@ async function updateMkDocsNav(config: {
       }
     );
 
-    if (!response.ok) return;
+    if (!response.ok) {
+      console.warn(`[GitHub updateMkDocsNav] Could not fetch mkdocs.yml: ${response.status}`);
+      return;
+    }
 
     const data = await response.json();
     const currentContent = Buffer.from(data.content, 'base64').toString('utf-8');
 
     // 检查文章是否已在 nav 中
-    const navEntry = `  - "${config.articleTitle}": ${config.articleSlug}.md`;
-    if (currentContent.includes(config.articleSlug)) {
+    if (currentContent.includes(`${config.articleSlug}.md`)) {
+      console.log(`[GitHub updateMkDocsNav] Article already in navigation, skipping`);
       return; // 已存在
     }
 
-    // 在 nav 末尾添加新文章（在 "# 新文章将在此处自动添加" 之前）
+    // 确定文章类别（从 slug 中提取，如果有前缀的话）
+    let category = 'Articles'; // 默认类别
+    let displaySlug = config.articleSlug;
+
+    // 检测常见的 fast/slow knife 路径前缀
+    if (config.articleSlug.startsWith('lab/') || config.articleSlug.startsWith('test/')) {
+      category = 'Lab (Experimental)';
+    } else if (config.articleSlug.startsWith('guide/')) {
+      category = 'Guides';
+    } else if (config.articleSlug.startsWith('compare/')) {
+      category = 'Comparisons';
+    } else if (config.articleSlug.startsWith('tool/')) {
+      category = 'Tools';
+    }
+
+    // 构建导航条目
+    const navEntry = `    - "${config.articleTitle}": ${config.articleSlug}.md`;
+
     let updatedContent = currentContent;
-    const marker = '# 新文章将在此处自动添加';
-    if (currentContent.includes(marker)) {
+
+    // 查找或创建类别部分
+    const categoryPattern = new RegExp(`  - ${category}:\\s*\\n`, 'i');
+    const hasCategory = categoryPattern.test(currentContent);
+
+    if (hasCategory) {
+      // 在现有类别下添加
       updatedContent = currentContent.replace(
-        marker,
-        `${navEntry}\n${marker}`
+        categoryPattern,
+        `  - ${category}:\n${navEntry}\n`
       );
+      console.log(`[GitHub updateMkDocsNav] Added to existing category: ${category}`);
     } else {
-      // 如果没有标记，在 nav 部分末尾添加
-      updatedContent = currentContent.trimEnd() + `\n${navEntry}\n`;
+      // 创建新类别（在标记之前添加）
+      const marker = '# 新文章将在此处自动添加';
+      if (currentContent.includes(marker)) {
+        const newCategory = `  - ${category}:\n${navEntry}\n${marker}`;
+        updatedContent = currentContent.replace(marker, newCategory);
+        console.log(`[GitHub updateMkDocsNav] Created new category: ${category}`);
+      } else {
+        // 如果没有标记，在 nav 部分末尾添加
+        const navEndPattern = /\nmarkdown_extensions:/;
+        if (navEndPattern.test(currentContent)) {
+          updatedContent = currentContent.replace(
+            navEndPattern,
+            `\n  - ${category}:\n${navEntry}\n\nmarkdown_extensions:`
+          );
+        } else {
+          // 最后的备选方案：直接追加到文件末尾
+          updatedContent = currentContent.trimEnd() + `\n  - ${category}:\n${navEntry}\n`;
+        }
+        console.log(`[GitHub updateMkDocsNav] Added new category at end: ${category}`);
+      }
     }
 
     // 更新文件
-    await createOrUpdateFile({
+    const updateResult = await createOrUpdateFile({
       token: config.token,
       owner: config.owner,
       repoName: config.repoName,
@@ -536,8 +594,14 @@ async function updateMkDocsNav(config: {
       message: `Add "${config.articleTitle}" to navigation`,
       branch: config.branch,
     });
-  } catch (error) {
-    console.error('[updateMkDocsNav] Error:', error);
+
+    if (updateResult.success) {
+      console.log(`[GitHub updateMkDocsNav] ✅ Navigation updated successfully`);
+    } else {
+      console.error(`[GitHub updateMkDocsNav] ❌ Failed to update navigation: ${updateResult.error}`);
+    }
+  } catch (error: any) {
+    console.error('[GitHub updateMkDocsNav] Error:', error.message);
   }
 }
 

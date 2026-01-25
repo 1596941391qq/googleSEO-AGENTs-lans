@@ -168,39 +168,21 @@ export async function publishArticle(
       };
     }
 
-    // Check if we should use HTML (Assuming all commercial/Pure HTML sites need this, or force it for now based on user request)
-    // For this specific user verification, I will enable HTML.
-    // In production this should be a config in the 'site' or 'project' object.
-    const useHtml = true;
-    let finalContent: string;
-    let extension: string = '.md';
+    // MkDocs requires Markdown files, not HTML
+    // Generate proper Markdown with frontmatter
+    console.log(`[PSEO Publisher] Generating Markdown content with frontmatter...`);
+    const finalContent = generateArticleMarkdown(article);
+    const extension = '.md';
 
-    if (useHtml) {
-      console.log(`[PSEO Publisher] Converting Markdown to HTML...`);
-      const { convertMarkdownToHtml } = await import('../utils/markdown-converter.js');
-      // generateArticleMarkdown returns content with frontmatter, we need raw content for converter?
-      // Actually generateArticleMarkdown adds frontmatter.
-      // We should convert the RAW article.content.
-      // We also need to constructing the HTML.
-      finalContent = convertMarkdownToHtml(article.content, article.title, {
-        description: article.metaDescription,
-        keywords: article.keyword
-      });
-      extension = '.html';
-
-      // 验证 HTML 转换结果
-      if (!finalContent || finalContent.trim().length === 0) {
-        console.error(`[PSEO Publisher] ❌ HTML conversion failed - result is empty!`);
-        return {
-          success: false,
-          error: 'HTML conversion failed. Converted content is empty.',
-        };
-      }
-      console.log(`[PSEO Publisher] HTML conversion successful. Length: ${finalContent.length} characters`);
-    } else {
-      finalContent = generateArticleMarkdown(article);
-      extension = '.md';
+    // 验证 Markdown 内容
+    if (!finalContent || finalContent.trim().length === 0) {
+      console.error(`[PSEO Publisher] ❌ Markdown generation failed - result is empty!`);
+      return {
+        success: false,
+        error: 'Markdown generation failed. Content is empty.',
+      };
     }
+    console.log(`[PSEO Publisher] ✅ Markdown generated successfully. Length: ${finalContent.length} characters`);
 
     const pushResult = await addArticleToMkDocs({
       token: githubTokenDecrypted,
@@ -229,21 +211,6 @@ export async function publishArticle(
     await incrementGitHubTokenUsage(github_token.id);
     if (platform_token) {
       await incrementPlatformTokenUsage(platform_token.id);
-    }
-
-    // 6. 重建站点索引 (静态 HTML 支持)
-    // 只有在使用 HTML 发布时才需要重建索引
-    if (useHtml) {
-      console.log(`[PSEO Publisher] Rebuilding static site index...`);
-      const indexResult = await rebuildStaticSiteIndex({
-        token: githubTokenDecrypted,
-        owner: github_token.owner_name,
-        repoName: site.repo_name,
-        branch: site.branch,
-      });
-      if (!indexResult.success) {
-        console.warn(`[PSEO Publisher] Warning: Failed to rebuild index: ${indexResult.error}`);
-      }
     }
 
     // 6. 构建文章 URL
@@ -523,21 +490,16 @@ export async function updatePublishedArticle(
     const githubTokenDecrypted = decryptToken(github_token.token_encrypted);
     const slug = generateSlug(article.keyword, article.urlSlug);
 
-    // 3. 准备内容（与发布时相同的逻辑）
-    const useHtml = true;
-    let finalContent: string;
-    let extension: string = '.md';
+    // 3. 准备 Markdown 内容（MkDocs 需要 .md 文件）
+    console.log(`[PSEO Publisher] Generating Markdown content for update...`);
+    const finalContent = generateArticleMarkdown(article);
+    const extension = '.md';
 
-    if (useHtml) {
-      const { convertMarkdownToHtml } = await import('../utils/markdown-converter.js');
-      finalContent = convertMarkdownToHtml(article.content, article.title, {
-        description: article.metaDescription,
-        keywords: article.keyword
-      });
-      extension = '.html';
-    } else {
-      finalContent = generateArticleMarkdown(article);
-      extension = '.md';
+    if (!finalContent || finalContent.trim().length === 0) {
+      return {
+        success: false,
+        error: 'Markdown generation failed. Content is empty.',
+      };
     }
 
     // 4. 推送更新到 GitHub（覆盖现有文件）
@@ -562,21 +524,7 @@ export async function updatePublishedArticle(
       };
     }
 
-    // 5. 重建站点索引（如果使用 HTML）
-    if (useHtml) {
-      console.log(`[PSEO Publisher] Rebuilding static site index...`);
-      const indexResult = await rebuildStaticSiteIndex({
-        token: githubTokenDecrypted,
-        owner: github_token.owner_name,
-        repoName: site.repo_name,
-        branch: site.branch,
-      });
-      if (!indexResult.success) {
-        console.warn(`[PSEO Publisher] Warning: Failed to rebuild index: ${indexResult.error}`);
-      }
-    }
-
-    // 6. 返回站点首页 URL（更新操作不需要跳转到具体文章）
+    // 5. 返回站点首页 URL（更新操作不需要跳转到具体文章）
     const siteHomeUrl = getSiteHomeUrl(site.site_url);
 
     console.log(`[PSEO Publisher] ✅ Updated successfully!`);
