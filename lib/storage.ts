@@ -27,6 +27,7 @@ const STORAGE_KEYS = {
   TASK_META: `${STORAGE_PREFIX}task_meta`,      // 任务基础信息（精简版）
   TASK_INDEX: `${STORAGE_PREFIX}task_index`,    // 任务ID索引
   SETTINGS: `${STORAGE_PREFIX}settings`,         // 用户设置
+  ACTIVE_TASK_ID: `${STORAGE_PREFIX}active_task_id`, // 当前激活任务ID
 } as const;
 
 // 单个 localStorage key 的最大大小（字节），留出安全边际
@@ -58,7 +59,7 @@ export async function initDB(): Promise<IDBDatabase> {
 
     request.onupgradeneeded = (event) => {
       const db = (event.target as IDBOpenDBRequest).result;
-      
+
       // 创建任务存储
       if (!db.objectStoreNames.contains(STORE_NAMES.TASKS)) {
         const taskStore = db.createObjectStore(STORE_NAMES.TASKS, { keyPath: 'id' });
@@ -229,8 +230,8 @@ export function extractTaskMeta(task: TaskState): TaskMeta {
         meta.miningRound = task.miningState.miningRound;
         meta.miningSuccess = task.miningState.miningSuccess;
         meta.keywordCount = task.miningState.keywords?.length || 0;
-        meta.status = task.miningState.isMining ? 'running' : 
-                      task.miningState.miningSuccess ? 'completed' : 'idle';
+        meta.status = task.miningState.isMining ? 'running' :
+          task.miningState.miningSuccess ? 'completed' : 'idle';
       }
       break;
 
@@ -248,7 +249,7 @@ export function extractTaskMeta(task: TaskState): TaskMeta {
         meta.articleStage = task.articleGeneratorState.currentStage;
         meta.hasArticle = !!(task.articleGeneratorState.finalArticle?.title || task.articleGeneratorState.finalArticle?.content);
         meta.status = task.articleGeneratorState.isGenerating ? 'running' :
-                      meta.hasArticle ? 'completed' : 'idle';
+          meta.hasArticle ? 'completed' : 'idle';
       }
       break;
   }
@@ -260,8 +261,8 @@ export function extractTaskMeta(task: TaskState): TaskMeta {
 
 export class SmartStorage {
   private static instance: SmartStorage;
-  
-  private constructor() {}
+
+  private constructor() { }
 
   static getInstance(): SmartStorage {
     if (!SmartStorage.instance) {
@@ -312,7 +313,7 @@ export class SmartStorage {
     const meta = extractTaskMeta(task);
     const allMetas = this.getTaskMetas();
     const index = allMetas.findIndex(m => m.id === task.id);
-    
+
     if (index >= 0) {
       allMetas[index] = meta;
     } else {
@@ -330,11 +331,37 @@ export class SmartStorage {
   }
 
   /**
+   * 保存当前激活任务 ID（用于刷新后恢复）
+   */
+  saveActiveTaskId(activeTaskId: string | null): void {
+    try {
+      localStorage.setItem(
+        STORAGE_KEYS.ACTIVE_TASK_ID,
+        JSON.stringify(activeTaskId)
+      );
+    } catch (e) {
+      console.warn('[SmartStorage] Failed to save active task id:', e);
+    }
+  }
+
+  /**
+   * 获取当前激活任务 ID
+   */
+  getActiveTaskId(): string | null {
+    try {
+      const data = localStorage.getItem(STORAGE_KEYS.ACTIVE_TASK_ID);
+      return data ? JSON.parse(data) : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /**
    * 保存完整任务到 IndexedDB
    */
   private async saveTaskToIndexedDB(task: TaskState): Promise<void> {
     const db = await initDB();
-    
+
     // 准备存储数据：分离大型字段
     const taskData = {
       ...task,
@@ -363,7 +390,7 @@ export class SmartStorage {
       } : undefined,
     };
 
-    await dbOperation(STORE_NAMES.TASKS, 'readwrite', (store) => 
+    await dbOperation(STORE_NAMES.TASKS, 'readwrite', (store) =>
       store.put(taskData)
     );
 
@@ -387,7 +414,7 @@ export class SmartStorage {
     // 先删除旧的关键词
     const index = store.index('taskId');
     const request = index.openCursor(IDBKeyRange.only(taskId));
-    
+
     await new Promise<void>((resolve, reject) => {
       request.onsuccess = (event) => {
         const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
@@ -405,15 +432,15 @@ export class SmartStorage {
     let skippedCount = 0;
     for (const keyword of keywords) {
       // 验证 id 是否为有效的 IndexedDB key（string 或 number）
-      if (keyword.id === undefined || keyword.id === null || 
-          (typeof keyword.id !== 'string' && typeof keyword.id !== 'number')) {
+      if (keyword.id === undefined || keyword.id === null ||
+        (typeof keyword.id !== 'string' && typeof keyword.id !== 'number')) {
         skippedCount++;
         console.warn('[SmartStorage] Skipping keyword without valid id:', keyword.keyword);
         continue;
       }
       store.put({ ...keyword, taskId });
     }
-    
+
     if (skippedCount > 0) {
       console.warn(`[SmartStorage] Skipped ${skippedCount} keywords without valid id for task ${taskId}`);
     }
@@ -573,7 +600,7 @@ export class SmartStorage {
         'readonly',
         (store) => store.getAll()
       );
-      return tasks || [];
+      return (tasks || []).sort((a, b) => b.updatedAt - a.updatedAt);
     } catch (error) {
       console.error('[SmartStorage] Failed to load all tasks:', error);
       return [];
@@ -587,8 +614,11 @@ export class SmartStorage {
    */
   async deleteTask(taskId: string): Promise<void> {
     try {
+      if (this.getActiveTaskId() === taskId) {
+        this.saveActiveTaskId(null);
+      }
       // 从 IndexedDB 删除
-      await dbOperation(STORE_NAMES.TASKS, 'readwrite', (store) => 
+      await dbOperation(STORE_NAMES.TASKS, 'readwrite', (store) =>
         store.delete(taskId)
       );
 
@@ -638,7 +668,7 @@ export class SmartStorage {
    */
   async cleanupOldData(): Promise<void> {
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    
+
     try {
       const tasks = await this.loadAllTasks();
       const oldTaskIds = tasks
@@ -663,7 +693,7 @@ export class SmartStorage {
       // 清理 IndexedDB
       const db = await initDB();
       const storeNames = [STORE_NAMES.TASKS, STORE_NAMES.KEYWORDS, STORE_NAMES.THOUGHTS, STORE_NAMES.STREAM_EVENTS];
-      
+
       for (const storeName of storeNames) {
         await dbOperation(storeName, 'readwrite', (store) => store.clear());
       }
@@ -711,7 +741,7 @@ export class SmartStorage {
     try {
       const tasks = await this.loadAllTasks();
       taskCount = tasks.length;
-      
+
       const db = await initDB();
       const countRequest = await dbOperation<number>(
         STORE_NAMES.KEYWORDS,
@@ -744,7 +774,7 @@ export const smartStorage = SmartStorage.getInstance();
  */
 export async function migrateFromOldStorage(): Promise<boolean> {
   const OLD_TASKS_KEY = 'google_seo_tasks';
-  
+
   try {
     const oldData = localStorage.getItem(OLD_TASKS_KEY);
     if (!oldData) return false;

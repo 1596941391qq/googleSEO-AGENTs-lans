@@ -687,31 +687,38 @@ export const SEO_RESEARCHER_PROMPTS = {
 
 <output_format>
 {
-  "semantic_landscape": "描述该关键词在全网的语义分布特征 (要求 100-150 字)...",
+  "semantic_landscape": "描述该关键词在全网的语义分布特征 (要求 100-150 字，不要重复)...",
   "engine_strategies": {
     "google": { 
-      "ranking_logic": "Google 排名逻辑分析 (50-80 字)",
-      "content_gap": "目前前十名缺失了什么？ (50-80 字)",
-      "action_item": "必须要做的动作 (30-50 字)",
+      "ranking_logic": "Google 排名逻辑分析 (50-80 字，简洁明确)",
+      "content_gap": "目前前十名缺失了什么？ (50-80 字，具体指出)",
+      "action_item": "必须要做的动作 (30-50 字，可执行)",
       "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     },
     "perplexity": { 
-      "citation_logic": "如何被其引用？ (50-80 字)",
-      "structure_hint": "推荐使用的Schema或列表格式",
+      "citation_logic": "如何被其引用？ (50-80 字，具体策略)",
+      "structure_hint": "推荐使用的Schema或列表格式 (简洁)",
       "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     },
     "generative_ai": { 
-      "llm_preference": "AI更喜欢哪种叙述风格？ (50-80 字)",
+      "llm_preference": "AI更喜欢哪种叙述风格？ (50-80 字，具体描述)",
       "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     }
   },
   "geo_recommendations": {
-    "format_engineering": "格式工程建议（Bullets、表格、键值对等，要求包含具体示例）",
-    "entity_engineering": "实体工程建议（命名统一、实体描述模板等，要求包含具体示例）",
-    "information_gain": "信息增益建议（独家数据、实测结果等，要求包含具体示例）",
-    "structure_optimization": "结构优化建议（首屏摘要、对比区、FAQ等，要求包含具体示例）"
+    "format_engineering": "格式工程建议（Bullets、表格、键值对等，要求包含具体示例，控制在 150-200 字）",
+    "entity_engineering": "实体工程建议（命名统一、实体描述模板等，要求包含具体示例，控制在 150-200 字）",
+    "information_gain": "信息增益建议（独家数据、实测结果等，要求包含具体示例，控制在 150-200 字）",
+    "structure_optimization": "结构优化建议（首屏摘要、对比区、FAQ等，要求包含具体示例，控制在 150-200 字）"
   }
 }
+
+**重要约束**：
+1. 严格遵守字数限制，不要超出指定范围
+2. 避免重复相同或类似的表述
+3. 每个字段都要提供独特、有价值的信息
+4. 不要使用填充性文字或通用套话
+5. 总输出控制在合理范围内（约 2000-2500 中文字符）
 
 请以结构化的JSON格式提供搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。
 
@@ -753,31 +760,38 @@ Must provide a "core breakthrough point" for each engine from a data-driven pers
 ## Output Format
 Return JSON:
 {
-  "semantic_landscape": "Describe the semantic distribution characteristics of this keyword across the web (100-150 words)...",
+  "semantic_landscape": "Describe the semantic distribution characteristics of this keyword across the web (100-150 words, no repetition)...",
   "engine_strategies": {
     "google": {
-      "ranking_logic": "Google ranking logic analysis (50-80 words)",
-      "content_gap": "What are the top 10 currently missing? (50-80 words)",
-      "action_item": "Actions that must be taken (30-50 words)",
+      "ranking_logic": "Google ranking logic analysis (50-80 words, concise and specific)",
+      "content_gap": "What are the top 10 currently missing? (50-80 words, specific gaps)",
+      "action_item": "Actions that must be taken (30-50 words, actionable)",
       "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     },
     "perplexity": {
-      "citation_logic": "How to be cited by it? (50-80 words)",
-      "structure_hint": "Recommended Schema or list formats",
+      "citation_logic": "How to be cited by it? (50-80 words, specific strategy)",
+      "structure_hint": "Recommended Schema or list formats (concise)",
       "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     },
     "generative_ai": {
-      "llm_preference": "What narrative style does AI prefer? (50-80 words)",
+      "llm_preference": "What narrative style does AI prefer? (50-80 words, specific description)",
       "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     }
   },
   "geo_recommendations": {
-    "format_engineering": "Format engineering recommendations (Bullets, tables, key-value pairs, etc., with concrete examples)",
-    "entity_engineering": "Entity engineering recommendations (naming consistency, entity description templates, etc., with concrete examples)",
-    "information_gain": "Information gain recommendations (exclusive data, test results, etc., with concrete examples)",
-    "structure_optimization": "Structure optimization recommendations (first-screen summary, comparison section, FAQ, etc., with concrete examples)"
+    "format_engineering": "Format engineering recommendations (Bullets, tables, key-value pairs, etc., with concrete examples, limit to 150-200 words)",
+    "entity_engineering": "Entity engineering recommendations (naming consistency, entity description templates, etc., with concrete examples, limit to 150-200 words)",
+    "information_gain": "Information gain recommendations (exclusive data, test results, etc., with concrete examples, limit to 150-200 words)",
+    "structure_optimization": "Structure optimization recommendations (first-screen summary, comparison section, FAQ, etc., with concrete examples, limit to 150-200 words)"
   }
 }
+
+**Important Constraints**:
+1. Strictly adhere to word limits, do not exceed specified ranges
+2. Avoid repeating similar or identical phrases
+3. Each field must provide unique, valuable information
+4. Do not use filler text or generic statements
+5. Keep total output within reasonable limits (approximately 2000-2500 words)
 
 Please provide detailed search engine preference analysis and optimization recommendations in structured JSON format, with special attention to localization needs for the target market.
 

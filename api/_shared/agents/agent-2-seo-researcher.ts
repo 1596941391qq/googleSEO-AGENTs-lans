@@ -337,8 +337,10 @@ export async function analyzeSearchPreferences(
     onProgress?.(language === 'zh' ? `🤖 正在分析 ${marketLabel} 市场的搜索引擎偏好...` : `🤖 Analyzing search engine preferences for ${marketLabel} market...`);
 
     // 调用 Gemini API（使用 JSON 模式）
+    // 设置合理的输出长度限制（3000 tokens ≈ 2000-2500 中文字符），避免生成重复内容
     const jsonConfig = {
       responseMimeType: 'application/json',
+      maxOutputTokens: 3000, // 限制输出长度，避免浪费资源
       responseSchema: {
         type: 'object',
         properties: {

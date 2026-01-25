@@ -165,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           workflow: "工作流编排",
           language: "中英切换",
           theme: "日夜间主题",
-          version: "V2.8.5 System Online",
+          version: "V2.8.5",
         }
       : {
           myWebsite: "My Website",
@@ -178,7 +178,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           workflow: "Workflow",
           language: "Language",
           theme: "Theme",
-          version: "V2.8.5 System Online",
+          version: "V2.8.5",
         };
 
   const getTaskIcon = (task: TaskState) => {
@@ -189,8 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (
       task.miningState?.isMining ||
       isBatchRunning ||
-      task.articleGeneratorState?.isGenerating ||
-      task.deepDiveState?.isDeepDiving
+      task.articleGeneratorState?.isGenerating
     ) {
       return <Loader2 size={14} className="animate-spin text-emerald-500" />;
     }
@@ -244,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         className={`border-r flex flex-col shrink-0 transition-all duration-500 ease-out z-50 ${
           isCollapsed
             ? "w-0 md:w-16 -translate-x-full md:translate-x-0 pointer-events-none md:pointer-events-auto"
-            : "w-72 translate-x-0 pointer-events-auto"
+            : "w-52 md:w-56 translate-x-0 pointer-events-auto"
         } ${
           isDarkTheme ? "border-white/10 bg-[#0a0a0a]" : "border-gray-200 bg-white"
         } fixed md:relative h-full overflow-hidden`}

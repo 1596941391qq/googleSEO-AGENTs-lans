@@ -1,3 +1,11 @@
+export interface DeepDiveConfig {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  strategyPrompt: string;
+  targetLanguage: TargetLanguage;
+}
 
 export enum IntentType {
   INFORMATIONAL = 'Informational', // e.g., How to...
@@ -198,6 +206,7 @@ export interface DeepDiveArchiveEntry {
   targetLanguage: TargetLanguage;
 }
 
+
 export type UILanguage = 'en' | 'zh';
 export type TargetLanguage = 'en' | 'zh' | 'fr' | 'ru' | 'ja' | 'ko' | 'pt' | 'id' | 'es' | 'ar';
 
@@ -271,14 +280,6 @@ export interface AgentConfig {
   targetLanguage: TargetLanguage;
 }
 
-export interface DeepDiveConfig {
-  id: string;
-  name: string;
-  createdAt: number;
-  updatedAt: number;
-  strategyPrompt: string;
-  targetLanguage: TargetLanguage;
-}
 
 export interface LogEntry {
   timestamp: string;
@@ -426,7 +427,7 @@ export interface CreateTaskParams {
   targetMarket?: string; // For article-generator tasks
   seedKeyword?: string; // For mining tasks
   inputKeywords?: string; // For batch tasks
-  keyword?: KeywordData; // For deep-dive tasks
+  keyword?: KeywordData;
   miningMode?: 'blue-ocean' | 'existing-website-audit';
   miningConfig?: {
     industry?: string;
@@ -494,12 +495,6 @@ export interface AppState {
   archives: ArchiveEntry[];
   batchArchives: BatchArchiveEntry[];
   deepDiveArchives: DeepDiveArchiveEntry[];
-
-  // Results View Configuration
-  filterLevel: ProbabilityLevel | 'ALL';
-  sortBy: 'volume' | 'probability' | 'difficulty';
-  expandedRowId: string | null;
-
   // Deep Dive State
   showDeepDiveModal: boolean;
   isDeepDiving: boolean;
@@ -509,6 +504,12 @@ export interface AppState {
   showDetailedAnalysisModal: boolean;
   deepDiveProgress: number; // 0-100
   deepDiveCurrentStep: string;
+
+
+  // Results View Configuration
+  filterLevel: ProbabilityLevel | 'ALL';
+  sortBy: 'volume' | 'probability' | 'difficulty';
+  expandedRowId: string | null;
 
   // Config
   uiLanguage: UILanguage;

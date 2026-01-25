@@ -126,7 +126,6 @@ import {
 import {
   MINING_WORKFLOW,
   BATCH_WORKFLOW,
-  DEEP_DIVE_WORKFLOW,
   createDefaultConfig,
 } from "./workflows";
 import {
@@ -3274,7 +3273,6 @@ export default function App() {
 
     // Deep Dive
     deepDiveThoughts: [],
-    logs: [],
     isDeepDiving: false,
     deepDiveProgress: 0,
     deepDiveCurrentStep: "",
@@ -3282,6 +3280,8 @@ export default function App() {
     deepDiveKeyword: null,
     showDeepDiveModal: false,
     showDetailedAnalysisModal: false,
+
+    logs: [],
 
     // Config
     uiLanguage: "en" as UILanguage,
@@ -4009,20 +4009,6 @@ export default function App() {
     }
 
     try {
-      const savedDeepDiveArchives = localStorage.getItem(
-        "google_seo_deepdive_archives"
-      );
-      if (savedDeepDiveArchives) {
-        setState((prev) => ({
-          ...prev,
-          deepDiveArchives: JSON.parse(savedDeepDiveArchives),
-        }));
-      }
-    } catch (e) {
-      console.error("Failed to load deep dive archives", e);
-    }
-
-    try {
       const savedConfigs = localStorage.getItem("google_seo_agent_configs");
       if (savedConfigs) {
         setState((prev) => ({
@@ -4175,6 +4161,11 @@ export default function App() {
 
     initAndLoad();
   }, [authenticated]);
+
+  // Persist active task id for refresh restoration
+  useEffect(() => {
+    smartStorage.saveActiveTaskId(state.taskManager.activeTaskId ?? null);
+  }, [state.taskManager.activeTaskId]);
 
   const loadTasksFromBackend = async () => {
     try {
@@ -4520,36 +4511,6 @@ export default function App() {
     const updated = state.batchArchives.filter((a) => a.id !== id);
     localStorage.setItem("google_seo_batch_archives", JSON.stringify(updated));
     setState((prev) => ({ ...prev, batchArchives: updated }));
-  };
-
-  const loadDeepDiveArchive = (entry: DeepDiveArchiveEntry) => {
-    setState((prev) => ({
-      ...prev,
-      targetLanguage: entry.targetLanguage || "en",
-      currentStrategyReport: entry.strategyReport,
-      deepDiveKeyword: {
-        id: `dd-${Date.now()}`,
-        keyword: entry.keyword,
-        translation: entry.keyword,
-        intent: IntentType.INFORMATIONAL,
-        volume: 0,
-      },
-      step: "deep-dive-results",
-      deepDiveThoughts: [],
-      logs: [],
-      // 只有在有 strategyReport 时才显示模态框
-      showDetailedAnalysisModal: !!entry.strategyReport,
-    }));
-  };
-
-  const deleteDeepDiveArchive = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updated = state.deepDiveArchives.filter((a) => a.id !== id);
-    localStorage.setItem(
-      "google_seo_deepdive_archives",
-      JSON.stringify(updated)
-    );
-    setState((prev) => ({ ...prev, deepDiveArchives: updated }));
   };
 
   // Agent Config management
@@ -5300,7 +5261,9 @@ export default function App() {
       const tasks = await loadTasksCompat();
 
       if (tasks && tasks.length > 0) {
-        // 确保所有任务都不是active，默认显示"我的网站"
+        const savedActiveTaskId = smartStorage.getActiveTaskId();
+
+        // 修正状态并准备恢复 activeTaskId
         // 同时修正 isGenerating 状态：如果有 finalArticle 或 isMining 但页面已刷新，应该停止"进行中"状态
         const tasksWithNoActive = tasks.map((t) => {
           const correctedTask = {
@@ -5342,6 +5305,10 @@ export default function App() {
           return correctedTask;
         });
 
+        const savedActiveTask =
+          savedActiveTaskId &&
+          tasksWithNoActive.find((t) => t.id === savedActiveTaskId);
+
         // 查找是否有 article-generator 任务且有 finalArticle
         const articleTaskWithResult = tasksWithNoActive.find(
           (task) =>
@@ -5351,13 +5318,19 @@ export default function App() {
               task.articleGeneratorState.finalArticle.content)
         );
 
+        const restoredActiveTaskId =
+          savedActiveTask?.id || articleTaskWithResult?.id || null;
+
         setState((prev) => {
           const newState = {
             ...prev,
             taskManager: {
               ...prev.taskManager,
-              tasks: tasksWithNoActive,
-              activeTaskId: articleTaskWithResult?.id || null,
+              tasks: tasksWithNoActive.map((t) => ({
+                ...t,
+                isActive: t.id === restoredActiveTaskId,
+              })),
+              activeTaskId: restoredActiveTaskId,
             },
           };
 
@@ -5387,6 +5360,10 @@ export default function App() {
             },
           };
         });
+
+        if (restoredActiveTaskId) {
+          setTimeout(() => hydrateTask(restoredActiveTaskId), 0);
+        }
       }
     } catch (e) {
       console.error("Failed to load tasks", e);
@@ -5602,52 +5579,6 @@ export default function App() {
             isDeepDiving: false,
             deepDiveProgress: 0,
             deepDiveCurrentStep: "",
-            taskManager: {
-              ...prev.taskManager,
-              tasks: updatedTasks,
-              activeTaskId: taskId,
-            },
-          };
-          break;
-
-        case "deep-dive":
-          let deepDiveStep: AppState["step"] = "input";
-          if (targetTask.deepDiveState?.isDeepDiving) {
-            deepDiveStep = "deep-dive-analyzing";
-          } else if (targetTask.deepDiveState?.currentStrategyReport) {
-            deepDiveStep = "deep-dive-results";
-          }
-
-          newState = {
-            ...prev,
-            ...baseState,
-            step: deepDiveStep,
-            deepDiveKeyword: targetTask.deepDiveState?.deepDiveKeyword || null,
-            currentStrategyReport:
-              targetTask.deepDiveState?.currentStrategyReport || null,
-            deepDiveThoughts: targetTask.deepDiveState?.deepDiveThoughts || [],
-            isDeepDiving: targetTask.deepDiveState?.isDeepDiving || false,
-            deepDiveProgress: targetTask.deepDiveState?.deepDiveProgress || 0,
-            deepDiveCurrentStep:
-              targetTask.deepDiveState?.deepDiveCurrentStep || "",
-            miningConfig: undefined,
-            miningMode: "blue-ocean",
-            logs: targetTask.deepDiveState?.logs || [],
-            // Clear other task types
-            seedKeyword: "",
-            keywords: [],
-            miningRound: 0,
-            agentThoughts: [],
-            isMining: false,
-            miningSuccess: false,
-            wordsPerRound: 10,
-            miningStrategy: "horizontal",
-            userSuggestion: "",
-            batchKeywords: [],
-            batchThoughts: [],
-            batchInputKeywords: "",
-            batchCurrentIndex: 0,
-            batchTotalCount: 0,
             taskManager: {
               ...prev.taskManager,
               tasks: updatedTasks,
@@ -6851,7 +6782,7 @@ export default function App() {
           ).filter(
             (k) =>
               k.probability === "High" ||
-              k.probability === ProbabilityLevel.HIGH
+              (k.probability as ProbabilityLevel | undefined) === ProbabilityLevel.HIGH
           );
 
           if (firstRoundHighProbKeywords.length > 0) {
@@ -7887,7 +7818,7 @@ export default function App() {
           const highProbKeywords = newKeywords.filter(
             (k) =>
               k.probability === "High" ||
-              k.probability === ProbabilityLevel.HIGH
+              (k.probability as ProbabilityLevel | undefined) === ProbabilityLevel.HIGH
           );
 
           // 更新关键词列表（累加到已有关键词）
@@ -10819,9 +10750,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     number={2}
                     label={t.step2}
                     active={
-                      state.step === "mining" ||
-                      state.step === "batch-analyzing" ||
-                      state.step === "deep-dive-analyzing"
+                      state.step === "mining" || state.step === "batch-analyzing"
                     }
                     isDarkTheme={isDarkTheme}
                   />
@@ -10835,9 +10764,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     number={3}
                     label={t.step3}
                     active={
-                      state.step === "results" ||
-                      state.step === "batch-results" ||
-                      state.step === "deep-dive-results"
+                      state.step === "results" || state.step === "batch-results"
                     }
                     isDarkTheme={isDarkTheme}
                   />
@@ -13653,42 +13580,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 </div>
 
                 {/* Deep Dive Workflow */}
-                <div
-                  className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
-                    isDarkTheme
-                      ? "bg-black/40 border-emerald-500/20"
-                      : "bg-white border-emerald-200"
-                  }`}
-                >
-                  <h3
-                    className={`text-xl font-bold mb-2 flex items-center gap-2 ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
-                  >
-                    <Lightbulb className="w-5 h-5 text-emerald-400" />
-                    {t.deepDiveWorkflow}
-                  </h3>
-                  <p
-                    className={`text-sm mb-6 ${
-                      isDarkTheme ? "text-slate-400" : "text-gray-600"
-                    }`}
-                  >
-                    {DEEP_DIVE_WORKFLOW.description}
-                  </p>
-                  <WorkflowConfigPanel
-                    workflowDef={DEEP_DIVE_WORKFLOW}
-                    currentConfig={getCurrentWorkflowConfig("deepDive")}
-                    allConfigs={state.workflowConfigs}
-                    onSave={saveWorkflowConfig}
-                    onLoad={(configId) =>
-                      loadWorkflowConfig("deepDive", configId)
-                    }
-                    onReset={() => resetWorkflowToDefault("deepDive")}
-                    onDelete={deleteWorkflowConfig}
-                    t={t}
-                    isDarkTheme={isDarkTheme}
-                  />
-                </div>
               </div>
             </div>
           )}
@@ -14944,74 +14835,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       </table>
                     );
                   })()}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* DEEP DIVE ANALYZING PAGE */}
-          {state.step === "deep-dive-analyzing" && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-140px)] min-h-[600px] relative">
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
-                  <div>
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      {t.deepDiveAnalyzing || "Deep Dive Analysis"}
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      {state.deepDiveKeyword?.keyword || "Analyzing keyword..."}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setState((prev) => ({
-                      ...prev,
-                      step: "results",
-                      isDeepDiving: false,
-                    }));
-                  }}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-xs font-medium shadow-sm"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Cancel
-                </button>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="mb-4 bg-black/40 backdrop-blur-sm rounded-xl shadow-sm border border-emerald-500/20 px-4 py-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-xs font-bold text-white">
-                    {state.deepDiveCurrentStep ||
-                      (state.uiLanguage === "zh"
-                        ? "初始化..."
-                        : "Initializing...")}
-                  </div>
-                  <div className="text-xs font-bold text-emerald-400">
-                    {Math.round(state.deepDiveProgress)}%
-                  </div>
-                </div>
-                <div className="w-full bg-black/60 rounded-full h-2 overflow-hidden border border-emerald-500/10">
-                  <div
-                    className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full transition-all duration-500 ease-out relative overflow-hidden"
-                    style={{ width: `${state.deepDiveProgress}%` }}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-                <div className="w-full md:w-[30%] h-full">
-                  <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
-                </div>
-                <div className="w-full md:w-[70%] h-full">
-                  <DeepDiveAnalysisStream
-                    thoughts={state.deepDiveThoughts}
-                    t={t}
-                    isDarkTheme={isDarkTheme}
-                  />
                 </div>
               </div>
             </div>

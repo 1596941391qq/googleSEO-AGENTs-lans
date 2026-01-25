@@ -244,6 +244,7 @@ interface ArticleGeneratorLayoutProps {
     targetMarket?: string;
     websiteId?: string; // 关联的用户网站 ID
     websiteUrl?: string; // 网站 URL
+    promotedWebsites?: string[];
     promotionIntensity?: "natural" | "strong";
     reference?: any; // Added reference field to state
     isGenerating: boolean;

@@ -3,8 +3,16 @@ import { Pool, QueryResultRow } from 'pg';
 // 数据库连接字符串
 const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
-if (!connectionString) {
+// 调试：显示实际使用的连接字符串（隐藏密码）
+if (connectionString) {
+  const maskedUrl = connectionString.replace(/:([^:@]+)@/, ':****@');
+  const isLocal = connectionString.includes('127.0.0.1') || connectionString.includes('localhost');
+  console.log(`[db] Using ${isLocal ? 'LOCAL' : 'REMOTE'} database: ${maskedUrl}`);
+} else {
   console.error('[db] Database connection string not found. Please set POSTGRES_URL or DATABASE_URL environment variable.');
+}
+
+if (!connectionString) {
   // 在生产环境中，如果没有连接字符串，应该抛出错误
   if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
     throw new Error('Database connection string (POSTGRES_URL or DATABASE_URL) is required in production');
@@ -16,6 +24,13 @@ const needsSSL = connectionString && (
   connectionString.includes('sslmode=require') ||
   connectionString.includes('ssl=true') ||
   connectionString.includes('vercel')
+);
+
+// 判断是否为本地数据库
+const isLocalDB = connectionString && (
+  connectionString.includes('127.0.0.1') ||
+  connectionString.includes('localhost') ||
+  connectionString.includes('::1')
 );
 
 // 创建连接池（复用连接，提高性能）
@@ -30,14 +45,12 @@ const pool = connectionString ? new Pool({
     rejectUnauthorized: false
   } : undefined,
   // 连接池配置
-  max: parseInt(process.env.DB_POOL_MAX || '10', 10), // 最大连接数
-  min: parseInt(process.env.DB_POOL_MIN || '2', 10),  // 最小连接数
-  idleTimeoutMillis: 30000, // 30秒空闲超时
-  connectionTimeoutMillis: 10000, // 10秒连接超时
-  // 对于海外数据库，可以增加连接超时时间
-  ...(process.env.DB_CONNECTION_TIMEOUT ? {
-    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT, 10)
-  } : {})
+  max: parseInt(process.env.DB_POOL_MAX || (isLocalDB ? '20' : '10'), 10), // 本地数据库可以更多连接
+  min: parseInt(process.env.DB_POOL_MIN || (isLocalDB ? '5' : '2'), 10),  // 本地数据库保持更多连接
+  idleTimeoutMillis: isLocalDB ? 60000 : 30000, // 本地数据库：60秒，远程：30秒
+  connectionTimeoutMillis: isLocalDB ? 5000 : (process.env.DB_CONNECTION_TIMEOUT ? parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) : 10000), // 本地数据库：5秒，远程：10秒或自定义
+  // 本地数据库不需要查询超时
+  statement_timeout: isLocalDB ? undefined : 30000, // 远程数据库：30秒查询超时
 }) : null;
 
 // 监听连接池错误
@@ -99,14 +112,32 @@ export const sql = async <T extends QueryResultRow = any>(
       rowCount: result.rowCount || 0
     };
   } catch (error: any) {
-    console.error('[sql] Query error:', error);
-    console.error('[sql] Error details:', {
-      message: error.message,
-      code: error.code,
-      detail: error.detail,
-      hint: error.hint,
-      position: error.position
-    });
+    const isConnectionError = error.message?.includes('timeout') || 
+                             error.message?.includes('Connection terminated') ||
+                             error.code === 'ETIMEDOUT' ||
+                             error.code === 'ECONNREFUSED';
+    
+    if (isConnectionError) {
+      const maskedUrl = connectionString?.replace(/:([^:@]+)@/, ':****@') || 'unknown';
+      console.error('[sql] Database connection error:', {
+        message: error.message,
+        code: error.code,
+        connectionString: maskedUrl,
+        isLocal: isLocalDB,
+        hint: isLocalDB 
+          ? 'Check if PostgreSQL service is running: "Get-Service postgresql*" or check port 5432'
+          : 'Check network connection and database server status'
+      });
+    } else {
+      console.error('[sql] Query error:', error);
+      console.error('[sql] Error details:', {
+        message: error.message,
+        code: error.code,
+        detail: error.detail,
+        hint: error.hint,
+        position: error.position
+      });
+    }
     throw error;
   }
 };

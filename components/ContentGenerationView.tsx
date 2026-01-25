@@ -249,7 +249,7 @@ const OpportunityTerminal: React.FC<{
   return (
     <Card
       className={cn(
-        "h-[420px] border-none rounded-[32px] overflow-hidden font-mono text-[10px] lg:text-xs relative group flex flex-col",
+        "h-[400px] border-none rounded-[32px] overflow-hidden font-mono text-[10px] lg:text-xs relative group flex flex-col",
         isDarkTheme
           ? "bg-black text-emerald-500"
           : "bg-zinc-900 text-emerald-400"
@@ -3161,10 +3161,10 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
           </div>
 
           {/* Top: Website Info & Feature Guidance */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:items-stretch">
             {/* Section 1: Website Info (Current Bound Website) */}
-            <div className="lg:col-span-5 space-y-4">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="lg:col-span-5 space-y-3">
+              <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-1 h-4 bg-emerald-500 rounded-full" />
                 <span className="text-xs font-black uppercase tracking-widest opacity-60">
                   {uiLanguage === "zh" ? "当前站点" : "Current Site"}
@@ -3174,11 +3174,11 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
               {state.website ? (
                 <Card
                   className={cn(
-                    "overflow-hidden border-none rounded-[32px] transition-all h-[420px] flex flex-col group",
+                    "overflow-hidden border-none rounded-[32px] transition-all h-[400px] flex flex-col group",
                     isDarkTheme ? "bg-zinc-900/50" : "bg-white shadow-sm"
                   )}
                 >
-                  <div className="relative h-32 shrink-0 overflow-hidden">
+                  <div className="relative h-28 shrink-0 overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
                     {state.website.screenshot ? (
                       <img
@@ -3191,13 +3191,13 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                         <Globe className="w-12 h-12 text-emerald-500/20" />
                       </div>
                     )}
-                    <div className="absolute bottom-4 left-6 z-20">
+                    <div className="absolute bottom-4 left-5 right-5 z-20">
                       <Badge className="bg-emerald-500 text-white border-none font-bold mb-1 scale-75 lg:scale-90 origin-left">
                         {uiLanguage === "zh" ? "已绑定" : "Bound"}
                       </Badge>
                       <h3
                         className={cn(
-                          "text-xl lg:text-2xl font-black truncate max-w-[300px] tracking-tight",
+                          "text-sm lg:text-base font-semibold truncate max-w-[280px] tracking-tight leading-tight",
                           isDarkTheme ? "text-white" : "text-zinc-900"
                         )}
                       >
@@ -3205,23 +3205,23 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                       </h3>
                     </div>
                   </div>
-                  <CardContent className="p-6 flex-1 flex flex-col justify-between relative">
-                    <div className="space-y-6">
+                  <CardContent className="px-5 py-4 flex-1 flex flex-col justify-between relative">
+                    <div className="space-y-3">
                       <div
                         className={cn(
-                          "flex items-center justify-between p-3 rounded-2xl backdrop-blur-md border",
+                          "flex items-center justify-between px-3 py-2 rounded-xl backdrop-blur-md border",
                           isDarkTheme
                             ? "bg-black/40 border-white/5"
                             : "bg-zinc-100/80 border-zinc-200"
                         )}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-xl bg-emerald-500/10">
-                            <Globe className="w-4 h-4 text-emerald-500" />
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="p-1.5 rounded-lg bg-emerald-500/10 shrink-0">
+                            <Globe className="w-3.5 h-3.5 text-emerald-500" />
                           </div>
                           <span
                             className={cn(
-                              "text-[10px] lg:text-xs font-bold truncate max-w-[180px] opacity-60 mono",
+                              "text-[10px] lg:text-xs font-medium truncate opacity-60 mono",
                               isDarkTheme ? "text-white" : "text-zinc-900"
                             )}
                           >
@@ -3232,15 +3232,15 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           href={state.website.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="p-2 rounded-xl hover:bg-white/5 transition-colors text-emerald-500"
+                          className="p-1.5 rounded-lg hover:bg-white/5 transition-colors text-emerald-500 shrink-0"
                         >
-                          <ExternalLink size={14} />
+                          <ExternalLink size={12} />
                         </a>
                       </div>
 
                       {/* Real Stats Grid */}
-                      <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-                        <div className="space-y-1">
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-5 pb-3">
+                        <div className="space-y-1.5">
                           <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             {uiLanguage === "zh"
                               ? "预估月流量"
@@ -3248,7 +3248,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           </span>
                           <p
                             className={cn(
-                              "text-2xl lg:text-3xl font-black tracking-tighter",
+                              "text-xl lg:text-2xl font-bold tracking-tighter",
                               isDarkTheme ? "text-white" : "text-zinc-900"
                             )}
                           >
@@ -3264,7 +3264,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                             })()}
                           </p>
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             {uiLanguage === "zh"
                               ? "索引关键词"
@@ -3272,7 +3272,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                           </span>
                           <p
                             className={cn(
-                              "text-2xl lg:text-3xl font-black tracking-tighter",
+                              "text-xl lg:text-2xl font-bold tracking-tighter",
                               isDarkTheme ? "text-white" : "text-zinc-900"
                             )}
                           >
@@ -3286,7 +3286,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                                 state.website.keywordsCount.toLocaleString()
                               )
                             ) : (
-                              <span className="text-zinc-600 animate-pulse text-lg">
+                              <span className="text-zinc-600 animate-pulse text-base">
                                 {uiLanguage === "zh"
                                   ? "同步中..."
                                   : "Syncing..."}
@@ -3294,11 +3294,11 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                             )}
                           </p>
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             {uiLanguage === "zh" ? "流量价值" : "Traffic Value"}
                           </span>
-                          <p className="text-xs lg:text-sm font-black uppercase tracking-tight text-emerald-500">
+                          <p className="text-xs font-bold tracking-tight text-emerald-500">
                             {state.website.trafficCost
                               ? "$" +
                               (state.website.trafficCost >= 1000000
@@ -3309,7 +3309,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                               : "$0.00"}
                           </p>
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-widest text-zinc-500">
                             {uiLanguage === "zh"
                               ? "前10名关键词"
@@ -3329,7 +3329,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                                 }}
                               />
                             </div>
-                            <span className="text-xs lg:text-sm font-black text-emerald-500">
+                            <span className="text-xs font-bold text-emerald-500 tabular-nums">
                               {state.website.top10Count?.toLocaleString() ||
                                 "0"}
                             </span>
@@ -3341,7 +3341,7 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
                     {/* Footer Tech Stack */}
                     <div
                       className={cn(
-                        "pt-4 border-t flex items-center justify-between",
+                        "pt-4 mt-0.5 border-t flex items-center justify-between shrink-0",
                         isDarkTheme ? "border-white/5" : "border-zinc-200"
                       )}
                     >
@@ -3404,8 +3404,8 @@ export const ContentGenerationView: React.FC<ContentGenerationViewProps> = ({
             </div>
 
             {/* Section 2: Opportunity Insight Terminal */}
-            <div className="lg:col-span-7 space-y-4">
-              <div className="flex items-center gap-2 mb-2">
+            <div className="lg:col-span-7 space-y-3">
+              <div className="flex items-center gap-2 mb-1.5">
                 <div className="w-1 h-4 bg-emerald-500 rounded-full" />
                 <span className="text-xs lg:text-sm font-black uppercase tracking-widest opacity-60">
                   {uiLanguage === "zh" ? "机会洞察" : "Opportunity Insights"}

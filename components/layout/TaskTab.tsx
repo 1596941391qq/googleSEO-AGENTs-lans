@@ -49,14 +49,12 @@ export const TaskTab: React.FC<TaskTabProps> = ({
     }
   };
 
-  const isRunning =
-    task.miningState?.isMining || task.deepDiveState?.isDeepDiving;
+  const isRunning = task.miningState?.isMining;
   const hasResults =
     (task.miningState?.keywords && task.miningState.keywords.length > 0) ||
     (task.batchState?.batchKeywords &&
       task.batchState.batchKeywords.length > 0) ||
-    (task.deepDiveState?.currentStrategyReport !== null &&
-      task.deepDiveState?.currentStrategyReport !== undefined);
+    false;
 
   const TaskIcon =
     task.type === "mining"

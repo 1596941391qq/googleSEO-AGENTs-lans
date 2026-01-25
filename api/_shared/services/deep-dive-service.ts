@@ -30,6 +30,13 @@ export interface DeepDiveOptions {
   projectId?: string;
   projectName?: string;
   onProgress?: (step: number, message: string) => void;
+  onStream?: (event: {
+    step: number;
+    phase: 'search-preferences' | 'competitor-analysis' | 'strategy' | 'content';
+    delta: string;
+    fullText: string;
+    isFinal: boolean;
+  }) => void;
   stopAfterStrategy?: boolean;
 }
 
@@ -107,9 +114,10 @@ export async function analyzeSearchEnginePreferences(
   uiLanguage: 'zh' | 'en',
   targetLanguage: TargetLanguage,
   targetMarket: string = 'global',
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  onStream?: (delta: string, fullText: string, isFinal: boolean) => void
 ): Promise<SearchPreferencesResult> {
-  return await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket, undefined, onProgress);
+  return await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket, undefined, onProgress, onStream);
 }
 
 /**
@@ -122,10 +130,11 @@ export async function analyzeCompetitorsForDeepDive(
   targetLanguage: TargetLanguage,
   targetMarket: string = 'global',
   searchEngine: SearchEngine = 'google',
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  onStream?: (delta: string, fullText: string, isFinal: boolean) => void
 ): Promise<CompetitorAnalysisResult> {
   const serpData = await fetchSerpResults(keyword, targetLanguage, searchEngine);
-  return await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, searchEngine, undefined, onProgress);
+  return await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, searchEngine, undefined, onProgress, onStream);
 }
 
 /**
@@ -139,7 +148,8 @@ export async function generateSEOStrategyReport(
   strategyPrompt?: string,
   searchPreferences?: SearchPreferencesResult,
   competitorAnalysis?: CompetitorAnalysisResult,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  onStream?: (delta: string, fullText: string, isFinal: boolean) => void
 ): Promise<SEOStrategyReport> {
   return await generateDeepDiveStrategy(
     keyword,
@@ -150,7 +160,8 @@ export async function generateSEOStrategyReport(
     competitorAnalysis,
     'global',
     undefined,
-    onProgress
+    onProgress,
+    onStream
   );
 }
 
@@ -309,13 +320,24 @@ export async function generateContentForDeepDive(
   seoStrategyReport: SEOStrategyReport,
   searchPreferences?: SearchPreferencesResult,
   competitorAnalysis?: CompetitorAnalysisResult,
-  uiLanguage: 'zh' | 'en' = 'en'
+  uiLanguage: 'zh' | 'en' = 'en',
+  onStream?: (delta: string, fullText: string, isFinal: boolean) => void
 ): Promise<ContentGenerationResult> {
   return await generateContent(
     seoStrategyReport,
     searchPreferences,
     competitorAnalysis,
-    uiLanguage
+    uiLanguage,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    onStream
   );
 }
 
@@ -510,6 +532,7 @@ export async function executeDeepDive(
     strategyPrompt,
     generateImages: shouldGenerateImages = false,
     onProgress,
+    onStream,
     stopAfterStrategy = false
   } = options;
 
@@ -532,7 +555,14 @@ export async function executeDeepDive(
         uiLanguage,
         targetLanguage,
         'global',
-        (msg) => onProgress?.(1, msg)
+        (msg) => onProgress?.(1, msg),
+        (delta, fullText, isFinal) => onStream?.({
+          step: 1,
+          phase: 'search-preferences',
+          delta,
+          fullText,
+          isFinal
+        })
       );
     } catch (error: any) {
       console.warn(`[Deep Dive Service] Search preferences analysis failed: ${error.message}`);
@@ -547,7 +577,14 @@ export async function executeDeepDive(
         targetLanguage,
         'global',
         'google',
-        (msg) => onProgress?.(2, msg)
+        (msg) => onProgress?.(2, msg),
+        (delta, fullText, isFinal) => onStream?.({
+          step: 2,
+          phase: 'competitor-analysis',
+          delta,
+          fullText,
+          isFinal
+        })
       );
     } catch (error: any) {
       console.warn(`[Deep Dive Service] Competitor analysis failed: ${error.message}`);
@@ -562,7 +599,14 @@ export async function executeDeepDive(
       strategyPrompt,
       result.searchPreferences,
       result.competitorAnalysis,
-      (msg) => onProgress?.(3, msg)
+      (msg) => onProgress?.(3, msg),
+      (delta, fullText, isFinal) => onStream?.({
+        step: 3,
+        phase: 'strategy',
+        delta,
+        fullText,
+        isFinal
+      })
     );
 
     // Step 4: 提取核心关键词
@@ -614,7 +658,14 @@ export async function executeDeepDive(
         result.seoStrategyReport,
         result.searchPreferences,
         result.competitorAnalysis,
-        uiLanguage
+        uiLanguage,
+        (delta, fullText, isFinal) => onStream?.({
+          step: 6,
+          phase: 'content',
+          delta,
+          fullText,
+          isFinal
+        })
       );
     } catch (error: any) {
       console.error(`[Deep Dive Service] Content generation failed: ${error.message}`);

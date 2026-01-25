@@ -6,6 +6,7 @@ import {
   generateDeepDiveStrategy,
   extractCoreKeywords
 } from './_shared/agents/agent-2-seo-researcher.js';
+import { executeDeepDive } from './_shared/services/deep-dive-service.js';
 import { fetchKeywordData } from './_shared/tools/dataforseo.js';
 import { parseRequestBody, setCorsHeaders, handleOptions, sendErrorResponse } from './_shared/request-handler.js';
 import { KeywordData, IntentType, ProbabilityLevel } from './_shared/types.js';
@@ -671,7 +672,8 @@ async function handleDeepDive(
     workflowConfigId,
     workflowConfig,
     searchEngine = 'google',
-    skipCreditsCheck = false
+    skipCreditsCheck = false,
+    stream = false
   } = body;
 
   // Validate required fields
@@ -750,6 +752,90 @@ async function handleDeepDive(
   }
 
   try {
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const sendEvent = (event: any) => {
+        try {
+          res.write(`data: ${JSON.stringify(event)}\n\n`);
+        } catch (writeError) {
+          console.error('[deep_dive] Failed to write event:', writeError);
+        }
+      };
+
+      try {
+        const deepDiveResult = await executeDeepDive({
+          keyword: keywordData,
+          uiLanguage,
+          targetLanguage,
+          strategyPrompt: finalStrategyPrompt,
+          onProgress: (step, message) => {
+            sendEvent({
+              type: 'progress',
+              data: { step, message }
+            });
+          },
+          onStream: (event) => {
+            sendEvent({
+              type: 'event',
+              phase: event.phase,
+              data: {
+                step: event.step,
+                delta: event.delta,
+                fullText: event.fullText,
+                isFinal: event.isFinal
+              }
+            });
+          },
+          stopAfterStrategy: true
+        });
+
+        const report = deepDiveResult.seoStrategyReport;
+        const coreKeywords = deepDiveResult.coreKeywords || [];
+
+        // Consume credits after successful operation
+        if (!skipCreditsCheck && token) {
+          try {
+            const creditsAmount = getCreditsCost('deep_dive');
+            const keywordText = typeof keyword === 'string' ? keyword : keyword.keyword;
+            await consumeCredits(
+              token,
+              'deep_mining',
+              `Deep Dive Strategy - "${keywordText}" (${targetLanguage.toUpperCase()})`,
+              creditsAmount
+            );
+          } catch (creditsError: any) {
+            console.error('Failed to consume credits:', creditsError);
+            sendEvent({
+              type: 'warning',
+              message: 'Operation completed but credits consumption failed',
+              creditsError: creditsError.message
+            });
+          }
+        }
+
+        sendEvent({
+          type: 'done',
+          data: {
+            report,
+            coreKeywords,
+            keyword: keywordData.keyword,
+            targetLanguage
+          }
+        });
+        return;
+      } catch (streamError: any) {
+        console.error('Deep dive stream error:', streamError);
+        sendEvent({
+          type: 'error',
+          message: streamError.message || 'Deep dive streaming failed'
+        });
+        return;
+      }
+    }
+
     // Step 1: Generate strategy report
     const report = await generateDeepDiveStrategy(
       keywordData,
