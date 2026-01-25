@@ -19,6 +19,58 @@ export interface ScrapeResult {
   title?: string; // Page title
 }
 
+async function fetchScreenshotAsBase64(
+  url: string,
+  maxRetries: number = 2
+): Promise<string | null> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    try {
+      const response = await fetch(url, {
+        headers: {
+          // Some storage URLs require a UA to avoid 403
+          "User-Agent": "Mozilla/5.0 (compatible; NicheDiggerBot/1.0)",
+          "Accept": "image/*,*/*;q=0.8",
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const contentType = response.headers.get("content-type") || "image/png";
+      if (!contentType.startsWith("image/")) {
+        throw new Error(`Unexpected content-type: ${contentType}`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString("base64");
+      return `data:${contentType};base64,${base64}`;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      const isLastAttempt = attempt >= maxRetries;
+      if (isLastAttempt) {
+        console.warn(
+          `[Firecrawl] Screenshot Base64 conversion failed after ${attempt + 1} attempts: ${error?.message || String(error)}`
+        );
+        return null;
+      }
+
+      const delay = 500 * (attempt + 1);
+      console.warn(
+        `[Firecrawl] Screenshot fetch failed (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${delay}ms...`
+      );
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+
+  return null;
+}
+
 /**
  * 清理抓取到的 Markdown 内容，移除脏数据并减少 token 消耗
  */
@@ -191,21 +243,13 @@ export async function scrapeWebsite(
 
       // If screenshot is a URL, convert it to Base64 to make it permanent
       if (screenshot && typeof screenshot === 'string' && screenshot.trim().toLowerCase().startsWith('http')) {
-        try {
-          console.log(`[Firecrawl] Converting screenshot URL to Base64: ${screenshot.substring(0, 50)}...`);
-          const imgResponse = await fetch(screenshot);
-          if (imgResponse && imgResponse.ok) {
-            const buffer = await imgResponse.arrayBuffer();
-            const base64 = Buffer.from(buffer).toString('base64');
-            const contentType = imgResponse.headers.get('content-type') || 'image/png';
-            screenshot = `data:${contentType};base64,${base64}`;
-            console.log(`[Firecrawl] Successfully converted screenshot to Base64 (${screenshot.length} chars)`);
-          } else {
-            console.warn(`[Firecrawl] Failed to fetch screenshot for Base64 conversion: ${imgResponse?.status || 'no response'}`);
-          }
-        } catch (error: any) {
-          console.warn(`[Firecrawl] Error converting screenshot to Base64: ${error?.message || String(error)}`);
-          // Keep the original URL as fallback
+        console.log(`[Firecrawl] Converting screenshot URL to Base64: ${screenshot.substring(0, 50)}...`);
+        const base64Screenshot = await fetchScreenshotAsBase64(screenshot, 2);
+        if (base64Screenshot) {
+          screenshot = base64Screenshot;
+          console.log(`[Firecrawl] Successfully converted screenshot to Base64 (${screenshot.length} chars)`);
+        } else {
+          console.warn(`[Firecrawl] Keeping screenshot URL as fallback`);
         }
       }
 

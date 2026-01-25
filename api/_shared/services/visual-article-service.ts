@@ -102,6 +102,47 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     // 1. Research phase
     emit('tracker', 'log', uiLanguage === 'zh' ? `正在初始化关于 "${keyword}" 的任务...` : `Initializing mission for "${keyword}"...`);
 
+    // Emit website scrape cards for promoted/reference sources (visual agent feed)
+    const websiteCardMap = new Map<string, { url: string; title?: string; content?: string; screenshot?: string }>();
+    if (processedPromotedWebsites && processedPromotedWebsites.length > 0) {
+      for (const site of processedPromotedWebsites) {
+        if (!site?.url) continue;
+        websiteCardMap.set(site.url, {
+          url: site.url,
+          title: site.title,
+          content: site.content,
+          screenshot: site.screenshot,
+        });
+      }
+    }
+    if (reference?.type === 'url' && reference.url?.url) {
+      const refUrl = reference.url.url;
+      if (!websiteCardMap.has(refUrl)) {
+        websiteCardMap.set(refUrl, {
+          url: refUrl,
+          title: reference.url.title,
+          content: reference.url.content,
+          screenshot: reference.url.screenshot,
+        });
+      }
+    }
+
+    if (websiteCardMap.size > 0) {
+      for (const site of websiteCardMap.values()) {
+        emit('researcher', 'card', undefined, 'firecrawl-result', {
+          url: site.url,
+          title: site.title || site.url,
+          contentLength: site.content?.length || 0,
+          hasScreenshot: !!site.screenshot,
+          screenshot: site.screenshot,
+          images: [],
+          preview: site.content
+            ? site.content.substring(0, 400) + (site.content.length > 400 ? '...' : '')
+            : undefined,
+        });
+      }
+    }
+
     emit('researcher', 'log', uiLanguage === 'zh' ? `正在分析 ${targetMarket === 'global' ? '全球' : (targetMarket || 'global').toUpperCase()} 市场的 SERP 和竞争对手...` : `Analyzing SERP and Competitors for ${targetMarket === 'global' ? 'Global' : (targetMarket || 'global').toUpperCase()} market...`);
     // Map targetMarket to country code for SERP search
     const countryCodeMap: Record<string, string> = {

@@ -2,6 +2,7 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "../../lib/utils";
+import { MermaidBlock } from "./MermaidBlock";
 
 interface MarkdownContentProps {
   content: string;
@@ -114,6 +115,16 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
 
   const processedContent = preprocessContent(content);
 
+  const isMermaidCodeBlock = (className?: string) => {
+    if (!className) return false;
+    return className.split(" ").some((entry) => entry === "language-mermaid");
+  };
+
+  const isMermaidElement = (children: React.ReactNode) => {
+    const [firstChild] = React.Children.toArray(children);
+    return React.isValidElement(firstChild) && firstChild.type === MermaidBlock;
+  };
+
   return (
     <div className={cn("markdown-content", textColor)}>
       <ReactMarkdown
@@ -172,6 +183,17 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
           // 代码
           code: ({ className, children, ...props }) => {
             const isInline = !className;
+            const codeText = String(children ?? "").replace(/\n$/, "");
+
+            if (!isInline && isMermaidCodeBlock(className)) {
+              return (
+                <MermaidBlock
+                  code={codeText}
+                  isDarkTheme={isDarkTheme}
+                />
+              );
+            }
+
             return isInline ? (
               <code
                 className={cn(
@@ -196,9 +218,12 @@ export const MarkdownContent: React.FC<MarkdownContentProps> = ({
               </code>
             );
           },
-          pre: ({ children }) => (
-            <pre className="my-4 overflow-x-auto">{children}</pre>
-          ),
+          pre: ({ children }) =>
+            isMermaidElement(children) ? (
+              <>{children}</>
+            ) : (
+              <pre className="my-4 overflow-x-auto">{children}</pre>
+            ),
           // 分割线
           hr: () => <hr className={cn("my-8 border-t", borderColor)} />,
           // 引用

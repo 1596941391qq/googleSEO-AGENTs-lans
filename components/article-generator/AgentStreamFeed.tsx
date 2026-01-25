@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { MermaidBlock } from "../ui/MermaidBlock";
 import { AgentStreamEvent, UILanguage } from "../../types";
 import {
   CheckCircle,
@@ -25,6 +26,37 @@ import { StreamingTextCard } from "./StreamingTextCard";
 import { ErrorCard, ErrorType } from "./ErrorCard";
 import { ImageLightbox } from "./ImageLightbox";
 import { QualityScoreCard } from "./QualityScoreCard";
+
+const buildMarkdownComponents = (isDarkTheme: boolean) => {
+  const isMermaidCodeBlock = (className?: string) => {
+    if (!className) return false;
+    return className.split(" ").some((entry) => entry === "language-mermaid");
+  };
+
+  const isMermaidElement = (children: React.ReactNode) => {
+    const [firstChild] = React.Children.toArray(children);
+    return React.isValidElement(firstChild) && firstChild.type === MermaidBlock;
+  };
+
+  return {
+    code: ({ className, children, ...props }: any) => {
+      const isInline = !className;
+      const codeText = String(children ?? "").replace(/\n$/, "");
+
+      if (!isInline && isMermaidCodeBlock(className)) {
+        return <MermaidBlock code={codeText} isDarkTheme={isDarkTheme} />;
+      }
+
+      return (
+        <code className={className} {...props}>
+          {children}
+        </code>
+      );
+    },
+    pre: ({ children }: any) =>
+      isMermaidElement(children) ? <>{children}</> : <pre>{children}</pre>,
+  };
+};
 
 // Import TEXT from App.tsx - we'll need to pass it as a prop or create a separate translations file
 // For now, we'll define it locally to avoid circular dependencies
@@ -208,6 +240,7 @@ const OutlineCard: React.FC<{
   isDarkTheme?: boolean;
 }> = ({ data, uiLanguage, isDarkTheme = true }) => {
   const t = AGENT_TEXT[uiLanguage];
+  const markdownComponents = buildMarkdownComponents(isDarkTheme);
 
   // If markdown field exists, render markdown directly
   if (data.markdown) {
@@ -240,7 +273,10 @@ const OutlineCard: React.FC<{
               isDarkTheme ? "text-gray-300" : "text-gray-700"
             )}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={markdownComponents}
+            >
               {data.markdown}
             </ReactMarkdown>
           </div>
@@ -975,7 +1011,10 @@ const WebsiteAuditReportCard: React.FC<{
                   : "bg-gray-100 text-gray-700"
               )}
             >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={buildMarkdownComponents(isDarkTheme)}
+              >
                 {report}
               </ReactMarkdown>
             </div>
@@ -1003,7 +1042,10 @@ const WebsiteAuditReportCard: React.FC<{
                   : "bg-gray-100 text-gray-700"
               )}
             >
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={buildMarkdownComponents(isDarkTheme)}
+              >
                 {report}
               </ReactMarkdown>
             </div>
@@ -2394,7 +2436,10 @@ const FinalArticleCard: React.FC<{
               isDarkTheme ? "text-gray-300" : "text-gray-700"
             )}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={buildMarkdownComponents(isDarkTheme)}
+            >
               {articleBody}
             </ReactMarkdown>
           </div>

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setRequestProxyProvider, setRequestModel } from './gemini.js';
+import { ensureProxyFetch } from './proxy-fetch.js';
 
 /**
  * Parse request body, handling both JSON string and object
@@ -28,6 +29,9 @@ export function parseRequestBody(req: VercelRequest): any {
  * 应该在每个 API handler 开头调用
  */
 export function initRequestContext(req: VercelRequest): void {
+  // Ensure fetch is wrapped with proxy dispatcher in dev
+  ensureProxyFetch();
+
   // 从 header 中读取代理选择（Vercel 可能将 header 转为小写）
   const proxyProviderHeader = req.headers['x-proxy-provider'] || req.headers['x-proxy-provider'] || req.headers['X-Proxy-Provider'];
   const proxyProvider = typeof proxyProviderHeader === 'string' ? proxyProviderHeader.toLowerCase().trim() : undefined;
