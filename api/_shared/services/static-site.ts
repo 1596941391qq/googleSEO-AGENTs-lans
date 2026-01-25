@@ -8,29 +8,38 @@ export async function rebuildStaticSiteIndex(config: {
 }): Promise<{ success: boolean; error?: string }> {
     try {
         const { token, owner, repoName, branch } = config;
+        console.log(`[Static Site] Rebuilding index for ${owner}/${repoName}`);
 
         // 1. Scan for articles
         const articles: { name: string, path: string }[] = [];
 
         // Check docs/ folder
+        console.log(`[Static Site] Scanning docs/ folder...`);
         const docsResult = await listRepoContents({ token, owner, repoName, path: 'docs', branch });
         if (docsResult.success && docsResult.files) {
             docsResult.files.forEach((f: any) => {
                 if (f.name.endsWith('.html') || f.name.endsWith('.md')) {
                     articles.push({ name: f.name, path: f.path });
+                    console.log(`[Static Site] Found article: ${f.path}`);
                 }
             });
+        } else {
+            console.log(`[Static Site] docs/ folder not found or empty`);
         }
 
         // Check root (exclude index.html itself)
+        console.log(`[Static Site] Scanning root folder...`);
         const rootResult = await listRepoContents({ token, owner, repoName, path: '', branch });
         if (rootResult.success && rootResult.files) {
             rootResult.files.forEach((f: any) => {
                 if ((f.name.endsWith('.html') || f.name.endsWith('.md')) && f.name !== 'index.html') {
                     articles.push({ name: f.name, path: f.path });
+                    console.log(`[Static Site] Found article: ${f.path}`);
                 }
             });
         }
+
+        console.log(`[Static Site] Total articles found: ${articles.length}`);
 
         // 2. Generate HTML
         const articleLinks = articles.map(a => `
@@ -70,6 +79,7 @@ export async function rebuildStaticSiteIndex(config: {
 </html>`;
 
         // 3. Push index.html
+        console.log(`[Static Site] Generating index.html with ${articles.length} articles...`);
         const updateResult = await createOrUpdateFile({
             token,
             owner,
@@ -81,12 +91,15 @@ export async function rebuildStaticSiteIndex(config: {
         });
 
         if (!updateResult.success) {
+            console.error(`[Static Site] ❌ Failed to update index.html: ${updateResult.error}`);
             return { success: false, error: updateResult.error };
         }
 
+        console.log(`[Static Site] ✅ Index rebuilt successfully`);
         return { success: true };
 
     } catch (error: any) {
+        console.error(`[Static Site] ❌ Exception:`, error);
         return { success: false, error: error.message };
     }
 }
