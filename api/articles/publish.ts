@@ -35,11 +35,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await initPublishedArticlesTable();
     const body = parseRequestBody(req);
-    const { articleId, projectId } = body;
+    const { articleId, projectId, forceUpdate } = body;
 
     if (!articleId) {
       return sendErrorResponse(res, null, 'articleId is required', 400);
     }
+
+    console.log(`[Publish API] ${forceUpdate ? 'Republishing' : 'Publishing'} article ${articleId}`);
 
     // 1. 获取文章详情
     const articleResult = await sql`
@@ -86,6 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .substring(0, 50);
 
     // 5. 使用 PSEO Publisher 发布
+    console.log(`[Publish API] Calling publishArticle with forceUpdate=${forceUpdate || false}`);
     const publishResult = await publishArticle(
       actualProjectId,
       {
@@ -112,7 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await sql`
       UPDATE published_articles
       SET status = 'published',
-          published_at = NOW(),
+          published_at = ${forceUpdate ? 'NOW()' : (article.published_at ? article.published_at : 'NOW()')},
           url_slug = ${urlSlug},
           content_type = ${contentType},
           updated_at = NOW()
@@ -122,14 +125,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.json({
       success: true,
       data: {
-        message: `Article published to ${publishResult.platform} successfully`,
+        message: forceUpdate
+          ? `Article updated on ${publishResult.platform} successfully`
+          : `Article published to ${publishResult.platform} successfully`,
         liveUrl: publishResult.articleUrl,
         platform: publishResult.platform,
         siteName: publishResult.siteName,
         siteUrl: publishResult.siteUrl,
         repoUrl: publishResult.repoUrl,
         isNewSite: publishResult.isNewSite,
-        publishedAt: new Date().toISOString()
+        publishedAt: new Date().toISOString(),
+        isUpdate: forceUpdate || false
       }
     });
 
