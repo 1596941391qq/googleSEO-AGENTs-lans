@@ -4,12 +4,12 @@ import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { cn } from '../../lib/utils';
 import { Search, RefreshCw, Download, Trash2, Filter } from 'lucide-react';
-import { ProbabilityLevel, IntentType } from '../../types';
+import { ProbabilityLevel } from '../../types';
 
 export interface KeywordFilters {
   search: string;
   probability: ProbabilityLevel[];
-  intent: IntentType[];
+  source: string[]; // 'website-audit' | 'manual' | 'blue-ocean'
   language: string[];
   projectIds: string[];
   status: ('pending' | 'generated' | 'published')[];
@@ -50,11 +50,11 @@ export const KeywordFiltersBar: React.FC<KeywordFiltersBarProps> = ({
     }
   };
 
-  const handleIntentChange = (value: string) => {
+  const handleSourceChange = (value: string) => {
     if (value === 'all') {
-      onFiltersChange({ ...filters, intent: [] });
+      onFiltersChange({ ...filters, source: [] });
     } else {
-      onFiltersChange({ ...filters, intent: [value as IntentType] });
+      onFiltersChange({ ...filters, source: [value] });
     }
   };
 
@@ -67,9 +67,9 @@ export const KeywordFiltersBar: React.FC<KeywordFiltersBarProps> = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {/* Search and Primary Filters */}
-      <div className="flex flex-col lg:flex-row gap-3">
+      <div className="flex flex-col lg:flex-row gap-2">
         {/* Search Box */}
         <div className="relative flex-1">
           <Search className={cn('absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4', isDarkTheme ? 'text-zinc-500' : 'text-gray-400')} />
@@ -99,17 +99,16 @@ export const KeywordFiltersBar: React.FC<KeywordFiltersBarProps> = ({
           </SelectContent>
         </Select>
 
-        {/* Intent Filter */}
-        <Select value={filters.intent[0] || 'all'} onValueChange={handleIntentChange}>
+        {/* Source Filter */}
+        <Select value={filters.source[0] || 'all'} onValueChange={handleSourceChange}>
           <SelectTrigger className={cn('w-full lg:w-[180px] font-medium', isDarkTheme ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200')}>
-            <SelectValue placeholder={uiLanguage === 'zh' ? '意图' : 'Intent'} />
+            <SelectValue placeholder={uiLanguage === 'zh' ? '来源' : 'Source'} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{uiLanguage === 'zh' ? '全部意图' : 'All Intent'}</SelectItem>
-            <SelectItem value="Commercial">{uiLanguage === 'zh' ? '商业' : 'Commercial'}</SelectItem>
-            <SelectItem value="Informational">{uiLanguage === 'zh' ? '信息' : 'Informational'}</SelectItem>
-            <SelectItem value="Navigational">{uiLanguage === 'zh' ? '导航' : 'Navigational'}</SelectItem>
-            <SelectItem value="Transactional">{uiLanguage === 'zh' ? '交易' : 'Transactional'}</SelectItem>
+            <SelectItem value="all">{uiLanguage === 'zh' ? '全部来源' : 'All Source'}</SelectItem>
+            <SelectItem value="website-audit">{uiLanguage === 'zh' ? '存量拓新' : 'Website Audit'}</SelectItem>
+            <SelectItem value="manual">{uiLanguage === 'zh' ? '手动添加' : 'Manual'}</SelectItem>
+            <SelectItem value="blue-ocean">{uiLanguage === 'zh' ? '蓝海模式' : 'Blue Ocean'}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -130,7 +129,7 @@ export const KeywordFiltersBar: React.FC<KeywordFiltersBarProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 text-xs">
         <Button
           variant="outline"
           size="sm"

@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { ArrowUpDown, ArrowUp, ArrowDown, FileText, Eye, Sparkles } from 'lucide-react';
-import { KeywordWithStatus, ProbabilityLevel, IntentType } from '../../types';
+import { ArrowUpDown, ArrowUp, ArrowDown, FileText, Eye, Sparkles, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { KeywordWithStatus, ProbabilityLevel } from '../../types';
 
 export interface SortConfig {
   field: 'keyword' | 'volume' | 'difficulty' | 'probability' | 'created_at' | 'intent';
@@ -35,8 +35,21 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
   isDarkTheme,
   uiLanguage,
 }) => {
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const allSelected = keywords.length > 0 && selectedIds.length === keywords.length;
   const someSelected = selectedIds.length > 0 && selectedIds.length < keywords.length;
+
+  const toggleExpand = (id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const getSortIcon = (field: SortConfig['field']) => {
     if (sortConfig.field !== field) {
@@ -60,18 +73,29 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
     }
   };
 
-  const getIntentColor = (intent: IntentType) => {
-    switch (intent) {
-      case 'Commercial':
+  const getSourceColor = (source: string | null | undefined) => {
+    switch (source) {
+      case 'website-audit':
         return isDarkTheme ? 'bg-blue-500/10 text-blue-400' : 'bg-blue-50 text-blue-700';
-      case 'Informational':
+      case 'blue-ocean':
+        return isDarkTheme ? 'bg-emerald-500/10 text-emerald-400' : 'bg-emerald-50 text-emerald-700';
+      case 'manual':
         return isDarkTheme ? 'bg-purple-500/10 text-purple-400' : 'bg-purple-50 text-purple-700';
-      case 'Navigational':
-        return isDarkTheme ? 'bg-cyan-500/10 text-cyan-400' : 'bg-cyan-50 text-cyan-700';
-      case 'Transactional':
-        return isDarkTheme ? 'bg-pink-500/10 text-pink-400' : 'bg-pink-50 text-pink-700';
       default:
         return isDarkTheme ? 'bg-zinc-500/10 text-zinc-400' : 'bg-gray-50 text-gray-700';
+    }
+  };
+
+  const getSourceLabel = (source: string | null | undefined) => {
+    switch (source) {
+      case 'website-audit':
+        return uiLanguage === 'zh' ? '存量拓新' : 'Website Audit';
+      case 'blue-ocean':
+        return uiLanguage === 'zh' ? '蓝海模式' : 'Blue Ocean';
+      case 'manual':
+        return uiLanguage === 'zh' ? '手动添加' : 'Manual';
+      default:
+        return source || '-';
     }
   };
 
@@ -110,10 +134,10 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
       <table className="w-full">
         <thead>
           <tr className={cn(
-            'border-b text-xs font-bold uppercase tracking-wider',
+            'border-b text-[10px] font-bold uppercase tracking-wider',
             isDarkTheme ? 'border-zinc-800 text-zinc-500' : 'border-gray-200 text-gray-500'
           )}>
-            <th className="p-3 text-left w-10">
+            <th className="p-2 text-left w-10">
               <input
                 type="checkbox"
                 checked={allSelected}
@@ -122,7 +146,7 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                 className="w-4 h-4 rounded border-zinc-700 bg-zinc-900"
               />
             </th>
-            <th className="p-3 text-left">
+            <th className="p-2 text-left">
               <button
                 onClick={() => onSort('keyword')}
                 className="flex items-center hover:text-emerald-500 transition-colors"
@@ -131,17 +155,8 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                 {getSortIcon('keyword')}
               </button>
             </th>
-            <th className="p-3 text-left">{uiLanguage === 'zh' ? '翻译' : 'Translation'}</th>
-            <th className="p-3 text-left">
-              <button
-                onClick={() => onSort('intent')}
-                className="flex items-center hover:text-emerald-500 transition-colors"
-              >
-                {uiLanguage === 'zh' ? '意图' : 'Intent'}
-                {getSortIcon('intent')}
-              </button>
-            </th>
-            <th className="p-3 text-right">
+            <th className="p-2 text-left">{uiLanguage === 'zh' ? '来源' : 'Source'}</th>
+            <th className="p-2 text-right">
               <button
                 onClick={() => onSort('volume')}
                 className="flex items-center justify-end hover:text-emerald-500 transition-colors ml-auto"
@@ -150,7 +165,7 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                 {getSortIcon('volume')}
               </button>
             </th>
-            <th className="p-3 text-right">
+            <th className="p-2 text-right">
               <button
                 onClick={() => onSort('difficulty')}
                 className="flex items-center justify-end hover:text-emerald-500 transition-colors ml-auto"
@@ -159,7 +174,7 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                 {getSortIcon('difficulty')}
               </button>
             </th>
-            <th className="p-3 text-left">
+            <th className="p-2 text-left">
               <button
                 onClick={() => onSort('probability')}
                 className="flex items-center hover:text-emerald-500 transition-colors"
@@ -168,17 +183,9 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                 {getSortIcon('probability')}
               </button>
             </th>
-            <th className="p-3 text-left">{uiLanguage === 'zh' ? '来源项目' : 'Project'}</th>
-            <th className="p-3 text-left">
-              <button
-                onClick={() => onSort('created_at')}
-                className="flex items-center hover:text-emerald-500 transition-colors"
-              >
-                {uiLanguage === 'zh' ? '创建时间' : 'Created'}
-                {getSortIcon('created_at')}
-              </button>
-            </th>
-            <th className="p-3 text-center">{uiLanguage === 'zh' ? '操作' : 'Actions'}</th>
+            <th className="p-2 text-left">{uiLanguage === 'zh' ? '来源项目' : 'Project'}</th>
+            <th className="p-2 text-center w-16">{uiLanguage === 'zh' ? '详情' : 'Details'}</th>
+            <th className="p-2 text-center">{uiLanguage === 'zh' ? '操作' : 'Actions'}</th>
           </tr>
         </thead>
         <tbody>
@@ -195,7 +202,7 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                   isHighProbability && 'border-l-4 border-l-emerald-500'
                 )}
               >
-                <td className="p-3">
+                <td className="p-2">
                   <input
                     type="checkbox"
                     checked={isSelected}
@@ -203,48 +210,57 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                     className="w-4 h-4 rounded border-zinc-700 bg-zinc-900"
                   />
                 </td>
-                <td className={cn('p-3 font-medium', isDarkTheme ? 'text-white' : 'text-gray-900')}>
+                <td className={cn('p-2 font-medium text-xs', isDarkTheme ? 'text-white' : 'text-gray-900')}>
                   <div className="max-w-[200px] truncate" title={keyword.keyword}>
                     {keyword.keyword}
                   </div>
                 </td>
-                <td className={cn('p-3 text-sm', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
-                  <div className="max-w-[150px] truncate" title={keyword.translation}>
-                    {keyword.translation || '-'}
-                  </div>
-                </td>
-                <td className="p-3">
-                  <Badge className={cn('text-[10px] font-bold', getIntentColor(keyword.intent))}>
-                    {keyword.intent}
+                <td className="p-2">
+                  <Badge className={cn('text-[9px] font-bold px-1.5 py-0.5', getSourceColor(keyword.source))}>
+                    {getSourceLabel(keyword.source)}
                   </Badge>
                 </td>
-                <td className={cn('p-3 text-right font-medium', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
+                <td className={cn('p-2 text-right text-xs font-medium', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
                   {keyword.volume ? keyword.volume.toLocaleString() : '-'}
                 </td>
-                <td className={cn('p-3 text-right font-medium', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
+                <td className={cn('p-2 text-right text-xs font-medium', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
                   {keyword.difficulty || '-'}
                 </td>
-                <td className="p-3">
-                  <Badge className={cn('text-[10px] font-bold border', getProbabilityColor(keyword.probability))}>
+                <td className="p-2">
+                  <Badge className={cn('text-[9px] font-bold border px-1.5 py-0.5', getProbabilityColor(keyword.probability))}>
                     {keyword.probability}
                   </Badge>
                 </td>
-                <td className={cn('p-3 text-sm', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
-                  <div className="max-w-[150px] truncate" title={keyword.project_name}>
+                <td className={cn('p-2 text-xs', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
+                  <div className="max-w-[120px] truncate" title={keyword.project_name}>
                     {keyword.project_name || '-'}
                   </div>
                 </td>
-                <td className={cn('p-3 text-sm', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
-                  {keyword.created_at ? formatTimeAgo(keyword.created_at) : '-'}
+                <td className="p-2 text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => toggleExpand(keyword.id)}
+                    className={cn(
+                      'h-6 w-6 p-0',
+                      isDarkTheme ? 'text-zinc-400 hover:bg-zinc-800' : 'text-gray-500 hover:bg-gray-100'
+                    )}
+                  >
+                    {expandedRows.has(keyword.id) ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </Button>
                 </td>
-                <td className="p-3">
+                <td className="p-2">
                   <div className="flex items-center justify-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => onGenerate(keyword)}
                       className={cn(
-                        'h-7 px-2 text-xs font-medium',
+                        'h-6 px-2 text-[10px] font-medium',
                         isDarkTheme ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-emerald-600 hover:bg-emerald-50'
                       )}
                     >
@@ -257,7 +273,7 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                         size="sm"
                         onClick={() => onViewDraft(keyword)}
                         className={cn(
-                          'h-7 px-2 text-xs font-medium',
+                          'h-6 px-2 text-[10px] font-medium',
                           isDarkTheme ? 'text-blue-400 hover:bg-blue-500/10' : 'text-blue-600 hover:bg-blue-50'
                         )}
                       >
@@ -268,6 +284,98 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                   </div>
                 </td>
               </tr>
+              {expandedRows.has(keyword.id) && (
+                <tr className={cn(isDarkTheme ? 'bg-zinc-900/50' : 'bg-gray-50')}>
+                  <td colSpan={9} className="p-4">
+                    <div className={cn('space-y-4 text-sm', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
+                      {/* Metrics Row */}
+                      <div className={cn('grid grid-cols-2 md:grid-cols-4 gap-4 pb-4 border-b', isDarkTheme ? 'border-zinc-800' : 'border-gray-200')}>
+                        <div>
+                          <p className={cn('text-xs font-medium mb-1', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
+                            {uiLanguage === 'zh' ? '搜索量' : 'Search Volume'}
+                          </p>
+                          <p className="font-semibold">{keyword.volume ? keyword.volume.toLocaleString() : '-'}</p>
+                        </div>
+                        <div>
+                          <p className={cn('text-xs font-medium mb-1', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
+                            {uiLanguage === 'zh' ? '难度' : 'Difficulty'}
+                          </p>
+                          <p className="font-semibold">{keyword.difficulty || '-'}</p>
+                        </div>
+                        <div>
+                          <p className={cn('text-xs font-medium mb-1', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
+                            {uiLanguage === 'zh' ? 'CPC' : 'CPC'}
+                          </p>
+                          <p className="font-semibold">{keyword.cpc ? `$${keyword.cpc.toFixed(2)}` : '-'}</p>
+                        </div>
+                        <div>
+                          <p className={cn('text-xs font-medium mb-1', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
+                            {uiLanguage === 'zh' ? 'SERP类型' : 'SERP Type'}
+                          </p>
+                          <p className="font-semibold">{keyword.top_domain_type || '-'}</p>
+                        </div>
+                      </div>
+
+                      {/* Analysis Content */}
+                      {keyword.reasoning && (
+                        <div>
+                          <p className={cn('text-xs font-medium mb-2', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
+                            {uiLanguage === 'zh' ? '分析内容' : 'Analysis'}
+                          </p>
+                          <p className={cn('text-xs leading-relaxed', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
+                            {keyword.reasoning}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* SERP Results */}
+                      {keyword.top_serp_snippets && keyword.top_serp_snippets.length > 0 && (
+                        <div>
+                          <p className={cn('text-xs font-medium mb-2', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
+                            {uiLanguage === 'zh' ? 'SERP结果' : 'SERP Results'}
+                          </p>
+                          <div className="space-y-2">
+                            {keyword.top_serp_snippets.slice(0, 5).map((snippet, idx) => (
+                              <div
+                                key={idx}
+                                className={cn(
+                                  'p-2 rounded border',
+                                  isDarkTheme ? 'border-zinc-800 bg-zinc-900/50' : 'border-gray-200 bg-white'
+                                )}
+                              >
+                                {snippet.title && (
+                                  <p className={cn('text-xs font-medium mb-1', isDarkTheme ? 'text-white' : 'text-gray-900')}>
+                                    {snippet.title}
+                                  </p>
+                                )}
+                                {snippet.url && (
+                                  <a
+                                    href={snippet.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={cn(
+                                      'text-xs flex items-center gap-1 hover:underline',
+                                      isDarkTheme ? 'text-blue-400' : 'text-blue-600'
+                                    )}
+                                  >
+                                    {snippet.url}
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                                {snippet.snippet && (
+                                  <p className={cn('text-xs mt-1 line-clamp-2', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
+                                    {snippet.snippet}
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
             );
           })}
         </tbody>

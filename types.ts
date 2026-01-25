@@ -610,6 +610,7 @@ export interface KeywordWithStatus {
   intent: string | null;
   volume: number | null;
   difficulty: number | null;
+  cpc?: number | null;
   probability: string | null;
   is_selected: boolean;
   status: 'selected' | 'generating' | 'completed' | 'failed';
@@ -621,6 +622,11 @@ export interface KeywordWithStatus {
   task_type?: string | null;
   mining_mode?: string | null;
   target_language?: string | null;
+  // SERP and analysis fields
+  source?: string | null; // 'website-audit' | 'manual' | 'blue-ocean'
+  top_domain_type?: string | null;
+  reasoning?: string | null;
+  top_serp_snippets?: Array<{ url?: string; title?: string; snippet?: string }> | null;
 }
 
 export interface ProjectStats {

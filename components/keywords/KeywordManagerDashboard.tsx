@@ -20,8 +20,8 @@ interface KeywordManagerDashboardProps {
 interface KeywordStats {
   totalKeywords: number;
   highProbability: number;
-  contentGenerated: number;
-  pendingKeywords: number;
+  mediumProbability: number;
+  lowProbability: number;
 }
 
 export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = ({
@@ -38,13 +38,13 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
   const [stats, setStats] = useState<KeywordStats>({
     totalKeywords: 0,
     highProbability: 0,
-    contentGenerated: 0,
-    pendingKeywords: 0,
+    mediumProbability: 0,
+    lowProbability: 0,
   });
   const [filters, setFilters] = useState<KeywordFilters>({
     search: '',
     probability: [],
-    intent: [],
+    source: [],
     language: [],
     projectIds: [],
     status: [],
@@ -85,8 +85,8 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
         const stats: KeywordStats = {
           totalKeywords: allKeywords.length,
           highProbability: allKeywords.filter((k: KeywordWithStatus) => k.probability === 'High').length,
-          contentGenerated: allKeywords.filter((k: KeywordWithStatus) => k.has_draft).length,
-          pendingKeywords: allKeywords.filter((k: KeywordWithStatus) => !k.has_draft).length,
+          mediumProbability: allKeywords.filter((k: KeywordWithStatus) => k.probability === 'Medium').length,
+          lowProbability: allKeywords.filter((k: KeywordWithStatus) => k.probability === 'Low').length,
         };
         setStats(stats);
 
@@ -136,9 +136,9 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
       result = result.filter(k => filters.probability.includes(k.probability));
     }
 
-    // Apply intent filter
-    if (filters.intent.length > 0) {
-      result = result.filter(k => filters.intent.includes(k.intent));
+    // Apply source filter
+    if (filters.source.length > 0) {
+      result = result.filter(k => k.source && filters.source.includes(k.source));
     }
 
     // Apply project filter
@@ -278,13 +278,13 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
   }
 
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-3 pb-20">
       {/* Page Header */}
       <div className="space-y-1">
-        <h1 className={cn('text-2xl font-bold tracking-tight', isDarkTheme ? 'text-white' : 'text-gray-900')}>
+        <h1 className={cn('text-xl font-bold tracking-tight', isDarkTheme ? 'text-white' : 'text-gray-900')}>
           {uiLanguage === 'zh' ? '关键词管理' : 'Keyword Manager'}
         </h1>
-        <p className={cn('text-xs font-medium uppercase tracking-wider', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
+        <p className={cn('text-[10px] font-medium uppercase tracking-wider', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
           {uiLanguage === 'zh' ? '统一管理所有挖掘任务的关键词，支持筛选、排序、批量操作' : 'Manage all keywords with filters, sorting, and batch operations'}
         </p>
       </div>

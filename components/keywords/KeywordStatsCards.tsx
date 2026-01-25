@@ -1,13 +1,13 @@
 import React from 'react';
 import { Card, CardContent } from '../ui/card';
 import { cn } from '../../lib/utils';
-import { Hash, TrendingUp, FileText, Clock } from 'lucide-react';
+import { Hash, TrendingUp, AlertCircle, AlertTriangle } from 'lucide-react';
 
 interface KeywordStats {
   totalKeywords: number;
   highProbability: number;
-  contentGenerated: number;
-  pendingKeywords: number;
+  mediumProbability: number;
+  lowProbability: number;
 }
 
 interface KeywordStatsCardsProps {
@@ -37,43 +37,43 @@ export const KeywordStatsCards: React.FC<KeywordStatsCardsProps> = ({
       bgColor: isDarkTheme ? 'bg-emerald-500/10' : 'bg-emerald-50',
     },
     {
-      icon: FileText,
-      label: uiLanguage === 'zh' ? '已生成内容' : 'Content Generated',
-      value: stats.contentGenerated,
-      color: 'text-purple-500',
-      bgColor: isDarkTheme ? 'bg-purple-500/10' : 'bg-purple-50',
-    },
-    {
-      icon: Clock,
-      label: uiLanguage === 'zh' ? '待处理词数' : 'Pending Keywords',
-      value: stats.pendingKeywords,
+      icon: AlertCircle,
+      label: uiLanguage === 'zh' ? '中概率词数' : 'Medium Probability',
+      value: stats.mediumProbability,
       color: 'text-amber-500',
       bgColor: isDarkTheme ? 'bg-amber-500/10' : 'bg-amber-50',
+    },
+    {
+      icon: AlertTriangle,
+      label: uiLanguage === 'zh' ? '低概率词数' : 'Low Probability',
+      value: stats.lowProbability,
+      color: 'text-red-500',
+      bgColor: isDarkTheme ? 'bg-red-500/10' : 'bg-red-50',
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {cards.map((card, index) => (
         <Card
           key={index}
           className={cn(
-            'transition-all hover:scale-[1.02]',
+            'transition-all',
             isDarkTheme ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200'
           )}
         >
-          <CardContent className="p-6">
+          <CardContent className="p-3">
             <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <p className={cn('text-xs font-medium uppercase tracking-wider', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
+              <div className="space-y-1">
+                <p className={cn('text-[10px] font-medium uppercase tracking-wider', isDarkTheme ? 'text-zinc-500' : 'text-gray-500')}>
                   {card.label}
                 </p>
-                <p className={cn('text-3xl font-bold', isDarkTheme ? 'text-white' : 'text-gray-900')}>
+                <p className={cn('text-xl font-bold', isDarkTheme ? 'text-white' : 'text-gray-900')}>
                   {card.value.toLocaleString()}
                 </p>
               </div>
-              <div className={cn('p-3 rounded-lg', card.bgColor)}>
-                <card.icon className={cn('w-6 h-6', card.color)} />
+              <div className={cn('p-2 rounded-lg', card.bgColor)}>
+                <card.icon className={cn('w-4 h-4', card.color)} />
               </div>
             </div>
           </CardContent>
