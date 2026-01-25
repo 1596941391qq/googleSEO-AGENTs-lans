@@ -1003,6 +1003,31 @@ interface PublishTabProps {
   uiLanguage: "en" | "zh";
 }
 
+const BUILD_MESSAGES_ZH = [
+  "正在构建导航栏",
+  "正在构建文章大纲",
+  "正在生成目录",
+  "正在编译文档",
+  "正在生成索引",
+  "正在部署静态资源",
+  "正在同步 CDN",
+  "正在优化资源",
+  "正在校验链接",
+  "正在生成 sitemap",
+];
+const BUILD_MESSAGES_EN = [
+  "Building navigation...",
+  "Building article outline...",
+  "Generating table of contents...",
+  "Compiling documentation...",
+  "Generating index...",
+  "Deploying static assets...",
+  "Syncing CDN...",
+  "Optimizing resources...",
+  "Validating links...",
+  "Generating sitemap...",
+];
+
 const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const { user } = useAuth();
   const currentUserId = getUserId(user);
@@ -1012,7 +1037,45 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const [publishingId, setPublishingId] = React.useState<string | null>(null);
   const [updatingId, setUpdatingId] = React.useState<string | null>(null);
   const [editingArticle, setEditingArticle] = React.useState<any | null>(null);
+  const [buildingOverlay, setBuildingOverlay] = React.useState<{ siteUrl: string } | null>(null);
+  const [buildingProgress, setBuildingProgress] = React.useState(0);
+  const [buildingMessages, setBuildingMessages] = React.useState<string[]>([]);
+  const buildingLogRef = React.useRef<HTMLDivElement>(null);
   const platform = "platform" as const;
+
+  React.useEffect(() => {
+    if (!buildingOverlay) {
+      setBuildingProgress(0);
+      setBuildingMessages([]);
+      return;
+    }
+    const durationMs = 20_000;
+    const tickMs = 100;
+    const step = (100 * tickMs) / durationMs;
+    const list = uiLanguage === "zh" ? BUILD_MESSAGES_ZH : BUILD_MESSAGES_EN;
+    let msgIndex = 0;
+
+    const pushMessage = () => {
+      setBuildingMessages((prev) => [...prev, list[msgIndex % list.length]]);
+      msgIndex += 1;
+    };
+    pushMessage();
+    const msgId = setInterval(pushMessage, 2000);
+
+    const progressId = setInterval(() => {
+      setBuildingProgress((p) => Math.min(100, p + step));
+    }, tickMs);
+
+    return () => {
+      clearInterval(progressId);
+      clearInterval(msgId);
+    };
+  }, [buildingOverlay, uiLanguage]);
+
+  React.useEffect(() => {
+    if (!buildingLogRef.current) return;
+    buildingLogRef.current.scrollTop = buildingLogRef.current.scrollHeight;
+  }, [buildingMessages]);
 
   const loadArticles = React.useCallback(async () => {
     try {
@@ -1076,7 +1139,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
           );
 
           if (result.data.siteUrl) {
-            window.open(result.data.siteUrl, "_blank");
+            setBuildingOverlay({ siteUrl: result.data.siteUrl });
           }
         } else {
           throw new Error(result.error || "Publishing failed");
@@ -1120,15 +1183,8 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
 
         const result = await response.json();
         if (result.success) {
-          alert(
-            uiLanguage === "zh"
-              ? "文章已成功更新到发布站点！"
-              : "Article updated successfully!"
-          );
-
-          // 打开站点首页
           if (result.data.siteUrl) {
-            window.open(result.data.siteUrl, "_blank");
+            setBuildingOverlay({ siteUrl: result.data.siteUrl });
           }
 
           // 刷新列表
@@ -1636,6 +1692,94 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                   }
                 }}
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 构建中 Overlay：发布/更新成功后展示 ~20s 进度条 + 滚动日志，不自动打开网页 */}
+      {buildingOverlay && (
+        <div
+          className={cn(
+            "fixed inset-0 z-[90] flex items-center justify-center p-4",
+            isDarkTheme ? "bg-black/80" : "bg-black/50"
+          )}
+        >
+          <div
+            className={cn(
+              "w-full max-w-md rounded-2xl border-2 shadow-2xl overflow-hidden flex flex-col",
+              isDarkTheme ? "bg-zinc-900 border-zinc-700" : "bg-white border-zinc-200"
+            )}
+          >
+            <div className="p-5 pb-2">
+              <h3
+                className={cn(
+                  "text-lg font-bold",
+                  isDarkTheme ? "text-white" : "text-zinc-900"
+                )}
+              >
+                {uiLanguage === "zh" ? "站点正在构建中" : "Site is building..."}
+              </h3>
+              <p className={cn("text-sm mt-1", isDarkTheme ? "text-zinc-400" : "text-zinc-500")}>
+                {uiLanguage === "zh"
+                  ? "预计约 20 秒，请稍候"
+                  : "About 20 seconds, please wait"}
+              </p>
+            </div>
+            <div className="px-5 pb-2">
+              <div
+                className={cn(
+                  "h-2 w-full rounded-full overflow-hidden",
+                  isDarkTheme ? "bg-zinc-800" : "bg-zinc-200"
+                )}
+              >
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-150"
+                  style={{ width: `${Math.min(100, buildingProgress)}%` }}
+                />
+              </div>
+            </div>
+            <div
+              ref={buildingLogRef}
+              className={cn(
+                "flex-1 min-h-[140px] max-h-[180px] overflow-y-auto px-5 py-3 font-mono text-xs space-y-1",
+                isDarkTheme ? "bg-zinc-950/50 text-zinc-300" : "bg-zinc-50 text-zinc-600"
+              )}
+            >
+              {buildingMessages.map((msg, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-emerald-500">▸</span>
+                  <span>{msg}</span>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 flex gap-3 items-center border-t border-zinc-200 dark:border-zinc-800">
+              {buildingProgress >= 100 ? (
+                <Button
+                  size="sm"
+                  className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-500"
+                  onClick={() => {
+                    window.open(buildingOverlay.siteUrl, "_blank");
+                    setBuildingOverlay(null);
+                  }}
+                >
+                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                  {uiLanguage === "zh" ? "查看站点" : "View site"}
+                </Button>
+              ) : (
+                <div className="flex-1 flex items-center gap-2 text-sm text-zinc-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {uiLanguage === "zh" ? "构建中…" : "Building…"}
+                </div>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-xl shrink-0"
+                onClick={() => setBuildingOverlay(null)}
+              >
+                {uiLanguage === "zh" ? "关闭" : "Close"}
+              </Button>
             </div>
           </div>
         </div>
