@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { query } from '../lib/db';
+import { sql, initDomainCacheTables } from '../lib/database.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -23,48 +23,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Fetch all keywords from all projects for this user
-    const result = await query(
-      `SELECT
-        k.id,
-        k.keyword,
-        k.translation,
-        k.intent,
-        k.volume,
-        k.difficulty,
-        k.probability,
-        k.project_id,
-        k.created_at,
-        p.name as project_name,
-        p.task_type,
-        p.mining_mode,
-        p.target_language,
+    // Initialize tables
+    await initDomainCacheTables();
+
+    // Fetch all keywords from keyword_analysis_cache for this user's websites
+    const result = await sql`
+      SELECT
+        kac.id,
+        kac.keyword,
+        kac.dataforseo_volume as volume,
+        kac.dataforseo_difficulty as difficulty,
+        kac.agent2_probability as probability,
+        kac.agent2_search_intent as intent,
+        kac.website_id,
+        kac.created_at,
+        uw.website_url,
+        uw.website_domain,
         CASE WHEN EXISTS (
-          SELECT 1 FROM articles a
-          WHERE a.keyword = k.keyword
-          AND a.user_id = $1
+          SELECT 1 FROM published_articles pa
+          WHERE pa.keyword = kac.keyword
+          AND pa.user_id::text = ${userId.toString()}
         ) THEN true ELSE false END as has_draft
-      FROM keywords k
-      LEFT JOIN projects p ON k.project_id = p.id
-      WHERE p.user_id = $1
-      AND p.is_archived = false
-      ORDER BY k.created_at DESC`,
-      [userId]
-    );
+      FROM keyword_analysis_cache kac
+      LEFT JOIN user_websites uw ON kac.website_id = uw.id
+      WHERE (uw.user_id::text = ${userId.toString()} OR kac.website_id IS NULL)
+      AND kac.cache_expires_at > NOW()
+      ORDER BY kac.created_at DESC
+    `;
 
     const keywords = result.rows.map(row => ({
       id: row.id,
       keyword: row.keyword,
-      translation: row.translation,
+      translation: null, // keyword_analysis_cache doesn't have translation
       intent: row.intent || 'Informational',
       volume: row.volume,
       difficulty: row.difficulty,
       probability: row.probability || 'Medium',
-      project_id: row.project_id,
-      project_name: row.project_name,
-      task_type: row.task_type,
-      mining_mode: row.mining_mode,
-      target_language: row.target_language,
+      project_id: row.website_id, // Use website_id as project_id for compatibility
+      project_name: row.website_domain || row.website_url || null,
+      task_type: null,
+      mining_mode: null,
+      target_language: null,
       created_at: row.created_at,
       has_draft: row.has_draft,
     }));

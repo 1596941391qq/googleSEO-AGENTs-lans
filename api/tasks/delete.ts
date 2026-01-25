@@ -23,8 +23,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { id } = req.body || req.query;
 
-    if (!id) {
+    if (!id || typeof id !== 'string') {
       return sendErrorResponse(res, null, 'Task ID is required', 400);
+    }
+
+    // 前端可能传入本地生成的 client ID（如 task-1769380406938-xxx），未同步到 DB 的任务不存在于 execution_tasks。
+    // 仅 UUID 格式的 id 才在 DB 中；非 UUID 时直接返回成功，避免 PostgreSQL "无效的类型 uuid" 错误。
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(id.trim())) {
+      return res.status(200).json({
+        success: true,
+        message: 'Task deleted successfully'
+      });
     }
 
     const success = await deleteExecutionTask(id, userId);

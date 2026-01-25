@@ -85,13 +85,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }));
 
     // Get articles from content_drafts
+    // Note: Removed dependency on keywords table - using keyword field directly from content_drafts or keyword_analysis_cache
     const draftsResult = await sql`
       SELECT 
         cd.*, 
-        k.keyword as keyword_name,
+        COALESCE(cd.keyword, '') as keyword_name,
         p.name as project_name
       FROM content_drafts cd
-      LEFT JOIN keywords k ON cd.keyword_id = k.id
       LEFT JOIN projects p ON cd.project_id = p.id
       WHERE p.user_id::text = ${userId.toString()}
       ORDER BY cd.updated_at DESC
@@ -101,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       id: row.id,
       title: row.title,
       content: row.content,
-      keyword: row.keyword_name,
+      keyword: row.keyword_name || null,
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,

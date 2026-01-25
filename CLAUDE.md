@@ -242,7 +242,7 @@ VITE_MAIN_APP_URL=http://localhost:3000
 - `api/_shared/request-handler.ts` - Common request/response utilities
 - `api/_shared/types.ts` - API-specific TypeScript types
 - `api/_shared/serp.ts` - SERP analysis utilities
-- `api/lib/db.ts` - PostgreSQL database connection (pg library)
+- `api/lib/database.js` - PostgreSQL database connection (pg library)
 - `api/lib/auth.ts` - JWT token generation and verification
 
 #### Existing APIs (COMPLETED)

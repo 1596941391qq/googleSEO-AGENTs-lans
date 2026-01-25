@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { query } from '../lib/db';
+import { sql, initDomainCacheTables } from '../lib/database.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -27,18 +27,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Verify ownership and delete keywords
-    const placeholders = keywordIds.map((_, i) => `$${i + 2}`).join(',');
-    const deleteQuery = `
-      DELETE FROM keywords
-      WHERE id IN (${placeholders})
-      AND project_id IN (
-        SELECT id FROM projects WHERE user_id = $1
+    // Initialize tables
+    await initDomainCacheTables();
+
+    // Verify ownership and delete keywords from keyword_analysis_cache
+    // Use PostgreSQL ANY() function for array parameter
+    const result = await sql`
+      DELETE FROM keyword_analysis_cache
+      WHERE id = ANY(${keywordIds})
+      AND (
+        website_id IN (
+          SELECT id FROM user_websites WHERE user_id::text = ${userId.toString()}
+        )
+        OR website_id IS NULL
       )
       RETURNING id
     `;
-
-    const result = await query(deleteQuery, [userId, ...keywordIds]);
 
     return res.json({
       success: true,

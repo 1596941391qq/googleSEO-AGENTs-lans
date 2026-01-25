@@ -604,16 +604,23 @@ export interface ProjectWithStats extends Project {
 
 export interface KeywordWithStatus {
   id: string;
-  project_id: string;
+  project_id: string | null;
   keyword: string;
   translation: string | null;
   intent: string | null;
   volume: number | null;
+  difficulty: number | null;
   probability: string | null;
   is_selected: boolean;
   status: 'selected' | 'generating' | 'completed' | 'failed';
   content_status?: string;
   created_at: string;
+  // Additional fields from API
+  has_draft?: boolean;
+  project_name?: string | null;
+  task_type?: string | null;
+  mining_mode?: string | null;
+  target_language?: string | null;
 }
 
 export interface ProjectStats {
