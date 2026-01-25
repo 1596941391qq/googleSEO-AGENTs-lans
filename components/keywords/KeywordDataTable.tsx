@@ -194,99 +194,99 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
             const isHighProbability = keyword.probability === 'High';
 
             return (
-              <tr
-                key={keyword.id}
-                className={cn(
-                  'border-b transition-colors group',
-                  isDarkTheme ? 'border-zinc-800 hover:bg-zinc-900/50' : 'border-gray-100 hover:bg-gray-50',
-                  isHighProbability && 'border-l-4 border-l-emerald-500'
-                )}
-              >
-                <td className="p-2">
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={(e) => onSelectOne(keyword.id, e.target.checked)}
-                    className="w-4 h-4 rounded border-zinc-700 bg-zinc-900"
-                  />
-                </td>
-                <td className={cn('p-2 font-medium text-xs', isDarkTheme ? 'text-white' : 'text-gray-900')}>
-                  <div className="max-w-[200px] truncate" title={keyword.keyword}>
-                    {keyword.keyword}
-                  </div>
-                </td>
-                <td className="p-2">
-                  <Badge className={cn('text-[9px] font-bold px-1.5 py-0.5', getSourceColor(keyword.source))}>
-                    {getSourceLabel(keyword.source)}
-                  </Badge>
-                </td>
-                <td className={cn('p-2 text-right text-xs font-medium', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
-                  {keyword.volume ? keyword.volume.toLocaleString() : '-'}
-                </td>
-                <td className={cn('p-2 text-right text-xs font-medium', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
-                  {keyword.difficulty || '-'}
-                </td>
-                <td className="p-2">
-                  <Badge className={cn('text-[9px] font-bold border px-1.5 py-0.5', getProbabilityColor(keyword.probability))}>
-                    {keyword.probability}
-                  </Badge>
-                </td>
-                <td className={cn('p-2 text-xs', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
-                  <div className="max-w-[120px] truncate" title={keyword.project_name}>
-                    {keyword.project_name || '-'}
-                  </div>
-                </td>
-                <td className="p-2 text-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleExpand(keyword.id)}
-                    className={cn(
-                      'h-6 w-6 p-0',
-                      isDarkTheme ? 'text-zinc-400 hover:bg-zinc-800' : 'text-gray-500 hover:bg-gray-100'
-                    )}
-                  >
-                    {expandedRows.has(keyword.id) ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
-                  </Button>
-                </td>
-                <td className="p-2">
-                  <div className="flex items-center justify-center gap-1">
+              <React.Fragment key={keyword.id}>
+                <tr
+                  className={cn(
+                    'border-b transition-colors group',
+                    isDarkTheme ? 'border-zinc-800 hover:bg-zinc-900/50' : 'border-gray-100 hover:bg-gray-50',
+                    isHighProbability && 'border-l-4 border-l-emerald-500'
+                  )}
+                >
+                  <td className="p-2">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => onSelectOne(keyword.id, e.target.checked)}
+                      className="w-4 h-4 rounded border-zinc-700 bg-zinc-900"
+                    />
+                  </td>
+                  <td className={cn('p-2 font-medium text-xs', isDarkTheme ? 'text-white' : 'text-gray-900')}>
+                    <div className="max-w-[200px] truncate" title={keyword.keyword}>
+                      {keyword.keyword}
+                    </div>
+                  </td>
+                  <td className="p-2">
+                    <Badge className={cn('text-[9px] font-bold px-1.5 py-0.5', getSourceColor(keyword.source))}>
+                      {getSourceLabel(keyword.source)}
+                    </Badge>
+                  </td>
+                  <td className={cn('p-2 text-right text-xs font-medium', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
+                    {keyword.volume ? keyword.volume.toLocaleString() : '-'}
+                  </td>
+                  <td className={cn('p-2 text-right text-xs font-medium', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
+                    {keyword.difficulty || '-'}
+                  </td>
+                  <td className="p-2">
+                    <Badge className={cn('text-[9px] font-bold border px-1.5 py-0.5', getProbabilityColor(keyword.probability))}>
+                      {keyword.probability}
+                    </Badge>
+                  </td>
+                  <td className={cn('p-2 text-xs', isDarkTheme ? 'text-zinc-400' : 'text-gray-600')}>
+                    <div className="max-w-[120px] truncate" title={keyword.project_name}>
+                      {keyword.project_name || '-'}
+                    </div>
+                  </td>
+                  <td className="p-2 text-center">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onGenerate(keyword)}
+                      onClick={() => toggleExpand(keyword.id)}
                       className={cn(
-                        'h-6 px-2 text-[10px] font-medium',
-                        isDarkTheme ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-emerald-600 hover:bg-emerald-50'
+                        'h-6 w-6 p-0',
+                        isDarkTheme ? 'text-zinc-400 hover:bg-zinc-800' : 'text-gray-500 hover:bg-gray-100'
                       )}
                     >
-                      <Sparkles className="w-3 h-3 mr-1" />
-                      {uiLanguage === 'zh' ? '生成' : 'Generate'}
+                      {expandedRows.has(keyword.id) ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
                     </Button>
-                    {keyword.has_draft && (
+                  </td>
+                  <td className="p-2">
+                    <div className="flex items-center justify-center gap-1">
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onViewDraft(keyword)}
+                        onClick={() => onGenerate(keyword)}
                         className={cn(
                           'h-6 px-2 text-[10px] font-medium',
-                          isDarkTheme ? 'text-blue-400 hover:bg-blue-500/10' : 'text-blue-600 hover:bg-blue-50'
+                          isDarkTheme ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-emerald-600 hover:bg-emerald-50'
                         )}
                       >
-                        <Eye className="w-3 h-3 mr-1" />
-                        {uiLanguage === 'zh' ? '查看' : 'View'}
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        {uiLanguage === 'zh' ? '生成' : 'Generate'}
                       </Button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              {expandedRows.has(keyword.id) && (
-                <tr className={cn(isDarkTheme ? 'bg-zinc-900/50' : 'bg-gray-50')}>
-                  <td colSpan={9} className="p-4">
+                      {keyword.has_draft && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onViewDraft(keyword)}
+                          className={cn(
+                            'h-6 px-2 text-[10px] font-medium',
+                            isDarkTheme ? 'text-blue-400 hover:bg-blue-500/10' : 'text-blue-600 hover:bg-blue-50'
+                          )}
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          {uiLanguage === 'zh' ? '查看' : 'View'}
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                {expandedRows.has(keyword.id) && (
+                  <tr className={cn(isDarkTheme ? 'bg-zinc-900/50' : 'bg-gray-50')}>
+                    <td colSpan={9} className="p-4">
                     <div className={cn('space-y-4 text-sm', isDarkTheme ? 'text-zinc-300' : 'text-gray-700')}>
                       {/* Metrics Row */}
                       <div className={cn('grid grid-cols-2 md:grid-cols-4 gap-4 pb-4 border-b', isDarkTheme ? 'border-zinc-800' : 'border-gray-200')}>
@@ -375,7 +375,8 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                     </div>
                   </td>
                 </tr>
-              )}
+                )}
+              </React.Fragment>
             );
           })}
         </tbody>
