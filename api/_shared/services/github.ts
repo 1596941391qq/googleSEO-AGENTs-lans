@@ -152,6 +152,10 @@ async function getFileSha(
       await new Promise((r) => setTimeout(r, 1500));
       return getFileSha(config, true);
     }
+<<<<<<< Updated upstream
+=======
+    // 区分 404（可创建）与网络异常：后者不能假定「文件不存在」，否则会误走创建导致 422
+>>>>>>> Stashed changes
     throw new Error(
       `getFileSha failed (fetch error): ${error.message}. Cannot determine if file exists; retry later.`
     );
@@ -219,6 +223,7 @@ export async function createOrUpdateFile(config: {
     }
 
     const putUrl = `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/${config.path}`;
+<<<<<<< Updated upstream
     const putHeaders = {
       Authorization: `Bearer ${config.token}`,
       Accept: 'application/vnd.github.v3+json',
@@ -235,13 +240,35 @@ export async function createOrUpdateFile(config: {
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
       const msg = typeof errJson?.message === 'string' ? errJson.message : '';
+=======
+    const putOptions = {
+      method: 'PUT' as const,
+      headers: {
+        Authorization: `Bearer ${config.token}`,
+        Accept: 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    };
+
+    let response = await fetch(putUrl, putOptions);
+
+    // 422 "sha wasn't supplied"：文件实际存在但 getFileSha 曾失败，误走了创建。重试取 sha 再更新。
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      const msg = typeof error?.message === 'string' ? error.message : '';
+>>>>>>> Stashed changes
       const is422ShaRequired =
         response.status === 422 && msg.includes('sha') && msg.includes("wasn't supplied");
 
       if (is422ShaRequired) {
+<<<<<<< Updated upstream
         console.log(
           `[GitHub] 422 sha required — file exists but SHA was missing. Retrying getFileSha + update.`
         );
+=======
+        console.log(`[GitHub] 422 sha required — file exists but SHA was missing. Retrying getFileSha + update.`);
+>>>>>>> Stashed changes
         try {
           const retrySha = await getFileSha({
             token: config.token,
@@ -252,11 +279,15 @@ export async function createOrUpdateFile(config: {
           });
           if (retrySha) {
             body.sha = retrySha;
+<<<<<<< Updated upstream
             response = await fetch(putUrl, {
               method: 'PUT',
               headers: putHeaders,
               body: JSON.stringify(body),
             });
+=======
+            response = await fetch(putUrl, { ...putOptions, body: JSON.stringify(body) });
+>>>>>>> Stashed changes
           }
         } catch (retryErr: any) {
           console.error(`[GitHub] ❌ Retry getFileSha failed:`, retryErr.message);
@@ -272,10 +303,14 @@ export async function createOrUpdateFile(config: {
         console.error(`[GitHub] ❌ API error: ${response.status}`, errBody);
         return {
           success: false,
+<<<<<<< Updated upstream
           error:
             (typeof errBody?.message === 'string' ? errBody.message : null) ||
             (typeof errJson?.message === 'string' ? errJson.message : null) ||
             `GitHub API error: ${response.status}`,
+=======
+          error: (typeof errBody?.message === 'string' ? errBody.message : null) || `GitHub API error: ${response.status}`,
+>>>>>>> Stashed changes
         };
       }
     }

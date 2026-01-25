@@ -175,8 +175,8 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
         </thead>
         <tbody>
           {keywords.map((keyword) => {
-            const isSelected = selectedIds.includes(keyword.id);
             const isHighProbability = keyword.probability === 'High';
+            const isFavorited = favoritedIds.has(keyword.id);
 
             return (
               <React.Fragment key={keyword.id}>
