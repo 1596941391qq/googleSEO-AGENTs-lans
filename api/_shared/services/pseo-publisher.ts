@@ -421,3 +421,115 @@ export async function getWebsitePublishingSites(websiteId: string): Promise<{
 
   return { informational, commercial };
 }
+
+/**
+ * 更新已发布的文章
+ * 将修改后的内容推送到已绑定的 GitHub 仓库
+ */
+export async function updatePublishedArticle(
+  projectId: string,
+  article: ArticleForPublish
+): Promise<PublishResult> {
+  console.log(`[PSEO Publisher] 🔄 Updating "${article.title}" for project ${projectId}`);
+
+  try {
+    // 1. 获取已绑定的站点（必须已存在）
+    const siteBinding = await assignSiteToWebsite(projectId, article.contentType);
+
+    if (!siteBinding) {
+      return {
+        success: false,
+        error: 'No published site found for this project. Please publish the article first.',
+      };
+    }
+
+    const { site, github_token, platform_token } = siteBinding;
+
+    // 2. 检查站点状态
+    if (site.status !== 'active') {
+      return {
+        success: false,
+        error: `Site is not active (status: ${site.status}). Cannot update.`,
+      };
+    }
+
+    const githubTokenDecrypted = decryptToken(github_token.token_encrypted);
+    const slug = generateSlug(article.keyword, article.urlSlug);
+
+    // 3. 准备内容（与发布时相同的逻辑）
+    const useHtml = true;
+    let finalContent: string;
+    let extension: string = '.md';
+
+    if (useHtml) {
+      const { convertMarkdownToHtml } = await import('../utils/markdown-converter.js');
+      finalContent = convertMarkdownToHtml(article.content, article.title, {
+        description: article.metaDescription,
+        keywords: article.keyword
+      });
+      extension = '.html';
+    } else {
+      finalContent = generateArticleMarkdown(article);
+      extension = '.md';
+    }
+
+    // 4. 推送更新到 GitHub（覆盖现有文件）
+    console.log(`[PSEO Publisher] Pushing updated article to GitHub...`);
+
+    const pushResult = await addArticleToMkDocs({
+      token: githubTokenDecrypted,
+      owner: github_token.owner_name,
+      repoName: site.repo_name,
+      articleSlug: slug,
+      articleTitle: article.title,
+      articleContent: finalContent,
+      branch: site.branch,
+      extension
+    });
+
+    if (!pushResult.success) {
+      return {
+        success: false,
+        error: pushResult.error || 'Failed to push updated article to GitHub',
+      };
+    }
+
+    // 5. 重建站点索引（如果使用 HTML）
+    if (useHtml) {
+      console.log(`[PSEO Publisher] Rebuilding static site index...`);
+      const indexResult = await rebuildStaticSiteIndex({
+        token: githubTokenDecrypted,
+        owner: github_token.owner_name,
+        repoName: site.repo_name,
+        branch: site.branch,
+      });
+      if (!indexResult.success) {
+        console.warn(`[PSEO Publisher] Warning: Failed to rebuild index: ${indexResult.error}`);
+      }
+    }
+
+    // 6. 构建文章 URL
+    const articleUrl = buildArticleUrl(site.site_url, slug);
+
+    console.log(`[PSEO Publisher] ✅ Updated successfully!`);
+    console.log(`[PSEO Publisher] Article URL: ${articleUrl}`);
+
+    return {
+      success: true,
+      articleUrl,
+      siteUrl: site.site_url,
+      repoUrl: `https://github.com/${github_token.owner_name}/${site.repo_name}`,
+      siteName: site.site_name,
+      platform: site.platform,
+      isNewSite: false,
+    };
+
+  } catch (error: any) {
+    console.error(`[PSEO Publisher] ❌ Update Error:`, error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error during update',
+    };
+  }
+}
+

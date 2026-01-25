@@ -57,6 +57,7 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
 
@@ -81,7 +82,7 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
   const handlePublish = async (articleId: string, websiteId?: string) => {
     try {
       setPublishingId(articleId);
-      
+
       const response = await apiClient.post('/api/articles/publish', {
         articleId,
         websiteId // 传递关联的用户网站 ID
@@ -89,20 +90,20 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
 
       if (response.success) {
         // Update local state
-        setArticles(prev => prev.map(a => 
-          a.id === articleId 
-            ? { 
-                ...a, 
-                status: 'published', 
+        setArticles(prev => prev.map(a =>
+          a.id === articleId
+            ? {
+                ...a,
+                status: 'published',
                 published_at: response.data.publishedAt,
                 url_slug: response.data.liveUrl?.split('/').pop(),
                 site_name: response.data.siteName,
                 site_url: response.data.siteUrl,
                 platform: response.data.platform
-              } 
+              }
             : a
         ));
-        
+
         // 复制链接到剪贴板
         if (response.data.liveUrl) {
           navigator.clipboard.writeText(response.data.liveUrl);
@@ -117,6 +118,33 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
       alert("Failed to publish article");
     } finally {
       setPublishingId(null);
+    }
+  };
+
+  const handleUpdate = async (articleId: string, websiteId?: string) => {
+    try {
+      setUpdatingId(articleId);
+
+      const response = await apiClient.post('/api/articles/update-published', {
+        articleId,
+        websiteId
+      });
+
+      if (response.success) {
+        // 显示成功提示
+        setCopiedUrl(response.data.articleUrl || 'Updated');
+        setTimeout(() => setCopiedUrl(null), 3000);
+
+        // 刷新文章列表
+        await fetchArticles();
+      } else {
+        alert(response.error || (uiLanguage === 'zh' ? '更新失败' : 'Update failed'));
+      }
+    } catch (error) {
+      console.error("Update error:", error);
+      alert(uiLanguage === 'zh' ? '更新失败，请重试' : 'Failed to update article');
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -349,8 +377,27 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                         
                         {article.status === 'published' ? (
                           <div className="flex items-center gap-1">
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-xl border-blue-500/20 text-blue-500 font-bold"
+                              disabled={updatingId === article.id}
+                              onClick={() => handleUpdate(article.id, article.websiteId)}
+                            >
+                              {updatingId === article.id ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                  {uiLanguage === 'zh' ? '更新中...' : 'Updating...'}
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-4 h-4 mr-2" />
+                                  {uiLanguage === 'zh' ? '更新' : 'Update'}
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              variant="outline"
                               size="sm"
                               className="rounded-xl border-emerald-500/20 text-emerald-500 font-bold"
                               onClick={() => article.site_url && copyToClipboard(article.site_url)}
@@ -358,8 +405,8 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                               <Copy className="w-4 h-4 mr-2" />
                               {uiLanguage === 'zh' ? '复制链接' : 'Copy'}
                             </Button>
-                            <Button 
-                              variant="outline" 
+                            <Button
+                              variant="outline"
                               size="sm"
                               className="rounded-xl border-emerald-500/20 text-emerald-500 font-bold"
                               onClick={() => article.site_url && window.open(article.site_url, '_blank')}
