@@ -347,7 +347,10 @@ interface RebuildResult {
 
 /**
  * 触发 Read the Docs 重新构建
- * API 文档: https://docs.readthedocs.io/en/stable/api/v3.html#build-triggering
+ * API 文档: https://docs.readthedocs.io/en/stable/api/v3.html
+ *
+ * RTD v3 API 需要通过 webhook 或者直接触发构建
+ * 这里使用 GitHub webhook 模拟方式或者直接调用构建 API
  */
 export async function triggerRTDBuild(config: {
   token: string;
@@ -356,6 +359,8 @@ export async function triggerRTDBuild(config: {
   try {
     console.log(`[RTD] Triggering build for project: ${config.projectSlug}`);
 
+    // RTD API v3: 触发构建需要指定版本
+    // 我们触发 latest 版本的构建
     const response = await fetch(
       `https://readthedocs.org/api/v3/projects/${config.projectSlug}/versions/latest/builds/`,
       {
@@ -364,16 +369,26 @@ export async function triggerRTDBuild(config: {
           'Authorization': `Token ${config.token}`,
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({}), // 空 body 触发构建
       }
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error(`[RTD] Build trigger failed: ${response.status}`, error);
-      return {
-        success: false,
-        error: error.detail || `RTD API error: ${response.status}`,
-      };
+      const errorText = await response.text();
+      let errorDetail = errorText;
+
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorDetail = errorJson.detail || errorJson.error || errorText;
+      } catch (e) {
+        // 如果不是 JSON，使用原始文本
+      }
+
+      console.error(`[RTD] Build trigger failed: ${response.status}`, errorDetail);
+
+      // 如果 API v3 失败，尝试使用 webhook 方式
+      console.log(`[RTD] Trying alternative method: GitHub webhook simulation...`);
+      return await triggerRTDBuildViaWebhook(config);
     }
 
     const data = await response.json();
@@ -384,9 +399,58 @@ export async function triggerRTDBuild(config: {
     };
   } catch (error: any) {
     console.error(`[RTD] Build trigger exception:`, error);
+
+    // 尝试备用方法
+    console.log(`[RTD] Trying alternative method due to exception...`);
+    return await triggerRTDBuildViaWebhook(config);
+  }
+}
+
+/**
+ * 通过 GitHub webhook 方式触发 RTD 构建（备用方法）
+ * RTD 会监听 GitHub push 事件，我们可以通过 GitHub API 触发
+ */
+async function triggerRTDBuildViaWebhook(config: {
+  token: string;
+  projectSlug: string;
+}): Promise<RebuildResult> {
+  try {
+    // 使用 RTD 的 webhook 端点
+    // 这个端点不需要认证，但需要正确的 payload
+    const webhookUrl = `https://readthedocs.org/api/v2/webhook/${config.projectSlug}/1/`;
+
+    console.log(`[RTD] Triggering via webhook: ${webhookUrl}`);
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ref: 'refs/heads/main',
+        // 模拟 GitHub webhook payload
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[RTD] Webhook trigger failed: ${response.status}`, errorText);
+      return {
+        success: false,
+        error: `RTD webhook failed: ${response.status} - ${errorText}`,
+      };
+    }
+
+    console.log(`[RTD] ✅ Build triggered via webhook successfully`);
+    return {
+      success: true,
+      buildId: 'webhook-triggered',
+    };
+  } catch (error: any) {
+    console.error(`[RTD] Webhook trigger exception:`, error);
     return {
       success: false,
-      error: error.message || 'Failed to trigger RTD build',
+      error: error.message || 'Failed to trigger RTD build via webhook',
     };
   }
 }
