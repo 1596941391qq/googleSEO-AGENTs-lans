@@ -60,6 +60,7 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [republishingId, setRepublishingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchArticles();
@@ -98,7 +99,7 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                 published_at: response.data.publishedAt,
                 url_slug: response.data.liveUrl?.split('/').pop(),
                 site_name: response.data.siteName,
-                site_url: response.data.siteUrl,
+                site_url: response.data.liveUrl,
                 platform: response.data.platform
               }
             : a
@@ -121,30 +122,39 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
     }
   };
 
-  const handleUpdate = async (articleId: string, websiteId?: string) => {
+  const handleRepublish = async (articleId: string, websiteId?: string) => {
     try {
-      setUpdatingId(articleId);
+      setRepublishingId(articleId);
 
-      const response = await apiClient.post('/api/articles/update-published', {
+      const response = await apiClient.post('/api/articles/publish', {
         articleId,
-        websiteId
+        websiteId,
+        forceUpdate: true // 标记为强制更新
       });
 
       if (response.success) {
-        // 显示成功提示
-        setCopiedUrl(response.data.articleUrl || 'Updated');
-        setTimeout(() => setCopiedUrl(null), 3000);
+        // Update local state
+        setArticles(prev => prev.map(a =>
+          a.id === articleId
+            ? {
+                ...a,
+                published_at: new Date().toISOString(),
+                site_url: response.data.liveUrl,
+              }
+            : a
+        ));
 
-        // 刷新文章列表
-        await fetchArticles();
+        // 显示成功提示
+        setCopiedUrl('updated');
+        setTimeout(() => setCopiedUrl(null), 3000);
       } else {
-        alert(response.error || (uiLanguage === 'zh' ? '更新失败' : 'Update failed'));
+        alert(response.error || "Republishing failed");
       }
     } catch (error) {
-      console.error("Update error:", error);
-      alert(uiLanguage === 'zh' ? '更新失败，请重试' : 'Failed to update article');
+      console.error("Republish error:", error);
+      alert("Failed to republish article");
     } finally {
-      setUpdatingId(null);
+      setRepublishingId(null);
     }
   };
 
@@ -242,11 +252,24 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
       {/* Copied Toast */}
       {copiedUrl && (
         <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-top-2">
-          <Card className="border-emerald-500 bg-emerald-500/10">
+          <Card className={cn(
+            "border",
+            copiedUrl === 'updated'
+              ? "border-blue-500 bg-blue-500/10"
+              : "border-emerald-500 bg-emerald-500/10"
+          )}>
             <CardContent className="p-3 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-500" />
-              <span className="text-sm text-emerald-500 font-medium">
-                {uiLanguage === 'zh' ? '链接已复制!' : 'Link copied!'}
+              <CheckCircle className={cn(
+                "w-4 h-4",
+                copiedUrl === 'updated' ? "text-blue-500" : "text-emerald-500"
+              )} />
+              <span className={cn(
+                "text-sm font-medium",
+                copiedUrl === 'updated' ? "text-blue-500" : "text-emerald-500"
+              )}>
+                {copiedUrl === 'updated'
+                  ? (uiLanguage === 'zh' ? '文章已更新!' : 'Article updated!')
+                  : (uiLanguage === 'zh' ? '链接已复制!' : 'Link copied!')}
               </span>
             </CardContent>
           </Card>
@@ -284,16 +307,27 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
               const PlatformIcon = platformConfig?.icon || Globe;
               
               return (
-                <Card 
-                  key={article.id} 
+                <Card
+                  key={article.id}
                   className={cn(
-                    "border-none rounded-3xl overflow-hidden transition-all hover:scale-[1.005] group",
+                    "border-none rounded-3xl overflow-hidden transition-all hover:scale-[1.005] group relative",
                     isDarkTheme ? "bg-zinc-900/50 hover:bg-zinc-900" : "bg-white shadow-sm hover:shadow-md"
                   )}
                 >
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-3 flex-1 min-w-0">
+                  {/* 右上角查看图标 - 仅已发布文章显示 */}
+                  {article.status === 'published' && article.site_url && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full opacity-60 hover:opacity-100 transition-opacity"
+                      onClick={() => window.open(article.site_url, '_blank')}
+                      title={uiLanguage === 'zh' ? '在新标签页查看' : 'View in new tab'}
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                    </Button>
+                  )}
+
+                  <CardContent className="p-6">\n                    <div className="flex items-start justify-between gap-4">\n                      <div className="space-y-3 flex-1 min-w-0 pr-8">{/* 添加右侧padding避免与图标重叠 */}
                         {/* Status & Type Badges */}
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge className={cn(
@@ -362,8 +396,8 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                       
                       {/* Actions */}
                       <div className="flex items-center gap-2 shrink-0">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className={cn(
                             "rounded-xl font-bold",
@@ -374,17 +408,25 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                           <Edit3 className="w-4 h-4 mr-2" />
                           {uiLanguage === 'zh' ? '编辑' : 'Edit'}
                         </Button>
-                        
+
                         {article.status === 'published' ? (
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-2">
                             <Button
                               variant="outline"
                               size="sm"
-                              className="rounded-xl border-blue-500/20 text-blue-500 font-bold"
-                              disabled={updatingId === article.id}
-                              onClick={() => handleUpdate(article.id, article.websiteId)}
+                              className="rounded-xl border-emerald-500/20 text-emerald-500 font-bold hover:bg-emerald-500/10"
+                              onClick={() => article.site_url && copyToClipboard(article.site_url)}
                             >
-                              {updatingId === article.id ? (
+                              <Copy className="w-4 h-4 mr-2" />
+                              {uiLanguage === 'zh' ? '复制链接' : 'Copy'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              disabled={republishingId === article.id}
+                              className="rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-bold disabled:opacity-50"
+                              onClick={() => handleRepublish(article.id, article.websiteId)}
+                            >
+                              {republishingId === article.id ? (
                                 <>
                                   <Loader2 className="w-4 h-4 animate-spin mr-2" />
                                   {uiLanguage === 'zh' ? '更新中...' : 'Updating...'}
@@ -396,26 +438,9 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
                                 </>
                               )}
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl border-emerald-500/20 text-emerald-500 font-bold"
-                              onClick={() => article.site_url && copyToClipboard(article.site_url)}
-                            >
-                              <Copy className="w-4 h-4 mr-2" />
-                              {uiLanguage === 'zh' ? '复制链接' : 'Copy'}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="rounded-xl border-emerald-500/20 text-emerald-500 font-bold"
-                              onClick={() => article.site_url && window.open(article.site_url, '_blank')}
-                            >
-                              <ExternalLink className="w-4 h-4" />
-                            </Button>
                           </div>
                         ) : (
-                          <Button 
+                          <Button
                             size="sm"
                             disabled={publishingId === article.id || !article.websiteId}
                             className="rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold disabled:opacity-50"
