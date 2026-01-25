@@ -5,7 +5,7 @@
  * 使用：Deep Dive模式 Step 1-5
  */
 
-import { callGeminiAPI } from '../gemini.js';
+import { callGeminiAPI, callGeminiAPIStream } from '../gemini.js';
 import { fetchSerpResults, fetchSerpResultsBatch, type SerpData } from '../tools/serp-search.js';
 import { getSEOResearcherPrompt, DEFAULT_SERP_ANALYSIS } from '../../../services/prompts/index.js';
 import { KeywordData, TargetLanguage, ProbabilityLevel, SEOStrategyReport, SerpSnippet } from '../types.js';
@@ -317,7 +317,8 @@ export async function analyzeSearchPreferences(
   targetLanguage: TargetLanguage = 'en',
   targetMarket: string = 'global',
   onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  onStream?: (delta: string, fullText: string, isFinal: boolean) => void
 ): Promise<SearchPreferencesResult> {
   try {
     // 构建市场标签
@@ -336,8 +337,7 @@ export async function analyzeSearchPreferences(
     onProgress?.(language === 'zh' ? `🤖 正在分析 ${marketLabel} 市场的搜索引擎偏好...` : `🤖 Analyzing search engine preferences for ${marketLabel} market...`);
 
     // 调用 Gemini API（使用 JSON 模式）
-    const response = await callGeminiAPI(prompt, systemInstruction, {
-
+    const jsonConfig = {
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'object',
@@ -415,7 +415,30 @@ export async function analyzeSearchPreferences(
           ? `⚠️ 搜索引擎偏好分析异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
           : `⚠️ Search preferences analysis error (attempt ${attempt}/3), retrying in ${delay}ms...`);
       }
-    });
+    };
+
+    let response;
+    if (onStream) {
+      let streamedText = '';
+      try {
+        const streamResult = await callGeminiAPIStream(
+          prompt,
+          systemInstruction,
+          jsonConfig,
+          (delta, fullText) => {
+            streamedText = fullText;
+            onStream(delta, fullText, false);
+          }
+        );
+        onStream('', streamedText, true);
+        response = streamResult;
+      } catch (streamError: any) {
+        console.warn('[Agent 2] Streaming search preferences failed, falling back:', streamError?.message || String(streamError));
+        response = await callGeminiAPI(prompt, systemInstruction, jsonConfig);
+      }
+    } else {
+      response = await callGeminiAPI(prompt, systemInstruction, jsonConfig);
+    }
 
     // 提取并解析 JSON - 强制返回JSON格式
     let text = response?.text || '{}';
@@ -471,7 +494,8 @@ export async function analyzeCompetitors(
   targetMarket: string = 'global',
   searchEngine: SearchEngine = 'google',
   onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  onStream?: (delta: string, fullText: string, isFinal: boolean) => void
 ): Promise<CompetitorAnalysisResult> {
   try {
     // 如果没有提供 SERP 数据，则获取
@@ -509,7 +533,7 @@ export async function analyzeCompetitors(
     onProgress?.(language === 'zh' ? `🤖 正在调用 AI 进行深度竞争对手分析...` : `🤖 Calling AI for deep competitor analysis...`);
 
     // 调用 Gemini API（使用 JSON 模式）
-    const response = await callGeminiAPI(prompt, systemInstruction, {
+    const jsonConfig = {
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'object',
@@ -557,7 +581,30 @@ export async function analyzeCompetitors(
           ? `⚠️ AI 竞争对手分析异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
           : `⚠️ AI competitor analysis error (attempt ${attempt}/3), retrying in ${delay}ms...`);
       }
-    });
+    };
+
+    let response;
+    if (onStream) {
+      let streamedText = '';
+      try {
+        const streamResult = await callGeminiAPIStream(
+          prompt,
+          systemInstruction,
+          jsonConfig,
+          (delta, fullText) => {
+            streamedText = fullText;
+            onStream(delta, fullText, false);
+          }
+        );
+        onStream('', streamedText, true);
+        response = streamResult;
+      } catch (streamError: any) {
+        console.warn('[Agent 2] Streaming competitor analysis failed, falling back:', streamError?.message || String(streamError));
+        response = await callGeminiAPI(prompt, systemInstruction, jsonConfig);
+      }
+    } else {
+      response = await callGeminiAPI(prompt, systemInstruction, jsonConfig);
+    }
 
     // 提取并解析 JSON
     let text = response?.text || '{}';
@@ -1777,7 +1824,8 @@ export const generateDeepDiveStrategy = async (
       title?: string;
     };
   },
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  onStream?: (delta: string, fullText: string, isFinal: boolean) => void
 ): Promise<SEOStrategyReport> => {
   const uiLangName = uiLanguage === 'zh' ? 'Chinese' : 'English';
   const targetLangName = getLanguageName(targetLanguage);
@@ -1841,7 +1889,7 @@ export const generateDeepDiveStrategy = async (
   onProgress?.(uiLanguage === 'zh' ? `🤖 正在制定最终的 SEO 内容策略报告...` : `🤖 Generating final SEO content strategy report...`);
 
   try {
-    const response = await callGeminiAPI(prompt, systemInstruction, {
+    const jsonConfig = {
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'object',
@@ -1879,7 +1927,30 @@ export const generateDeepDiveStrategy = async (
           ? `⚠️ 策略报告生成异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
           : `⚠️ Strategy report generation error (attempt ${attempt}/3), retrying in ${delay}ms...`);
       }
-    });
+    };
+
+    let response;
+    if (onStream) {
+      let streamedText = '';
+      try {
+        const streamResult = await callGeminiAPIStream(
+          prompt,
+          systemInstruction,
+          jsonConfig,
+          (delta, fullText) => {
+            streamedText = fullText;
+            onStream(delta, fullText, false);
+          }
+        );
+        onStream('', streamedText, true);
+        response = streamResult;
+      } catch (streamError: any) {
+        console.warn('[Agent 2] Streaming strategy failed, falling back:', streamError?.message || String(streamError));
+        response = await callGeminiAPI(prompt, systemInstruction, jsonConfig);
+      }
+    } else {
+      response = await callGeminiAPI(prompt, systemInstruction, jsonConfig);
+    }
 
     // 提取并解析 JSON
     let text = response?.text || '{}';

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MermaidBlock } from '../ui/MermaidBlock';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { 
@@ -149,6 +150,39 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
     setIsSaving(false);
   };
 
+  const buildMarkdownComponents = () => {
+    const isMermaidCodeBlock = (className?: string) => {
+      if (!className) return false;
+      return className.split(' ').some((entry) => entry === 'language-mermaid');
+    };
+
+    const isMermaidElement = (children: React.ReactNode) => {
+      const [firstChild] = React.Children.toArray(children);
+      return React.isValidElement(firstChild) && firstChild.type === MermaidBlock;
+    };
+
+    return {
+      code: ({ className, children, ...props }: any) => {
+        const isInline = !className;
+        const codeText = String(children ?? '').replace(/\n$/, '');
+
+        if (!isInline && isMermaidCodeBlock(className)) {
+          return (
+            <MermaidBlock code={codeText} isDarkTheme={isDarkTheme} />
+          );
+        }
+
+        return (
+          <code className={className} {...props}>
+            {children}
+          </code>
+        );
+      },
+      pre: ({ children }: any) =>
+        isMermaidElement(children) ? <>{children}</> : <pre>{children}</pre>,
+    };
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
@@ -292,7 +326,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
                 "max-w-3xl mx-auto prose prose-sm md:prose-base lg:prose-lg",
                 isDarkTheme ? "prose-invert" : ""
               )}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={buildMarkdownComponents()}
+                >
                   {content}
                 </ReactMarkdown>
               </div>

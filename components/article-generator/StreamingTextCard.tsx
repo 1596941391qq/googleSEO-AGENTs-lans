@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MermaidBlock } from '../ui/MermaidBlock';
 import { PenTool, Loader2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -9,6 +10,8 @@ export interface StreamingTextCardProps {
   markdown?: string; // 可选的 Markdown 内容
   speed?: number; // characters per interval
   interval?: number; // milliseconds
+  live?: boolean; // 是否为实时流式更新
+  isComplete?: boolean; // 实时流式是否完成
   onComplete?: () => void;
   uiLanguage?: 'en' | 'zh';
   className?: string;
@@ -19,12 +22,14 @@ export const StreamingTextCard: React.FC<StreamingTextCardProps> = ({
   markdown,
   speed = 3,
   interval = 50,
+  live = false,
+  isComplete = false,
   onComplete,
   uiLanguage = 'en',
   className,
 }) => {
   const [displayedContent, setDisplayedContent] = useState('');
-  const [isComplete, setIsComplete] = useState(false);
+  const [isStreamComplete, setIsStreamComplete] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   // 检查是否使用 Markdown 模式
@@ -33,6 +38,18 @@ export const StreamingTextCard: React.FC<StreamingTextCardProps> = ({
 
   useEffect(() => {
     if (!finalContent) return;
+
+    if (live) {
+      setDisplayedContent(finalContent);
+      setIsStreamComplete(!!isComplete);
+      if (contentRef.current) {
+        contentRef.current.scrollTop = contentRef.current.scrollHeight;
+      }
+      if (isComplete) {
+        onComplete?.();
+      }
+      return;
+    }
 
     let currentIndex = 0;
     const timer = setInterval(() => {
@@ -47,19 +64,51 @@ export const StreamingTextCard: React.FC<StreamingTextCardProps> = ({
         }
       } else {
         clearInterval(timer);
-        setIsComplete(true);
+        setIsStreamComplete(true);
         onComplete?.();
       }
     }, interval);
 
     return () => clearInterval(timer);
-  }, [finalContent, speed, interval, onComplete]);
+  }, [finalContent, speed, interval, onComplete, live, isComplete]);
 
-  // Reset when content changes
+  // Reset when content changes in non-live mode
   useEffect(() => {
+    if (live) return;
     setDisplayedContent('');
-    setIsComplete(false);
-  }, [finalContent]);
+    setIsStreamComplete(false);
+  }, [finalContent, live]);
+
+  const buildMarkdownComponents = () => {
+    const isMermaidCodeBlock = (className?: string) => {
+      if (!className) return false;
+      return className.split(' ').some((entry) => entry === 'language-mermaid');
+    };
+
+    const isMermaidElement = (children: React.ReactNode) => {
+      const [firstChild] = React.Children.toArray(children);
+      return React.isValidElement(firstChild) && firstChild.type === MermaidBlock;
+    };
+
+    return {
+      code: ({ className, children, ...props }: any) => {
+        const isInline = !className;
+        const codeText = String(children ?? '').replace(/\n$/, '');
+
+        if (!isStreamComplete || isInline || !isMermaidCodeBlock(className)) {
+          return (
+            <code className={className} {...props}>
+              {children}
+            </code>
+          );
+        }
+
+        return <MermaidBlock code={codeText} isDarkTheme />;
+      },
+      pre: ({ children }: any) =>
+        isMermaidElement(children) ? <>{children}</> : <pre>{children}</pre>,
+    };
+  };
 
   return (
     <div className={cn("bg-amber-500/5 border border-amber-500/20 rounded-lg p-4 space-y-3", className)}>
@@ -69,7 +118,7 @@ export const StreamingTextCard: React.FC<StreamingTextCardProps> = ({
         <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
           {uiLanguage === 'zh' ? '内容生成中' : 'Writing Content'}
         </span>
-        {!isComplete && (
+        {!isStreamComplete && (
           <Loader2 className="text-amber-500 animate-spin" size={14} />
         )}
       </div>
@@ -86,13 +135,16 @@ export const StreamingTextCard: React.FC<StreamingTextCardProps> = ({
         }}
       >
         {useMarkdown ? (
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={buildMarkdownComponents()}
+          >
             {displayedContent}
           </ReactMarkdown>
         ) : (
           displayedContent
         )}
-        {!isComplete && (
+        {!isStreamComplete && (
           <span className="inline-block w-2 h-4 bg-amber-500 ml-1 animate-pulse" />
         )}
       </div>

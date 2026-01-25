@@ -5,7 +5,7 @@
  * 使用：Deep Dive模式 Step 6
  */
 
-import { callGeminiAPI } from '../gemini.js';
+import { callGeminiAPI, callGeminiAPIStream } from '../gemini.js';
 import { getContentWriterPrompt } from '../../../services/prompts/index.js';
 import { SEOStrategyReport, TargetLanguage } from '../types.js';
 import { SearchPreferencesResult, CompetitorAnalysisResult } from './agent-2-seo-researcher.js';
@@ -397,7 +397,8 @@ export async function generateContent(
   processedPromotedWebsites?: ProcessedPromotedWebsite[],
   onSearchResults?: (results: Array<{ title: string; url: string; snippet?: string }>) => void,
   onProgress?: (message: string) => void,
-  availableImages?: AvailableImage[]  // 新增：可用图片资源，用于在文章中插入
+  availableImages?: AvailableImage[],  // 新增：可用图片资源，用于在文章中插入
+  onStream?: (delta: string, fullText: string, isFinal: boolean) => void
 ): Promise<ContentGenerationResult> {
   try {
     // 获取 Content Writer prompt - 使用 targetLanguage 来确定生成内容的语言
@@ -583,24 +584,58 @@ Please weave these sites in naturally based on the summaries above, without copy
     let response;
     try {
       onProgress?.(contentLanguage === 'zh' ? `✍️ AI 专家正在撰写深度内容，请稍候（这通常需要 30-60 秒）...` : `✍️ AI expert is drafting deep content, please wait (this usually takes 30-60 seconds)...`);
-      
-      response = await callGeminiAPI(prompt, systemInstruction, {
-        // 不设置 maxOutputTokens 限制，让 API 使用模型支持的最大值
-        // 这样可以确保长文章不会被截断
-        onRetry: (attempt, error, delay) => {
-          onProgress?.(contentLanguage === 'zh'
-            ? `⚠️ 内容撰写连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
-            : `⚠️ Content drafting connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+
+      if (onStream) {
+        let streamedText = '';
+        try {
+          const streamResult = await callGeminiAPIStream(
+            prompt,
+            systemInstruction,
+            {
+              // 不设置 maxOutputTokens 限制，让 API 使用模型支持的最大值
+              onRetry: (attempt, error, delay) => {
+                onProgress?.(contentLanguage === 'zh'
+                  ? `⚠️ 内容撰写连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+                  : `⚠️ Content drafting connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+              }
+            },
+            (delta, fullText) => {
+              streamedText = fullText;
+              onStream(delta, fullText, false);
+            }
+          );
+          onStream('', streamedText, true);
+          response = streamResult;
+        } catch (streamError: any) {
+          console.warn('[Content Writer] Streaming failed, falling back to non-streaming:', streamError?.message || String(streamError));
+          response = await callGeminiAPI(prompt, systemInstruction, {
+            // 不设置 maxOutputTokens 限制，让 API 使用模型支持的最大值
+            onRetry: (attempt, error, delay) => {
+              onProgress?.(contentLanguage === 'zh'
+                ? `⚠️ 内容撰写连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+                : `⚠️ Content drafting connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+            }
+          });
         }
-      });
-      
+      } else {
+        response = await callGeminiAPI(prompt, systemInstruction, {
+          // 不设置 maxOutputTokens 限制，让 API 使用模型支持的最大值
+          // 这样可以确保长文章不会被截断
+          onRetry: (attempt, error, delay) => {
+            onProgress?.(contentLanguage === 'zh'
+              ? `⚠️ 内容撰写连接异常 (尝试 ${attempt}/3)，正在 ${delay}ms 后重试...`
+              : `⚠️ Content drafting connection error (attempt ${attempt}/3), retrying in ${delay}ms...`);
+          }
+        });
+      }
+
       // 检查是否被截断
       if (response.finishReason === 'LENGTH' || response.finishReason === 'MAX_TOKENS') {
         onProgress?.(contentLanguage === 'zh' 
           ? `⚠️ 警告: AI 输出被截断，可能影响文章完整性` 
           : `⚠️ Warning: AI output was truncated, article may be incomplete`);
       }
-      
+
       onProgress?.(contentLanguage === 'zh' ? `✅ 内容初稿撰写完成` : `✅ Content draft completed`);
     } catch (apiError: any) {
       console.error('[Content Writer] API call failed:', apiError.message);

@@ -78,9 +78,16 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     onEvent
   } = options;
 
-  const emit = (agentId: AgentStreamEvent['agentId'], type: AgentStreamEvent['type'], message?: string, cardType?: AgentStreamEvent['cardType'], data?: any) => {
+  const emit = (
+    agentId: AgentStreamEvent['agentId'],
+    type: AgentStreamEvent['type'],
+    message?: string,
+    cardType?: AgentStreamEvent['cardType'],
+    data?: any,
+    eventId?: string
+  ) => {
     onEvent({
-      id: Math.random().toString(36).substring(7),
+      id: eventId || Math.random().toString(36).substring(7),
       agentId,
       type,
       timestamp: Date.now(),
@@ -169,12 +176,37 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
 
     let searchPrefs;
     try {
-      searchPrefs = await analyzeSearchPreferences(keyword, uiLanguage, targetLanguage, targetMarket, (searchResults) => {
+      const searchPrefsStreamId = `researcher-searchprefs-${Date.now()}`;
+      emit('researcher', 'card', undefined, 'streaming-text', {
+        content: '',
+        speed: 3,
+        interval: 50,
+        live: true,
+        isComplete: false
+      }, searchPrefsStreamId);
+
+      searchPrefs = await analyzeSearchPreferences(
+        keyword,
+        uiLanguage,
+        targetLanguage,
+        targetMarket,
+        (searchResults) => {
         // Emit Google search results if available
         if (searchResults && searchResults.length > 0) {
           emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
         }
-      }, (msg) => emit('researcher', 'log', msg));
+      },
+        (msg) => emit('researcher', 'log', msg),
+        (delta, fullText, isFinal) => {
+          emit('researcher', 'card', undefined, 'streaming-text', {
+            content: `\`\`\`json\n${fullText}\n\`\`\``,
+            speed: 3,
+            interval: 50,
+            live: true,
+            isComplete: isFinal
+          }, searchPrefsStreamId);
+        }
+      );
     } catch (searchPrefsError: any) {
       console.error('[VisualArticle] Failed to analyze search preferences:', searchPrefsError);
       searchPrefs = undefined;
@@ -193,12 +225,39 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
 
     let competitorAnalysis;
     try {
-      competitorAnalysis = await analyzeCompetitors(keyword, serpData, uiLanguage, targetLanguage, targetMarket, 'google', (searchResults) => {
+      const competitorStreamId = `researcher-competitors-${Date.now()}`;
+      emit('researcher', 'card', undefined, 'streaming-text', {
+        content: '',
+        speed: 3,
+        interval: 50,
+        live: true,
+        isComplete: false
+      }, competitorStreamId);
+
+      competitorAnalysis = await analyzeCompetitors(
+        keyword,
+        serpData,
+        uiLanguage,
+        targetLanguage,
+        targetMarket,
+        'google',
+        (searchResults) => {
         // Emit Google search results if available
         if (searchResults && searchResults.length > 0) {
           emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
         }
-      }, (msg) => emit('researcher', 'log', msg));
+      },
+        (msg) => emit('researcher', 'log', msg),
+        (delta, fullText, isFinal) => {
+          emit('researcher', 'card', undefined, 'streaming-text', {
+            content: `\`\`\`json\n${fullText}\n\`\`\``,
+            speed: 3,
+            interval: 50,
+            live: true,
+            isComplete: isFinal
+          }, competitorStreamId);
+        }
+      );
     } catch (competitorError: any) {
       console.error('[VisualArticle] Failed to analyze competitors:', competitorError);
       competitorAnalysis = undefined;
@@ -261,6 +320,15 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     emit('strategist', 'log', uiLanguage === 'zh' ? '正在生成综合SEO策略报告...' : 'Generating comprehensive SEO strategy report...');
     let strategyReport;
     try {
+      const strategyStreamId = `strategist-strategy-${Date.now()}`;
+      emit('strategist', 'card', undefined, 'streaming-text', {
+        content: '',
+        speed: 3,
+        interval: 50,
+        live: true,
+        isComplete: false
+      }, strategyStreamId);
+
       strategyReport = await generateDeepDiveStrategy(
         keywordData,
         uiLanguage,
@@ -270,7 +338,16 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         competitorAnalysis,
         targetMarket,
         reference,
-        (msg) => emit('strategist', 'log', msg)
+        (msg) => emit('strategist', 'log', msg),
+        (delta, fullText, isFinal) => {
+          emit('strategist', 'card', undefined, 'streaming-text', {
+            content: `\`\`\`json\n${fullText}\n\`\`\``,
+            speed: 3,
+            interval: 50,
+            live: true,
+            isComplete: isFinal
+          }, strategyStreamId);
+        }
       );
     } catch (strategyError: any) {
       console.error('[VisualArticle] Failed to generate strategy report:', strategyError);
@@ -496,11 +573,14 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     emit('writer', 'log', uiLanguage === 'zh' ? `正在为 ${targetMarket === 'global' ? '全球' : (targetMarket || 'global').toUpperCase()} 市场撰写包含视觉元素的精细内容...` : `Drafting content with integrated visuals for ${targetMarket === 'global' ? 'Global' : (targetMarket || 'global').toUpperCase()} market...`);
 
     // Emit streaming text card
+    const streamingEventId = `writer-stream-${Date.now()}`;
     emit('writer', 'card', undefined, 'streaming-text', {
       content: '',
       speed: 3,
-      interval: 50
-    });
+      interval: 50,
+      live: true,
+      isComplete: false
+    }, streamingEventId);
 
     // 将生成的图片转换为写手可用的格式
     const availableImagesForWriter: AvailableImage[] = generatedImages.map((img: any) => ({
@@ -549,7 +629,16 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
           }
         },
         (msg) => emit('writer', 'log', msg),
-        availableImagesForWriter  // 传递可用图片给写手
+        availableImagesForWriter,  // 传递可用图片给写手
+        (delta, fullText, isFinal) => {
+          emit('writer', 'card', undefined, 'streaming-text', {
+            content: fullText,
+            speed: 3,
+            interval: 50,
+            live: true,
+            isComplete: isFinal
+          }, streamingEventId);
+        }
       );
       // 内容生成成功后的详细日志
       console.log('[VisualArticle] Content generation successful:', {
@@ -587,8 +676,10 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
       emit('writer', 'card', undefined, 'streaming-text', {
         content: finalContent,
         speed: 3,
-        interval: 50
-      });
+        interval: 50,
+        live: true,
+        isComplete: true
+      }, streamingEventId);
     } else {
       emit('writer', 'log', uiLanguage === 'zh' ? '⚠️ 警告: 未生成有效内容' : '⚠️ Warning: No valid content generated');
     }

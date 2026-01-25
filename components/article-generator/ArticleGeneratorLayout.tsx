@@ -586,7 +586,18 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
 
             if (json.type === "event") {
               const event = json.data as AgentStreamEvent;
-              currentEvents = [...currentEvents, event];
+              const existingIndex = currentEvents.findIndex(
+                (existing) => existing.id === event.id
+              );
+              if (existingIndex >= 0) {
+                currentEvents = [
+                  ...currentEvents.slice(0, existingIndex),
+                  event,
+                  ...currentEvents.slice(existingIndex + 1),
+                ];
+              } else {
+                currentEvents = [...currentEvents, event];
+              }
 
               // Update progress and stage based on agent
               let newProgress = state.progress || 0;

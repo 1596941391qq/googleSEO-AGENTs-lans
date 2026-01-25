@@ -20,6 +20,7 @@ interface ProxyConfig {
   baseUrl: string;
   // URL 路径模板，{model} 会被替换为模型名称
   urlTemplate: string;
+  streamUrlTemplate: string;
   // 获取 API Key 的方式
   getApiKey: () => string;
 }
@@ -95,15 +96,18 @@ const getProxyConfig = (): ProxyConfig & { provider: ProxyProvider } => {
   // 从原始配置获取（硬编码，确保不会出错）
   let baseUrl: string;
   let urlTemplate: string;
+  let streamUrlTemplate: string;
   let getApiKey: () => string;
 
   if (provider === 'tuzi') {
     baseUrl = 'https://api.tu-zi.com';
     urlTemplate = '/v1beta/models/{model}:generateContent';
+    streamUrlTemplate = '/v1beta/models/{model}:streamGenerateContent';
     getApiKey = () => process.env.GEMINI_TUZI_API_KEY || process.env.GEMINI_API_KEY || '';
   } else {
     baseUrl = 'https://api.302.ai';
     urlTemplate = '/v1/v1beta/models/{model}:generateContent';
+    streamUrlTemplate = '/v1/v1beta/models/{model}:streamGenerateContent';
     getApiKey = () => process.env.GEMINI_API_KEY || '';
   }
 
@@ -117,6 +121,7 @@ const getProxyConfig = (): ProxyConfig & { provider: ProxyProvider } => {
   const config: ProxyConfig = {
     baseUrl,
     urlTemplate,
+    streamUrlTemplate,
     getApiKey,
   };
 
@@ -127,6 +132,13 @@ const getProxyConfig = (): ProxyConfig & { provider: ProxyProvider } => {
 const buildApiUrl = (model: string): string => {
   const config = getProxyConfig();
   const url = config.baseUrl + config.urlTemplate.replace('{model}', model);
+  return url;
+};
+
+// 构建 Stream API URL
+const buildStreamApiUrl = (model: string): string => {
+  const config = getProxyConfig();
+  const url = config.baseUrl + config.streamUrlTemplate.replace('{model}', model);
   return url;
 };
 
@@ -255,6 +267,150 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
   }
 
   throw lastError;
+}
+
+/**
+ * Call Gemini API with streaming response (SSE)
+ */
+export async function callGeminiAPIStream(
+  prompt: string,
+  systemInstruction: string | undefined,
+  config: GeminiConfig | undefined,
+  onDelta: (delta: string, fullText: string) => void
+) {
+  const apiKey = getApiKey();
+  const proxyInfo = getCurrentProxyInfo();
+
+  if (!apiKey || apiKey.trim() === '') {
+    console.error(`API Key is not configured for proxy provider: ${proxyInfo.provider}`);
+    throw new Error(`API Key is not configured for ${proxyInfo.provider}. Please set GEMINI_API_KEY${proxyInfo.provider === 'tuzi' ? ' or GEMINI_TUZI_API_KEY' : ''} in environment variables.`);
+  }
+
+  const modelName = config?.model || getCurrentModel();
+  const url = buildStreamApiUrl(modelName);
+
+  const contents: any[] = [];
+  if (systemInstruction) {
+    contents.push({
+      role: 'user',
+      parts: [{ text: systemInstruction }]
+    });
+    contents.push({
+      role: 'model',
+      parts: [{ text: 'Understood. I will follow these instructions.' }]
+    });
+  }
+  contents.push({
+    role: 'user',
+    parts: [{ text: prompt }]
+  });
+
+  const requestBody: any = {
+    contents: contents,
+    generationConfig: {
+      maxOutputTokens: config?.maxOutputTokens ?? 65536,
+      reasoningMode: config?.reasoningMode ?? 'none'
+    }
+  };
+
+  if (config?.enableGoogleSearch) {
+    requestBody.tools = [
+      {
+        googleSearchRetrieval: {
+          disableAttribution: true
+        }
+      }
+    ];
+  }
+
+  if (config?.responseMimeType === 'application/json') {
+    requestBody.generationConfig.responseMimeType = 'application/json';
+    if (config?.responseSchema) {
+      requestBody.generationConfig.responseSchema = config.responseSchema;
+    }
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 240000);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
+      body: JSON.stringify(requestBody),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('API Stream Response Error:', response.status, errorText);
+      throw new Error(`API Stream Request Failed: ${response.status} ${errorText}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No reader available for streaming response');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullText = '';
+    let finishReason: string | undefined;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data:')) continue;
+
+        const payload = trimmed.replace(/^data:\s*/, '');
+        if (!payload || payload === '[DONE]') continue;
+
+        try {
+          const json: any = JSON.parse(payload);
+          const candidate = json.candidates?.[0];
+          const delta = candidate?.content?.parts?.[0]?.text || '';
+          if (delta) {
+            fullText += delta;
+            onDelta(delta, fullText);
+          }
+          if (candidate?.finishReason || candidate?.finish_reason) {
+            finishReason = candidate.finishReason || candidate.finish_reason;
+          }
+        } catch (e) {
+          console.warn('[Gemini Stream] Failed to parse chunk:', e);
+        }
+      }
+    }
+
+    clearTimeout(timeoutId);
+
+    if (!fullText) {
+      throw new Error('No text content found in streaming response');
+    }
+
+    return {
+      text: fullText,
+      raw: undefined,
+      finishReason,
+    };
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('API Stream Request Timeout (300s)');
+    }
+    console.error('Call Gemini API Stream Failed:', error);
+    throw error;
+  }
 }
 
 /**

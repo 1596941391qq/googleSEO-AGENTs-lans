@@ -2554,7 +2554,10 @@ const CompetitorAnalysisCard: React.FC<{
               isDarkTheme ? "text-gray-300" : "text-gray-700"
             )}
           >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={buildMarkdownComponents(isDarkTheme)}
+            >
               {data.markdown}
             </ReactMarkdown>
           </div>
@@ -2828,6 +2831,8 @@ export const StreamEventDetails: React.FC<{
             markdown={event.data.markdown}
             speed={event.data.speed}
             interval={event.data.interval}
+            live={event.data.live}
+            isComplete={event.data.isComplete}
             onComplete={event.data.onComplete}
             uiLanguage={uiLanguage}
           />
