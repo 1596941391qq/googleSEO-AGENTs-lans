@@ -57,6 +57,7 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [publishingId, setPublishingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
   const [republishingId, setRepublishingId] = useState<string | null>(null);
