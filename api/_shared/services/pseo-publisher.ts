@@ -153,7 +153,20 @@ export async function publishArticle(
 
     // 4. 推送文章到 GitHub
     console.log(`[PSEO Publisher] Pushing article to GitHub...`);
+    console.log(`[PSEO Publisher] Article title: "${article.title}"`);
+    console.log(`[PSEO Publisher] Article content length: ${article.content?.length || 0} characters`);
+
     const slug = generateSlug(article.keyword, article.urlSlug);
+    console.log(`[PSEO Publisher] Generated slug: "${slug}"`);
+
+    // 验证文章内容不为空
+    if (!article.content || article.content.trim().length === 0) {
+      console.error(`[PSEO Publisher] ❌ Article content is empty!`);
+      return {
+        success: false,
+        error: 'Article content is empty. Cannot publish empty content.',
+      };
+    }
 
     // Check if we should use HTML (Assuming all commercial/Pure HTML sites need this, or force it for now based on user request)
     // For this specific user verification, I will enable HTML.
@@ -163,9 +176,10 @@ export async function publishArticle(
     let extension: string = '.md';
 
     if (useHtml) {
+      console.log(`[PSEO Publisher] Converting Markdown to HTML...`);
       const { convertMarkdownToHtml } = await import('../utils/markdown-converter.js');
       // generateArticleMarkdown returns content with frontmatter, we need raw content for converter?
-      // Actually generateArticleMarkdown adds frontmatter. 
+      // Actually generateArticleMarkdown adds frontmatter.
       // We should convert the RAW article.content.
       // We also need to constructing the HTML.
       finalContent = convertMarkdownToHtml(article.content, article.title, {
@@ -173,6 +187,16 @@ export async function publishArticle(
         keywords: article.keyword
       });
       extension = '.html';
+
+      // 验证 HTML 转换结果
+      if (!finalContent || finalContent.trim().length === 0) {
+        console.error(`[PSEO Publisher] ❌ HTML conversion failed - result is empty!`);
+        return {
+          success: false,
+          error: 'HTML conversion failed. Converted content is empty.',
+        };
+      }
+      console.log(`[PSEO Publisher] HTML conversion successful. Length: ${finalContent.length} characters`);
     } else {
       finalContent = generateArticleMarkdown(article);
       extension = '.md';
@@ -190,11 +214,15 @@ export async function publishArticle(
     });
 
     if (!pushResult.success) {
+      console.error(`[PSEO Publisher] ❌ Failed to push article to GitHub: ${pushResult.error}`);
       return {
         success: false,
         error: pushResult.error || 'Failed to push article to GitHub',
       };
     }
+
+    console.log(`[PSEO Publisher] ✅ Article pushed to GitHub successfully`);
+    console.log(`[PSEO Publisher] Article path: ${pushResult.articlePath}`);
 
     // 5. 更新使用计数
     await incrementSiteUsage(site.id);
