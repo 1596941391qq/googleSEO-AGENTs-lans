@@ -48,6 +48,7 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
     language: [],
     projectIds: [],
     status: [],
+    favorited: null, // null = all, true = favorited only, false = not favorited
   });
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     field: 'created_at',
@@ -59,9 +60,44 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
     totalItems: 0,
     totalPages: 0,
   });
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Array<{ id: string; name: string; keyword_count: number }>>([]);
+
+  // Load favorited keywords from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('keyword_favorites');
+      if (stored) {
+        const favoriteArray = JSON.parse(stored);
+        setFavoritedIds(new Set(favoriteArray));
+      }
+    } catch (error) {
+      console.error('Failed to load favorites:', error);
+    }
+  }, []);
+
+  // Save favorited keywords to localStorage
+  const saveFavorites = (favorites: Set<string>) => {
+    try {
+      localStorage.setItem('keyword_favorites', JSON.stringify(Array.from(favorites)));
+    } catch (error) {
+      console.error('Failed to save favorites:', error);
+    }
+  };
+
+  const handleToggleFavorite = (id: string) => {
+    setFavoritedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      saveFavorites(next);
+      return next;
+    });
+  };
 
   // Fetch all keywords and projects
   const fetchData = async () => {
@@ -144,6 +180,15 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
     // Apply project filter
     if (filters.projectIds.length > 0) {
       result = result.filter(k => k.project_id && filters.projectIds.includes(k.project_id));
+    }
+
+    // Apply favorited filter
+    if (filters.favorited !== null) {
+      if (filters.favorited === true) {
+        result = result.filter(k => favoritedIds.has(k.id));
+      } else {
+        result = result.filter(k => !favoritedIds.has(k.id));
+      }
     }
 
     // Apply sorting

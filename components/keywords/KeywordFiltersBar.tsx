@@ -3,7 +3,7 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { cn } from '../../lib/utils';
-import { Search, RefreshCw, Download, Trash2, Filter } from 'lucide-react';
+import { Search, RefreshCw, Download, Filter, Star } from 'lucide-react';
 import { ProbabilityLevel } from '../../types';
 
 export interface KeywordFilters {
@@ -13,6 +13,7 @@ export interface KeywordFilters {
   language: string[];
   projectIds: string[];
   status: ('pending' | 'generated' | 'published')[];
+  favorited: boolean | null; // null = all, true = favorited only, false = not favorited
 }
 
 interface KeywordFiltersBarProps {
@@ -20,8 +21,6 @@ interface KeywordFiltersBarProps {
   onFiltersChange: (filters: KeywordFilters) => void;
   onRefresh: () => void;
   onExport: () => void;
-  onBatchDelete: () => void;
-  selectedCount: number;
   isDarkTheme: boolean;
   uiLanguage: 'en' | 'zh';
   projects: Array<{ id: string; name: string; keyword_count: number }>;
@@ -32,8 +31,6 @@ export const KeywordFiltersBar: React.FC<KeywordFiltersBarProps> = ({
   onFiltersChange,
   onRefresh,
   onExport,
-  onBatchDelete,
-  selectedCount,
   isDarkTheme,
   uiLanguage,
   projects,
@@ -125,6 +122,24 @@ export const KeywordFiltersBar: React.FC<KeywordFiltersBarProps> = ({
             ))}
           </SelectContent>
         </Select>
+
+        {/* Favorited Filter */}
+        <Select 
+          value={filters.favorited === true ? 'favorited' : filters.favorited === false ? 'not-favorited' : 'all'} 
+          onValueChange={(value) => {
+            const favoritedValue = value === 'favorited' ? true : value === 'not-favorited' ? false : null;
+            onFiltersChange({ ...filters, favorited: favoritedValue });
+          }}
+        >
+          <SelectTrigger className={cn('w-full lg:w-[180px] font-medium', isDarkTheme ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-gray-200')}>
+            <SelectValue placeholder={uiLanguage === 'zh' ? '收藏' : 'Favorites'} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{uiLanguage === 'zh' ? '全部' : 'All'}</SelectItem>
+            <SelectItem value="favorited">{uiLanguage === 'zh' ? '已收藏' : 'Favorited'}</SelectItem>
+            <SelectItem value="not-favorited">{uiLanguage === 'zh' ? '未收藏' : 'Not Favorited'}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Action Buttons */}
@@ -148,18 +163,6 @@ export const KeywordFiltersBar: React.FC<KeywordFiltersBarProps> = ({
           <Download className="w-4 h-4 mr-2" />
           {uiLanguage === 'zh' ? '导出' : 'Export'}
         </Button>
-
-        {selectedCount > 0 && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onBatchDelete}
-            className={cn('font-medium text-red-500 border-red-500/20 hover:bg-red-500/10')}
-          >
-            <Trash2 className="w-4 h-4 mr-2" />
-            {uiLanguage === 'zh' ? `删除 (${selectedCount})` : `Delete (${selectedCount})`}
-          </Button>
-        )}
       </div>
     </div>
   );

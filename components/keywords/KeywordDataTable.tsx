@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { ArrowUpDown, ArrowUp, ArrowDown, FileText, Eye, Sparkles, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, FileText, Eye, Sparkles, ChevronDown, ChevronUp, ExternalLink, Star } from 'lucide-react';
 import { KeywordWithStatus, ProbabilityLevel } from '../../types';
 
 export interface SortConfig {
@@ -12,9 +12,8 @@ export interface SortConfig {
 
 interface KeywordDataTableProps {
   keywords: KeywordWithStatus[];
-  selectedIds: string[];
-  onSelectAll: (checked: boolean) => void;
-  onSelectOne: (id: string, checked: boolean) => void;
+  favoritedIds: Set<string>;
+  onToggleFavorite: (id: string) => void;
   onSort: (field: SortConfig['field']) => void;
   sortConfig: SortConfig;
   onGenerate: (keyword: KeywordWithStatus) => void;
@@ -25,9 +24,8 @@ interface KeywordDataTableProps {
 
 export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
   keywords,
-  selectedIds,
-  onSelectAll,
-  onSelectOne,
+  favoritedIds,
+  onToggleFavorite,
   onSort,
   sortConfig,
   onGenerate,
@@ -36,8 +34,6 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
   uiLanguage,
 }) => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
-  const allSelected = keywords.length > 0 && selectedIds.length === keywords.length;
-  const someSelected = selectedIds.length > 0 && selectedIds.length < keywords.length;
 
   const toggleExpand = (id: string) => {
     setExpandedRows(prev => {
@@ -134,15 +130,7 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
             'border-b text-[10px] font-bold uppercase tracking-wider',
             isDarkTheme ? 'border-zinc-800 text-zinc-500' : 'border-gray-200 text-gray-500'
           )}>
-            <th className="p-2 text-left w-10">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                ref={(el) => el && (el.indeterminate = someSelected)}
-                onChange={(e) => onSelectAll(e.target.checked)}
-                className="w-4 h-4 rounded border-zinc-700 bg-zinc-900"
-              />
-            </th>
+            <th className="p-2 text-center w-10">{uiLanguage === 'zh' ? '收藏' : '⭐'}</th>
             <th className="p-2 text-left">
               <button
                 onClick={() => onSort('keyword')}
@@ -199,15 +187,22 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                     isHighProbability && 'border-l-4 border-l-emerald-500'
                   )}
                 >
-                  <td className="p-2">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={(e) => onSelectOne(keyword.id, e.target.checked)}
-                      className="w-4 h-4 rounded border-zinc-700 bg-zinc-900"
-                    />
-                  </td>
-                  <td className={cn('p-2 font-medium text-xs', isDarkTheme ? 'text-white' : 'text-gray-900')}>
+                <td className="p-2 text-center">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => onToggleFavorite(keyword.id)}
+                    className={cn(
+                      'h-6 w-6 p-0',
+                      favoritedIds.has(keyword.id)
+                        ? (isDarkTheme ? 'text-yellow-400 hover:text-yellow-300' : 'text-yellow-600 hover:text-yellow-700')
+                        : (isDarkTheme ? 'text-zinc-500 hover:text-yellow-400' : 'text-gray-400 hover:text-yellow-500')
+                    )}
+                  >
+                    <Star className={cn('w-4 h-4', favoritedIds.has(keyword.id) && 'fill-current')} />
+                  </Button>
+                </td>
+                <td className={cn('p-2 font-medium text-xs', isDarkTheme ? 'text-white' : 'text-gray-900')}>
                     <div className="max-w-[200px] truncate" title={keyword.keyword}>
                       {keyword.keyword}
                     </div>
