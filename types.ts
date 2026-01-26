@@ -675,3 +675,27 @@ export interface AgentStreamEvent {
   cardType?: 'serp' | 'data' | 'outline' | 'streaming-text' | 'image-gen' | 'competitor-analysis' | 'search-preferences' | 'google-search-results' | 'firecrawl-result' | 'dataforseo-competitors' | 'dataforseo-keywords' | 'website-audit-report' | 'strategy-keywords-result' | 'keywords-extracted' | 'quality-review' | 'final-article';
   data?: any;
 }
+
+/** Website builder (SEO landing) – section type */
+export type WebsiteSectionType =
+  | 'hero'
+  | 'features'
+  | 'content'
+  | 'testimonials'
+  | 'faq'
+  | 'cta';
+
+/** Website builder – theme (matches SeoComponents.Theme) */
+export type WebsiteTheme = 'blue' | 'green' | 'purple' | 'orange' | 'red';
+
+/** Website builder – single section */
+export interface WebsiteSection {
+  type: WebsiteSectionType;
+  props: Record<string, unknown>;
+}
+
+/** Website builder – full page data */
+export interface WebsiteData {
+  theme: WebsiteTheme;
+  sections: WebsiteSection[];
+}

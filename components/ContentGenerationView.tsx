@@ -26,6 +26,7 @@ import {
   X,
   Settings,
   RefreshCw,
+  Search,
 } from "lucide-react";
 import { driver } from "driver.js";
 import "driver.js/dist/driver.css";
@@ -52,6 +53,12 @@ import { KeywordData } from "../types";
 // 定义本地类型
 import { KeywordManagerDashboard } from "./keywords/KeywordManagerDashboard";
 import { RichTextEditor } from "./projects/RichTextEditor";
+import {
+  PublishArticleTable,
+  PublishArticleDrawer,
+  BatchActions,
+} from "./website-articles";
+import type { PublishArticle } from "./website-articles";
 
 interface WebsiteBinding {
   id: string;
@@ -1042,6 +1049,9 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const [buildingMessages, setBuildingMessages] = React.useState<string[]>([]);
   const buildingLogRef = React.useRef<HTMLDivElement>(null);
   const platform = "platform" as const;
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [drawerArticle, setDrawerArticle] = React.useState<PublishArticle | null>(null);
+  const [searchQuery, setSearchQuery] = React.useState("");
 
   React.useEffect(() => {
     if (!buildingOverlay) {
@@ -1222,6 +1232,18 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
     };
   }, [loadArticles]);
 
+  // Move useMemo before early returns to follow Rules of Hooks
+  const filteredArticles = React.useMemo(() => {
+    if (!searchQuery.trim()) return articles;
+    const q = searchQuery.toLowerCase().trim();
+    return articles.filter(
+      (a) =>
+        (a.title && String(a.title).toLowerCase().includes(q)) ||
+        (a.keyword && String(a.keyword).toLowerCase().includes(q)) ||
+        (a.tone && String(a.tone).toLowerCase().includes(q))
+    );
+  }, [articles, searchQuery]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -1248,13 +1270,57 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
     );
   }
 
+  const publishArticles: PublishArticle[] = filteredArticles.map((a) => ({
+    id: a.id,
+    title: a.title || "",
+    content: a.content,
+    images: a.images || [],
+    keyword: a.keyword ?? null,
+    tone: a.tone ?? null,
+    visualStyle: a.visualStyle ?? null,
+    content_type: a.content_type ?? null,
+    status: a.status || "draft",
+    createdAt: a.createdAt,
+    updatedAt: a.updatedAt,
+    publishedAt: a.publishedAt ?? null,
+    urlSlug: a.urlSlug ?? null,
+    websiteId: a.websiteId ?? null,
+    websiteName: a.websiteName ?? null,
+    websiteUrl: a.websiteUrl ?? null,
+    siteId: a.siteId ?? null,
+    siteUrl: (a as any).siteUrl ?? null,
+    source: a.source,
+  }));
+
+  const handleSelectArticle = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.length === publishArticles.length ? [] : publishArticles.map((a) => a.id)
+    );
+  };
+
+  const handleBatchPublish = async () => {
+    const drafts = publishArticles.filter(
+      (a) => selectedIds.includes(a.id) && a.status === "draft"
+    );
+    for (const a of drafts) {
+      await handlePublish(a.id);
+    }
+    setSelectedIds([]);
+  };
+
   return (
-    <div className="max-w-6xl mx-auto py-8 px-4 space-y-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+    <div className="w-full max-w-[1400px] mx-auto px-4 py-6 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div className="space-y-1">
           <h2
             className={cn(
-              "text-3xl font-black tracking-tight",
+              "text-2xl md:text-3xl font-black tracking-tight",
               isDarkTheme ? "text-white" : "text-zinc-900"
             )}
           >
@@ -1267,291 +1333,102 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
             )}
           >
             {uiLanguage === "zh"
-              ? "一键分发内容到您的 PSEO 平台托管站"
-              : "One-click distribute to your PSEO platform hosted site"}
+              ? "一键分发内容到 PSEO 平台 · 文章列表全屏视野"
+              : "One-click distribute to PSEO · Full-width article list"}
           </p>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Settings */}
-        <div className="space-y-6">
-          <Card
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search
+              className={cn(
+                "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4",
+                isDarkTheme ? "text-zinc-500" : "text-gray-400"
+              )}
+            />
+            <input
+              type="text"
+              placeholder={
+                uiLanguage === "zh"
+                  ? "搜索标题、关键词、标签…"
+                  : "Search title, keyword, tags…"
+              }
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={cn(
+                "w-full pl-10 pr-4 py-2.5 rounded-xl border transition-all",
+                "focus:outline-none focus:ring-2 focus:ring-emerald-500/50",
+                isDarkTheme
+                  ? "bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500"
+                  : "bg-white border-gray-200 text-gray-900 placeholder:text-gray-400"
+              )}
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => loadArticles()}
             className={cn(
-              "border-none rounded-[32px] overflow-hidden",
-              isDarkTheme ? "bg-zinc-900/50" : "bg-white shadow-sm"
+              "font-bold shrink-0",
+              isDarkTheme
+                ? "border-zinc-800 hover:bg-zinc-800"
+                : "border-gray-200 hover:bg-gray-50"
             )}
           >
-            <CardHeader>
-              <div className="flex items-center gap-2 mb-2">
-                <Settings className="w-4 h-4 text-emerald-500" />
-                <CardTitle className="text-lg font-bold">
-                  {uiLanguage === "zh" ? "发布配置" : "Publishing Config"}
-                </CardTitle>
-              </div>
-              <CardDescription
-                className={cn(isDarkTheme ? "text-zinc-400" : "text-gray-600")}
-              >
-                {uiLanguage === "zh"
-                  ? "平台托管站 (PSEO) 已就绪，文章将自动部署"
-                  : "Platform hosted (PSEO) ready, articles auto-deploy"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <label
-                  className={cn(
-                    "text-xs font-black uppercase tracking-widest",
-                    isDarkTheme ? "text-zinc-300" : "text-gray-700"
-                  )}
-                >
-                  {uiLanguage === "zh" ? "目标平台" : "Target Platform"}
-                </label>
-                <div
-                  className={cn(
-                    "flex items-center gap-2 px-4 py-3 rounded-2xl border-2 font-bold bg-transparent",
-                    isDarkTheme ? "border-zinc-800" : "border-zinc-200"
-                  )}
-                >
-                  <Layout className="w-4 h-4 text-emerald-500" />
-                  <span className={cn(isDarkTheme ? "text-zinc-200" : "text-gray-900")}>
-                    {uiLanguage === "zh"
-                      ? "平台托管站 (PSEO)"
-                      : "Platform Hosted (PSEO)"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/10 space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-500">
-                    <CheckCircle className="w-4 h-4" />
-                    <span className="text-xs font-bold">
-                      {uiLanguage === "zh"
-                        ? "平台代管模式已就绪"
-                        : "Platform Managed Mode Ready"}
-                    </span>
-                  </div>
-                  <p className={cn(
-                    "text-[10px] leading-relaxed font-medium",
-                    isDarkTheme ? "text-zinc-400 opacity-80" : "text-gray-600"
-                  )}>
-                    {uiLanguage === "zh"
-                      ? "文章将自动部署到您的子域名，并通过 Google Indexing API 秒级推送索引。"
-                      : "Articles will be automatically deployed to your subdomain and indexed via Google Indexing API in seconds."}
-                  </p>
-                </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column: Article List */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="flex items-center gap-2">
-            <div className="w-1 h-4 bg-emerald-500 rounded-full" />
-            <span className={cn(
-              "text-xs font-black uppercase tracking-widest",
-              isDarkTheme ? "text-zinc-400 opacity-80" : "text-gray-700"
-            )}>
-              {uiLanguage === "zh" ? "已保存文章" : "Articles"}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {articles.map((article) => (
-              <Card
-                key={article.id}
-                className={cn(
-                  "hover:shadow-lg transition-all cursor-pointer group",
-                  isDarkTheme
-                    ? "bg-zinc-900 border-zinc-800 hover:border-emerald-500/50"
-                    : "bg-white border-gray-200 hover:border-emerald-500"
-                )}
-                onClick={() => setEditingArticle(article)}
-              >
-                <CardHeader>
-                  <div className="flex items-start justify-between mb-2">
-                    <CardTitle className={cn(
-                      "text-lg line-clamp-2 group-hover:text-emerald-500 transition-colors",
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    )}>
-                      {article.title}
-                    </CardTitle>
-                  </div>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {article.keyword && (
-                      <Badge
-                        variant="outline"
-                        className={cn("text-xs", !isDarkTheme && "border-gray-300 text-gray-700")}
-                      >
-                        <Hash className="w-3 h-3 mr-1" />
-                        {article.keyword}
-                      </Badge>
-                    )}
-                    {article.tone && (
-                      <Badge
-                        variant="outline"
-                        className={cn("text-xs", !isDarkTheme && "border-gray-300 text-gray-700")}
-                      >
-                        {article.tone}
-                      </Badge>
-                    )}
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {article.images && article.images.length > 0 && (
-                      <div className="grid grid-cols-2 gap-2">
-                        {article.images
-                          .slice(0, 2)
-                          .map((img: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className={cn(
-                            "aspect-video rounded-lg overflow-hidden",
-                            isDarkTheme ? "bg-zinc-800" : "bg-gray-200"
-                          )}
-                        >
-                              <img
-                                src={img.url}
-                                alt={img.prompt || "Article image"}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                    <p
-                      className={cn(
-                        "text-sm line-clamp-3",
-                        isDarkTheme ? "text-zinc-400" : "text-gray-600"
-                      )}
-                      dangerouslySetInnerHTML={{
-                        __html: article.content.substring(0, 150) + "...",
-                      }}
-                    />
-                    <div className={cn(
-                      "space-y-2 pt-2 border-t",
-                      isDarkTheme ? "border-zinc-800" : "border-gray-200"
-                    )}>
-                      <div className="flex items-center justify-between text-xs">
-                        <span
-                          className={cn(
-                            isDarkTheme ? "text-zinc-500" : "text-gray-500"
-                          )}
-                        >
-                          {new Date(article.createdAt).toLocaleDateString(
-                            uiLanguage === "zh" ? "zh-CN" : "en-US"
-                          )}
-                        </span>
-                        <Badge
-                          className={cn(
-                            article.status === "draft"
-                              ? "bg-yellow-500/20 text-yellow-400"
-                              : "bg-emerald-500/20 text-emerald-400"
-                          )}
-                        >
-                          {article.status === "draft"
-                            ? uiLanguage === "zh"
-                              ? "草稿"
-                              : "Draft"
-                            : uiLanguage === "zh"
-                              ? "已发布"
-                              : "Published"}
-                        </Badge>
-                      </div>
-                      <div
-                        className="flex gap-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className={cn(
-                            "flex-1 text-xs h-7",
-                            !isDarkTheme && "border-gray-300 text-gray-700 hover:bg-gray-100 hover:border-emerald-500 hover:text-emerald-600"
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditingArticle(article);
-                          }}
-                        >
-                          <Edit3 className="w-3 h-3 mr-1" />
-                          {uiLanguage === "zh" ? "编辑" : "Edit"}
-                        </Button>
-                        {article.status === "draft" ? (
-                          <Button
-                            size="sm"
-                            className="flex-1 text-xs h-7 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handlePublish(article.id);
-                            }}
-                            disabled={publishingId === article.id}
-                          >
-                            {publishingId === article.id ? (
-                              <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                            ) : (
-                              <Send className="w-3 h-3 mr-1" />
-                            )}
-                            {uiLanguage === "zh" ? "立即发布" : "Publish"}
-                          </Button>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className={cn(
-                                "flex-1 text-xs h-7 font-bold rounded-xl",
-                                isDarkTheme
-                                  ? "border-blue-500/20 text-blue-500"
-                                  : "border-blue-500/50 text-blue-600 hover:bg-blue-500/10 hover:border-blue-500"
-                              )}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUpdate(article.id);
-                              }}
-                              disabled={updatingId === article.id}
-                            >
-                              {updatingId === article.id ? (
-                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                              ) : (
-                                <RefreshCw className="w-3 h-3 mr-1" />
-                              )}
-                              {uiLanguage === "zh" ? "更新" : "Update"}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className={cn(
-                                "flex-1 text-xs h-7 font-bold rounded-xl",
-                                isDarkTheme
-                                  ? "border-emerald-500/20 text-emerald-500"
-                                  : "border-emerald-500/50 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500"
-                              )}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // 打开站点首页
-                                const siteUrl = (article as any).siteUrl;
-                                if (siteUrl && typeof siteUrl === "string") {
-                                  window.open(siteUrl, "_blank");
-                                }
-                              }}
-                              disabled={!(article as any).siteUrl}
-                            >
-                              <ExternalLink className="w-3 h-3 mr-1" />
-                              {uiLanguage === "zh" ? "查看" : "View"}
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+            <RefreshCw className="w-4 h-4 mr-2" />
+            {uiLanguage === "zh" ? "刷新" : "Refresh"}
+          </Button>
         </div>
       </div>
+
+      <PublishArticleTable
+        articles={publishArticles}
+        selectedIds={selectedIds}
+        onSelect={handleSelectArticle}
+        onSelectAll={handleSelectAll}
+        onView={(a) => setDrawerArticle(a)}
+        onEdit={(a) => {
+          setDrawerArticle(null);
+          setEditingArticle(articles.find((x) => x.id === a.id) ?? a);
+        }}
+        onPublish={(a) => handlePublish(a.id)}
+        onUpdate={(a) => handleUpdate(a.id)}
+        onViewLive={(a) => {
+          const url = (a as any).siteUrl;
+          if (url && typeof url === "string") window.open(url, "_blank");
+        }}
+        publishingId={publishingId}
+        updatingId={updatingId}
+        isDarkTheme={isDarkTheme}
+        uiLanguage={uiLanguage}
+      />
+
+      <BatchActions
+        selectedCount={selectedIds.length}
+        onPublish={selectedIds.length > 0 ? handleBatchPublish : undefined}
+        onClearSelection={() => setSelectedIds([])}
+        isDarkTheme={isDarkTheme}
+        uiLanguage={uiLanguage}
+      />
+
+      <PublishArticleDrawer
+        article={drawerArticle}
+        isOpen={!!drawerArticle}
+        onClose={() => setDrawerArticle(null)}
+        onEdit={(a) => {
+          setDrawerArticle(null);
+          setEditingArticle(articles.find((x) => x.id === a.id) ?? a);
+        }}
+        onPublish={(a) => handlePublish(a.id)}
+        onUpdate={(a) => handleUpdate(a.id)}
+        onViewLive={(a) => {
+          const url = (a as any).siteUrl;
+          if (url && typeof url === "string") window.open(url, "_blank");
+        }}
+        publishingId={publishingId}
+        updatingId={updatingId}
+        isDarkTheme={isDarkTheme}
+        uiLanguage={uiLanguage}
+      />
 
       {/* Rich Text Editor Modal */}
       {editingArticle && (

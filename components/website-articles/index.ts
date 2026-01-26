@@ -11,6 +11,8 @@ export { ArticleDrawer } from './ArticleDrawer';
 export { StatusBadge } from './StatusBadge';
 export { IntentBadge } from './IntentBadge';
 export { BatchActions } from './BatchActions';
+export { PublishArticleTable, type PublishArticle } from './PublishArticleTable';
+export { PublishArticleDrawer } from './PublishArticleDrawer';
 
 export type {
   Website,

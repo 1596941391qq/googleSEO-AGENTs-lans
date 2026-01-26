@@ -10707,7 +10707,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   <ChevronRight
                     size={14}
                     className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                      isDarkTheme ? "text-neutral-800" : "text-gray-500"
                     }
                   />
                   <StepItem
@@ -10719,7 +10719,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   <ChevronRight
                     size={14}
                     className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                      isDarkTheme ? "text-neutral-800" : "text-gray-500"
                     }
                   />
                   <StepItem
@@ -10741,7 +10741,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   <ChevronRight
                     size={14}
                     className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                      isDarkTheme ? "text-neutral-800" : "text-gray-500"
                     }
                   />
                   <StepItem
@@ -10755,7 +10755,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   <ChevronRight
                     size={14}
                     className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                      isDarkTheme ? "text-neutral-800" : "text-gray-500"
                     }
                   />
                   <StepItem

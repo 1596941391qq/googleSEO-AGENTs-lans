@@ -22,28 +22,29 @@ interface WebsiteRendererProps {
 
 export const WebsiteRenderer: React.FC<WebsiteRendererProps> = ({ data }) => {
   const { theme, sections } = data;
+  const themeTyped = theme as Theme;
 
   const renderSection = (section: WebsiteSection, index: number) => {
     const { type, props } = section;
 
     switch (type) {
       case 'hero':
-        return <HeroSection key={index} {...(props as HeroProps)} theme={theme} />;
+        return <HeroSection key={index} {...(props as unknown as HeroProps)} theme={themeTyped} />;
 
       case 'features':
-        return <FeaturesSection key={index} {...(props as FeaturesProps)} theme={theme} />;
+        return <FeaturesSection key={index} {...(props as unknown as FeaturesProps)} theme={themeTyped} />;
 
       case 'content':
-        return <ContentSection key={index} {...(props as ContentProps)} theme={theme} />;
+        return <ContentSection key={index} {...(props as unknown as ContentProps)} theme={themeTyped} />;
 
       case 'testimonials':
-        return <TestimonialsSection key={index} {...(props as TestimonialsProps)} theme={theme} />;
+        return <TestimonialsSection key={index} {...(props as unknown as TestimonialsProps)} theme={themeTyped} />;
 
       case 'faq':
-        return <FAQSection key={index} {...(props as FAQProps)} theme={theme} />;
+        return <FAQSection key={index} {...(props as unknown as FAQProps)} theme={themeTyped} />;
 
       case 'cta':
-        return <CTASection key={index} {...(props as CTAProps)} theme={theme} />;
+        return <CTASection key={index} {...(props as unknown as CTAProps)} theme={themeTyped} />;
 
       default:
         console.warn(`Unknown section type: ${type}`);

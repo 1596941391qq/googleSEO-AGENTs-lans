@@ -112,11 +112,11 @@ export const sql = async <T extends QueryResultRow = any>(
       rowCount: result.rowCount || 0
     };
   } catch (error: any) {
-    const isConnectionError = error.message?.includes('timeout') || 
-                             error.message?.includes('Connection terminated') ||
-                             error.code === 'ETIMEDOUT' ||
-                             error.code === 'ECONNREFUSED';
-    
+    const isConnectionError = error.message?.includes('timeout') ||
+      error.message?.includes('Connection terminated') ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ECONNREFUSED';
+
     if (isConnectionError) {
       const maskedUrl = connectionString?.replace(/:([^:@]+)@/, ':****@') || 'unknown';
       console.error('[sql] Database connection error:', {
@@ -124,7 +124,7 @@ export const sql = async <T extends QueryResultRow = any>(
         code: error.code,
         connectionString: maskedUrl,
         isLocal: isLocalDB,
-        hint: isLocalDB 
+        hint: isLocalDB
           ? 'Check if PostgreSQL service is running: "Get-Service postgresql*" or check port 5432'
           : 'Check network connection and database server status'
       });
@@ -2826,6 +2826,8 @@ export interface PlatformToken {
   status: 'active' | 'disabled';
   created_at: Date;
   updated_at: Date;
+  /** 平台相关元数据，如 cf_pages 的 accountId */
+  metadata?: { accountId?: string;[k: string]: unknown } | null;
 }
 
 /**
@@ -2846,6 +2848,8 @@ export interface PlatformSite {
   status: 'pending' | 'active' | 'disabled'; // pending=等待创建
   created_at: Date;
   updated_at: Date;
+  /** 平台项目 ID，用于触发重新构建（如 RTD project slug、CF Pages project 等） */
+  platform_project_id?: string | null;
 }
 
 /**
