@@ -3471,6 +3471,49 @@ export async function updatePlatformSiteProjectId(
 }
 
 /**
+ * 更新站点的平台类型
+ * 用于切换发布平台(如从 GitHub Pages 切换到 Netlify)
+ */
+export async function updatePlatformSitePlatform(
+  siteId: string,
+  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel' | 'github_pages',
+  platformTokenId: string | null = null
+): Promise<PlatformSite | null> {
+  await initPSEOPublishTables();
+  const result = await sql<PlatformSite>`
+    UPDATE platform_sites_v2
+    SET 
+      platform = ${platform}, 
+      platform_token_id = ${platformTokenId},
+      platform_project_id = NULL,
+      status = 'pending',
+      updated_at = NOW()
+    WHERE id = ${siteId}
+    RETURNING *
+  `;
+  return result.rows[0] || null;
+}
+
+/**
+ * 更新站点的 GitHub Token
+ */
+export async function updatePlatformSiteGitHubToken(
+  siteId: string,
+  githubTokenId: string
+): Promise<PlatformSite | null> {
+  await initPSEOPublishTables();
+  const result = await sql<PlatformSite>`
+    UPDATE platform_sites_v2
+    SET 
+      github_token_id = ${githubTokenId},
+      updated_at = NOW()
+    WHERE id = ${siteId}
+    RETURNING *
+  `;
+  return result.rows[0] || null;
+}
+
+/**
  * 删除站点
  */
 export async function deletePlatformSite(siteId: string): Promise<boolean> {

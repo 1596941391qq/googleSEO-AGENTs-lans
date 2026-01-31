@@ -16,7 +16,6 @@ const question = (query: string): Promise<string> => {
 
 // KNOWN CONFIG
 const knownConfig = {
-    netlifyToken: 'nfp_FcUX5UV1cQU7xwoSqnafr2TXmVzMY7PQ26c2',
     owner: 'ylyy',
     repo: 'pseo-site-050ad0b5'
 };
@@ -52,8 +51,17 @@ async function run() {
     console.log('=== Netlify Auto-Setup & Fix Tool (Automated) ===');
 
     // 1. Netlify Token
-    const netlifyToken = knownConfig.netlifyToken;
-    console.log('Using provided Netlify Token.');
+    let netlifyToken = process.env.netlifytoken;
+    if (!netlifyToken) {
+        console.log('Netlify Token not found in environment variables (netlifytoken).');
+        netlifyToken = await question('Please Enter Netlify Token: ');
+    }
+
+    if (!netlifyToken) {
+        console.error('Netlify Token is required.');
+        process.exit(1);
+    }
+    console.log('Using Netlify Token.');
 
     // 2. GitHub Config
     const owner = knownConfig.owner;

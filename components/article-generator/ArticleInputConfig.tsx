@@ -17,6 +17,7 @@ import {
   ChevronDown,
   Layout,
   MousePointer2,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { fetchWithAuth, postWithAuth } from "../../lib/api-client";
@@ -177,7 +178,7 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   const [selectedWebsiteId, setSelectedWebsiteId] = useState<string>("");
   const [selectedWebsiteUrl, setSelectedWebsiteUrl] = useState<string>("");
   const [promotionIntensity, setPromotionIntensity] = useState<"natural" | "strong">(initialPromotionIntensity);
-  const [boundWebsites, setBoundWebsites] = useState<Array<{id: string, url: string, domain: string, title?: string}>>([]);
+  const [boundWebsites, setBoundWebsites] = useState<Array<{ id: string, url: string, domain: string, title?: string }>>([]);
   const [isLoadingWebsites, setIsLoadingWebsites] = useState(false);
 
   // Fetch bound websites
@@ -202,7 +203,7 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   }, [userId]);
 
   // 选择绑定的网站（单选必填）
-  const selectBoundWebsite = (website: {id: string, url: string, domain: string}) => {
+  const selectBoundWebsite = (website: { id: string, url: string, domain: string }) => {
     setSelectedWebsiteId(website.id);
     setSelectedWebsiteUrl(website.url);
   };
@@ -325,7 +326,7 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
           if (pdfError.message.includes("PDF text extraction failed")) {
             throw pdfError;
           }
-          
+
           // Send to backend for processing
           const fileContent = await file.text();
           const response = await fetch("/api/extract-document-text", {
@@ -613,9 +614,9 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                       {boundWebsites.find(w => w.id === selectedWebsiteId)?.domain || selectedWebsiteUrl}
                     </span>
                   </div>
-                  <button 
+                  <button
                     type="button"
-                    onClick={clearSelectedWebsite} 
+                    onClick={clearSelectedWebsite}
                     className="text-blue-400 hover:text-white"
                   >
                     <X size={12} />
@@ -633,29 +634,58 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                 </div>
               ) : boundWebsites.length > 0 ? (
                 <div className="space-y-2">
-                  <span className="text-[9px] font-black text-gray-500 uppercase">
-                    {uiLanguage === "zh" ? "选择您的网站" : "Select Your Website"}
-                  </span>
-                  <div className="grid grid-cols-1 gap-1.5 max-h-[120px] overflow-y-auto pr-1 custom-scrollbar">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black text-gray-500 uppercase">
+                      {uiLanguage === "zh" ? "选择您的网站" : "Select Your Website"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const fetchWebsites = async () => {
+                          setIsLoadingWebsites(true);
+                          try {
+                            const response = await fetchWithAuth(`/api/websites/list`);
+                            if (response.ok) {
+                              const result = await response.json();
+                              console.log("[ArticleInputConfig] Fetched websites:", result.data?.websites);
+                              if (result.success && result.data?.websites) {
+                                setBoundWebsites(result.data.websites);
+                              }
+                            }
+                          } catch (error) {
+                            console.error("Failed to fetch bound websites:", error);
+                          } finally {
+                            setIsLoadingWebsites(false);
+                          }
+                        };
+                        fetchWebsites();
+                      }}
+                      className="p-1 hover:bg-white/10 rounded-md transition-colors group"
+                      title={uiLanguage === "zh" ? "刷新列表" : "Refresh list"}
+                    >
+                      <RefreshCw size={10} className={cn("text-gray-500 group-hover:text-emerald-400", isLoadingWebsites && "animate-spin")} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar min-h-[50px]">
                     {boundWebsites.map(site => (
                       <button
                         key={site.id}
                         type="button"
                         onClick={() => selectBoundWebsite(site)}
                         className={cn(
-                          "flex items-center justify-between p-2.5 rounded-lg border text-left transition-all",
+                          "flex items-center justify-between p-3 rounded-xl border text-left transition-all",
                           selectedWebsiteId === site.id
-                            ? "bg-blue-500/10 border-blue-500/40 text-blue-300"
-                            : "bg-black/20 border-white/5 text-gray-400 hover:border-white/20"
+                            ? "bg-emerald-500/10 border-emerald-500/50 text-emerald-400 ring-1 ring-emerald-500/20"
+                            : "bg-white/5 border-white/5 text-gray-400 hover:border-white/10 hover:bg-white/[0.07]"
                         )}
                       >
-                        <div className="flex flex-col">
-                          <span className="text-[11px] font-bold truncate max-w-[160px]">{site.domain}</span>
+                        <div className="flex flex-col gap-0.5 overflow-hidden">
+                          <span className="text-[11px] font-bold truncate">{site.domain}</span>
                           {site.title && (
-                            <span className="text-[9px] text-gray-500 truncate max-w-[160px]">{site.title}</span>
+                            <span className="text-[9px] text-gray-500 truncate opacity-80">{site.title}</span>
                           )}
                         </div>
-                        {selectedWebsiteId === site.id && <CheckCircle2 size={12} className="text-blue-400 shrink-0" />}
+                        {selectedWebsiteId === site.id && <CheckCircle2 size={12} className="text-emerald-500 shrink-0 ml-2" />}
                       </button>
                     ))}
                   </div>
@@ -664,10 +694,36 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                 <div className="flex flex-col items-center justify-center p-4 border border-dashed border-amber-500/30 rounded-lg bg-amber-500/5">
                   <Globe size={20} className="text-amber-500/50 mb-2" />
                   <span className="text-[10px] text-amber-400 text-center">
-                    {uiLanguage === "zh" 
-                      ? "请先在「我的网站」添加网站" 
+                    {uiLanguage === "zh"
+                      ? "请先在「我的网站」添加网站"
                       : "Please add a website in 'My Websites' first"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fetchWebsites = async () => {
+                        setIsLoadingWebsites(true);
+                        try {
+                          const response = await fetchWithAuth(`/api/websites/list`);
+                          if (response.ok) {
+                            const result = await response.json();
+                            if (result.success && result.data?.websites) {
+                              setBoundWebsites(result.data.websites);
+                            }
+                          }
+                        } catch (error) {
+                          console.error("Failed to fetch bound websites:", error);
+                        } finally {
+                          setIsLoadingWebsites(false);
+                        }
+                      };
+                      fetchWebsites();
+                    }}
+                    className="mt-2 text-[10px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                  >
+                    <RefreshCw size={10} className={isLoadingWebsites ? "animate-spin" : ""} />
+                    {uiLanguage === "zh" ? "刷新列表" : "Refresh List"}
+                  </button>
                 </div>
               )}
 

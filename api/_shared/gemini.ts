@@ -331,7 +331,7 @@ export async function callGeminiAPIStream(
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 240000);
+  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes (300s) to match Vercel limit
 
   try {
     const response = await fetch(url, {
@@ -473,9 +473,9 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
     }
   }
 
-  // Add timeout for fetch (240 seconds per request - balanced for performance and reliability)
+  // Add timeout for fetch (300 seconds per request - matching Vercel max limit)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 240000); // 4 minutes
+  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes (300s)
 
   try {
     const response = await fetch(url, {
@@ -585,7 +585,7 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
  * Clean Google Search reference markers from JSON response
  */
 function cleanJSONFromSearchReferences(text: string): string {
-  if (!text) return text;
+  if (!text || typeof text !== 'string') return text || '';
   text = text.replace(/\[\d+\]/g, '');
   text = text.replace(/\[source\]/gi, '');
   text = text.replace(/\[citation\]/gi, '');
@@ -644,7 +644,7 @@ export function extractJSON(text: string): string {
 
   if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
     const extracted = text.substring(startIdx, endIdx + 1).trim();
-    if (extracted && typeof extracted === 'string') {
+    if (extracted && typeof extracted === 'string' && extracted.length > 0) {
       if ((isArray && extracted.startsWith('[') && extracted.endsWith(']')) ||
         (!isArray && extracted.startsWith('{') && extracted.endsWith('}'))) {
         return extracted;

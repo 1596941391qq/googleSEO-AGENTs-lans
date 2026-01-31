@@ -134,6 +134,7 @@ export interface SEOStrategyReport {
   rankingAnalysis?: string;
   searchIntent?: string;
   intentMatch?: string;
+  contentType?: 'informational' | 'commercial';
   serpCompetitionData?: {
     keyword: string;
     serpResults: SerpSnippet[];

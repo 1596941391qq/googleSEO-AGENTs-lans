@@ -97,11 +97,15 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     });
   };
 
+  // Simple heuristic for intent based on keywords
+  const commercialTerms = ['buy', 'price', 'review', 'best', 'top', 'vs', 'comparison', 'guide', 'sale', 'deal', 'cheap', 'cost', 'shop', 'store', '购买', '价格', '评测', '最', '排名', '对比', '指南', '怎么选', '推荐', '多少钱', '哪里买'];
+  const isLikelyCommercial = commercialTerms.some(term => keyword.toLowerCase().includes(term));
+
   const keywordData: KeywordData = {
     id: `kw-${Date.now()}`,
     keyword,
     translation: keyword,
-    intent: 'Informational' as any,
+    intent: isLikelyCommercial ? 'Commercial' as any : 'Informational' as any,
     volume: 0
   };
 
@@ -191,20 +195,14 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         targetLanguage,
         targetMarket,
         (searchResults) => {
-        // Emit Google search results if available
-        if (searchResults && searchResults.length > 0) {
-          emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
-        }
-      },
+          // Emit Google search results if available
+          if (searchResults && searchResults.length > 0) {
+            emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
+          }
+        },
         (msg) => emit('researcher', 'log', msg),
         (delta, fullText, isFinal) => {
-          emit('researcher', 'card', undefined, 'streaming-text', {
-            content: `\`\`\`json\n${fullText}\n\`\`\``,
-            speed: 3,
-            interval: 50,
-            live: true,
-            isComplete: isFinal
-          }, searchPrefsStreamId);
+          // Do not emit raw JSON to UI as streaming text
         }
       );
     } catch (searchPrefsError: any) {
@@ -242,20 +240,14 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         targetMarket,
         'google',
         (searchResults) => {
-        // Emit Google search results if available
-        if (searchResults && searchResults.length > 0) {
-          emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
-        }
-      },
+          // Emit Google search results if available
+          if (searchResults && searchResults.length > 0) {
+            emit('researcher', 'card', undefined, 'google-search-results', { results: searchResults });
+          }
+        },
         (msg) => emit('researcher', 'log', msg),
         (delta, fullText, isFinal) => {
-          emit('researcher', 'card', undefined, 'streaming-text', {
-            content: `\`\`\`json\n${fullText}\n\`\`\``,
-            speed: 3,
-            interval: 50,
-            live: true,
-            isComplete: isFinal
-          }, competitorStreamId);
+          // Do not emit raw JSON to UI as streaming text
         }
       );
     } catch (competitorError: any) {
@@ -340,13 +332,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         reference,
         (msg) => emit('strategist', 'log', msg),
         (delta, fullText, isFinal) => {
-          emit('strategist', 'card', undefined, 'streaming-text', {
-            content: `\`\`\`json\n${fullText}\n\`\`\``,
-            speed: 3,
-            interval: 50,
-            live: true,
-            isComplete: isFinal
-          }, strategyStreamId);
+          // Do not emit raw JSON to UI as streaming text
         }
       );
     } catch (strategyError: any) {
@@ -375,7 +361,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     // Count promoted websites with screenshots
     const promotedScreenshots = processedPromotedWebsites?.filter(p => p.screenshot) || [];
     const promotedScreenshotCount = promotedScreenshots.length;
-    
+
     console.log(`[VisualArticle] Image generation strategy: ${promotedScreenshotCount} promoted URLs with screenshots`);
     console.log(`[VisualArticle] processedPromotedWebsites:`, processedPromotedWebsites?.map(p => ({
       url: p.url,
@@ -388,7 +374,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     // - 0 promoted URLs → 2 AI images
     // - 1 promoted URL → 1 AI image + 1 screenshot
     // - 2+ promoted URLs → 0 AI images + N screenshots
-    
+
     // Safely extract content structure with defensive checks
     const pageTitle = strategyReport.pageTitleH1 || '';
     const contentStructure = Array.isArray(strategyReport.contentStructure)
@@ -401,108 +387,108 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     const contentForThemes = pageTitle + (structureText ? "\n" + structureText : "");
 
     let generatedImages: any[] = [];
-    
+
     // Determine how many AI images to generate based on promoted URL count
     const aiImageCount = promotedScreenshotCount === 0 ? 2 : (promotedScreenshotCount === 1 ? 1 : 0);
-    
-    emit('artist', 'log', uiLanguage === 'zh' 
+
+    emit('artist', 'log', uiLanguage === 'zh'
       ? `图片策略: ${promotedScreenshotCount} 个推广链接截图 + ${aiImageCount} 张 AI 生成图`
       : `Image strategy: ${promotedScreenshotCount} promotion screenshots + ${aiImageCount} AI generated images`);
 
     // Generate AI images if needed (with error handling to ensure article generation continues)
     if (aiImageCount > 0) {
       try {
-      const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage, (msg) => emit('artist', 'log', msg));
-      
-      if (visualThemes.themes && visualThemes.themes.length > 0) {
-        const selectedThemes = visualThemes.themes.slice(0, aiImageCount);
-        // 传递关键词和文章标题以增强图像与主题的相关性
-        const prompts = await generateImagePrompts(
-          selectedThemes,
-          uiLanguage,
-          keyword,
-          pageTitle || undefined
-        );
+        const visualThemes = await extractVisualThemes(contentForThemes || keyword, uiLanguage, (msg) => emit('artist', 'log', msg));
 
-        // Emit image-gen cards as "loading" with theme info
-        prompts.forEach((p, i) => {
-          const theme = selectedThemes[i];
-          emit('artist', 'card', undefined, 'image-gen', {
-            theme: theme?.title || theme?.id || `Theme ${i + 1}`,
-            prompt: p.prompt,
-            description: p.description,
-            imageUrl: null,
-            status: 'extracting',
-            progress: 0
+        if (visualThemes.themes && visualThemes.themes.length > 0) {
+          const selectedThemes = visualThemes.themes.slice(0, aiImageCount);
+          // 传递关键词和文章标题以增强图像与主题的相关性
+          const prompts = await generateImagePrompts(
+            selectedThemes,
+            uiLanguage,
+            keyword,
+            pageTitle || undefined
+          );
+
+          // Emit image-gen cards as "loading" with theme info
+          prompts.forEach((p, i) => {
+            const theme = selectedThemes[i];
+            emit('artist', 'card', undefined, 'image-gen', {
+              theme: theme?.title || theme?.id || `Theme ${i + 1}`,
+              prompt: p.prompt,
+              description: p.description,
+              imageUrl: null,
+              status: 'extracting',
+              progress: 0
+            });
           });
-        });
 
-        // Generate images (parallel processing)
-        emit('artist', 'log', uiLanguage === 'zh' ? `正在生成 ${prompts.length} 张 AI 图片...` : `Generating ${prompts.length} AI images...`);
-        const imageResults = await generateImages(prompts);
+          // Generate images (parallel processing)
+          emit('artist', 'log', uiLanguage === 'zh' ? `正在生成 ${prompts.length} 张 AI 图片...` : `Generating ${prompts.length} AI images...`);
+          const imageResults = await generateImages(prompts);
 
-        const successCount = imageResults.filter(r => r.imageUrl).length;
-        const failCount = imageResults.filter(r => r.error).length;
-        emit('artist', 'log', `✓ ${uiLanguage === 'zh' ? `AI 图片生成完成: ${successCount} 成功, ${failCount} 失败` : `AI image generation complete: ${successCount} succeeded, ${failCount} failed`}`);
+          const successCount = imageResults.filter(r => r.imageUrl).length;
+          const failCount = imageResults.filter(r => r.error).length;
+          emit('artist', 'log', `✓ ${uiLanguage === 'zh' ? `AI 图片生成完成: ${successCount} 成功, ${failCount} 失败` : `AI image generation complete: ${successCount} succeeded, ${failCount} failed`}`);
 
-        generatedImages = imageResults.filter(r => r.imageUrl).map(r => ({
-          url: r.imageUrl,
-          prompt: r.theme,
-          placement: 'inline'
-        }));
+          generatedImages = imageResults.filter(r => r.imageUrl).map(r => ({
+            url: r.imageUrl,
+            prompt: r.theme,
+            placement: 'inline'
+          }));
 
-        // Update cards with results and progress
-        imageResults.forEach((res, i) => {
-          const theme = selectedThemes[i];
-          if (res.imageUrl) {
-            emit('artist', 'card',
-              uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`,
-              'image-gen',
-              {
-                theme: theme?.title || theme?.id || res.theme,
-                prompt: prompts[i]?.prompt || res.theme,
-                description: prompts[i]?.description,
-                imageUrl: res.imageUrl,
-                status: 'completed',
-                progress: 100
-              }
-            );
-          } else if (res.error) {
-            emit('artist', 'card',
-              uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`,
-              'image-gen',
-              {
-                theme: theme?.title || theme?.id || res.theme,
-                prompt: prompts[i]?.prompt || res.theme,
-                description: prompts[i]?.description,
-                imageUrl: null,
-                status: 'failed',
-                error: res.error,
-                progress: 0
-              }
-            );
-          }
-        });
+          // Update cards with results and progress
+          imageResults.forEach((res, i) => {
+            const theme = selectedThemes[i];
+            if (res.imageUrl) {
+              emit('artist', 'card',
+                uiLanguage === 'zh' ? `视觉效果已生成: ${res.theme}` : `Visual generated: ${res.theme}`,
+                'image-gen',
+                {
+                  theme: theme?.title || theme?.id || res.theme,
+                  prompt: prompts[i]?.prompt || res.theme,
+                  description: prompts[i]?.description,
+                  imageUrl: res.imageUrl,
+                  status: 'completed',
+                  progress: 100
+                }
+              );
+            } else if (res.error) {
+              emit('artist', 'card',
+                uiLanguage === 'zh' ? `图像生成失败: ${res.theme}` : `Image generation failed: ${res.theme}`,
+                'image-gen',
+                {
+                  theme: theme?.title || theme?.id || res.theme,
+                  prompt: prompts[i]?.prompt || res.theme,
+                  description: prompts[i]?.description,
+                  imageUrl: null,
+                  status: 'failed',
+                  error: res.error,
+                  progress: 0
+                }
+              );
+            }
+          });
         }
       } catch (aiImageError: any) {
         // AI 图片生成失败不应阻止文章生成
         console.error('[VisualArticle] AI image generation failed:', aiImageError.message);
-        emit('artist', 'log', uiLanguage === 'zh' 
+        emit('artist', 'log', uiLanguage === 'zh'
           ? `⚠️ AI 图片生成失败: ${aiImageError.message}，将继续生成文章`
           : `⚠️ AI image generation failed: ${aiImageError.message}, continuing with article generation`);
       }
     } else {
-      emit('artist', 'log', uiLanguage === 'zh' 
+      emit('artist', 'log', uiLanguage === 'zh'
         ? '检测到多个推广链接，跳过 AI 生图，使用推广页面截图'
         : 'Multiple promotion URLs detected, skipping AI image generation, using promotion screenshots');
     }
 
     // Add promoted website screenshots
     if (promotedScreenshots.length > 0) {
-      emit('artist', 'log', uiLanguage === 'zh' 
+      emit('artist', 'log', uiLanguage === 'zh'
         ? `正在添加 ${promotedScreenshots.length} 张推广网站截图...`
         : `Adding ${promotedScreenshots.length} promotion website screenshots...`);
-      
+
       for (const promotedSite of promotedScreenshots) {
         if (promotedSite.screenshot) {
           generatedImages.push({
@@ -512,7 +498,7 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
             isScreenshot: true,
             sourceUrl: promotedSite.url
           });
-          
+
           emit('artist', 'card',
             uiLanguage === 'zh' ? `已添加推广页面截图: ${promotedSite.title || promotedSite.url}` : `Promotion screenshot added: ${promotedSite.title || promotedSite.url}`,
             'image-gen',
@@ -527,19 +513,19 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
           );
         }
       }
-      
-      emit('artist', 'log', `✓ ${uiLanguage === 'zh' 
+
+      emit('artist', 'log', `✓ ${uiLanguage === 'zh'
         ? `已添加 ${promotedScreenshots.length} 张推广网站截图`
         : `Added ${promotedScreenshots.length} promotion website screenshots`}`);
     }
-    
+
     // Also add reference URL screenshot if available and not already covered by promoted websites
     const hasUrlScreenshot = reference?.type === 'url' && reference.url?.screenshot;
     if (hasUrlScreenshot && reference.url?.screenshot) {
       // Check if this URL is not already in promotedScreenshots
       const refUrl = reference.url.url;
       const alreadyIncluded = promotedScreenshots.some(p => p.url === refUrl);
-      
+
       if (!alreadyIncluded) {
         const urlString = reference.url.url && typeof reference.url.url === 'string' ? reference.url.url : 'Reference Screenshot';
         const titleString = reference.url.title && typeof reference.url.title === 'string' ? reference.url.title : undefined;
@@ -563,9 +549,9 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         );
       }
     }
-    
+
     console.log(`[VisualArticle] Total images: ${generatedImages.length} (AI: ${generatedImages.filter(i => !i.isScreenshot).length}, Screenshots: ${generatedImages.filter(i => i.isScreenshot).length})`);
-    emit('artist', 'log', `✓ ${uiLanguage === 'zh' 
+    emit('artist', 'log', `✓ ${uiLanguage === 'zh'
       ? `图片准备完成: 共 ${generatedImages.length} 张`
       : `Images ready: ${generatedImages.length} total`}`);
 
@@ -583,28 +569,37 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     }, streamingEventId);
 
     // 将生成的图片转换为写手可用的格式
-    const availableImagesForWriter: AvailableImage[] = generatedImages.map((img: any) => ({
-      url: img.url,
-      theme: img.prompt || img.theme || 'Image',
-      description: img.description || img.prompt || '',
-      isScreenshot: img.isScreenshot || false,
-      sourceUrl: img.sourceUrl || undefined
-    }));
+    // 关键优化：使用占位符代替真实的 URL（特别是 Base64），以避免消耗 LLM 上下文窗口并防止幻觉
+    const imagePlaceholderMap = new Map<string, string>();
+
+    const availableImagesForWriter: AvailableImage[] = generatedImages.map((img: any, index: number) => {
+      // 使用简短且唯一的占位符。使用 URL 格式以确保护 markdown 语法正确
+      // 使用 http 协议开头，确保 LLM 把它当作链接处理
+      const placeholder = `http://image-placeholder-${index}.com/img.png`;
+      imagePlaceholderMap.set(placeholder, img.url);
+
+      return {
+        url: placeholder,
+        theme: img.prompt || img.theme || 'Image',
+        description: img.description || img.prompt || '',
+        isScreenshot: img.isScreenshot || false,
+        sourceUrl: img.sourceUrl || undefined
+      };
+    });
 
     // 详细日志：记录传递给写手的图片信息
-    console.log(`[VisualArticle] availableImagesForWriter:`, availableImagesForWriter.map(img => ({
+    console.log(`[VisualArticle] availableImagesForWriter (with placeholders):`, availableImagesForWriter.map(img => ({
       theme: img.theme,
       isScreenshot: img.isScreenshot,
-      hasUrl: !!img.url,
-      urlPreview: img.url?.substring(0, 50) + '...'
+      url: img.url
     })));
 
     if (availableImagesForWriter.length > 0) {
-      emit('writer', 'log', uiLanguage === 'zh' 
+      emit('writer', 'log', uiLanguage === 'zh'
         ? `📷 将 ${availableImagesForWriter.length} 张图片传递给写手，用于嵌入文章...（AI生成: ${availableImagesForWriter.filter(i => !i.isScreenshot).length}，截图: ${availableImagesForWriter.filter(i => i.isScreenshot).length}）`
         : `📷 Passing ${availableImagesForWriter.length} images to writer for embedding... (AI: ${availableImagesForWriter.filter(i => !i.isScreenshot).length}, Screenshots: ${availableImagesForWriter.filter(i => i.isScreenshot).length})`);
     } else {
-      emit('writer', 'log', uiLanguage === 'zh' 
+      emit('writer', 'log', uiLanguage === 'zh'
         ? `⚠️ 没有可用图片传递给写手，文章将不包含嵌入图片`
         : `⚠️ No images available for writer, article will not contain embedded images`);
     }
@@ -631,8 +626,20 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
         (msg) => emit('writer', 'log', msg),
         availableImagesForWriter,  // 传递可用图片给写手
         (delta, fullText, isFinal) => {
+          // 在流式输出中恢复真实 URL，以便前端能实时显示图片
+          // 注意：频繁替换大字符串可能会有性能影响，但在 Node.js 环境通常可以接受
+          let processedText = fullText;
+          if (processedText.includes('http://image-placeholder-')) {
+            imagePlaceholderMap.forEach((realUrl, placeholder) => {
+              // 只有当 placeholder 存在于文本中时才执行替换，避免不必要的字符串操作
+              if (processedText.includes(placeholder)) {
+                processedText = processedText.split(placeholder).join(realUrl);
+              }
+            });
+          }
+
           emit('writer', 'card', undefined, 'streaming-text', {
-            content: fullText,
+            content: processedText,
             speed: 3,
             interval: 50,
             live: true,
@@ -665,13 +672,36 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     }
 
     // Update streaming text with final content
-    const finalContent = contentResult!.content || contentResult!.article_body || '';
+    // 恢复最终内容中的真实 URL
+    let finalContent = contentResult!.content || contentResult!.article_body || '';
+    let finalMarkdown = contentResult!.markdown || '';
+
+    // 批量替换所有占位符
+    if (imagePlaceholderMap.size > 0) {
+      console.log(`[VisualArticle] Restoring ${imagePlaceholderMap.size} image URLs in final content...`);
+      imagePlaceholderMap.forEach((realUrl, placeholder) => {
+        // 安全检查：如果 Base64 太大（>500KB），这可能导致 Vercel 响应超时或 OOM
+        // 在这种情况下，我们不回填，而是让它保持 placeholder 或使用一个更轻量的默认图
+        if (realUrl.length > 500 * 1024) {
+          console.warn(`[VisualArticle] Image data too large (${Math.round(realUrl.length / 1024)}KB) for placeholder ${placeholder}, skipping restore to prevent OOM.`);
+          return;
+        }
+
+        if (finalContent.includes(placeholder)) {
+          finalContent = finalContent.split(placeholder).join(realUrl);
+        }
+        if (finalMarkdown.includes(placeholder)) {
+          finalMarkdown = finalMarkdown.split(placeholder).join(realUrl);
+        }
+      });
+    }
+
     console.log('[VisualArticle] Final content for streaming-text:', {
       hasContent: !!finalContent,
       contentLength: finalContent.length,
       contentPreview: finalContent.substring(0, 200)
     });
-    
+
     if (finalContent) {
       emit('writer', 'card', undefined, 'streaming-text', {
         content: finalContent,
@@ -688,14 +718,15 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     // 确保至少有一个内容来源
     const articleContent = contentResult!.content || contentResult!.article_body || contentResult!.markdown || '';
     const articleTitle = contentResult!.title || strategyReport?.pageTitleH1 || keyword;
-    
+
     const finalArticle = {
       title: articleTitle,
       content: articleContent,
       // 同时保留 article_body 以兼容前端不同的解析逻辑
-      article_body: articleContent,
-      markdown: contentResult!.markdown || articleContent,
+      article_body: finalContent,
+      markdown: finalMarkdown || finalContent,
       images: Array.isArray(generatedImages) ? generatedImages : [],
+      contentType: isLikelyCommercial ? 'commercial' : (contentResult!.contentType || 'informational'),
     };
 
     // Log final article for debugging - 详细日志
@@ -714,8 +745,8 @@ export async function generateVisualArticle(options: VisualArticleOptions) {
     // 如果内容仍然为空，记录警告
     if (!finalArticle.content || finalArticle.content.trim().length === 0) {
       console.error('[VisualArticle] WARNING: Final article has empty content!');
-      emit('writer', 'log', uiLanguage === 'zh' 
-        ? '⚠️ 警告: 文章内容为空，请检查生成过程' 
+      emit('writer', 'log', uiLanguage === 'zh'
+        ? '⚠️ 警告: 文章内容为空，请检查生成过程'
         : '⚠️ Warning: Article content is empty, please check the generation process');
     }
 

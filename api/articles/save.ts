@@ -55,15 +55,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!title || !content) {
       return sendErrorResponse(res, null, 'title and content are required', 400);
     }
-    
+
     // 验证 websiteId 必需
     if (!websiteId) {
       return sendErrorResponse(res, null, 'websiteId is required - please select a promotion website', 400);
     }
-    
+
     // 验证 contentType 必需
     if (!contentType || !['informational', 'commercial'].includes(contentType)) {
       return sendErrorResponse(res, null, 'contentType must be "informational" or "commercial"', 400);
+    }
+
+    // Force correction of content type based on keyword intent
+    // Even if frontend sends 'informational', if the keyword implies buying guide, force 'commercial'
+    const commercialTerms = ['buy', 'price', 'review', 'best', 'top', 'vs', 'comparison', 'guide', 'sale', 'deal', 'cheap', 'cost', 'shop', 'store',
+      '购买', '价格', '评测', '最', '排名', '对比', '指南', '怎么选', '推荐', '多少钱', '哪里买'];
+
+    let finalContentType = contentType;
+    const keywordLower = (keyword || '').toLowerCase();
+    if (commercialTerms.some(term => keywordLower.includes(term))) {
+      console.log(`[Save Article] Forcing contentType to 'commercial' based on keyword intent: ${keyword}`);
+      finalContentType = 'commercial';
     }
 
     // 验证并清理 images 数组
@@ -93,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ${targetAudience || null},
         ${targetMarket || null},
         ${websiteId},
-        ${contentType},
+        ${finalContentType},
         'draft'
       )
       RETURNING id, created_at, website_id, content_type

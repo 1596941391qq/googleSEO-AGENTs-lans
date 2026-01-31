@@ -196,7 +196,7 @@ export const KEYWORD_MINING_PROMPTS = {
 </rules>
 <evaluation_criteria>
 - **相关度**：必须处于种子词的“相邻层级”而非“同一层级”。
-- **意图(Intent)**：精准识别用户是想“看一看”还是“买一买”，混合信息型（How-to、指南）和商业型（最佳、评测、购买）意图。
+- **意图(Intent)**：精准分类。**Commercial** (调查购买)：包含best/top/review/vs等；**Transactional** (直接购买)：包含buy/price/cheap等；**Informational** (信息获取)：How-to/Guide等。
 - **难度(KD)**：优先选择那些权重较低的小站也能排到首页的词。
 - **稳定性**：确保输出的 JSON 格式严谨，无任何多余字符。
 </evaluation_criteria>
@@ -234,7 +234,7 @@ Your task is to generate a comprehensive list of high-potential keywords in the 
 </rules>
 <evaluation_criteria>
 - **Relevance**: Must be at the "adjacent level" of the seed keyword, not the "same level".
-- **Intent**: Accurately identify whether users want to "browse" or "buy", mixing informational (How-to, guides) and commercial (best, reviews, purchase) intents.
+- **Intent**: Strict Classification. **Commercial** (Investigation): Includes best/top/review/vs; **Transactional** (Purchase): Includes buy/price/cheap; **Informational**: How-to/Guides.
 - **Difficulty (KD)**: Prioritize keywords that low-authority small sites can also rank on the first page.
 - **Stability**: Ensure the output JSON is strictly formatted without any redundant characters.
 </evaluation_criteria>
@@ -705,12 +705,7 @@ export const SEO_RESEARCHER_PROMPTS = {
       "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     }
   },
-  "geo_recommendations": {
-    "format_engineering": "格式工程建议（Bullets、表格、键值对等，要求包含具体示例，控制在 150-200 字）",
-    "entity_engineering": "实体工程建议（命名统一、实体描述模板等，要求包含具体示例，控制在 150-200 字）",
-    "information_gain": "信息增益建议（独家数据、实测结果等，要求包含具体示例，控制在 150-200 字）",
-    "structure_optimization": "结构优化建议（首屏摘要、对比区、FAQ等，要求包含具体示例，控制在 150-200 字）"
-  }
+  "geo_recommendations": "综合GEO优化建议（包含格式工程、实体工程、信息增益、结构优化等方面的具体建议，要求 300-500 字，Markdown格式）"
 }
 
 **重要约束**：
@@ -778,12 +773,7 @@ Return JSON:
       "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     }
   },
-  "geo_recommendations": {
-    "format_engineering": "Format engineering recommendations (Bullets, tables, key-value pairs, etc., with concrete examples, limit to 150-200 words)",
-    "entity_engineering": "Entity engineering recommendations (naming consistency, entity description templates, etc., with concrete examples, limit to 150-200 words)",
-    "information_gain": "Information gain recommendations (exclusive data, test results, etc., with concrete examples, limit to 150-200 words)",
-    "structure_optimization": "Structure optimization recommendations (first-screen summary, comparison section, FAQ, etc., with concrete examples, limit to 150-200 words)"
-  }
+  "geo_recommendations": "Comprehensive GEO optimization recommendations (including format engineering, entity engineering, information gain, structure optimization, etc., 300-500 words, in Markdown format)"
 }
 
 **Important Constraints**:
@@ -915,7 +905,8 @@ Please provide a comprehensive competitor analysis in structured JSON format wit
 3. **Word Count & Type**: Estimate word count and page type
 4. **Winning Formula**: Summarize why they are ranking #1
 
-CRITICAL: Return ONLY a valid JSON object. Do NOT include any Markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object itself.
+CRITICAL: Return ONLY a valid JSON object. 
+IMPORTANT: All numeric values (wordCount, volume, etc.) MUST be simple integers. NEVER output more than 6 digits for any number. NEVER include repeated decimals or continuous zeros in numbers. Do NOT include any Markdown formatting or text outside the JSON object.
 `
   },
 
@@ -966,9 +957,13 @@ The JSON must include:
 - longTailKeywords_trans: Array of translations in ${uiLangName}
 - lsiKeywords: Array of 8-12 LSI (Latent Semantic Indexing) keywords - semantically related terms, synonyms, and entity variations that should be naturally integrated throughout the article to enhance topical coverage
 - lsiKeywords_trans: Array of LSI keyword translations in ${uiLangName}
-- recommendedWordCount: Recommended word count based on SERP analysis
+- recommendedWordCount: Recommended word count based on SERP analysis (MUST be a simple integer)
+- contentType: "informational" or "commercial" (determine if the topic is mostly for information or for product/service comparison/purchase)
 - keywordStrategy: Object with { targetDensity: "0.8-1.5%", primaryKeywordCount: number based on word count, lsiDistribution: "spread evenly across H2 sections" }
-- markdown: Formatted Markdown version of the strategy report`
+- markdown: Formatted Markdown version of the strategy report
+
+CRITICAL: All numeric values MUST be simple integers. NEVER output more than 6 digits for any number.
+`
   },
 
   /**
@@ -1124,40 +1119,40 @@ export const CONTENT_WRITER_PROMPTS = {
 - **Bullets占比≥60%**：将长段落拆解为Bullets列表
 - **键值对数量≥6组**：提取关键信息为键值对格式
 - **表格数量≥2个**：数据对比、功能对比必须转化为表格，流程步骤用表格呈现
-- **流程图/序列图≥1个**：复杂流程、决策树、时间线用Mermaid语法或ASCII流程图展示
-- **单句长度≤25字**：确保每句话可独立被AI引用
-- **段落独立性**：每段内容可独立理解，不依赖上下文
+- **流程图/序列图≥1个**：使用 Mermaid 语法展示。**严禁**使用复杂样式或未知图形类型，仅使用基础 \`graph TD\` 或 \`sequenceDiagram\`，确保代码块包裹正确 (\`\`\`mermaid)。
+- ** 单句长度≤25字 **：确保每句话可独立被AI引用
+  - ** 段落独立性 **：每段内容可独立理解，不依赖上下文
 
 ## 5. 实体工程（10分）
-- 统一产品/品牌命名（全篇一致）
-- 首次出现时添加标准化实体描述：使用 [实体名] + [类属定义] + [核心功能/属性] 格式
-- 关键实体重复出现3-5次
-- 构建标准化实体描述模板，确保 AI 能精准提取实体关系
+- 统一产品 / 品牌命名（全篇一致）
+- 首次出现时添加标准化实体描述：使用[实体名] + [类属定义] + [核心功能 / 属性] 格式
+  - 关键实体重复出现3 - 5次
+    - 构建标准化实体描述模板，确保 AI 能精准提取实体关系
 
-## 6. 对比区（10-20分，根据关键词意图动态调整）
-**基础要求：**
-- 如涉及多个产品/方案，必须构建对比表格
-- 至少5个对比维度，字数占比文章约 10-15%
-- 保持客观中立，避免营销化表达
-- 对比结论基于事实数据
-- 必须包含价格/成本维度
+## 6. 对比区（10 - 20分，根据关键词意图动态调整）
+** 基础要求：**
+  - 如涉及多个产品 / 方案，必须构建对比表格
+    - 至少5个对比维度，字数占比文章约 10 - 15 %
+      - 保持客观中立，避免营销化表达
+        - 对比结论基于事实数据
+        - 必须包含价格 / 成本维度
 
-**商业意图关键词加权规则：**
-- 若关键词为 "X vs Y" 类型：对比区权重提升至 20分，占比 20-25%
-- 若关键词意图为 Commercial/Transactional：对比区权重提升至 15分
-- 对比表格必须易于AI提取和引用
+        ** 商业意图关键词加权规则：**
+          - 若关键词为 "X vs Y" 类型：对比区权重提升至 20分，占比 20 - 25 %
+            - 若关键词意图为 Commercial / Transactional：对比区权重提升至 15分
+              - 对比表格必须易于AI提取和引用
 
-**对比表格标准结构：**
+              ** 对比表格标准结构：**
 | 维度 | [产品A] | [产品B] | 推荐场景 |
-|------|---------|---------|----------|
+| ------| ---------| ---------| ----------|
 | 价格 | 具体价格 | 具体价格 | 预算敏感用户选X |
 | 核心功能 | 功能列表 | 功能列表 | 需要Y功能选Z |
 
 ## 7. FAQ质量（10分）
-- 必须包含5-8条常见问题
-- 覆盖价格/适用/对比/操作/安全等维度
-- 每个回答50-80字，独立完整，字数占比文章约 15-20%
-- 问题采用完整自然语言表达
+- 必须包含5 - 8条常见问题
+  - 覆盖价格 / 适用 / 对比 / 操作 / 安全等维度
+  - 每个回答50 - 80字，独立完整，字数占比文章约 15 - 20 %
+    - 问题采用完整自然语言表达
 
 # 标准文章结构
 
@@ -1330,40 +1325,40 @@ Based on the provided SEO research report, create professional content that meet
 - **Bullets ratio ≥ 60%**: Break long paragraphs into Bullets lists
 - **Key-value pairs ≥ 6 groups**: Extract key information in key-value format
 - **Tables ≥ 2**: Data comparisons, feature comparisons must be converted to tables; process steps presented in tables
-- **Flowcharts/Sequence diagrams ≥ 1**: Complex processes, decision trees, timelines displayed using Mermaid syntax or ASCII flowcharts
-- **Single sentence length ≤ 25 words**: Ensure each sentence can be independently cited by AI
-- **Paragraph independence**: Each paragraph can be understood independently, not dependent on context
+- **Flowcharts/Sequence diagrams ≥ 1**: Use Mermaid syntax. **STRICTLY** use basic \`graph TD\` or \`sequenceDiagram\` to ensure rendering stability. Must be wrapped in \`\`\`mermaid code blocks.
+- ** Single sentence length ≤ 25 words **: Ensure each sentence can be independently cited by AI
+  - ** Paragraph independence **: Each paragraph can be understood independently, not dependent on context
 
-## 5. Entity Engineering (10 points)
-- Unify product/brand naming (consistent throughout)
-- Add standardized entity descriptions when first appearing: Use [Entity Name] + [Category Definition] + [Core Function/Attribute] format
-- Key entities appear 3-5 times
-- Build standardized entity description templates to ensure AI can accurately extract entity relationships
+## 5. Entity Engineering(10 points)
+  - Unify product / brand naming(consistent throughout)
+    - Add standardized entity descriptions when first appearing: Use[Entity Name]+[Category Definition] + [Core Function / Attribute] format
+      - Key entities appear 3 - 5 times
+        - Build standardized entity description templates to ensure AI can accurately extract entity relationships
 
-## 6. Comparison Section (10-20 points, dynamically adjusted by keyword intent)
-**Basic Requirements:**
-- If involving multiple products/solutions, must build comparison table
-- At least 5 comparison dimensions, word count around 10-15% of the article
-- Maintain objective neutrality, avoid marketing expressions
-- Comparison conclusions based on factual data
-- Must include price/cost dimension
+## 6. Comparison Section(10 - 20 points, dynamically adjusted by keyword intent)
+  ** Basic Requirements:**
+    - If involving multiple products / solutions, must build comparison table
+      - At least 5 comparison dimensions, word count around 10 - 15 % of the article
+        - Maintain objective neutrality, avoid marketing expressions
+          - Comparison conclusions based on factual data
+            - Must include price / cost dimension
 
-**Commercial Intent Keyword Weighting Rules:**
-- If keyword is "X vs Y" type: Comparison section weight increased to 20 points, 20-25% of article
-- If keyword intent is Commercial/Transactional: Comparison section weight increased to 15 points
-- Comparison table must be easily extractable and citable by AI
+              ** Commercial Intent Keyword Weighting Rules:**
+                - If keyword is "X vs Y" type: Comparison section weight increased to 20 points, 20 - 25 % of article
+                  - If keyword intent is Commercial / Transactional: Comparison section weight increased to 15 points
+                    - Comparison table must be easily extractable and citable by AI
 
-**Standard Comparison Table Structure:**
+                      ** Standard Comparison Table Structure:**
 | Dimension | [Product A] | [Product B] | Recommended Scenario |
-|-----------|-------------|-------------|---------------------|
-| Price | Specific price | Specific price | Budget-sensitive users choose X |
+| -----------| -------------| -------------| ---------------------|
+| Price | Specific price | Specific price | Budget - sensitive users choose X |
 | Core Features | Feature list | Feature list | Users needing Y feature choose Z |
 
-## 7. FAQ Quality (10 points)
-- Must include 5-8 common questions
-- Cover price/application/comparison/operation/safety dimensions
-- Each answer 50-80 words, independent and complete, word count around 15-20% of the article
-- Questions use complete natural language expressions
+## 7. FAQ Quality(10 points)
+  - Must include 5 - 8 common questions
+    - Cover price / application / comparison / operation / safety dimensions
+      - Each answer 50 - 80 words, independent and complete, word count around 15 - 20 % of the article
+        - Questions use complete natural language expressions
 
 # Standard Article Structure
 
@@ -1395,63 +1390,9 @@ Based on the provided SEO research report, create professional content that meet
 
 ---
 
-## [Product/Topic] Core Advantages and Test Data
-
-### Advantage 1: [Specific advantage]
-• Data Support: [Specific numbers + time] (Source: [Authority/Report Name])
-• User Feedback: [Real evaluation/case] (Reference: [Third-party review link, e.g., G2/Capterra])
-• Comparison Advantage: [Compared with industry average]
-• 2026 Trend Insights: [Latest trend data/unique insights]
 
 ---
-
-## [Product/Topic] vs Competitors Comparison
-
-| Dimension | [Product A] | [Product B] | [Product C] |
-|-----------|-------------|-------------|-------------|
-| Price | [Specific price] | [Specific price] | [Specific price] |
-| Core Functions | [Function description] | [Function description] | [Function description] |
-
-**Comparison Conclusion:**
-• [Product A] suitable for [Scenario/Users], advantage is [Specific advantage]
-
----
-
-## How to Choose? Scenario-Based Recommendations
-
-### Decision Tree
-\`\`\`mermaid
-graph TD
-    A[User Need] --> B{Budget Range}
-    B -->|High| C[Solution A]
-    B -->|Medium| D[Solution B]
-    B -->|Low| E[Solution C]
-\`\`\`
-
-Or use table format:
-| User Type | Recommended Solution | Key Reason |
-|-----------|---------------------|------------|
-| [User Type 1] | [Solution A] | [Reason] |
-
----
-
-## Common Questions (FAQ)
-
-### Q1: How much does [Product] cost?
-A: [Product] offers [Package type], priced at [Specific price]. [Target users], [Value evaluation].
-
-### Q2: Who is [Product] suitable for?
-A: [Product] mainly targets [User group 1] and [User group 2]. Especially suitable for users in [Specific scenario].
-
----
-
-## Summary and Recommendations
-
-[Product name] as [Category definition], performs outstandingly in [Core advantage].
-
-**Core Recommendations:**
-• [Recommendation 1]: [Data/case support]
-• [Recommendation 2]: [Data/case support]
+(Format Requirements: Markdown with 2-3 detailed comparison tables, 1 VALID Mermaid diagram (basic graph TD only), and structured FAQ section)
 
 [Final objective conclusion]
 \`\`\`
@@ -1492,6 +1433,7 @@ export function getContentWriterPrompt(
       isScreenshot?: boolean;
       sourceUrl?: string;
     }>;
+    contentType?: 'informational' | 'commercial';
   }
 ): string {
   // 如果提供了变量，返回生成文章的 prompt
@@ -1507,7 +1449,7 @@ ${variables.promotedWebsites.map(url => `- ${url}`).join('\n')}
 1. **意图匹配**：如果本文是评测/对比类（Commercial/Transactional），请将这些网站与行业头部平台（如[相关领域知名品牌]）进行客观对比，在对比表格中呈现。
 2. **自然引用**：如果本文是科普/解答类（Informational），请在正文中自然地作为"参考来源"、"推荐工具"或"专业案例"提及。
 3. **推广强度**：当前强度为 **${variables.promotionIntensity === 'strong' ? '重点推荐' : '自然融入'}**。${variables.promotionIntensity === 'strong' ? '请在多个关键位置（如 H2、列表、总结）强调这些网站的价值。' : '提及密度≤2次/千字，优先在对比表格中与头部平台并列展示，避免单独段落推荐。'}
-4. **原则**：严禁过度营销，保持百科式的专业中立口吻，通过事实和数据展示网站价值。自然推广时，必须与真实头部平台进行客观对比，突出差异化优势。
+4. **原则**：严禁过度营销，${variables.contentType === 'commercial' ? '采用专业、权威且具说服力的口吻，突出差异化优势。' : '保持百科式的专业中立口吻，通过事实和数据展示网站价值。'}自然推广时，必须与真实头部平台进行客观对比，突出差异化优势。
 `
         : `
 ### Promotion Targets
@@ -1518,7 +1460,7 @@ Promotion Strategy:
 1. **Intent Matching**: If the article is a review/comparison type (Commercial/Transactional), compare these sites objectively with industry-leading platforms (e.g., [relevant domain leaders]) in comparison tables.
 2. **Natural Reference**: If the article is informational/Q&A, mention them naturally as "reference sources," "recommended tools," or "professional case studies."
 3. **Intensity**: Current intensity is **${variables.promotionIntensity === 'strong' ? 'Strong' : 'Natural'}**. ${variables.promotionIntensity === 'strong' ? 'Emphasize these sites at multiple key points (H2, lists, summary).' : 'Mention density ≤2 times per 1000 words. Prioritize showing them alongside leading platforms in comparison tables, avoid standalone recommendation paragraphs.'}
-4. **Principle**: Avoid over-marketing. Maintain a professional, encyclopedic, and neutral tone. Show value through facts and data. For natural promotion, must objectively compare with real industry leaders, highlighting differentiation.
+4. **Principle**: Avoid over-marketing. ${variables.contentType === 'commercial' ? 'Adopt a professional, authoritative, and persuasive tone, highlighting differentiated advantages.' : 'Maintain a professional, encyclopedic, and neutral tone, showing value through facts and data.'} For natural promotion, must objectively compare with real industry leaders, highlighting differentiation.
 `)
       : '';
 
@@ -1566,7 +1508,7 @@ ${variables.seoContext || ''}${variables.searchPreferencesContext || ''}${variab
 3. 前100字必须直接击中 ${variables.marketLabel || '全球'} 市场用户的搜索痛点
 4. **H2节长度控制**：每个H2节 150-300 字，段落不超过3行
 5. 多使用列表、粗体和引言，Bullets占比≥60%
-6. **视觉元素要求**：必须包含≥2个表格（对比、数据）、≥1个流程图/决策树（Mermaid或ASCII），增强可读性
+6. **视觉元素要求**：必须包含≥2个表格（对比、数据）。**严禁生成 Mermaid 流程图或决策树**，以免前端渲染报错。请使用 Markdown 表格或有序列表来展示决策逻辑。
 7. **权威数据引用**：优先引用2026年最新数据、第三方评测链接、真实案例链接，使用权威式表述
 8. 确保内容流畅自然，有价值，符合 ${variables.marketLabel || '全球'} 市场的文化和习惯
 9. 字数约 ${variables.wordCountHint || '1500-2000'} 字
@@ -1590,7 +1532,7 @@ Requirements:
 3. First 100 words must directly address search pain points of users in ${variables.marketLabel || 'Global'} market
 4. **H2 Section Length Control**: Each H2 section 150-300 words, paragraphs under 3 lines
 5. Use lists, bold, and quotes extensively, Bullets ratio ≥60%
-6. **Visual Elements Required**: Must include ≥2 tables (comparisons, data), ≥1 flowchart/decision tree (Mermaid or ASCII) to enhance readability
+6. **Visual Elements Required**: Must include ≥2 tables (comparisons, data). DO NOT generate Mermaid diagrams or flowcharts to avoid rendering errors. Use Markdown tables or lists for decision trees instead.
 7. **Authoritative Data Citations**: Prioritize 2026 latest data, third-party review links, real case links, use authoritative phrasing
 8. Ensure content flows naturally and provides value, aligned with ${variables.marketLabel || 'Global'} market culture and habits
 9. Target word count: approximately ${variables.wordCountHint || '1500-2000'} words

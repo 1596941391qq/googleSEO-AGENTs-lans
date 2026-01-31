@@ -162,7 +162,9 @@ export async function deployToCloudflarePages(
  */
 export async function deployToNetlify(config: PlatformDeployConfig): Promise<PlatformDeployResult> {
   try {
-    // 1. 创建站点
+    console.log(`[Netlify] Creating site: ${config.siteName}`);
+
+    // Step 1: 先创建一个空站点(不连接 GitHub)
     const createResponse = await fetch('https://api.netlify.com/api/v1/sites', {
       method: 'POST',
       headers: {
@@ -171,22 +173,19 @@ export async function deployToNetlify(config: PlatformDeployConfig): Promise<Pla
       },
       body: JSON.stringify({
         name: config.siteName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-        repo: {
-          provider: 'github',
-          repo: `${config.repoOwner}/${config.repoName}`,
-          private: false,
-          branch: 'main',
-          cmd: config.buildCommand ?? 'mkdocs build',
-          dir: config.publishDir ?? 'site',
-        },
+        // 不包含 repo 配置,先创建空站点
       }),
     });
 
     if (!createResponse.ok) {
       const error = await createResponse.json();
-      // 站点名已存在，尝试获取
+      console.error(`[Netlify] API Error - Status: ${createResponse.status}`);
+      console.error(`[Netlify] Error Response:`, JSON.stringify(error, null, 2));
+
+      // 站点名已存在
       if (createResponse.status === 422) {
         const siteName = config.siteName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+        console.log(`[Netlify] Site already exists: ${siteName}`);
         return {
           success: true,
           siteUrl: `https://${siteName}.netlify.app`,
@@ -199,13 +198,26 @@ export async function deployToNetlify(config: PlatformDeployConfig): Promise<Pla
       };
     }
 
-    const data = await createResponse.json();
+    const siteData = await createResponse.json();
+    console.log(`[Netlify] ✅ Site created successfully. ID: ${siteData.id}`);
+    console.log(`[Netlify] Site URL: ${siteData.ssl_url || siteData.url}`);
+
+    // Step 2: 配置 GitHub 仓库连接
+    // 注意: 这一步可能需要用户在 Netlify UI 中手动完成 GitHub OAuth 授权
+    // 我们先返回成功,让用户手动连接 GitHub
+    console.log(`[Netlify] ⚠️ Please manually connect GitHub repo in Netlify UI:`);
+    console.log(`[Netlify] Site settings → Build & deploy → Link repository`);
+    console.log(`[Netlify] Repository: ${config.repoOwner}/${config.repoName}`);
+    console.log(`[Netlify] Build command: ${config.buildCommand ?? 'mkdocs build'}`);
+    console.log(`[Netlify] Publish directory: ${config.publishDir ?? 'site'}`);
+
     return {
       success: true,
-      siteUrl: data.ssl_url || data.url,
-      projectId: data.id,
+      siteUrl: siteData.ssl_url || siteData.url,
+      projectId: siteData.id,
     };
   } catch (error: any) {
+    console.error(`[Netlify] Exception:`, error);
     return {
       success: false,
       error: error.message || 'Failed to deploy to Netlify',
@@ -508,14 +520,26 @@ export async function triggerCFPagesBuild(config: {
 /**
  * 触发 Netlify 重新部署
  * API 文档: https://docs.netlify.com/api/get-started/#builds
+ * 
+ * 双重触发机制：
+ * 1. 优先使用 API 直接触发（需要 token 和 siteId）
+ * 2. 如果 API 失败，尝试使用 Build Hook（需要配置 buildHookUrl）
  */
 export async function triggerNetlifyBuild(config: {
   token: string;
   siteId: string;
+  buildHookUrl?: string; // 可选的 Build Hook URL，用于备用触发
 }): Promise<RebuildResult> {
   try {
     console.log(`[Netlify] Triggering build for site: ${config.siteId}`);
 
+    // 优先使用 Build Hook (更可靠,不需要特殊权限)
+    if (config.buildHookUrl) {
+      console.log(`[Netlify] Using Build Hook: ${config.buildHookUrl}`);
+      return await triggerNetlifyBuildViaWebhook({ buildHookUrl: config.buildHookUrl });
+    }
+
+    // 备用方案: 使用 API (需要更高权限)
     const response = await fetch(
       `https://api.netlify.com/api/v1/sites/${config.siteId}/builds`,
       {
@@ -528,11 +552,21 @@ export async function triggerNetlifyBuild(config: {
     );
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error(`[Netlify] Build trigger failed: ${response.status}`, error);
+      const errorText = await response.text();
+      let errorDetail = errorText;
+
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorDetail = errorJson.message || errorJson.error || errorText;
+      } catch (e) {
+        // 如果不是 JSON，使用原始文本
+      }
+
+      console.error(`[Netlify] Build trigger failed: ${response.status}`, errorDetail);
+
       return {
         success: false,
-        error: error.message || `Netlify API error: ${response.status}`,
+        error: errorDetail || `Netlify API error: ${response.status}`,
       };
     }
 
@@ -544,9 +578,58 @@ export async function triggerNetlifyBuild(config: {
     };
   } catch (error: any) {
     console.error(`[Netlify] Build trigger exception:`, error);
+
     return {
       success: false,
       error: error.message || 'Failed to trigger Netlify build',
+    };
+  }
+}
+
+/**
+ * 通过 Build Hook (Webhook) 触发 Netlify 重新构建（备用方法）
+ * 
+ * Build Hook 是 Netlify 提供的一个简单的 POST 端点，无需认证。
+ * 只需要向该 URL 发送 POST 请求即可触发构建。
+ * 
+ * 用法：在 Netlify 控制台创建 Build Hook：
+ * Site settings → Build & deploy → Build hooks → Add build hook
+ * 
+ * @param config.buildHookUrl - Netlify Build Hook URL (形如 https://api.netlify.com/build_hooks/xxx)
+ */
+export async function triggerNetlifyBuildViaWebhook(config: {
+  buildHookUrl: string;
+}): Promise<RebuildResult> {
+  try {
+    console.log(`[Netlify] Triggering build via Build Hook...`);
+
+    const response = await fetch(config.buildHookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}), // 空 body 即可触发
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[Netlify] Build Hook trigger failed: ${response.status}`, errorText);
+      return {
+        success: false,
+        error: `Netlify Build Hook failed: ${response.status} - ${errorText}`,
+      };
+    }
+
+    console.log(`[Netlify] ✅ Build triggered via Build Hook successfully`);
+    return {
+      success: true,
+      buildId: 'webhook-triggered',
+    };
+  } catch (error: any) {
+    console.error(`[Netlify] Build Hook trigger exception:`, error);
+    return {
+      success: false,
+      error: error.message || 'Failed to trigger Netlify build via Build Hook',
     };
   }
 }

@@ -40,6 +40,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       additionalInfo,
     } = parseRequestBody(req);
 
+    console.log('[Save Website] Request URL:', websiteUrl);
+    console.log('[Save Website] User ID:', userId);
+
     if (!websiteUrl || typeof websiteUrl !== 'string') {
       return sendErrorResponse(res, null, 'valid websiteUrl is required', 400);
     }
@@ -61,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         website_title, website_description, website_screenshot,
         raw_content, content_updated_at,
         industry, monthly_visits, monthly_revenue,
-        marketing_tools, additional_info
+        marketing_tools, additional_info, is_active
       )
       VALUES (
         ${userId}, ${websiteUrl}, ${domain},
@@ -69,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ${rawContent || null}, NOW(),
         ${industry || null}, ${monthlyVisits || null}, ${monthlyRevenue || null},
         ${marketingTools && Array.isArray(marketingTools) && marketingTools.length > 0 ? marketingTools : null},
-        ${additionalInfo || null}
+        ${additionalInfo || null}, true
       )
       ON CONFLICT (user_id, website_url) DO UPDATE SET
         website_title = EXCLUDED.website_title,
@@ -82,10 +85,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         monthly_revenue = EXCLUDED.monthly_revenue,
         marketing_tools = EXCLUDED.marketing_tools,
         additional_info = EXCLUDED.additional_info,
+        is_active = true,
         updated_at = NOW()
       RETURNING id
     `;
+    console.log('[Save Website] SQL Result:', result);
     const websiteId = result.rows[0].id;
+    console.log('[Save Website] Saved Website ID:', websiteId);
 
     // Save keywords
     if (keywords && Array.isArray(keywords) && keywords.length > 0) {

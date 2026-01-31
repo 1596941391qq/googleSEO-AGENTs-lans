@@ -340,7 +340,7 @@ export async function analyzeSearchPreferences(
     // 设置合理的输出长度限制（3000 tokens ≈ 2000-2500 中文字符），避免生成重复内容
     const jsonConfig = {
       responseMimeType: 'application/json',
-      maxOutputTokens: 3000, // 限制输出长度，避免浪费资源
+      maxOutputTokens: 3000,
       responseSchema: {
         type: 'object',
         properties: {
@@ -564,7 +564,7 @@ export async function analyzeCompetitors(
                     url: { type: 'string' },
                     title: { type: 'string' },
                     structure: { type: 'array', items: { type: 'string' } },
-                    wordCount: { type: 'number' },
+                    wordCount: { type: 'integer', description: 'Approximate word count, must be a simple integer' },
                     contentGaps: { type: 'array', items: { type: 'string' } }
                   }
                 }
@@ -652,135 +652,60 @@ function getLanguageName(code: TargetLanguage): string {
 function extractJSONRobust(text: string): string {
   if (!text) return '{}';
 
-  // 移除 Markdown 代码块标记
-  text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  // 1. Pre-processing: Fix extreme hallucinations (like 1800.00000000000000000...)
+  let cleaned = text.replace(/(\d+\.\d{5})\d{10,}/g, '$1');
+  cleaned = cleaned.replace(/: \d+\.\d{10,}(?=[,}\s])/g, (match) => match.split('.')[0]);
 
-  // 移除可能的 Markdown 格式标记（如 ** 等）在 JSON 外部
-  // 先尝试找到 JSON 对象或数组
-  // 注意：不使用贪婪匹配，而是直接查找第一个 { 或 [，然后使用括号匹配来提取完整 JSON
-  const firstBrace = text.indexOf('{');
-  const firstBracket = text.indexOf('[');
+  // 2. Remove Markdown code blocks
+  cleaned = cleaned.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+  // 3. Extract JSON object or array using brace matching
+  const firstBrace = cleaned.indexOf('{');
+  const firstBracket = cleaned.indexOf('[');
 
   let extracted: string | null = null;
+  const startIdx = (firstBrace !== -1 && firstBracket !== -1)
+    ? Math.min(firstBrace, firstBracket)
+    : (firstBrace !== -1 ? firstBrace : firstBracket);
 
-  if (firstBrace !== -1 || firstBracket !== -1) {
-    // 使用括号匹配方法提取完整 JSON（更可靠）
-    const startIdx = firstBrace !== -1 && firstBracket !== -1
-      ? Math.min(firstBrace, firstBracket)
-      : (firstBrace !== -1 ? firstBrace : firstBracket);
-
+  if (startIdx !== -1) {
     let braceCount = 0;
     let bracketCount = 0;
     let inString = false;
     let escapeNext = false;
 
-    for (let i = startIdx; i < text.length; i++) {
-      const char = text[i];
-
-      if (escapeNext) {
-        escapeNext = false;
-        continue;
-      }
-
-      if (char === '\\') {
-        escapeNext = true;
-        continue;
-      }
-
-      if (char === '"' && !escapeNext) {
-        inString = !inString;
-        continue;
-      }
+    for (let i = startIdx; i < cleaned.length; i++) {
+      const char = cleaned[i];
+      if (escapeNext) { escapeNext = false; continue; }
+      if (char === '\\') { escapeNext = true; continue; }
+      if (char === '"') { inString = !inString; continue; }
 
       if (!inString) {
         if (char === '{') braceCount++;
-        if (char === '}') braceCount--;
-        if (char === '[') bracketCount++;
-        if (char === ']') bracketCount--;
+        else if (char === '}') braceCount--;
+        else if (char === '[') bracketCount++;
+        else if (char === ']') bracketCount--;
 
         if (braceCount === 0 && bracketCount === 0 && (char === '}' || char === ']')) {
-          extracted = text.substring(startIdx, i + 1);
+          extracted = cleaned.substring(startIdx, i + 1);
           break;
         }
       }
     }
+
+    // Fallback: If no matched closing brace found, just take everything from start
+    if (!extracted) {
+      extracted = cleaned.substring(startIdx);
+    }
   }
 
-  // 如果括号匹配失败，回退到正则表达式匹配（但可能匹配到不完整的 JSON）
+  // 4. Final attempt with regex if brace matching failed completely
   if (!extracted) {
-    const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-    if (jsonMatch) {
-      extracted = jsonMatch[1];
-    }
+    const jsonMatch = cleaned.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+    extracted = jsonMatch ? jsonMatch[0] : cleaned;
   }
 
-  if (extracted) {
-
-    // 使用更精确的方法提取完整的 JSON
-    // 查找第一个 { 或 [
-    const firstBrace = extracted.indexOf('{');
-    const firstBracket = extracted.indexOf('[');
-
-    if (firstBrace !== -1 || firstBracket !== -1) {
-      const startIdx = firstBrace !== -1 && firstBracket !== -1
-        ? Math.min(firstBrace, firstBracket)
-        : (firstBrace !== -1 ? firstBrace : firstBracket);
-
-      // 从第一个 { 或 [ 开始，找到匹配的 } 或 ]
-      let braceCount = 0;
-      let bracketCount = 0;
-      let inString = false;
-      let escapeNext = false;
-
-      for (let i = startIdx; i < extracted.length; i++) {
-        const char = extracted[i];
-
-        if (escapeNext) {
-          escapeNext = false;
-          continue;
-        }
-
-        if (char === '\\') {
-          escapeNext = true;
-          continue;
-        }
-
-        if (char === '"' && !escapeNext) {
-          inString = !inString;
-          continue;
-        }
-
-        if (!inString) {
-          if (char === '{') braceCount++;
-          if (char === '}') braceCount--;
-          if (char === '[') bracketCount++;
-          if (char === ']') bracketCount--;
-
-          if (braceCount === 0 && bracketCount === 0 && (char === '}' || char === ']')) {
-            return extracted.substring(startIdx, i + 1).trim();
-          }
-        }
-      }
-
-      // 如果括号匹配失败（可能是 JSON 被截断），尝试修复截断的 JSON
-      // 检查是否有未闭合的括号
-      if (braceCount > 0 || bracketCount > 0) {
-        // JSON 可能被截断，尝试添加缺失的闭合括号
-        let fixedExtracted = extracted.substring(startIdx);
-        if (bracketCount > 0) {
-          fixedExtracted += ']'.repeat(bracketCount);
-        }
-        if (braceCount > 0) {
-          fixedExtracted += '}'.repeat(braceCount);
-        }
-        return fixedExtracted.trim();
-      }
-    }
-
-    return extracted.trim();
-  }
-
-  return text.trim() || '{}';
+  return extracted.trim() || '{}';
 }
 
 /**
@@ -1875,6 +1800,20 @@ export const generateDeepDiveStrategy = async (
     ? 'Global'
     : targetMarket.toUpperCase();
 
+  // Force commercial intent detection logic
+  // If the keyword contains specific commercial terms, we explicitly hint the model to lean towards commercial
+  const commercialTerms = ['buy', 'price', 'review', 'best', 'top', 'vs', 'comparison', 'guide', 'sale', 'deal', 'cheap', 'cost', 'shop', 'store',
+    '购买', '价格', '评测', '最', '排名', '对比', '指南', '怎么选', '推荐', '多少钱', '哪里买'];
+
+  const isLikelyCommercial = commercialTerms.some(term => keyword.keyword.toLowerCase().includes(term));
+
+  // Inject this hint into the context
+  const intentHintContext = isLikelyCommercial
+    ? (uiLanguage === 'zh'
+      ? `\n\n[CRITICAL INSTRUCTION] The user's keyword "${keyword.keyword}" contains commercial intent signals (e.g. buying guide, review, comparison). For SEO purposes, "Buying Guides" MUST be classified as 'commercial', NOT 'informational'. You MUST set 'contentType' to 'commercial'. This is non-negotiable.`
+      : `\n\n[CRITICAL INSTRUCTION] The user's keyword "${keyword.keyword}" contains commercial intent signals (e.g. buying guide, review, comparison). For SEO purposes, "Buying Guides" MUST be classified as 'commercial', NOT 'informational'. You MUST set 'contentType' to 'commercial'. This is non-negotiable.`)
+    : '';
+
   // 从 prompts 文件获取 system instruction 和 prompt
   const promptConfig = getSEOResearcherPrompt('deepDiveStrategy', uiLanguage, {
     keyword: keyword.keyword,
@@ -1882,13 +1821,17 @@ export const generateDeepDiveStrategy = async (
     uiLangName,
     marketLabel,
     analysisContext,
-    referenceContext
+    referenceContext: referenceContext + intentHintContext // Inject detecting hint
   }) as { systemInstruction: string; prompt: string };
 
   const systemInstruction = customPrompt || (promptConfig.systemInstruction + analysisContext + referenceContext);
   const prompt = promptConfig.prompt;
 
   onProgress?.(uiLanguage === 'zh' ? `🤖 正在制定最终的 SEO 内容策略报告...` : `🤖 Generating final SEO content strategy report...`);
+
+  // Debug Log for User: Show what's being sent to the Researcher
+  console.log('[Agent 2] Deep Dive Prompt Preview:', prompt.substring(0, 500) + '...');
+  console.log('[Agent 2] Full System Instruction Length:', systemInstruction.length);
 
   try {
     const jsonConfig = {
@@ -1919,10 +1862,11 @@ export const generateDeepDiveStrategy = async (
           longTailKeywords: { type: 'array', items: { type: 'string' } },
           longTailKeywords_trans: { type: 'array', items: { type: 'string' } },
           coreKeywords: { type: 'array', items: { type: 'string' } }, // OPTIMIZED: Embedded core keywords extraction
-          recommendedWordCount: { type: 'number' },
+          recommendedWordCount: { type: 'integer', description: 'Simple integer word count' },
+          contentType: { type: 'string', enum: ['informational', 'commercial'] },
           markdown: { type: 'string' }
         },
-        required: ['pageTitleH1', 'metaDescription', 'contentStructure', 'markdown', 'coreKeywords']
+        required: ['pageTitleH1', 'metaDescription', 'contentStructure', 'markdown', 'coreKeywords', 'contentType']
       },
       onRetry: (attempt, error, delay) => {
         onProgress?.(uiLanguage === 'zh'
@@ -1960,6 +1904,14 @@ export const generateDeepDiveStrategy = async (
 
     try {
       const parsed = JSON.parse(text);
+
+      // CRITICAL FIX: Enforce commercial type if keyword signals are present
+      // LLM may sometimes ignore the prompt instruction, so we override it here to ensure business logic consistency
+      if (isLikelyCommercial) {
+        console.log(`[Agent 2] Forcing contentType to 'commercial' based on keyword signals (overriding LLM output: ${parsed.contentType})`);
+        parsed.contentType = 'commercial';
+      }
+
       // 确保 markdown 字段存在，如果没有则从其他字段生成
       if (!parsed.markdown) {
         // 从结构化数据生成 Markdown
