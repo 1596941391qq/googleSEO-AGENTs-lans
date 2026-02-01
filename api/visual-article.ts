@@ -243,6 +243,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? targetLanguage
       : getTargetLanguageFromMarket(targetMarket, keywordString);
 
+    // Set up Server-Sent Events early to prevent timeout during scraping
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const sendEvent = (event: any) => {
+      try {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      } catch (writeError) {
+        console.error('[visual-article] Failed to write event:', writeError);
+      }
+    };
+
+    sendEvent({ type: 'event', data: { agentId: 'tracker', type: 'log', message: uiLanguage === 'zh' ? '正在初始化...' : 'Initializing...', timestamp: Date.now() } });
+
     // Process reference if provided
     let processedReference = reference;
     if (reference?.type === 'url' && reference.url?.url && typeof reference.url.url === 'string' && reference.url.url.trim()) {
@@ -288,24 +303,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(`[visual-article] Checking cached website content for websiteId: ${websiteId}`);
       try {
         const cached = await getWebsiteContentCache(websiteId, 'scraped_content');
-        
+
         if (cached && cached.content) {
           console.log(`[visual-article] Using cached website content (${cached.content.length} chars)`);
-          
+
           // 从缓存的 metadata 中提取截图
           let cachedScreenshot: string | undefined;
           if (cached.metadata) {
             const metadata = typeof cached.metadata === 'string' ? JSON.parse(cached.metadata) : cached.metadata;
             cachedScreenshot = metadata.screenshot;
           }
-          
+
           // 如果缓存中没有截图，尝试重新获取截图（但不重新抓取内容）
           if (!cachedScreenshot) {
             console.log(`[visual-article] Cache has no screenshot, fetching screenshot only...`);
             try {
               const scrapeResult = await scrapeWebsite(websiteUrl, true);
               cachedScreenshot = scrapeResult.screenshot;
-              
+
               // 更新缓存，添加截图到 metadata
               if (cachedScreenshot) {
                 const updatedMetadata = {
@@ -327,7 +342,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               console.warn(`[visual-article] Failed to fetch screenshot: ${screenshotError.message}`);
             }
           }
-          
+
           // 使用缓存的网站内容（包含截图）
           processedPromotedWebsites.push({
             url: websiteUrl,
@@ -335,7 +350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             title: cached.title || undefined,
             screenshot: cachedScreenshot,
           });
-          
+
           console.log(`[visual-article] Website info ready: content=${cached.content.length} chars, hasScreenshot=${!!cachedScreenshot}`);
         } else {
           console.log(`[visual-article] No valid cache found, will scrape website: ${websiteUrl}`);
@@ -343,7 +358,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           try {
             const scrapeResult = await scrapeWebsite(websiteUrl, true);
             const websiteContent = cleanMarkdown(scrapeResult.markdown || '', 15000);
-            
+
             // 保存到缓存（包含截图）
             await saveWebsiteContentCache(
               websiteId,
@@ -358,14 +373,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               },
               24 // 24小时有效期
             );
-            
+
             processedPromotedWebsites.push({
               url: websiteUrl,
               content: websiteContent.substring(0, 10000),
               title: scrapeResult.title || undefined,
               screenshot: scrapeResult.screenshot || undefined,
             });
-            
+
             console.log(`[visual-article] Scraped and cached website content (${websiteContent.length} chars), hasScreenshot=${!!scrapeResult.screenshot}`);
           } catch (scrapeError: any) {
             console.error(`[visual-article] Failed to scrape website ${websiteUrl}:`, scrapeError.message);
@@ -379,6 +394,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 处理额外的 promotedWebsites（用户手动添加的推广网站）
     if (Array.isArray(promotedWebsites) && promotedWebsites.length > 0) {
       console.log(`[visual-article] Processing ${promotedWebsites.length} promoted websites for scraping and screenshots`);
+      sendEvent({ type: 'event', data: { agentId: 'tracker', type: 'log', message: uiLanguage === 'zh' ? `正在分析 ${promotedWebsites.length} 个推广网站...` : `Analyzing ${promotedWebsites.length} promoted websites...`, timestamp: Date.now() } });
 
       // Process each promoted website in parallel (with limit)
       const scrapePromises = promotedWebsites.map(async (promWebsiteUrl: string): Promise<ProcessedPromotedWebsite | null> => {
@@ -429,19 +445,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('[visual-article] Screenshots captured:', processedPromotedWebsites.filter(p => p.screenshot).length);
     }
 
-    // Set up Server-Sent Events or multi-part like response for streaming
-    // For simplicity but effectiveness, we'll use a custom newline-delimited JSON stream
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    // Headers and sendEvent defined earlier
 
-    const sendEvent = (event: any) => {
-      try {
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
-      } catch (writeError) {
-        console.error('[visual-article] Failed to write event:', writeError);
-      }
-    };
 
     try {
       const finalArticle = await generateVisualArticle({
@@ -513,10 +518,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.error('[visual-article] Handler Error:', error);
     console.error('[visual-article] Error stack:', error?.stack);
     try {
-      res.status(500).json({
-        error: error?.message || 'Internal server error',
-        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
-      });
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: error?.message || 'Internal server error',
+          details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+        });
+      } else {
+        // Headers already sent, try to write error event if possible
+        try {
+          res.write(`data: ${JSON.stringify({
+            type: 'error',
+            message: error?.message || 'Internal server error',
+            details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+          })}\n\n`);
+        } catch (e) {
+          console.error('[visual-article] Failed to write error event after headers sent', e);
+        }
+      }
     } catch (responseError) {
       console.error('[visual-article] Failed to send error response:', responseError);
     }

@@ -20,6 +20,7 @@ export interface ContentGenerationResult {
   content?: string;
   structure?: string[];
   article_body?: string;
+  contentType?: 'informational' | 'commercial';
   appliedOptimizations?: {
     keywords?: Array<{
       position?: string;
@@ -556,7 +557,7 @@ Please weave these sites in naturally based on the summaries above, without copy
     // 使用 prompts/index.ts 中的 prompt 模板
     // 将推广网站内容添加到 referenceContext 中
     const fullReferenceContext = referenceContext + promotedWebsitesContext;
-    
+
     const prompt = getContentWriterPrompt(contentLanguage, {
       marketLabel,
       seoContext,
@@ -566,7 +567,8 @@ Please weave these sites in naturally based on the summaries above, without copy
       wordCountHint,
       promotedWebsites,
       promotionIntensity,
-      availableImages  // 传递可用图片资源
+      availableImages,  // 传递可用图片资源
+      contentType: (seoStrategyReport as any).contentType || 'informational'
     });
 
     // 验证 prompt
@@ -576,9 +578,14 @@ Please weave these sites in naturally based on the summaries above, without copy
     }
 
     if (!systemInstruction || systemInstruction.length === 0) {
-      console.error('[Content Writer] Empty system instruction');
+      console.error('[Content Writer] Failed to get system instruction');
       throw new Error('Failed to get system instruction');
     }
+
+    // Debug Log for User
+    console.log('[Content Writer] System Instruction:', systemInstruction.substring(0, 200) + '...');
+    console.log('[Content Writer] Prompt Preview:', prompt.substring(0, 500) + '...');
+    console.log('[Content Writer] Full Prompt Length:', prompt.length);
 
     // 调用 Gemini API - 不要求 JSON 格式，直接返回 Markdown
     let response;
@@ -631,8 +638,8 @@ Please weave these sites in naturally based on the summaries above, without copy
 
       // 检查是否被截断
       if (response.finishReason === 'LENGTH' || response.finishReason === 'MAX_TOKENS') {
-        onProgress?.(contentLanguage === 'zh' 
-          ? `⚠️ 警告: AI 输出被截断，可能影响文章完整性` 
+        onProgress?.(contentLanguage === 'zh'
+          ? `⚠️ 警告: AI 输出被截断，可能影响文章完整性`
           : `⚠️ Warning: AI output was truncated, article may be incomplete`);
       }
 
@@ -652,7 +659,7 @@ Please weave these sites in naturally based on the summaries above, without copy
 
     // 清理可能的 markdown 代码块包装
     let cleanedResponse = rawResponse.trim();
-    
+
     // 检测并移除 ```json 或 ``` 包装
     if (cleanedResponse.startsWith('```json')) {
       cleanedResponse = cleanedResponse.substring(7);
@@ -690,7 +697,8 @@ Please weave these sites in naturally based on the summaries above, without copy
       markdown: markdownContent,
       content: contentBody,
       article_body: contentBody,
-      title: extractedTitle
+      title: extractedTitle,
+      contentType: (seoStrategyReport as any).contentType || 'informational'
     };
   } catch (error: any) {
     console.error('Generate Content Error:', error);

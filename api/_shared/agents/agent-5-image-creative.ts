@@ -237,7 +237,8 @@ export async function generateImagePrompts(
  */
 export async function generateImages(
   prompts: ImagePromptResult[],
-  aspectRatio: '1:1' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9' = '4:3'
+  aspectRatio: '1:1' | '3:2' | '3:4' | '4:3' | '4:5' | '5:4' | '9:16' | '16:9' | '21:9' = '4:3',
+  onProgress?: (theme: string, type: 'starting' | 'completed' | 'failed', result?: string) => void
 ): Promise<Array<{ theme: string; imageUrl?: string; error?: string }>> {
   // 使用代理配置
   const proxyInfo = getCurrentProxyInfo();
@@ -258,10 +259,11 @@ export async function generateImages(
   const API_URL = `${API_BASE_URL}/google/v1/models/gemini-3-pro-image-preview?response_format=url`;
   console.log(`[Image Generation] Using proxy: ${proxyInfo.provider}, URL: ${API_URL}`);
 
-  const results: Array<{ theme: string; imageUrl?: string; error?: string }> = [];
-
-  for (const promptResult of prompts) {
+  // 并行处理请求
+  const promises = prompts.map(async (promptResult) => {
     try {
+      if (onProgress) onProgress(promptResult.theme, 'starting');
+
       // 根据文档构建请求体 - 使用正确的格式
       const requestBody = {
         contents: [
@@ -302,110 +304,68 @@ export async function generateImages(
         throw new Error(data.error);
       }
 
-      // 优先处理 302.ai API 文档格式：检查 output 字段（这是302.ai的标准响应格式）
+      let imageUrl: string | undefined;
+
+      // 1. 优先处理 302.ai API 文档格式：检查 output 字段
       if (data.output && typeof data.output === 'string') {
-        // 根据302.ai文档，output字段包含图片URL或base64数据
-        // 如果response_format=url，output应该是URL字符串
-        results.push({
-          theme: promptResult.theme,
-          imageUrl: data.output
-        });
+        imageUrl = data.output;
       }
-      // 如果status是completed且有output，也使用output
+      // 2. 如果status是completed且有output
       else if (data.status === 'completed' && data.output) {
-        results.push({
-          theme: promptResult.theme,
-          imageUrl: data.output
-        });
+        imageUrl = data.output;
       }
-      // 如果status是processing或pending，可能需要轮询（暂时记录错误）
+      // 3. 处理 processing/pending 状态
       else if (data.status === 'processing' || data.status === 'pending') {
-        console.warn(`Image generation for theme "${promptResult.theme}" returned status: ${data.status}. May need polling.`);
-        console.log(`[Image Generation] Full response for debugging:`, JSON.stringify(data, null, 2).substring(0, 1000));
-        results.push({
+        console.warn(`Image generation for theme "${promptResult.theme}" returned status: ${data.status}.`);
+        return {
           theme: promptResult.theme,
           error: `Image generation status: ${data.status}. May need polling.`
-        });
+        };
       }
-      // 回退处理：Gemini 标准的 candidates 格式（兼容性处理）
+      // 4. 回退处理：Gemini 标准的 candidates 格式
       else if (data.candidates && data.candidates.length > 0) {
         const candidate = data.candidates[0];
         if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-          let imageUrl: string | undefined;
-
-          // 根据响应格式，URL 通常在 parts[1].url（第二个元素）
-          // 优先检查 parts[1]，如果不存在则遍历所有 parts
-          if (candidate.content.parts.length > 1 && candidate.content.parts[1]) {
-            const secondPart = candidate.content.parts[1];
-            if (secondPart && secondPart.url && typeof secondPart.url === 'string') {
-              imageUrl = secondPart.url;
-            }
+          if (candidate.content.parts.length > 1 && candidate.content.parts[1]?.url) {
+            imageUrl = candidate.content.parts[1].url;
           }
-
-          // 如果 parts[1] 中没有找到，遍历所有 parts 查找 URL
           if (!imageUrl) {
             for (let i = 0; i < candidate.content.parts.length; i++) {
               const part = candidate.content.parts[i];
-
-              // 直接检查 part.url
-              if (part && part.url && typeof part.url === 'string') {
-                imageUrl = part.url;
-                break;
-              }
-
-              // 如果 part 是对象，检查是否有嵌套的 url 字段
-              if (part && typeof part === 'object') {
-                // 检查所有可能的 URL 字段位置
+              if (part?.url) { imageUrl = part.url; break; }
+              if (typeof part === 'object') {
                 const possibleUrlFields = ['url', 'imageUrl', 'image_url', 'fileUrl', 'file_url'];
                 for (const field of possibleUrlFields) {
-                  if (part[field] && typeof part[field] === 'string') {
-                    imageUrl = part[field];
-                    break;
-                  }
+                  // @ts-ignore
+                  if (part[field]) { imageUrl = part[field]; break; }
                 }
                 if (imageUrl) break;
               }
             }
           }
-
-          if (imageUrl) {
-            // 找到图片 URL
-            results.push({
-              theme: promptResult.theme,
-              imageUrl: imageUrl
-            });
-          } else {
-            // 如果没有找到 url，记录详细信息用于调试
-            console.warn(`Image generation for theme "${promptResult.theme}" returned candidates but no URL found in parts`);
-            console.log(`[Image Generation] Parts structure:`, JSON.stringify(candidate.content.parts, null, 2));
-            console.log(`[Image Generation] Full response (first 2000 chars):`, JSON.stringify(data, null, 2).substring(0, 2000));
-            results.push({
-              theme: promptResult.theme,
-              error: 'Image URL not found in response candidates'
-            });
-          }
-        } else {
-          console.warn(`Image generation for theme "${promptResult.theme}": Invalid candidates format: missing content.parts`);
-          console.log(`[Image Generation] Candidate structure:`, JSON.stringify(candidate, null, 2).substring(0, 1000));
-          results.push({
-            theme: promptResult.theme,
-            error: 'Invalid candidates format: missing content.parts'
-          });
         }
-      } else {
-        // 如果都不匹配，记录完整响应用于调试
-        console.error(`[Image Generation] Unexpected response format for theme "${promptResult.theme}":`, JSON.stringify(data, null, 2));
-        throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 500)}`);
       }
+
+      if (imageUrl) {
+        if (onProgress) onProgress(promptResult.theme, 'completed', imageUrl);
+        return {
+          theme: promptResult.theme,
+          imageUrl: imageUrl
+        };
+      } else {
+        throw new Error('Image URL not found in response');
+      }
+
     } catch (error: any) {
       console.error(`Failed to generate image for theme "${promptResult.theme}":`, error);
-      results.push({
+      if (onProgress) onProgress(promptResult.theme, 'failed', error.message);
+      return {
         theme: promptResult.theme,
         error: error.message
-      });
+      };
     }
-  }
+  });
 
-  return results;
+  return Promise.all(promises);
 }
 

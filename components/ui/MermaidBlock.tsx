@@ -47,26 +47,38 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({
     ensureMermaidInitialized(isDarkTheme);
 
     const normalizedCode = code.trim();
-    const result = mermaid.render(renderId, normalizedCode);
 
-    const handleResult = (value: any) => {
-      const svgContent = value?.svg ?? value;
-      if (!cancelled) {
-        setSvg(svgContent);
+    const renderDiagram = async () => {
+      try {
+        // 尝试解析语法
+        // 注意：parse 在 v10+ 是异步的，且如果失败会抛出错误
+        // 设置 suppressErrors: true 防止 mermaid 直接修改 DOM 插入错误信息
+        mermaid.parseError = (err) => {
+          // 捕获 parse 阶段的同步错误（如果有）
+          console.error("Mermaid Parse Error:", err);
+        };
+
+        // 验证语法
+        if (await mermaid.parse(normalizedCode)) {
+          // 语法有效，进行渲染
+          const result = await mermaid.render(renderId, normalizedCode);
+          const svgContent = typeof result === 'string' ? result : result.svg;
+
+          if (!cancelled) {
+            setSvg(svgContent);
+          }
+        }
+      } catch (err: any) {
+        console.error("Mermaid Render Failed:", err);
+        if (!cancelled) {
+          // 提取更有用的错误信息
+          const errorMessage = err?.message || "Syntax error";
+          setError(errorMessage);
+        }
       }
     };
 
-    const handleError = (err: any) => {
-      if (!cancelled) {
-        setError(err?.message || "Mermaid render failed");
-      }
-    };
-
-    if (result && typeof (result as Promise<any>).then === "function") {
-      (result as Promise<any>).then(handleResult).catch(handleError);
-    } else {
-      handleResult(result);
-    }
+    renderDiagram();
 
     return () => {
       cancelled = true;

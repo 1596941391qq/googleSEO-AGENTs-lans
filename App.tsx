@@ -514,18 +514,16 @@ const TerminalLog = ({
 
   return (
     <div
-      className={`rounded-lg p-3 font-mono text-xs h-full overflow-hidden flex flex-col shadow-inner ${
-        isDarkTheme
-          ? "bg-[#0a0a0a] text-emerald-400 border border-white/10"
-          : "bg-white text-emerald-600 border border-gray-200"
-      }`}
+      className={`rounded-lg p-3 font-mono text-xs h-full overflow-hidden flex flex-col shadow-inner ${isDarkTheme
+        ? "bg-[#0a0a0a] text-emerald-400 border border-white/10"
+        : "bg-white text-emerald-600 border border-gray-200"
+        }`}
     >
       <div
-        className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
-          isDarkTheme
-            ? "border-emerald-500/30 text-white/70"
-            : "border-gray-200 text-gray-500"
-        }`}
+        className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${isDarkTheme
+          ? "border-emerald-500/30 text-white/70"
+          : "border-gray-200 text-gray-500"
+          }`}
       >
         <Terminal className="w-3 h-3 text-emerald-500" />
         <span>System Logs</span>
@@ -537,24 +535,22 @@ const TerminalLog = ({
         {logs.map((log, i) => (
           <div
             key={i}
-            className={`flex gap-2 ${
-              log.type === "error"
-                ? isDarkTheme
-                  ? "text-red-400"
-                  : "text-red-600"
-                : log.type === "api"
+            className={`flex gap-2 ${log.type === "error"
+              ? isDarkTheme
+                ? "text-red-400"
+                : "text-red-600"
+              : log.type === "api"
                 ? isDarkTheme
                   ? "text-emerald-400"
                   : "text-emerald-600"
                 : isDarkTheme
-                ? "text-white"
-                : "text-gray-700"
-            }`}
+                  ? "text-white"
+                  : "text-gray-700"
+              }`}
           >
             <span
-              className={`w-14 shrink-0 ${
-                isDarkTheme ? "text-white/60" : "text-gray-500"
-              }`}
+              className={`w-14 shrink-0 ${isDarkTheme ? "text-white/60" : "text-gray-500"
+                }`}
             >
               [{log.timestamp.split(" ")[0]}]
             </span>
@@ -589,19 +585,17 @@ const SerpPreview = ({
 
   return (
     <div
-      className={`mt-2 border rounded-md overflow-hidden ${
-        isDarkTheme
-          ? "border-white/10 bg-black/40"
-          : "border-gray-200 bg-gray-50"
-      }`}
+      className={`mt-2 border rounded-md overflow-hidden ${isDarkTheme
+        ? "border-white/10 bg-black/40"
+        : "border-gray-200 bg-gray-50"
+        }`}
     >
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-2 text-xs font-medium transition-colors ${
-          isDarkTheme
-            ? "bg-black hover:bg-emerald-500/20 text-white border border-emerald-500/20"
-            : "bg-white hover:bg-gray-100 text-gray-700"
-        }`}
+        className={`w-full flex items-center justify-between p-2 text-xs font-medium transition-colors ${isDarkTheme
+          ? "bg-black hover:bg-emerald-500/20 text-white border border-emerald-500/20"
+          : "bg-white hover:bg-gray-100 text-gray-700"
+          }`}
       >
         <div className="flex items-center gap-2">
           <Search className="w-3 h-3" />
@@ -616,79 +610,70 @@ const SerpPreview = ({
 
       {isOpen && (
         <div
-          className={`p-2 space-y-3 border-t ${
-            isDarkTheme
-              ? "bg-black border-emerald-500/20"
-              : "bg-white border-gray-200"
-          }`}
+          className={`p-2 space-y-3 border-t ${isDarkTheme
+            ? "bg-black border-emerald-500/20"
+            : "bg-white border-gray-200"
+            }`}
         >
           <div
-            className={`text-[10px] px-2 italic mb-2 ${
-              isDarkTheme ? "text-amber-400" : "text-amber-600"
-            }`}
+            className={`text-[10px] px-2 italic mb-2 ${isDarkTheme ? "text-amber-400" : "text-amber-600"
+              }`}
           >
             {disclaimer}
           </div>
           {keywords.map((kw) => (
             <div
               key={kw.id}
-              className={`border-b last:border-0 pb-2 last:pb-0 ${
-                isDarkTheme ? "border-white/10" : "border-gray-200"
-              }`}
+              className={`border-b last:border-0 pb-2 last:pb-0 ${isDarkTheme ? "border-white/10" : "border-gray-200"
+                }`}
             >
               <div className="flex justify-between items-start mb-1">
                 <div
-                  className={`font-bold text-xs ${
-                    isDarkTheme ? "text-white" : "text-gray-900"
-                  }`}
+                  className={`font-bold text-xs ${isDarkTheme ? "text-white" : "text-gray-900"
+                    }`}
                 >
                   {kw.keyword}
                 </div>
                 <div
-                  className={`text-[10px] px-1.5 rounded-full ${
-                    kw.probability === ProbabilityLevel.HIGH
-                      ? isDarkTheme
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : "bg-emerald-100 text-emerald-700"
-                      : kw.probability === ProbabilityLevel.MEDIUM
+                  className={`text-[10px] px-1.5 rounded-full ${kw.probability === ProbabilityLevel.HIGH
+                    ? isDarkTheme
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
+                    : kw.probability === ProbabilityLevel.MEDIUM
                       ? isDarkTheme
                         ? "bg-yellow-500/20 text-yellow-400"
                         : "bg-yellow-100 text-yellow-700"
                       : isDarkTheme
-                      ? "bg-red-500/20 text-red-400"
-                      : "bg-red-100 text-red-700"
-                  }`}
+                        ? "bg-red-500/20 text-red-400"
+                        : "bg-red-100 text-red-700"
+                    }`}
                 >
                   {kw.probability}
                 </div>
               </div>
               {kw.topSerpSnippets && kw.topSerpSnippets.length > 0 ? (
                 <div
-                  className={`space-y-1.5 pl-2 border-l-2 ${
-                    isDarkTheme ? "border-white/10" : "border-gray-200"
-                  }`}
+                  className={`space-y-1.5 pl-2 border-l-2 ${isDarkTheme ? "border-white/10" : "border-gray-200"
+                    }`}
                 >
                   {kw.topSerpSnippets.slice(0, 3).map((snippet, idx) => (
                     <div key={idx} className="text-[10px]">
                       <div
-                        className={`truncate hover:underline cursor-pointer ${
-                          isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-                        }`}
+                        className={`truncate hover:underline cursor-pointer ${isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+                          }`}
                         title={snippet.title}
                       >
                         {snippet.title}
                       </div>
                       <div
-                        className={`truncate text-[9px] ${
-                          isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-                        }`}
+                        className={`truncate text-[9px] ${isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+                          }`}
                       >
                         {snippet.url}
                       </div>
                       <div
-                        className={`line-clamp-2 ${
-                          isDarkTheme ? "text-white/90" : "text-gray-600"
-                        }`}
+                        className={`line-clamp-2 ${isDarkTheme ? "text-white/90" : "text-gray-600"
+                          }`}
                       >
                         {snippet.snippet}
                       </div>
@@ -697,11 +682,10 @@ const SerpPreview = ({
                 </div>
               ) : (
                 <div
-                  className={`text-[10px] italic pl-2 border-l-2 ${
-                    isDarkTheme
-                      ? "text-white/70 border-emerald-500/30"
-                      : "text-gray-500 border-gray-200"
-                  }`}
+                  className={`text-[10px] italic pl-2 border-l-2 ${isDarkTheme
+                    ? "text-white/70 border-emerald-500/30"
+                    : "text-gray-500 border-gray-200"
+                    }`}
                 >
                   No SERP snippets returned. (May be zero results or API missing
                   data)
@@ -714,11 +698,10 @@ const SerpPreview = ({
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className={`mt-2 flex w-full items-center justify-center gap-1 text-[10px] py-1 rounded border transition-colors font-medium ${
-                  isDarkTheme
-                    ? "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border-emerald-500/30"
-                    : "bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-200"
-                }`}
+                className={`mt-2 flex w-full items-center justify-center gap-1 text-[10px] py-1 rounded border transition-colors font-medium ${isDarkTheme
+                  ? "bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border-emerald-500/30"
+                  : "bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border-emerald-200"
+                  }`}
               >
                 <ExternalLink className="w-3 h-3" />
                 {t.verifyBtn}
@@ -795,22 +778,19 @@ const renderAgentDataTable = (
   ) {
     return (
       <div
-        className={`mt-2 p-4 rounded-lg border ${
-          isDarkTheme
-            ? "bg-black/40 border-blue-500/30"
-            : "bg-blue-50 border-blue-200"
-        }`}
+        className={`mt-2 p-4 rounded-lg border ${isDarkTheme
+          ? "bg-black/40 border-blue-500/30"
+          : "bg-blue-50 border-blue-200"
+          }`}
       >
         <div className="flex items-center gap-2 mb-3">
           <Globe
-            className={`w-4 h-4 ${
-              isDarkTheme ? "text-blue-400" : "text-blue-600"
-            }`}
+            className={`w-4 h-4 ${isDarkTheme ? "text-blue-400" : "text-blue-600"
+              }`}
           />
           <h4
-            className={`text-sm font-bold ${
-              isDarkTheme ? "text-blue-400" : "text-blue-700"
-            }`}
+            className={`text-sm font-bold ${isDarkTheme ? "text-blue-400" : "text-blue-700"
+              }`}
           >
             {isDarkTheme ? "网站内容分析" : "Website Content Analysis"}
           </h4>
@@ -818,9 +798,8 @@ const renderAgentDataTable = (
         <div className="space-y-3">
           <div>
             <div
-              className={`text-xs font-semibold mb-1 ${
-                isDarkTheme ? "text-white/70" : "text-gray-600"
-              }`}
+              className={`text-xs font-semibold mb-1 ${isDarkTheme ? "text-white/70" : "text-gray-600"
+                }`}
             >
               {isDarkTheme ? "网站URL" : "Website URL"}
             </div>
@@ -828,41 +807,36 @@ const renderAgentDataTable = (
               href={data.url}
               target="_blank"
               rel="noopener noreferrer"
-              className={`text-xs break-all hover:underline ${
-                isDarkTheme ? "text-blue-400" : "text-blue-600"
-              }`}
+              className={`text-xs break-all hover:underline ${isDarkTheme ? "text-blue-400" : "text-blue-600"
+                }`}
             >
               {data.url}
             </a>
           </div>
           <div>
             <div
-              className={`text-xs font-semibold mb-1 ${
-                isDarkTheme ? "text-white/70" : "text-gray-600"
-              }`}
+              className={`text-xs font-semibold mb-1 ${isDarkTheme ? "text-white/70" : "text-gray-600"
+                }`}
             >
               {isDarkTheme ? "域名" : "Domain"}
             </div>
             <div
-              className={`text-xs ${
-                isDarkTheme ? "text-white" : "text-gray-800"
-              }`}
+              className={`text-xs ${isDarkTheme ? "text-white" : "text-gray-800"
+                }`}
             >
               {data.domain}
             </div>
           </div>
           <div>
             <div
-              className={`text-xs font-semibold mb-1 ${
-                isDarkTheme ? "text-white/70" : "text-gray-600"
-              }`}
+              className={`text-xs font-semibold mb-1 ${isDarkTheme ? "text-white/70" : "text-gray-600"
+                }`}
             >
               {isDarkTheme ? "内容长度" : "Content Length"}
             </div>
             <div
-              className={`text-sm font-mono ${
-                isDarkTheme ? "text-white" : "text-gray-800"
-              }`}
+              className={`text-sm font-mono ${isDarkTheme ? "text-white" : "text-gray-800"
+                }`}
             >
               {data.contentLength?.toLocaleString()}{" "}
               {isDarkTheme ? "字符" : "chars"}
@@ -871,18 +845,16 @@ const renderAgentDataTable = (
           {data.summary && (
             <div>
               <div
-                className={`text-xs font-semibold mb-2 ${
-                  isDarkTheme ? "text-white/70" : "text-gray-600"
-                }`}
+                className={`text-xs font-semibold mb-2 ${isDarkTheme ? "text-white/70" : "text-gray-600"
+                  }`}
               >
                 {isDarkTheme ? "内容摘要" : "Content Summary"}
               </div>
               <div
-                className={`text-xs leading-relaxed p-3 rounded border ${
-                  isDarkTheme
-                    ? "bg-black/60 border-blue-500/20 text-white/90"
-                    : "bg-white border-blue-200 text-gray-700"
-                }`}
+                className={`text-xs leading-relaxed p-3 rounded border ${isDarkTheme
+                  ? "bg-black/60 border-blue-500/20 text-white/90"
+                  : "bg-white border-blue-200 text-gray-700"
+                  }`}
               >
                 {data.summary}
               </div>
@@ -900,67 +872,58 @@ const renderAgentDataTable = (
   ) {
     return (
       <div
-        className={`mt-2 p-4 rounded-lg border ${
-          isDarkTheme
-            ? "bg-black/40 border-amber-500/30"
-            : "bg-amber-50 border-amber-200"
-        }`}
+        className={`mt-2 p-4 rounded-lg border ${isDarkTheme
+          ? "bg-black/40 border-amber-500/30"
+          : "bg-amber-50 border-amber-200"
+          }`}
       >
         <div className="flex items-center gap-2 mb-3">
           <Network
-            className={`w-4 h-4 ${
-              isDarkTheme ? "text-amber-400" : "text-amber-600"
-            }`}
+            className={`w-4 h-4 ${isDarkTheme ? "text-amber-400" : "text-amber-600"
+              }`}
           />
           <h4
-            className={`text-sm font-bold ${
-              isDarkTheme ? "text-amber-400" : "text-amber-700"
-            }`}
+            className={`text-sm font-bold ${isDarkTheme ? "text-amber-400" : "text-amber-700"
+              }`}
           >
             {isDarkTheme ? "竞争对手分析" : "Competitor Analysis"}
           </h4>
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div
-            className={`p-3 rounded-lg border ${
-              isDarkTheme
-                ? "bg-black/60 border-amber-500/20"
-                : "bg-white border-amber-200"
-            }`}
+            className={`p-3 rounded-lg border ${isDarkTheme
+              ? "bg-black/60 border-amber-500/20"
+              : "bg-white border-amber-200"
+              }`}
           >
             <div
-              className={`text-xs font-semibold mb-1 ${
-                isDarkTheme ? "text-amber-400" : "text-amber-700"
-              }`}
+              className={`text-xs font-semibold mb-1 ${isDarkTheme ? "text-amber-400" : "text-amber-700"
+                }`}
             >
               {isDarkTheme ? "竞争对手关键词数" : "Competitor Keywords"}
             </div>
             <div
-              className={`text-2xl font-bold ${
-                isDarkTheme ? "text-white" : "text-gray-800"
-              }`}
+              className={`text-2xl font-bold ${isDarkTheme ? "text-white" : "text-gray-800"
+                }`}
             >
               {data.competitorKeywordsCount?.toLocaleString() || 0}
             </div>
           </div>
           <div
-            className={`p-3 rounded-lg border ${
-              isDarkTheme
-                ? "bg-black/60 border-amber-500/20"
-                : "bg-white border-amber-200"
-            }`}
+            className={`p-3 rounded-lg border ${isDarkTheme
+              ? "bg-black/60 border-amber-500/20"
+              : "bg-white border-amber-200"
+              }`}
           >
             <div
-              className={`text-xs font-semibold mb-1 ${
-                isDarkTheme ? "text-amber-400" : "text-amber-700"
-              }`}
+              className={`text-xs font-semibold mb-1 ${isDarkTheme ? "text-amber-400" : "text-amber-700"
+                }`}
             >
               {isDarkTheme ? "发现的机会" : "Opportunities Found"}
             </div>
             <div
-              className={`text-2xl font-bold ${
-                isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-              }`}
+              className={`text-2xl font-bold ${isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+                }`}
             >
               {data.opportunitiesFound?.toLocaleString() || 0}
             </div>
@@ -969,9 +932,8 @@ const renderAgentDataTable = (
         {data.websiteUrl && (
           <div className="mt-3 pt-3 border-t border-amber-500/20">
             <div
-              className={`text-xs font-semibold mb-1 ${
-                isDarkTheme ? "text-white/70" : "text-gray-600"
-              }`}
+              className={`text-xs font-semibold mb-1 ${isDarkTheme ? "text-white/70" : "text-gray-600"
+                }`}
             >
               {isDarkTheme ? "分析网站" : "Analyzed Website"}
             </div>
@@ -979,9 +941,8 @@ const renderAgentDataTable = (
               href={data.websiteUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={`text-xs break-all hover:underline ${
-                isDarkTheme ? "text-amber-400" : "text-amber-600"
-              }`}
+              className={`text-xs break-all hover:underline ${isDarkTheme ? "text-amber-400" : "text-amber-600"
+                }`}
             >
               {data.websiteUrl}
             </a>
@@ -996,37 +957,32 @@ const renderAgentDataTable = (
         <table className="w-full text-xs border-collapse">
           <thead>
             <tr
-              className={`border-b ${
-                isDarkTheme
-                  ? "border-emerald-500/30 bg-black"
-                  : "border-emerald-200 bg-emerald-50"
-              }`}
+              className={`border-b ${isDarkTheme
+                ? "border-emerald-500/30 bg-black"
+                : "border-emerald-200 bg-emerald-50"
+                }`}
             >
               <th
-                className={`py-2 px-3 text-left font-semibold ${
-                  isDarkTheme ? "text-emerald-300" : "text-emerald-700"
-                }`}
+                className={`py-2 px-3 text-left font-semibold ${isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                  }`}
               >
                 Keyword
               </th>
               <th
-                className={`py-2 px-3 text-left font-semibold ${
-                  isDarkTheme ? "text-emerald-300" : "text-emerald-700"
-                }`}
+                className={`py-2 px-3 text-left font-semibold ${isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                  }`}
               >
                 Translation
               </th>
               <th
-                className={`py-2 px-3 text-left font-semibold ${
-                  isDarkTheme ? "text-emerald-300" : "text-emerald-700"
-                }`}
+                className={`py-2 px-3 text-left font-semibold ${isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                  }`}
               >
                 Intent
               </th>
               <th
-                className={`py-2 px-3 text-left font-semibold ${
-                  isDarkTheme ? "text-emerald-300" : "text-emerald-700"
-                }`}
+                className={`py-2 px-3 text-left font-semibold ${isDarkTheme ? "text-emerald-300" : "text-emerald-700"
+                  }`}
               >
                 Volume
               </th>
@@ -1044,39 +1000,34 @@ const renderAgentDataTable = (
               return (
                 <tr
                   key={i}
-                  className={`border-b ${
-                    isDarkTheme
-                      ? "border-emerald-500/20 hover:bg-emerald-500/5"
-                      : "border-gray-200 hover:bg-emerald-50"
-                  }`}
+                  className={`border-b ${isDarkTheme
+                    ? "border-emerald-500/20 hover:bg-emerald-500/5"
+                    : "border-gray-200 hover:bg-emerald-50"
+                    }`}
                 >
                   <td
-                    className={`py-2 px-3 relative group ${
-                      isDarkTheme ? "text-white" : "text-gray-800"
-                    }`}
+                    className={`py-2 px-3 relative group ${isDarkTheme ? "text-white" : "text-gray-800"
+                      }`}
                   >
                     <span className="cursor-help">{item.keyword}</span>
                     {hasReasoning && (
                       <div
-                        className={`absolute left-0 top-full mt-2 z-50 w-96 max-w-[calc(100vw-2rem)] p-3 rounded-lg shadow-lg border pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${
-                          isDarkTheme
-                            ? "bg-black/95 border-emerald-500/30 text-white"
-                            : "bg-white border-gray-200 text-gray-800 shadow-xl"
-                        }`}
+                        className={`absolute left-0 top-full mt-2 z-50 w-96 max-w-[calc(100vw-2rem)] p-3 rounded-lg shadow-lg border pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${isDarkTheme
+                          ? "bg-black/95 border-emerald-500/30 text-white"
+                          : "bg-white border-gray-200 text-gray-800 shadow-xl"
+                          }`}
                       >
                         <div
-                          className={`text-xs font-semibold mb-2 ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-700"
-                          }`}
+                          className={`text-xs font-semibold mb-2 ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-700"
+                            }`}
                         >
                           {uiLanguage === "zh" ? "分析推理" : "Reasoning"}
                         </div>
                         <div
-                          className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${
-                            isDarkTheme ? "text-white/90" : "text-gray-700"
-                          }`}
+                          className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${isDarkTheme ? "text-white/90" : "text-gray-700"
+                            }`}
                         >
                           {reasoning}
                         </div>
@@ -1084,31 +1035,27 @@ const renderAgentDataTable = (
                     )}
                   </td>
                   <td
-                    className={`py-2 px-3 ${
-                      isDarkTheme ? "text-white/80" : "text-gray-600"
-                    }`}
+                    className={`py-2 px-3 ${isDarkTheme ? "text-white/80" : "text-gray-600"
+                      }`}
                   >
                     {item.translation}
                   </td>
                   <td
-                    className={`py-2 px-3 ${
-                      isDarkTheme ? "text-white/80" : "text-gray-600"
-                    }`}
+                    className={`py-2 px-3 ${isDarkTheme ? "text-white/80" : "text-gray-600"
+                      }`}
                   >
                     <span
-                      className={`px-2 py-0.5 rounded text-xs ${
-                        isDarkTheme
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                          : "bg-emerald-100 text-emerald-700"
-                      }`}
+                      className={`px-2 py-0.5 rounded text-xs ${isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                        : "bg-emerald-100 text-emerald-700"
+                        }`}
                     >
                       {translatedIntent}
                     </span>
                   </td>
                   <td
-                    className={`py-2 px-3 font-mono ${
-                      isDarkTheme ? "text-white" : "text-gray-800"
-                    }`}
+                    className={`py-2 px-3 font-mono ${isDarkTheme ? "text-white" : "text-gray-800"
+                      }`}
                   >
                     {item.volume?.toLocaleString()}
                   </td>
@@ -1135,23 +1082,20 @@ const renderAgentDataTable = (
               {/* DR Comparison Card - 只在存量模式下显示 */}
               {!isBlueOceanMode && (
                 <div
-                  className={`p-3 rounded-lg border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/30"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
+                  className={`p-3 rounded-lg border ${isDarkTheme
+                    ? "bg-black border-emerald-500/30"
+                    : "bg-gray-50 border-gray-200"
+                    }`}
                 >
                   <div
-                    className={`text-[10px] font-bold mb-1 ${
-                      isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                    }`}
+                    className={`text-[10px] font-bold mb-1 ${isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                      }`}
                   >
                     DR (YOU vs AVG)
                   </div>
                   <div
-                    className={`text-lg font-bold ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
+                    className={`text-lg font-bold ${isDarkTheme ? "text-white" : "text-gray-900"
+                      }`}
                   >
                     {data.websiteDR !== undefined
                       ? Math.round(data.websiteDR)
@@ -1160,15 +1104,15 @@ const renderAgentDataTable = (
                       vs
                     </span>
                     {data.competitorDRs &&
-                    data.competitorDRs.length > 0 &&
-                    data.competitorDRs.some((dr: number) => dr > 0)
+                      data.competitorDRs.length > 0 &&
+                      data.competitorDRs.some((dr: number) => dr > 0)
                       ? Math.round(
-                          data.competitorDRs
-                            .filter((dr: number) => dr > 0)
-                            .reduce((a: number, b: number) => a + b, 0) /
-                            data.competitorDRs.filter((dr: number) => dr > 0)
-                              .length
-                        )
+                        data.competitorDRs
+                          .filter((dr: number) => dr > 0)
+                          .reduce((a: number, b: number) => a + b, 0) /
+                        data.competitorDRs.filter((dr: number) => dr > 0)
+                          .length
+                      )
                       : "-"}
                   </div>
                 </div>
@@ -1207,29 +1151,26 @@ const renderAgentDataTable = (
                   const displayReasoning = isValidReasoning
                     ? data.reasoning
                     : uiLanguage === "zh"
-                    ? "分析结果正在生成中，请稍候..."
-                    : "Analysis results are being generated, please wait...";
+                      ? "分析结果正在生成中，请稍候..."
+                      : "Analysis results are being generated, please wait...";
 
                   return (
                     <div
-                      className={`p-3 rounded-lg border ${
-                        isDarkTheme
-                          ? "bg-black border-emerald-500/20"
-                          : "bg-white border-gray-200"
-                      }`}
+                      className={`p-3 rounded-lg border ${isDarkTheme
+                        ? "bg-black border-emerald-500/20"
+                        : "bg-white border-gray-200"
+                        }`}
                     >
                       <div
-                        className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${
-                          isDarkTheme ? "text-white/70" : "text-gray-600"
-                        }`}
+                        className={`text-[10px] font-semibold mb-2 uppercase tracking-wider ${isDarkTheme ? "text-white/70" : "text-gray-600"
+                          }`}
                       >
                         {t.analysisReasoning?.toUpperCase() ||
                           "ANALYSIS REASONING"}
                       </div>
                       <div
-                        className={`text-xs leading-relaxed ${
-                          isDarkTheme ? "text-white" : "text-gray-700"
-                        }`}
+                        className={`text-xs leading-relaxed ${isDarkTheme ? "text-white" : "text-gray-700"
+                          }`}
                       >
                         {displayReasoning}
                       </div>
@@ -1292,9 +1233,8 @@ const TypingTextEffect = ({
       {displayedText}
       {!isComplete && (
         <span
-          className={`inline-block w-1.5 h-3.5 ml-0.5 animate-pulse ${
-            isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
-          }`}
+          className={`inline-block w-1.5 h-3.5 ml-0.5 animate-pulse ${isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
+            }`}
         />
       )}
     </span>
@@ -1386,17 +1326,15 @@ const ThinkingIndicator = ({
 
   return (
     <div
-      className={`flex items-center gap-3 p-3 rounded-lg border animate-pulse ${
-        isDarkTheme
-          ? "bg-emerald-500/5 border-emerald-500/20"
-          : "bg-emerald-50 border-emerald-200"
-      }`}
+      className={`flex items-center gap-3 p-3 rounded-lg border animate-pulse ${isDarkTheme
+        ? "bg-emerald-500/5 border-emerald-500/20"
+        : "bg-emerald-50 border-emerald-200"
+        }`}
     >
       <div className="flex items-center gap-2 flex-1">
         <BrainCircuit
-          className={`w-4 h-4 ${
-            isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-          } animate-pulse`}
+          className={`w-4 h-4 ${isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+            } animate-pulse`}
         />
         {/* Sub-phase badge */}
         {subPhaseInfo && (
@@ -1423,29 +1361,25 @@ const ThinkingIndicator = ({
         )}
         {/* Total timer */}
         <span
-          className={`text-xs font-mono font-bold ${
-            isDarkTheme ? "text-emerald-400" : "text-emerald-600"
-          }`}
+          className={`text-xs font-mono font-bold ${isDarkTheme ? "text-emerald-400" : "text-emerald-600"
+            }`}
         >
           {uiLanguage === "zh" ? "总计" : "Total"}: {elapsedSeconds}s
         </span>
         <div className="flex space-x-1">
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
-            } animate-bounce`}
+            className={`w-1.5 h-1.5 rounded-full ${isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
+              } animate-bounce`}
             style={{ animationDelay: "0ms" }}
           />
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
-            } animate-bounce`}
+            className={`w-1.5 h-1.5 rounded-full ${isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
+              } animate-bounce`}
             style={{ animationDelay: "150ms" }}
           />
           <span
-            className={`w-1.5 h-1.5 rounded-full ${
-              isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
-            } animate-bounce`}
+            className={`w-1.5 h-1.5 rounded-full ${isDarkTheme ? "bg-emerald-400" : "bg-emerald-600"
+              } animate-bounce`}
             style={{ animationDelay: "300ms" }}
           />
         </div>
@@ -1490,18 +1424,16 @@ const AgentStream = ({
 
   return (
     <div
-      className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${
-        isDarkTheme
-          ? "bg-[#0a0a0a] border-white/10"
-          : "bg-white border-gray-200"
-      }`}
+      className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${isDarkTheme
+        ? "bg-[#0a0a0a] border-white/10"
+        : "bg-white border-gray-200"
+        }`}
     >
       <div
-        className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
-          isDarkTheme
-            ? "border-white/10 text-neutral-400"
-            : "border-gray-200 text-gray-500"
-        }`}
+        className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${isDarkTheme
+          ? "border-white/10 text-neutral-400"
+          : "border-gray-200 text-gray-500"
+          }`}
       >
         <BrainCircuit className="w-3 h-3 text-emerald-500" />
         <span>{t.agentStreamTitle}</span>
@@ -1526,35 +1458,32 @@ const AgentStream = ({
             <div key={thought.id} className="animate-fade-in">
               <div className="flex items-center gap-2 mb-1">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                    thought.type === "generation"
-                      ? isDarkTheme
-                        ? "bg-emerald-500/20 text-emerald-400"
-                        : "bg-emerald-100 text-emerald-700"
-                      : thought.type === "analysis"
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${thought.type === "generation"
+                    ? isDarkTheme
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-emerald-100 text-emerald-700"
+                    : thought.type === "analysis"
                       ? isDarkTheme
                         ? "bg-emerald-500/20 text-emerald-400"
                         : "bg-emerald-100 text-emerald-700"
                       : isDarkTheme
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-emerald-100 text-emerald-700"
-                  }`}
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-700"
+                    }`}
                 >
                   ROUND {thought.round}
                 </span>
                 <span
-                  className={`text-xs uppercase font-semibold ${
-                    isDarkTheme ? "text-white/70" : "text-gray-500"
-                  }`}
+                  className={`text-xs uppercase font-semibold ${isDarkTheme ? "text-white/70" : "text-gray-500"
+                    }`}
                 >
                   {thought.type}
                 </span>
               </div>
               {thought.content && (
                 <p
-                  className={`text-sm mb-2 font-medium ${
-                    isDarkTheme ? "text-white" : "text-gray-700"
-                  }`}
+                  className={`text-sm mb-2 font-medium ${isDarkTheme ? "text-white" : "text-gray-700"
+                    }`}
                 >
                   {typedThoughts.has(thought.id) ? (
                     thought.content
@@ -1574,11 +1503,10 @@ const AgentStream = ({
                   {thought.keywords.map((kw, idx) => (
                     <span
                       key={idx}
-                      className={`px-2 py-1 border rounded text-xs ${
-                        isDarkTheme
-                          ? "bg-black border-emerald-500/20 text-white/90"
-                          : "bg-gray-50 border-gray-200 text-gray-600"
-                      }`}
+                      className={`px-2 py-1 border rounded text-xs ${isDarkTheme
+                        ? "bg-black border-emerald-500/20 text-white/90"
+                        : "bg-gray-50 border-gray-200 text-gray-600"
+                        }`}
                     >
                       {kw}
                     </span>
@@ -1589,29 +1517,26 @@ const AgentStream = ({
               {thought.stats && (
                 <div className="flex gap-2 text-xs items-center">
                   <span
-                    className={`font-bold px-2 py-0.5 rounded ${
-                      isDarkTheme
-                        ? "text-emerald-400 bg-emerald-500/10"
-                        : "text-emerald-700 bg-emerald-100"
-                    }`}
+                    className={`font-bold px-2 py-0.5 rounded ${isDarkTheme
+                      ? "text-emerald-400 bg-emerald-500/10"
+                      : "text-emerald-700 bg-emerald-100"
+                      }`}
                   >
                     {thought.stats.high} High
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded ${
-                      isDarkTheme
-                        ? "text-yellow-400 bg-yellow-500/10"
-                        : "text-yellow-700 bg-yellow-100"
-                    }`}
+                    className={`px-2 py-0.5 rounded ${isDarkTheme
+                      ? "text-yellow-400 bg-yellow-500/10"
+                      : "text-yellow-700 bg-yellow-100"
+                      }`}
                   >
                     {thought.stats.medium} Medium
                   </span>
                   <span
-                    className={`px-2 py-0.5 rounded ${
-                      isDarkTheme
-                        ? "text-red-400 bg-red-500/10"
-                        : "text-red-700 bg-red-100"
-                    }`}
+                    className={`px-2 py-0.5 rounded ${isDarkTheme
+                      ? "text-red-400 bg-red-500/10"
+                      : "text-red-700 bg-red-100"
+                      }`}
                   >
                     {thought.stats.low} Low
                   </span>
@@ -1630,41 +1555,36 @@ const AgentStream = ({
                     .map((kw) => (
                       <div
                         key={kw.id}
-                        className={`p-3 rounded border ${
-                          isDarkTheme
-                            ? "bg-black/40 border-orange-500/30"
-                            : "bg-orange-50 border-orange-200"
-                        }`}
+                        className={`p-3 rounded border ${isDarkTheme
+                          ? "bg-black/40 border-orange-500/30"
+                          : "bg-orange-50 border-orange-200"
+                          }`}
                       >
                         <div
-                          className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
-                            isDarkTheme ? "text-orange-400" : "text-orange-600"
-                          }`}
+                          className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${isDarkTheme ? "text-orange-400" : "text-orange-600"
+                            }`}
                         >
                           <TrendingUp className="w-3 h-3" />
                           KEYWORD RESEARCH: {kw.keyword}
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                           <div
-                            className={`p-2 rounded border ${
-                              isDarkTheme
-                                ? "bg-black border-emerald-500/20"
-                                : "bg-white border-gray-200"
-                            }`}
+                            className={`p-2 rounded border ${isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                              }`}
                           >
                             <div
-                              className={`text-[9px] font-bold mb-1 ${
-                                isDarkTheme ? "text-white/70" : "text-gray-500"
-                              }`}
+                              className={`text-[9px] font-bold mb-1 ${isDarkTheme ? "text-white/70" : "text-gray-500"
+                                }`}
                             >
                               VOLUME
                             </div>
                             <div
-                              className={`text-sm font-bold ${
-                                isDarkTheme
-                                  ? "text-emerald-400"
-                                  : "text-emerald-600"
-                              }`}
+                              className={`text-sm font-bold ${isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                                }`}
                             >
                               {(
                                 kw.serankingData?.volume ??
@@ -1674,41 +1594,38 @@ const AgentStream = ({
                             </div>
                           </div>
                           <div
-                            className={`p-2 rounded border ${
-                              isDarkTheme
-                                ? "bg-black border-emerald-500/20"
-                                : "bg-white border-gray-200"
-                            }`}
+                            className={`p-2 rounded border ${isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                              }`}
                           >
                             <div
-                              className={`text-[9px] font-bold mb-1 ${
-                                isDarkTheme
-                                  ? "text-neutral-400"
-                                  : "text-gray-500"
-                              }`}
+                              className={`text-[9px] font-bold mb-1 ${isDarkTheme
+                                ? "text-neutral-400"
+                                : "text-gray-500"
+                                }`}
                             >
                               KD
                             </div>
                             <div
-                              className={`text-sm font-bold ${
-                                ((kw.serankingData?.difficulty ??
+                              className={`text-sm font-bold ${((kw.serankingData?.difficulty ??
+                                kw.dataForSEOData?.difficulty ??
+                                0) ||
+                                0) <= 40
+                                ? isDarkTheme
+                                  ? "text-emerald-400"
+                                  : "text-emerald-600"
+                                : ((kw.serankingData?.difficulty ??
                                   kw.dataForSEOData?.difficulty ??
                                   0) ||
-                                  0) <= 40
-                                  ? isDarkTheme
-                                    ? "text-emerald-400"
-                                    : "text-emerald-600"
-                                  : ((kw.serankingData?.difficulty ??
-                                      kw.dataForSEOData?.difficulty ??
-                                      0) ||
-                                      0) <= 60
+                                  0) <= 60
                                   ? isDarkTheme
                                     ? "text-yellow-400"
                                     : "text-yellow-600"
                                   : isDarkTheme
-                                  ? "text-red-400"
-                                  : "text-red-600"
-                              }`}
+                                    ? "text-red-400"
+                                    : "text-red-600"
+                                }`}
                             >
                               {kw.serankingData?.difficulty ??
                                 kw.dataForSEOData?.difficulty ??
@@ -1716,27 +1633,24 @@ const AgentStream = ({
                             </div>
                           </div>
                           <div
-                            className={`p-2 rounded border ${
-                              isDarkTheme
-                                ? "bg-black border-emerald-500/20"
-                                : "bg-white border-gray-200"
-                            }`}
+                            className={`p-2 rounded border ${isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                              }`}
                           >
                             <div
-                              className={`text-[9px] font-bold mb-1 ${
-                                isDarkTheme
-                                  ? "text-neutral-400"
-                                  : "text-gray-500"
-                              }`}
+                              className={`text-[9px] font-bold mb-1 ${isDarkTheme
+                                ? "text-neutral-400"
+                                : "text-gray-500"
+                                }`}
                             >
                               CPC
                             </div>
                             <div
-                              className={`text-sm font-bold ${
-                                isDarkTheme
-                                  ? "text-emerald-400"
-                                  : "text-emerald-600"
-                              }`}
+                              className={`text-sm font-bold ${isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                                }`}
                             >
                               $
                               {(() => {
@@ -1746,33 +1660,30 @@ const AgentStream = ({
                                 return typeof val === "number"
                                   ? val.toFixed(2)
                                   : val && !isNaN(Number(val))
-                                  ? Number(val).toFixed(2)
-                                  : "N/A";
+                                    ? Number(val).toFixed(2)
+                                    : "N/A";
                               })()}
                             </div>
                           </div>
                           <div
-                            className={`p-2 rounded border ${
-                              isDarkTheme
-                                ? "bg-black border-emerald-500/20"
-                                : "bg-white border-gray-200"
-                            }`}
+                            className={`p-2 rounded border ${isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                              }`}
                           >
                             <div
-                              className={`text-[9px] font-bold mb-1 ${
-                                isDarkTheme
-                                  ? "text-neutral-400"
-                                  : "text-gray-500"
-                              }`}
+                              className={`text-[9px] font-bold mb-1 ${isDarkTheme
+                                ? "text-neutral-400"
+                                : "text-gray-500"
+                                }`}
                             >
                               COMP
                             </div>
                             <div
-                              className={`text-sm font-bold ${
-                                isDarkTheme
-                                  ? "text-emerald-400"
-                                  : "text-emerald-600"
-                              }`}
+                              className={`text-sm font-bold ${isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                                }`}
                             >
                               {(() => {
                                 const val =
@@ -1781,8 +1692,8 @@ const AgentStream = ({
                                 return typeof val === "number"
                                   ? val.toFixed(2)
                                   : val && !isNaN(Number(val))
-                                  ? Number(val).toFixed(2)
-                                  : "N/A";
+                                    ? Number(val).toFixed(2)
+                                    : "N/A";
                               })()}
                             </div>
                           </div>
@@ -1790,28 +1701,26 @@ const AgentStream = ({
                         {kw.probability && (
                           <div className="mt-2">
                             <div
-                              className={`text-[9px] font-bold mb-1 ${
-                                isDarkTheme
-                                  ? "text-neutral-400"
-                                  : "text-gray-500"
-                              }`}
+                              className={`text-[9px] font-bold mb-1 ${isDarkTheme
+                                ? "text-neutral-400"
+                                : "text-gray-500"
+                                }`}
                             >
                               PROBABILITY
                             </div>
                             <div
-                              className={`text-xs font-bold px-2 py-1 rounded inline-block ${
-                                kw.probability === ProbabilityLevel.HIGH
-                                  ? isDarkTheme
-                                    ? "bg-emerald-500/20 text-emerald-400"
-                                    : "bg-emerald-100 text-emerald-700"
-                                  : kw.probability === ProbabilityLevel.MEDIUM
+                              className={`text-xs font-bold px-2 py-1 rounded inline-block ${kw.probability === ProbabilityLevel.HIGH
+                                ? isDarkTheme
+                                  ? "bg-emerald-500/20 text-emerald-400"
+                                  : "bg-emerald-100 text-emerald-700"
+                                : kw.probability === ProbabilityLevel.MEDIUM
                                   ? isDarkTheme
                                     ? "bg-yellow-500/20 text-yellow-400"
                                     : "bg-yellow-100 text-yellow-700"
                                   : isDarkTheme
-                                  ? "bg-red-500/20 text-red-400"
-                                  : "bg-red-100 text-red-700"
-                              }`}
+                                    ? "bg-red-500/20 text-red-400"
+                                    : "bg-red-100 text-red-700"
+                                }`}
                             >
                               {kw.probability}
                             </div>
@@ -1949,18 +1858,16 @@ const BatchAnalysisStream = ({
 
   return (
     <div
-      className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${
-        isDarkTheme
-          ? "bg-[#0a0a0a] border-white/10"
-          : "bg-white border-gray-200"
-      }`}
+      className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${isDarkTheme
+        ? "bg-[#0a0a0a] border-white/10"
+        : "bg-white border-gray-200"
+        }`}
     >
       <div
-        className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
-          isDarkTheme
-            ? "border-emerald-500/30 text-white/90"
-            : "border-gray-200 text-gray-500"
-        }`}
+        className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${isDarkTheme
+          ? "border-emerald-500/30 text-white/90"
+          : "border-gray-200 text-gray-500"
+          }`}
       >
         <Languages className="w-3 h-3 text-emerald-500" />
         <span>Cross-Market Insights Stream</span>
@@ -1973,44 +1880,41 @@ const BatchAnalysisStream = ({
           <div key={thought.id} className="animate-fade-in">
             <div className="flex items-center gap-2 mb-1">
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  thought.type === "translation"
-                    ? isDarkTheme
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-emerald-100 text-emerald-700"
-                    : thought.type === "seranking"
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${thought.type === "translation"
+                  ? isDarkTheme
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-emerald-100 text-emerald-700"
+                  : thought.type === "seranking"
                     ? isDarkTheme
                       ? "bg-orange-500/20 text-orange-400"
                       : "bg-orange-100 text-orange-700"
                     : thought.type === "serp-search"
-                    ? isDarkTheme
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-emerald-100 text-emerald-700"
-                    : thought.type === "intent-analysis"
-                    ? isDarkTheme
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-emerald-100 text-emerald-700"
-                    : isDarkTheme
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : "bg-emerald-100 text-emerald-700"
-                }`}
+                      ? isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-700"
+                      : thought.type === "intent-analysis"
+                        ? isDarkTheme
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "bg-emerald-100 text-emerald-700"
+                        : isDarkTheme
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "bg-emerald-100 text-emerald-700"
+                  }`}
               >
                 {thought.type === "seranking"
                   ? "SEO RESEARCH"
                   : thought.type.toUpperCase().replace("-", " ")}
               </span>
               <span
-                className={`text-xs font-medium truncate ${
-                  isDarkTheme ? "text-white/90" : "text-gray-600"
-                }`}
+                className={`text-xs font-medium truncate ${isDarkTheme ? "text-white/90" : "text-gray-600"
+                  }`}
               >
                 {thought.keyword}
               </span>
             </div>
             <p
-              className={`text-sm mb-2 ${
-                isDarkTheme ? "text-white" : "text-gray-700"
-              }`}
+              className={`text-sm mb-2 ${isDarkTheme ? "text-white" : "text-gray-700"
+                }`}
             >
               {typedThoughts.has(thought.id) ? (
                 thought.content
@@ -2029,136 +1933,122 @@ const BatchAnalysisStream = ({
               <div className="mt-2">
                 {thought.serankingData.is_data_found ? (
                   <div
-                    className={`p-3 rounded border ${
-                      isDarkTheme
-                        ? "bg-black/40 border-orange-500/30"
-                        : "bg-orange-50 border-orange-200"
-                    }`}
+                    className={`p-3 rounded border ${isDarkTheme
+                      ? "bg-black/40 border-orange-500/30"
+                      : "bg-orange-50 border-orange-200"
+                      }`}
                   >
                     <div
-                      className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${
-                        isDarkTheme ? "text-orange-400" : "text-orange-600"
-                      }`}
+                      className={`text-[10px] font-bold mb-2 flex items-center gap-1 ${isDarkTheme ? "text-orange-400" : "text-orange-600"
+                        }`}
                     >
                       <TrendingUp className="w-3 h-3" />
                       SE RANKING DATA
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div
-                        className={`p-2 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`p-2 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`text-[9px] font-bold mb-1 ${
-                            isDarkTheme ? "text-white/70" : "text-gray-500"
-                          }`}
+                          className={`text-[9px] font-bold mb-1 ${isDarkTheme ? "text-white/70" : "text-gray-500"
+                            }`}
                         >
                           VOLUME
                         </div>
                         <div
-                          className={`text-sm font-bold ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-600"
-                          }`}
+                          className={`text-sm font-bold ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                            }`}
                         >
                           {thought.serankingData.volume?.toLocaleString() ||
                             "N/A"}
                         </div>
                       </div>
                       <div
-                        className={`p-2 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`p-2 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`text-[9px] font-bold mb-1 ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                          }`}
+                          className={`text-[9px] font-bold mb-1 ${isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
                         >
                           KD
                         </div>
                         <div
-                          className={`text-sm font-bold ${
-                            (thought.serankingData.difficulty || 0) <= 40
-                              ? isDarkTheme
-                                ? "text-emerald-400"
-                                : "text-emerald-600"
-                              : (thought.serankingData.difficulty || 0) <= 60
+                          className={`text-sm font-bold ${(thought.serankingData.difficulty || 0) <= 40
+                            ? isDarkTheme
+                              ? "text-emerald-400"
+                              : "text-emerald-600"
+                            : (thought.serankingData.difficulty || 0) <= 60
                               ? isDarkTheme
                                 ? "text-yellow-400"
                                 : "text-yellow-600"
                               : isDarkTheme
-                              ? "text-red-400"
-                              : "text-red-600"
-                          }`}
+                                ? "text-red-400"
+                                : "text-red-600"
+                            }`}
                         >
                           {thought.serankingData.difficulty || "N/A"}
                         </div>
                       </div>
                       <div
-                        className={`p-2 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`p-2 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`text-[9px] font-bold mb-1 ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                          }`}
+                          className={`text-[9px] font-bold mb-1 ${isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
                         >
                           CPC
                         </div>
                         <div
-                          className={`text-sm font-bold ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-600"
-                          }`}
+                          className={`text-sm font-bold ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                            }`}
                         >
                           {(() => {
                             const val = thought.serankingData.cpc;
                             return typeof val === "number"
                               ? `$${val.toFixed(2)}`
                               : val && !isNaN(Number(val))
-                              ? `$${Number(val).toFixed(2)}`
-                              : "N/A";
+                                ? `$${Number(val).toFixed(2)}`
+                                : "N/A";
                           })()}
                         </div>
                       </div>
                       <div
-                        className={`p-2 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`p-2 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`text-[9px] font-bold mb-1 ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                          }`}
+                          className={`text-[9px] font-bold mb-1 ${isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
                         >
                           COMP
                         </div>
                         <div
-                          className={`text-sm font-bold ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-600"
-                          }`}
+                          className={`text-sm font-bold ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                            }`}
                         >
                           {thought.serankingData.competition
                             ? typeof thought.serankingData.competition ===
                               "number"
                               ? (
-                                  thought.serankingData.competition * 100
-                                ).toFixed(1) + "%"
+                                thought.serankingData.competition * 100
+                              ).toFixed(1) + "%"
                               : thought.serankingData.competition
                             : "N/A"}
                         </div>
@@ -2167,16 +2057,14 @@ const BatchAnalysisStream = ({
                   </div>
                 ) : (
                   <div
-                    className={`p-3 rounded border ${
-                      isDarkTheme
-                        ? "bg-emerald-500/10 border-emerald-500/30"
-                        : "bg-emerald-50 border-emerald-200"
-                    }`}
+                    className={`p-3 rounded border ${isDarkTheme
+                      ? "bg-emerald-500/10 border-emerald-500/30"
+                      : "bg-emerald-50 border-emerald-200"
+                      }`}
                   >
                     <div
-                      className={`text-xs font-medium flex items-center gap-2 ${
-                        isDarkTheme ? "text-emerald-400" : "text-emerald-700"
-                      }`}
+                      className={`text-xs font-medium flex items-center gap-2 ${isDarkTheme ? "text-emerald-400" : "text-emerald-700"
+                        }`}
                     >
                       <Lightbulb className="w-4 h-4" />
                       Blue Ocean Signal - No competition data found!
@@ -2235,25 +2123,22 @@ const BatchAnalysisStream = ({
                   <div className="mt-2 space-y-2">
                     {isValidSearchIntent && (
                       <div
-                        className={`p-2 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/30"
-                            : "bg-emerald-50 border-emerald-200"
-                        }`}
+                        className={`p-2 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/30"
+                          : "bg-emerald-50 border-emerald-200"
+                          }`}
                       >
                         <div
-                          className={`text-[10px] font-bold mb-1 ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-700"
-                          }`}
+                          className={`text-[10px] font-bold mb-1 ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-700"
+                            }`}
                         >
                           USER INTENT
                         </div>
                         <p
-                          className={`text-xs ${
-                            isDarkTheme ? "text-white" : "text-gray-700"
-                          }`}
+                          className={`text-xs ${isDarkTheme ? "text-white" : "text-gray-700"
+                            }`}
                         >
                           {thought.intentData.searchIntent}
                         </p>
@@ -2261,25 +2146,22 @@ const BatchAnalysisStream = ({
                     )}
                     {isValidIntentAnalysis && (
                       <div
-                        className={`p-2 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/30"
-                            : "bg-emerald-50 border-emerald-200"
-                        }`}
+                        className={`p-2 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/30"
+                          : "bg-emerald-50 border-emerald-200"
+                          }`}
                       >
                         <div
-                          className={`text-[10px] font-bold mb-1 ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-700"
-                          }`}
+                          className={`text-[10px] font-bold mb-1 ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-700"
+                            }`}
                         >
                           INTENT vs SERP
                         </div>
                         <p
-                          className={`text-xs ${
-                            isDarkTheme ? "text-white" : "text-gray-700"
-                          }`}
+                          className={`text-xs ${isDarkTheme ? "text-white" : "text-gray-700"
+                            }`}
                         >
                           {thought.intentData.intentAnalysis}
                         </p>
@@ -2294,44 +2176,39 @@ const BatchAnalysisStream = ({
               thought.serpSnippets &&
               thought.serpSnippets.length > 0 && (
                 <div
-                  className={`mt-2 border rounded-md overflow-hidden ${
-                    isDarkTheme
-                      ? "border-emerald-500/30 bg-black"
-                      : "border-gray-200 bg-gray-50"
-                  }`}
+                  className={`mt-2 border rounded-md overflow-hidden ${isDarkTheme
+                    ? "border-emerald-500/30 bg-black"
+                    : "border-gray-200 bg-gray-50"
+                    }`}
                 >
                   <div className="space-y-2 p-2">
                     {thought.serpSnippets.slice(0, 3).map((snippet, idx) => (
                       <div
                         key={idx}
-                        className={`p-2 rounded border text-xs ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`p-2 rounded border text-xs ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`font-medium truncate ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-600"
-                          }`}
+                          className={`font-medium truncate ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                            }`}
                         >
                           {snippet.title}
                         </div>
                         <div
-                          className={`text-[10px] truncate ${
-                            isDarkTheme
-                              ? "text-emerald-500/70"
-                              : "text-emerald-600"
-                          }`}
+                          className={`text-[10px] truncate ${isDarkTheme
+                            ? "text-emerald-500/70"
+                            : "text-emerald-600"
+                            }`}
                         >
                           {snippet.url}
                         </div>
                         <div
-                          className={`mt-1 line-clamp-2 ${
-                            isDarkTheme ? "text-white/90" : "text-gray-600"
-                          }`}
+                          className={`mt-1 line-clamp-2 ${isDarkTheme ? "text-white/90" : "text-gray-600"
+                            }`}
                         >
                           {snippet.snippet}
                         </div>
@@ -2344,42 +2221,38 @@ const BatchAnalysisStream = ({
             {/* Analysis Result */}
             {thought.type === "analysis" && thought.analysis && (
               <div
-                className={`mt-2 p-3 rounded border ${
-                  isDarkTheme
-                    ? "bg-black border-emerald-500/30"
-                    : "bg-gray-50 border-gray-200"
-                }`}
+                className={`mt-2 p-3 rounded border ${isDarkTheme
+                  ? "bg-black border-emerald-500/30"
+                  : "bg-gray-50 border-gray-200"
+                  }`}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span
-                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                      thought.analysis.probability === ProbabilityLevel.HIGH
-                        ? isDarkTheme
-                          ? "bg-emerald-500/20 text-emerald-400"
-                          : "bg-emerald-100 text-emerald-700"
-                        : thought.analysis.probability ===
-                          ProbabilityLevel.MEDIUM
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${thought.analysis.probability === ProbabilityLevel.HIGH
+                      ? isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-700"
+                      : thought.analysis.probability ===
+                        ProbabilityLevel.MEDIUM
                         ? isDarkTheme
                           ? "bg-yellow-500/20 text-yellow-400"
                           : "bg-yellow-100 text-yellow-700"
                         : isDarkTheme
-                        ? "bg-red-500/20 text-red-400"
-                        : "bg-red-100 text-red-700"
-                    }`}
+                          ? "bg-red-500/20 text-red-400"
+                          : "bg-red-100 text-red-700"
+                      }`}
                   >
                     {thought.analysis.probability}
                   </span>
                   <span
-                    className={`text-xs ${
-                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                    }`}
+                    className={`text-xs ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                      }`}
                   >
                     {thought.analysis.topDomainType}
                   </span>
                   <span
-                    className={`text-xs ${
-                      isDarkTheme ? "text-neutral-500" : "text-gray-500"
-                    }`}
+                    className={`text-xs ${isDarkTheme ? "text-neutral-500" : "text-gray-500"
+                      }`}
                   >
                     (
                     {thought.analysis.serpResultCount === -1
@@ -2389,9 +2262,8 @@ const BatchAnalysisStream = ({
                   </span>
                 </div>
                 <p
-                  className={`text-xs whitespace-pre-wrap ${
-                    isDarkTheme ? "text-neutral-300" : "text-gray-700"
-                  }`}
+                  className={`text-xs whitespace-pre-wrap ${isDarkTheme ? "text-neutral-300" : "text-gray-700"
+                    }`}
                 >
                   {thought.analysis.reasoning}
                 </p>
@@ -2435,18 +2307,16 @@ const DeepDiveAnalysisStream = ({
 
   return (
     <div
-      className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${
-        isDarkTheme
-          ? "bg-[#0a0a0a] border-white/10"
-          : "bg-white border-gray-200"
-      }`}
+      className={`rounded-lg p-4 h-full overflow-hidden flex flex-col shadow-sm border ${isDarkTheme
+        ? "bg-[#0a0a0a] border-white/10"
+        : "bg-white border-gray-200"
+        }`}
     >
       <div
-        className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${
-          isDarkTheme
-            ? "border-white/10 text-neutral-400"
-            : "border-gray-200 text-gray-500"
-        }`}
+        className={`flex items-center gap-2 border-b pb-2 mb-2 uppercase tracking-wider text-[10px] ${isDarkTheme
+          ? "border-white/10 text-neutral-400"
+          : "border-gray-200 text-gray-500"
+          }`}
       >
         <BrainCircuit className="w-3 h-3 text-emerald-500" />
         <span>Deep Dive Analysis Stream</span>
@@ -2459,31 +2329,29 @@ const DeepDiveAnalysisStream = ({
           <div key={thought.id} className="animate-fade-in">
             <div className="flex items-center gap-2 mb-1">
               <span
-                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  thought.type === "content-generation"
-                    ? isDarkTheme
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-emerald-100 text-emerald-700"
-                    : thought.type === "keyword-extraction"
+                className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${thought.type === "content-generation"
+                  ? isDarkTheme
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-emerald-100 text-emerald-700"
+                  : thought.type === "keyword-extraction"
                     ? isDarkTheme
                       ? "bg-emerald-500/20 text-emerald-400"
                       : "bg-emerald-100 text-emerald-700"
                     : thought.type === "serp-verification"
-                    ? isDarkTheme
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-emerald-100 text-emerald-700"
-                    : isDarkTheme
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : "bg-emerald-100 text-emerald-700"
-                }`}
+                      ? isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-700"
+                      : isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : "bg-emerald-100 text-emerald-700"
+                  }`}
               >
                 {thought.type.toUpperCase().replace("-", " ")}
               </span>
             </div>
             <p
-              className={`text-sm mb-2 ${
-                isDarkTheme ? "text-neutral-300" : "text-gray-700"
-              }`}
+              className={`text-sm mb-2 ${isDarkTheme ? "text-neutral-300" : "text-gray-700"
+                }`}
             >
               {thought.content}
             </p>
@@ -2495,11 +2363,10 @@ const DeepDiveAnalysisStream = ({
                   {thought.data.keywords.map((kw, idx) => (
                     <span
                       key={idx}
-                      className={`px-2 py-1 rounded-md text-xs font-medium border ${
-                        isDarkTheme
-                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                      }`}
+                      className={`px-2 py-1 rounded-md text-xs font-medium border ${isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                        : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                        }`}
                     >
                       {kw}
                     </span>
@@ -2518,25 +2385,22 @@ const DeepDiveAnalysisStream = ({
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {thought.data.serankingData.volume !== undefined && (
                       <div
-                        className={`px-2 py-1 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`px-2 py-1 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`text-[9px] uppercase ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                          }`}
+                          className={`text-[9px] uppercase ${isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
                         >
                           Volume
                         </div>
                         <div
-                          className={`font-bold ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-600"
-                          }`}
+                          className={`font-bold ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                            }`}
                         >
                           {thought.data.serankingData.volume.toLocaleString()}
                         </div>
@@ -2544,33 +2408,30 @@ const DeepDiveAnalysisStream = ({
                     )}
                     {thought.data.serankingData.difficulty !== undefined && (
                       <div
-                        className={`px-2 py-1 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`px-2 py-1 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`text-[9px] uppercase ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                          }`}
+                          className={`text-[9px] uppercase ${isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
                         >
                           KD
                         </div>
                         <div
-                          className={`font-bold ${
-                            thought.data.serankingData.difficulty > 40
-                              ? isDarkTheme
-                                ? "text-red-400"
-                                : "text-red-600"
-                              : thought.data.serankingData.difficulty > 20
+                          className={`font-bold ${thought.data.serankingData.difficulty > 40
+                            ? isDarkTheme
+                              ? "text-red-400"
+                              : "text-red-600"
+                            : thought.data.serankingData.difficulty > 20
                               ? isDarkTheme
                                 ? "text-yellow-400"
                                 : "text-yellow-600"
                               : isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-600"
-                          }`}
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                            }`}
                         >
                           {thought.data.serankingData.difficulty}
                         </div>
@@ -2578,25 +2439,22 @@ const DeepDiveAnalysisStream = ({
                     )}
                     {thought.data.serankingData.cpc !== undefined && (
                       <div
-                        className={`px-2 py-1 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`px-2 py-1 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`text-[9px] uppercase ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                          }`}
+                          className={`text-[9px] uppercase ${isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
                         >
                           CPC
                         </div>
                         <div
-                          className={`font-bold ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-600"
-                          }`}
+                          className={`font-bold ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                            }`}
                         >
                           ${Number(thought.data.serankingData.cpc).toFixed(2)}
                         </div>
@@ -2604,33 +2462,30 @@ const DeepDiveAnalysisStream = ({
                     )}
                     {thought.data.serankingData.competition !== undefined && (
                       <div
-                        className={`px-2 py-1 rounded border ${
-                          isDarkTheme
-                            ? "bg-black border-emerald-500/20"
-                            : "bg-white border-gray-200"
-                        }`}
+                        className={`px-2 py-1 rounded border ${isDarkTheme
+                          ? "bg-black border-emerald-500/20"
+                          : "bg-white border-gray-200"
+                          }`}
                       >
                         <div
-                          className={`text-[9px] uppercase ${
-                            isDarkTheme ? "text-neutral-400" : "text-gray-500"
-                          }`}
+                          className={`text-[9px] uppercase ${isDarkTheme ? "text-neutral-400" : "text-gray-500"
+                            }`}
                         >
                           Competition
                         </div>
                         <div
-                          className={`font-bold ${
-                            isDarkTheme
-                              ? "text-emerald-400"
-                              : "text-emerald-600"
-                          }`}
+                          className={`font-bold ${isDarkTheme
+                            ? "text-emerald-400"
+                            : "text-emerald-600"
+                            }`}
                         >
                           {(() => {
                             const val = thought.data.serankingData.competition;
                             return typeof val === "number"
                               ? val.toFixed(2)
                               : val && !isNaN(Number(val))
-                              ? Number(val).toFixed(2)
-                              : "N/A";
+                                ? Number(val).toFixed(2)
+                                : "N/A";
                           })()}
                         </div>
                       </div>
@@ -2645,11 +2500,10 @@ const DeepDiveAnalysisStream = ({
               thought.data.serpResults.length > 0 && (
                 <div className="mt-2 space-y-2">
                   <div
-                    className={`border rounded-md overflow-hidden ${
-                      isDarkTheme
-                        ? "border-emerald-500/30 bg-black"
-                        : "border-gray-200 bg-gray-50"
-                    }`}
+                    className={`border rounded-md overflow-hidden ${isDarkTheme
+                      ? "border-emerald-500/30 bg-black"
+                      : "border-gray-200 bg-gray-50"
+                      }`}
                   >
                     <div className="space-y-2 p-2">
                       {thought.data.serpResults
@@ -2657,36 +2511,32 @@ const DeepDiveAnalysisStream = ({
                         .map((snippet, idx) => (
                           <div
                             key={idx}
-                            className={`p-2 rounded border text-xs ${
-                              isDarkTheme
-                                ? "bg-black border-emerald-500/20"
-                                : "bg-white border-gray-200"
-                            }`}
+                            className={`p-2 rounded border text-xs ${isDarkTheme
+                              ? "bg-black border-emerald-500/20"
+                              : "bg-white border-gray-200"
+                              }`}
                           >
                             <div
-                              className={`font-medium truncate ${
-                                isDarkTheme
-                                  ? "text-emerald-400"
-                                  : "text-emerald-600"
-                              }`}
+                              className={`font-medium truncate ${isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                                }`}
                             >
                               {snippet.title}
                             </div>
                             <div
-                              className={`text-[10px] truncate ${
-                                isDarkTheme
-                                  ? "text-emerald-400"
-                                  : "text-emerald-600"
-                              }`}
+                              className={`text-[10px] truncate ${isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                                }`}
                             >
                               {snippet.url}
                             </div>
                             <div
-                              className={`mt-1 line-clamp-2 ${
-                                isDarkTheme
-                                  ? "text-neutral-400"
-                                  : "text-gray-600"
-                              }`}
+                              className={`mt-1 line-clamp-2 ${isDarkTheme
+                                ? "text-neutral-400"
+                                : "text-gray-600"
+                                }`}
                             >
                               {snippet.snippet}
                             </div>
@@ -2696,23 +2546,20 @@ const DeepDiveAnalysisStream = ({
                   </div>
                   {thought.data.analysis && (
                     <div
-                      className={`p-2 rounded border ${
-                        isDarkTheme
-                          ? "bg-indigo-500/10 border-indigo-500/30"
-                          : "bg-indigo-50 border-indigo-200"
-                      }`}
+                      className={`p-2 rounded border ${isDarkTheme
+                        ? "bg-indigo-500/10 border-indigo-500/30"
+                        : "bg-indigo-50 border-indigo-200"
+                        }`}
                     >
                       <div
-                        className={`text-[10px] font-bold mb-1 ${
-                          isDarkTheme ? "text-indigo-400" : "text-indigo-700"
-                        }`}
+                        className={`text-[10px] font-bold mb-1 ${isDarkTheme ? "text-indigo-400" : "text-indigo-700"
+                          }`}
                       >
                         COMPETITION ANALYSIS
                       </div>
                       <p
-                        className={`text-xs whitespace-pre-wrap ${
-                          isDarkTheme ? "text-neutral-300" : "text-gray-700"
-                        }`}
+                        className={`text-xs whitespace-pre-wrap ${isDarkTheme ? "text-neutral-300" : "text-gray-700"
+                          }`}
                       >
                         {thought.data.analysis}
                       </p>
@@ -2726,35 +2573,32 @@ const DeepDiveAnalysisStream = ({
               thought.data?.probability &&
               thought.data?.analysis && (
                 <div
-                  className={`mt-2 p-3 rounded border ${
-                    isDarkTheme
-                      ? "bg-black border-emerald-500/20"
-                      : "bg-gray-50 border-gray-200"
-                  }`}
+                  className={`mt-2 p-3 rounded border ${isDarkTheme
+                    ? "bg-black border-emerald-500/20"
+                    : "bg-gray-50 border-gray-200"
+                    }`}
                 >
                   <div className="flex items-center gap-2 mb-2">
                     <span
-                      className={`px-3 py-1 rounded-full text-sm font-bold border ${
-                        thought.data.probability === ProbabilityLevel.HIGH
-                          ? isDarkTheme
-                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                            : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                          : thought.data.probability === ProbabilityLevel.MEDIUM
+                      className={`px-3 py-1 rounded-full text-sm font-bold border ${thought.data.probability === ProbabilityLevel.HIGH
+                        ? isDarkTheme
+                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                        : thought.data.probability === ProbabilityLevel.MEDIUM
                           ? isDarkTheme
                             ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
                             : "bg-yellow-100 text-yellow-700 border-yellow-300"
                           : isDarkTheme
-                          ? "bg-red-500/20 text-red-400 border-red-500/30"
-                          : "bg-red-100 text-red-700 border-red-300"
-                      }`}
+                            ? "bg-red-500/20 text-red-400 border-red-500/30"
+                            : "bg-red-100 text-red-700 border-red-300"
+                        }`}
                     >
                       {thought.data.probability} Probability
                     </span>
                   </div>
                   <p
-                    className={`text-xs whitespace-pre-wrap ${
-                      isDarkTheme ? "text-neutral-300" : "text-gray-700"
-                    }`}
+                    className={`text-xs whitespace-pre-wrap ${isDarkTheme ? "text-neutral-300" : "text-gray-700"
+                      }`}
                   >
                     {thought.data.analysis}
                   </p>
@@ -2858,25 +2702,22 @@ const WorkflowConfigPanel = ({
 
   return (
     <div
-      className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 mb-6 ${
-        isDarkTheme
-          ? "bg-black/20 border-emerald-500/20"
-          : "bg-white border-emerald-200"
-      }`}
+      className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 mb-6 ${isDarkTheme
+        ? "bg-black/20 border-emerald-500/20"
+        : "bg-white border-emerald-200"
+        }`}
     >
       <div className="mb-4">
         <h3
-          className={`text-lg font-bold flex items-center gap-2 ${
-            isDarkTheme ? "text-white" : "text-gray-900"
-          }`}
+          className={`text-lg font-bold flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+            }`}
         >
           <BrainCircuit className="w-5 h-5 text-emerald-400" />
           {workflowDef.name}
         </h3>
         <p
-          className={`text-sm mt-1 ${
-            isDarkTheme ? "text-slate-400" : "text-gray-600"
-          }`}
+          className={`text-sm mt-1 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+            }`}
         >
           {workflowDef.description}
         </p>
@@ -2887,55 +2728,50 @@ const WorkflowConfigPanel = ({
         {nodes.map((node: any, index: number) => (
           <div key={node.id}>
             <div
-              className={`p-4 rounded-lg border-2 ${
-                node.type === "agent"
-                  ? isDarkTheme
-                    ? "border-emerald-500/30 bg-emerald-500/10"
-                    : "border-emerald-300 bg-emerald-50"
-                  : isDarkTheme
+              className={`p-4 rounded-lg border-2 ${node.type === "agent"
+                ? isDarkTheme
+                  ? "border-emerald-500/30 bg-emerald-500/10"
+                  : "border-emerald-300 bg-emerald-50"
+                : isDarkTheme
                   ? "border-emerald-500/20 bg-black/40"
                   : "border-emerald-200 bg-gray-50"
-              } ${!node.configurable ? "opacity-60" : ""}`}
+                } ${!node.configurable ? "opacity-60" : ""}`}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span
-                      className={`px-2 py-0.5 rounded text-xs font-bold ${
-                        node.type === "agent"
-                          ? "bg-emerald-500 text-black"
-                          : isDarkTheme
+                      className={`px-2 py-0.5 rounded text-xs font-bold ${node.type === "agent"
+                        ? "bg-emerald-500 text-black"
+                        : isDarkTheme
                           ? "bg-slate-600 text-white"
                           : "bg-gray-600 text-white"
-                      }`}
+                        }`}
                     >
                       {node.type === "agent" ? t.agentNode : t.toolNode}
                     </span>
                     <span
-                      className={`font-bold text-sm ${
-                        isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
+                      className={`font-bold text-sm ${isDarkTheme ? "text-white" : "text-gray-900"
+                        }`}
                     >
                       {node.name}
                     </span>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded ${
-                        node.configurable
-                          ? isDarkTheme
-                            ? "bg-emerald-500/20 text-emerald-400"
-                            : "bg-emerald-100 text-emerald-700"
-                          : isDarkTheme
+                      className={`text-xs px-2 py-0.5 rounded ${node.configurable
+                        ? isDarkTheme
+                          ? "bg-emerald-500/20 text-emerald-400"
+                          : "bg-emerald-100 text-emerald-700"
+                        : isDarkTheme
                           ? "bg-slate-500/20 text-slate-400"
                           : "bg-gray-200 text-gray-600"
-                      }`}
+                        }`}
                     >
                       {node.configurable ? t.configurable : t.notConfigurable}
                     </span>
                   </div>
                   <p
-                    className={`text-xs ${
-                      isDarkTheme ? "text-slate-400" : "text-gray-600"
-                    }`}
+                    className={`text-xs ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                      }`}
                   >
                     {node.description}
                   </p>
@@ -2950,11 +2786,10 @@ const WorkflowConfigPanel = ({
                             onChange={(e) =>
                               handleNodePromptChange(node.id, e.target.value)
                             }
-                            className={`w-full h-32 p-2 text-xs font-mono border rounded focus:outline-none focus:ring-2 ${
-                              isDarkTheme
-                                ? "border-emerald-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-emerald-500/50"
-                                : "border-emerald-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-emerald-500"
-                            }`}
+                            className={`w-full h-32 p-2 text-xs font-mono border rounded focus:outline-none focus:ring-2 ${isDarkTheme
+                              ? "border-emerald-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-emerald-500/50"
+                              : "border-emerald-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-emerald-500"
+                              }`}
                             placeholder={t.editPrompt}
                           />
                           <div className="flex gap-2">
@@ -2980,23 +2815,20 @@ const WorkflowConfigPanel = ({
                       ) : (
                         <div
                           onClick={() => setEditingNodeId(node.id)}
-                          className={`mt-2 p-2 border rounded cursor-pointer transition-colors ${
-                            isDarkTheme
-                              ? "bg-black/60 border-emerald-500/30 hover:border-emerald-400"
-                              : "bg-gray-50 border-emerald-300 hover:border-emerald-400"
-                          }`}
+                          className={`mt-2 p-2 border rounded cursor-pointer transition-colors ${isDarkTheme
+                            ? "bg-black/60 border-emerald-500/30 hover:border-emerald-400"
+                            : "bg-gray-50 border-emerald-300 hover:border-emerald-400"
+                            }`}
                         >
                           <div
-                            className={`text-[10px] mb-1 ${
-                              isDarkTheme ? "text-slate-500" : "text-gray-500"
-                            }`}
+                            className={`text-[10px] mb-1 ${isDarkTheme ? "text-slate-500" : "text-gray-500"
+                              }`}
                           >
                             {t.editPrompt}
                           </div>
                           <div
-                            className={`text-xs line-clamp-2 font-mono ${
-                              isDarkTheme ? "text-slate-300" : "text-gray-700"
-                            }`}
+                            className={`text-xs line-clamp-2 font-mono ${isDarkTheme ? "text-slate-300" : "text-gray-700"
+                              }`}
                           >
                             {node.prompt || "No prompt"}
                           </div>
@@ -3027,11 +2859,10 @@ const WorkflowConfigPanel = ({
             value={configName}
             onChange={(e) => setConfigName(e.target.value)}
             placeholder={t.configNamePlaceholder}
-            className={`flex-1 px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 ${
-              isDarkTheme
-                ? "border-emerald-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-emerald-500/50"
-                : "border-emerald-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-emerald-500"
-            }`}
+            className={`flex-1 px-3 py-2 border rounded text-sm focus:outline-none focus:ring-2 ${isDarkTheme
+              ? "border-emerald-500/30 bg-black/60 text-white placeholder:text-slate-500 focus:ring-emerald-500/50"
+              : "border-emerald-300 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-emerald-500"
+              }`}
           />
           <button
             onClick={(e) => {
@@ -3058,9 +2889,8 @@ const WorkflowConfigPanel = ({
         {workflowConfigs.length > 0 && (
           <div>
             <div
-              className={`text-xs uppercase font-bold mb-2 ${
-                isDarkTheme ? "text-slate-400" : "text-gray-600"
-              }`}
+              className={`text-xs uppercase font-bold mb-2 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                }`}
             >
               {t.loadWorkflowConfig}
             </div>
@@ -3068,28 +2898,25 @@ const WorkflowConfigPanel = ({
               {workflowConfigs.map((config) => (
                 <div
                   key={config.id}
-                  className={`flex items-center justify-between p-2 rounded border ${
-                    currentConfig?.id === config.id
-                      ? isDarkTheme
-                        ? "border-emerald-500/50 bg-emerald-500/20"
-                        : "border-emerald-400 bg-emerald-100"
-                      : isDarkTheme
+                  className={`flex items-center justify-between p-2 rounded border ${currentConfig?.id === config.id
+                    ? isDarkTheme
+                      ? "border-emerald-500/50 bg-emerald-500/20"
+                      : "border-emerald-400 bg-emerald-100"
+                    : isDarkTheme
                       ? "border-emerald-500/20 bg-black/40"
                       : "border-emerald-200 bg-gray-50"
-                  }`}
+                    }`}
                 >
                   <div className="flex-1">
                     <div
-                      className={`text-sm font-medium ${
-                        isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
+                      className={`text-sm font-medium ${isDarkTheme ? "text-white" : "text-gray-900"
+                        }`}
                     >
                       {config.name}
                     </div>
                     <div
-                      className={`text-xs ${
-                        isDarkTheme ? "text-slate-500" : "text-gray-500"
-                      }`}
+                      className={`text-xs ${isDarkTheme ? "text-slate-500" : "text-gray-500"
+                        }`}
                     >
                       {new Date(config.createdAt).toLocaleDateString()}
                     </div>
@@ -3142,9 +2969,8 @@ const WorkflowConfigPanel = ({
 
         {workflowConfigs.length === 0 && (
           <div
-            className={`text-center py-4 text-sm ${
-              isDarkTheme ? "text-slate-500" : "text-gray-500"
-            }`}
+            className={`text-center py-4 text-sm ${isDarkTheme ? "text-slate-500" : "text-gray-500"
+              }`}
           >
             {t.noSavedConfigs}
           </div>
@@ -3228,7 +3054,7 @@ export default function App() {
     taskManager: {
       tasks: [],
       activeTaskId: null,
-      maxTasks: 5,
+      maxTasks: 10,
     },
 
     step: "content-generation",
@@ -4247,8 +4073,8 @@ export default function App() {
                 name: updatedTask.name,
                 status:
                   updatedTask.miningState?.miningSuccess ||
-                  (updatedTask.batchState?.batchKeywords &&
-                    updatedTask.batchState.batchKeywords.length > 0)
+                    (updatedTask.batchState?.batchKeywords &&
+                      updatedTask.batchState.batchKeywords.length > 0)
                     ? "completed"
                     : "in_progress",
                 state: updatedTask,
@@ -4282,8 +4108,8 @@ export default function App() {
         name,
         status:
           task.miningState?.miningSuccess ||
-          (task.batchState?.batchKeywords &&
-            task.batchState.batchKeywords.length > 0)
+            (task.batchState?.batchKeywords &&
+              task.batchState.batchKeywords.length > 0)
             ? "completed"
             : "in_progress",
         state: task,
@@ -4526,9 +4352,8 @@ export default function App() {
       workflowId: "mining",
       name:
         name.trim() ||
-        `Mining Config ${
-          state.workflowConfigs.filter((c) => c.workflowId === "mining")
-            .length + 1
+        `Mining Config ${state.workflowConfigs.filter((c) => c.workflowId === "mining")
+          .length + 1
         }`,
       nodes: miningWorkflow.nodes.map((node) => ({
         ...node,
@@ -4536,8 +4361,8 @@ export default function App() {
           node.id === "mining-gen"
             ? state.genPrompt
             : node.id === "mining-analyze"
-            ? state.analyzePrompt
-            : node.prompt,
+              ? state.analyzePrompt
+              : node.prompt,
       })),
       // Include mining settings
       miningSettings: {
@@ -4652,8 +4477,8 @@ export default function App() {
         node.id === "mining-gen"
           ? state.genPrompt
           : node.id === "mining-analyze"
-          ? state.analyzePrompt
-          : node.prompt,
+            ? state.analyzePrompt
+            : node.prompt,
     }));
 
     try {
@@ -5375,8 +5200,8 @@ export default function App() {
         ...prev,
         error:
           state.uiLanguage === "zh"
-            ? "最多只能同时开启5个任务，请先关闭一个任务。"
-            : "Maximum 5 tasks allowed. Please close a task first.",
+            ? `最多只能同时开启${state.taskManager.maxTasks}个任务，请先关闭一个任务。`
+            : `Maximum ${state.taskManager.maxTasks} tasks allowed. Please close a task first.`,
       }));
       return;
     }
@@ -5420,10 +5245,10 @@ export default function App() {
       // Save current task state before switching
       const updatedTasks = prev.taskManager.activeTaskId
         ? prev.taskManager.tasks.map((task) =>
-            task.id === prev.taskManager.activeTaskId
-              ? snapshotCurrentTask(prev, task)
-              : task
-          )
+          task.id === prev.taskManager.activeTaskId
+            ? snapshotCurrentTask(prev, task)
+            : task
+        )
         : prev.taskManager.tasks;
 
       return {
@@ -5537,7 +5362,7 @@ export default function App() {
           const isBatchRunning =
             targetTask.batchState &&
             targetTask.batchState.batchCurrentIndex <
-              targetTask.batchState.batchTotalCount;
+            targetTask.batchState.batchTotalCount;
           if (isBatchRunning) {
             batchStep = "batch-analyzing";
           } else if (
@@ -6119,16 +5944,12 @@ export default function App() {
 
     // 显示成功日志
     addLog(
-      `✨ ${
-        state.uiLanguage === "zh" ? "配置已保存" : "Configuration saved"
-      }: ${state.uiLanguage === "zh" ? "行业" : "Industry"}="${
-        config.industry
-      }"${
-        config.additionalSuggestions
-          ? `, ${state.uiLanguage === "zh" ? "建议" : "Suggestions"}="${
-              config.additionalSuggestions
-            }"`
-          : ""
+      `✨ ${state.uiLanguage === "zh" ? "配置已保存" : "Configuration saved"
+      }: ${state.uiLanguage === "zh" ? "行业" : "Industry"}="${config.industry
+      }"${config.additionalSuggestions
+        ? `, ${state.uiLanguage === "zh" ? "建议" : "Suggestions"}="${config.additionalSuggestions
+        }"`
+        : ""
       }`,
       "success",
       state.taskManager.activeTaskId || undefined
@@ -6218,8 +6039,7 @@ export default function App() {
     }));
 
     addLog(
-      `Starting mining loop for: "${
-        state.seedKeyword
+      `Starting mining loop for: "${state.seedKeyword
       }" (${state.targetLanguage.toUpperCase()})...`,
       "info",
       currentTaskId
@@ -6299,7 +6119,7 @@ export default function App() {
     // 保存网站信息到任务状态
     const websiteId =
       typeof websiteToUse.id === "string" &&
-      websiteToUse.id.startsWith("manual-")
+        websiteToUse.id.startsWith("manual-")
         ? `temp-${Date.now()}`
         : websiteToUse.id;
 
@@ -6387,8 +6207,8 @@ export default function App() {
           // 计算策略模式下的总关键词数（各启用模块的 count 之和）
           const strategyTotalKeywords = useStrategyMode
             ? Object.values(strategyConfig)
-                .filter((s) => s?.enabled)
-                .reduce((sum, s) => sum + (s?.count || 0), 0)
+              .filter((s) => s?.enabled)
+              .reduce((sum, s) => sum + (s?.count || 0), 0)
             : 0;
 
           response = await postWithAuth(
@@ -6966,10 +6786,9 @@ export default function App() {
 
       // Add AI thinking logs
       addLog(
-        `💭 ${
-          state.uiLanguage === "zh"
-            ? `准备分析 "${state.seedKeyword}" 的关键词机会`
-            : `Preparing to analyze keyword opportunities for "${state.seedKeyword}"`
+        `💭 ${state.uiLanguage === "zh"
+          ? `准备分析 "${state.seedKeyword}" 的关键词机会`
+          : `Preparing to analyze keyword opportunities for "${state.seedKeyword}"`
         }`,
         "info",
         taskId
@@ -7055,8 +6874,7 @@ export default function App() {
         );
 
         addLog(
-          `🤖 ${
-            currentUiLanguage === "zh" ? "AI 正在思考..." : "AI is thinking..."
+          `🤖 ${currentUiLanguage === "zh" ? "AI 正在思考..." : "AI is thinking..."
           }`,
           "info",
           taskId
@@ -7148,10 +6966,9 @@ export default function App() {
           .map((k) => k.keyword)
           .join(", ");
         addLog(
-          `✨ ${
-            state.uiLanguage === "zh"
-              ? `成功生成 ${generatedKeywords.length} 个候选关键词`
-              : `Generated ${generatedKeywords.length} candidate keywords`
+          `✨ ${state.uiLanguage === "zh"
+            ? `成功生成 ${generatedKeywords.length} 个候选关键词`
+            : `Generated ${generatedKeywords.length} candidate keywords`
           }: ${sampleKeywords}...`,
           "success",
           taskId
@@ -7173,10 +6990,9 @@ export default function App() {
           taskId
         );
         addLog(
-          `🔍 ${
-            currentUiLanguage === "zh"
-              ? "正在分析搜索引擎结果页面 (SERP) 估算排名概率..."
-              : "Analyzing Search Engine Results Page (SERP) to estimate ranking probability..."
+          `🔍 ${currentUiLanguage === "zh"
+            ? "正在分析搜索引擎结果页面 (SERP) 估算排名概率..."
+            : "Analyzing Search Engine Results Page (SERP) to estimate ranking probability..."
           }`,
           "info",
           taskId
@@ -7341,14 +7157,12 @@ export default function App() {
             );
             await consumeCredits(
               "keyword_mining",
-              `Keyword Mining - "${
-                state.seedKeyword
+              `Keyword Mining - "${state.seedKeyword
               }" (${state.targetLanguage.toUpperCase()})`,
               analyzedBatch.length
             );
             addLog(
-              `✅ Credits consumed: ${
-                Math.ceil(analyzedBatch.length / 10) * 20
+              `✅ Credits consumed: ${Math.ceil(analyzedBatch.length / 10) * 20
               } credits. Remaining: ${credits?.remaining || 0}`,
               "success",
               taskId
@@ -8127,11 +7941,10 @@ export default function App() {
 ${auditReport}
 --- End of Report ---
 
-Please generate keywords based on the opportunities and keyword suggestions mentioned in the above analysis report.${
-          combinedAdditionalSuggestions
+Please generate keywords based on the opportunities and keyword suggestions mentioned in the above analysis report.${combinedAdditionalSuggestions
             ? `\n\nAdditional user suggestions:\n${combinedAdditionalSuggestions}`
             : ""
-        }`;
+          }`;
 
         addLog(
           state.uiLanguage === "zh"
@@ -8146,11 +7959,11 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           seedKeywords.length > 0
             ? seedKeywords.join(", ")
             : allKeywords.length > 0
-            ? allKeywords
+              ? allKeywords
                 .slice(-5)
                 .map((k) => k.keyword)
                 .join(", ")
-            : state.miningConfig?.industry || "general topics";
+              : state.miningConfig?.industry || "general topics";
         combinedAdditionalSuggestions =
           state.miningConfig?.additionalSuggestions || "";
 
@@ -8294,18 +8107,14 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
             addLog(
               state.uiLanguage === "zh"
-                ? `💾 使用缓存的竞争对手关键词 ${
-                    generatedKeywords.length
-                  } 个（剩余 ${
-                    competitorKeywordsPool.length -
-                    usedCompetitorKeywords.length
-                  } 个）`
-                : `💾 Using ${
-                    generatedKeywords.length
-                  } cached competitor keywords (${
-                    competitorKeywordsPool.length -
-                    usedCompetitorKeywords.length
-                  } remaining)`,
+                ? `💾 使用缓存的竞争对手关键词 ${generatedKeywords.length
+                } 个（剩余 ${competitorKeywordsPool.length -
+                usedCompetitorKeywords.length
+                } 个）`
+                : `💾 Using ${generatedKeywords.length
+                } cached competitor keywords (${competitorKeywordsPool.length -
+                usedCompetitorKeywords.length
+                } remaining)`,
               "info",
               taskId
             );
@@ -8567,8 +8376,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               analyzedBatch.length
             );
             addLog(
-              `✅ Credits consumed: ${
-                Math.ceil(analyzedBatch.length / 10) * 30
+              `✅ Credits consumed: ${Math.ceil(analyzedBatch.length / 10) * 30
               } credits. Remaining: ${credits?.remaining || 0}`,
               "success",
               taskId
@@ -8610,11 +8418,11 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             "generation",
             state.uiLanguage === "zh"
               ? `发现高概率关键词：${highProbKeywords
-                  .map((k) => k.keyword)
-                  .join(", ")}`
+                .map((k) => k.keyword)
+                .join(", ")}`
               : `High-probability keywords found: ${highProbKeywords
-                  .map((k) => k.keyword)
-                  .join(", ")}`,
+                .map((k) => k.keyword)
+                .join(", ")}`,
             {
               keywords: highProbKeywords.map((k) => k.keyword),
               data: highProbKeywords,
@@ -8698,18 +8506,15 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         addThought(
           "generation",
           state.uiLanguage === "zh"
-            ? `关键词挖掘完成，共 ${allKeywords.length} 个关键词（高概率: ${
-                allKeywords.filter(
-                  (k) => k.probability === ProbabilityLevel.HIGH
-                ).length
-              }）`
-            : `Keyword mining complete, ${
-                allKeywords.length
-              } keywords total (High: ${
-                allKeywords.filter(
-                  (k) => k.probability === ProbabilityLevel.HIGH
-                ).length
-              })`,
+            ? `关键词挖掘完成，共 ${allKeywords.length} 个关键词（高概率: ${allKeywords.filter(
+              (k) => k.probability === ProbabilityLevel.HIGH
+            ).length
+            }）`
+            : `Keyword mining complete, ${allKeywords.length
+            } keywords total (High: ${allKeywords.filter(
+              (k) => k.probability === ProbabilityLevel.HIGH
+            ).length
+            })`,
           {
             keywords: allKeywords.map((k) => k.keyword),
             data: allKeywords,
@@ -9255,13 +9060,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       ) {
         const isCrossOrigin = new URL(url).origin !== window.location.origin;
         const errorMsg = isCrossOrigin
-          ? `跨域请求失败（CORS 错误）。\n\n当前域名: ${
-              window.location.origin
-            }\n目标域名: ${
-              new URL(url).origin
-            }\n\n可能的原因：\n主应用 ${MAIN_APP_URL} 未配置允许来自 ${
-              window.location.origin
-            } 的跨域请求\n需要检查主应用的 CORS 配置（Access-Control-Allow-Origin）\n或者需要通过本地 API 代理转发请求`
+          ? `跨域请求失败（CORS 错误）。\n\n当前域名: ${window.location.origin
+          }\n目标域名: ${new URL(url).origin
+          }\n\n可能的原因：\n主应用 ${MAIN_APP_URL} 未配置允许来自 ${window.location.origin
+          } 的跨域请求\n需要检查主应用的 CORS 配置（Access-Control-Allow-Origin）\n或者需要通过本地 API 代理转发请求`
           : `网络请求失败。请检查：\n主应用 ${MAIN_APP_URL} 是否可访问\n网络连接是否正常\n浏览器控制台是否有其他错误`;
         throw new Error(errorMsg);
       }
@@ -9532,7 +9334,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     let keywordList: string[] = [];
     let effectiveBatchInput = batchInput;
     let keywordsFromAudit:
-      | Array<string | { keyword: string; [key: string]: any }>
+      | Array<string | { keyword: string;[key: string]: any }>
       | undefined = undefined; // 用于存量拓新模式
 
     // Handle Workflow 4: Existing Website Audit + Cross-Market
@@ -9627,12 +9429,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     if (!isLocalDev && !checkCreditsBalance(requiredCredits)) {
       const confirmRecharge = window.confirm(
         state.uiLanguage === "zh"
-          ? `余额不足！此操作需要 ${requiredCredits} Credits，您当前剩余 ${
-              credits?.remaining || 0
-            } Credits。\n\n是否前往主应用充值？`
-          : `Insufficient credits! This operation requires ${requiredCredits} Credits, you have ${
-              credits?.remaining || 0
-            } Credits.\n\nGo to main app to recharge?`
+          ? `余额不足！此操作需要 ${requiredCredits} Credits，您当前剩余 ${credits?.remaining || 0
+          } Credits。\n\n是否前往主应用充值？`
+          : `Insufficient credits! This operation requires ${requiredCredits} Credits, you have ${credits?.remaining || 0
+          } Credits.\n\nGo to main app to recharge?`
       );
 
       if (confirmRecharge) {
@@ -9656,13 +9456,11 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         addLog("Consuming credits...", "info");
         await consumeCredits(
           "batch_translation",
-          `Batch Translation - ${
-            keywordList.length
+          `Batch Translation - ${keywordList.length
           } keywords (${state.targetLanguage.toUpperCase()})`
         );
         addLog(
-          `✅ Credits consumed successfully. Remaining: ${
-            credits?.remaining || 0
+          `✅ Credits consumed successfully. Remaining: ${credits?.remaining || 0
           }`,
           "success"
         );
@@ -9756,7 +9554,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
   const runBatchAnalysis = async (
     keywordList: string[],
     taskId: string,
-    keywordsFromAudit?: Array<string | { keyword: string; [key: string]: any }>
+    keywordsFromAudit?: Array<string | { keyword: string;[key: string]: any }>
   ) => {
     try {
       const allKeywords: KeywordData[] = [];
@@ -9941,12 +9739,12 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             const updatedTasks = prev.taskManager.tasks.map((t) =>
               t.id === taskId
                 ? {
-                    ...t,
-                    batchState: {
-                      ...t.batchState!,
-                      batchArchives: updatedArchives,
-                    },
-                  }
+                  ...t,
+                  batchState: {
+                    ...t.batchState!,
+                    batchArchives: updatedArchives,
+                  },
+                }
                 : t
             );
 
@@ -10007,12 +9805,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         setThinkingStatus(
           true,
           state.uiLanguage === "zh"
-            ? `🌍 AI 正在分析 "${originalKeyword}" (${i + 1}/${
-                keywordList.length
-              })`
-            : `🌍 AI is analyzing "${originalKeyword}" (${i + 1}/${
-                keywordList.length
-              })`,
+            ? `🌍 AI 正在分析 "${originalKeyword}" (${i + 1}/${keywordList.length
+            })`
+            : `🌍 AI is analyzing "${originalKeyword}" (${i + 1}/${keywordList.length
+            })`,
           "analyzing"
         );
 
@@ -10062,8 +9858,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         try {
           // Step 1: Translate keyword (real-time display)
           addLog(
-            `[${i + 1}/${
-              keywordList.length
+            `[${i + 1}/${keywordList.length
             }] Step 1: Translating "${originalKeyword}"...`,
             "info",
             taskId
@@ -10221,8 +10016,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
           allKeywords.push(result);
 
           addLog(
-            `[${i + 1}/${
-              keywordList.length
+            `[${i + 1}/${keywordList.length
             }] Completed: "${originalKeyword}" → ${result.probability}`,
             "success",
             taskId
@@ -10233,8 +10027,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             error
           );
           addLog(
-            `[${i + 1}/${
-              keywordList.length
+            `[${i + 1}/${keywordList.length
             }] Error processing "${originalKeyword}": ${error.message}`,
             "error",
             taskId
@@ -10252,14 +10045,12 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         );
         await consumeCredits(
           "batch_translation",
-          `Batch Translation - ${
-            allKeywords.length
+          `Batch Translation - ${allKeywords.length
           } keywords (${state.targetLanguage.toUpperCase()})`,
           allKeywords.length
         );
         addLog(
-          `✅ Credits consumed: ${
-            Math.ceil(allKeywords.length / 10) * 20
+          `✅ Credits consumed: ${Math.ceil(allKeywords.length / 10) * 20
           } credits. Remaining: ${credits?.remaining || 0}`,
           "success",
           taskId
@@ -10548,8 +10339,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
   return (
     <div
-      className={`flex h-screen overflow-hidden ${ isDarkTheme ? "bg-[#050505] text-[#e5e5e5]" : "bg-gray-50 text-gray-900"
-      }`}
+      className={`flex h-screen overflow-hidden ${isDarkTheme ? "bg-[#050505] text-[#e5e5e5]" : "bg-gray-50 text-gray-900"
+        }`}
     >
       {/* 移动端顶部导航栏 */}
       <MobileHeader
@@ -10673,11 +10464,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         {/* Header: Process Indicators & User Info */}
         {state.step !== "article-generator" && (
           <header
-            className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0 ${
-              isDarkTheme
-                ? "border-white/5 bg-[#0a0a0a]/50"
-                : "border-gray-200 bg-white/80"
-            }`}
+            className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0 ${isDarkTheme
+              ? "border-white/5 bg-[#0a0a0a]/50"
+              : "border-gray-200 bg-white/80"
+              }`}
           >
             {/* Left: Step Indicators */}
             <div className="flex items-center space-x-8">
@@ -10779,9 +10569,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
                       <span
-                        className={`text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${
-                          isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                        }`}
+                        className={`text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                          }`}
                       >
                         {state.uiLanguage === "zh" ? "加载中..." : "Loading..."}
                       </span>
@@ -10793,9 +10582,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       </div>
                       <div className="flex flex-col min-w-0">
                         <span
-                          className={`text-xs font-black mono leading-none tracking-tight whitespace-nowrap ${
-                            isDarkTheme ? "text-white" : "text-gray-900"
-                          }`}
+                          className={`text-xs font-black mono leading-none tracking-tight whitespace-nowrap ${isDarkTheme ? "text-white" : "text-gray-900"
+                            }`}
                         >
                           {credits.remaining.toLocaleString()}
                         </span>
@@ -10804,16 +10592,14 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         </span>
                       </div>
                       <div
-                        className={`w-[1px] h-6 mx-2 shrink-0 ${
-                          isDarkTheme ? "bg-white/10" : "bg-gray-300"
-                        }`}
+                        className={`w-[1px] h-6 mx-2 shrink-0 ${isDarkTheme ? "bg-white/10" : "bg-gray-300"
+                          }`}
                       />
                       <button
-                        className={`text-[9px] lg:text-xs font-black uppercase tracking-widest transition-colors shrink-0 whitespace-nowrap ${
-                          isDarkTheme
-                            ? "text-neutral-400 hover:text-white"
-                            : "text-gray-600 hover:text-gray-900"
-                        }`}
+                        className={`text-[9px] lg:text-xs font-black uppercase tracking-widest transition-colors shrink-0 whitespace-nowrap ${isDarkTheme
+                          ? "text-neutral-400 hover:text-white"
+                          : "text-gray-600 hover:text-gray-900"
+                          }`}
                         onClick={() => setShowPaymentModal(true)}
                       >
                         {state.uiLanguage === "zh" ? "充值" : "Recharge"}
@@ -10822,9 +10608,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   ) : (
                     <>
                       <div
-                        className={`p-1 rounded shrink-0 ${
-                          isDarkTheme ? "bg-white/5" : "bg-gray-100"
-                        }`}
+                        className={`p-1 rounded shrink-0 ${isDarkTheme ? "bg-white/5" : "bg-gray-100"
+                          }`}
                       >
                         <Coins
                           size={14}
@@ -10834,9 +10619,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         />
                       </div>
                       <span
-                        className={`text-xs font-bold whitespace-nowrap ${
-                          isDarkTheme ? "text-neutral-600" : "text-gray-500"
-                        }`}
+                        className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                          }`}
                       >
                         --
                       </span>
@@ -10850,24 +10634,21 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 <div className="flex items-center space-x-2 shrink-0">
                   <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
                   <span
-                    className={`text-xs font-bold whitespace-nowrap ${
-                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                    }`}
+                    className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                      }`}
                   >
                     {state.uiLanguage === "zh" ? "验证中..." : "Verifying..."}
                   </span>
                 </div>
               ) : authenticated ? (
                 <div
-                  className={`flex items-center space-x-4 border-l pl-6 shrink-0 ${
-                    isDarkTheme ? "border-white/5" : "border-gray-200"
-                  }`}
+                  className={`flex items-center space-x-4 border-l pl-6 shrink-0 ${isDarkTheme ? "border-white/5" : "border-gray-200"
+                    }`}
                 >
                   <div className="text-right shrink-0">
                     <p
-                      className={`text-xs font-bold leading-none whitespace-nowrap ${
-                        isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
+                      className={`text-xs font-bold leading-none whitespace-nowrap ${isDarkTheme ? "text-white" : "text-gray-900"
+                        }`}
                     >
                       {user?.name || user?.email}
                     </p>
@@ -10878,19 +10659,17 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   {user?.picture && (
                     <img
                       src={user.picture}
-                      className={`w-8 h-8 rounded border shrink-0 ${
-                        isDarkTheme ? "border-white/10" : "border-gray-200"
-                      }`}
+                      className={`w-8 h-8 rounded border shrink-0 ${isDarkTheme ? "border-white/10" : "border-gray-200"
+                        }`}
                       alt="avatar"
                     />
                   )}
                   <button
                     onClick={logout}
-                    className={`p-2 transition-colors shrink-0 ${
-                      isDarkTheme
-                        ? "text-neutral-500 hover:text-white"
-                        : "text-gray-500 hover:text-gray-900"
-                    }`}
+                    className={`p-2 transition-colors shrink-0 ${isDarkTheme
+                      ? "text-neutral-500 hover:text-white"
+                      : "text-gray-500 hover:text-gray-900"
+                      }`}
                     title={state.uiLanguage === "zh" ? "登出" : "Logout"}
                   >
                     <LogOut size={16} />
@@ -10899,14 +10678,12 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               ) : (
                 <div className="flex items-center space-x-3 shrink-0">
                   <User
-                    className={`w-4 h-4 shrink-0 ${
-                      isDarkTheme ? "text-neutral-500" : "text-gray-500"
-                    }`}
+                    className={`w-4 h-4 shrink-0 ${isDarkTheme ? "text-neutral-500" : "text-gray-500"
+                      }`}
                   />
                   <span
-                    className={`text-xs font-bold whitespace-nowrap ${
-                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                    }`}
+                    className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                      }`}
                   >
                     {state.uiLanguage === "zh" ? "未登录" : "Not Logged In"}
                   </span>
@@ -11070,10 +10847,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           tasks: newState.taskManager.tasks.map((task) =>
                             task.id === newState.taskManager.activeTaskId
                               ? {
-                                  ...task,
-                                  name: taskName,
-                                  updatedAt: Date.now(),
-                                }
+                                ...task,
+                                name: taskName,
+                                updatedAt: Date.now(),
+                              }
                               : task
                           ),
                         };
@@ -11177,8 +10954,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     ...prev,
                     error:
                       state.uiLanguage === "zh"
-                        ? "最多只能同时开启5个任务。请先关闭一些任务再继续。"
-                        : "Maximum 5 tasks allowed. Please close some tasks first.",
+                        ? `最多只能同时开启${state.taskManager.maxTasks}个任务。请先关闭一些任务再继续。`
+                        : `Maximum ${state.taskManager.maxTasks} tasks allowed. Please close some tasks first.`,
                   }));
                   return;
                 }
@@ -11190,9 +10967,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   targetLanguage: state.targetLanguage,
                   targetMarket:
                     state.contentGeneration.website?.location || "global",
-                  name: `${keyword.keyword.slice(0, 30)}${
-                    keyword.keyword.length > 30 ? "..." : ""
-                  }`,
+                  name: `${keyword.keyword.slice(0, 30)}${keyword.keyword.length > 30 ? "..." : ""
+                    }`,
                 });
 
                 // 成功提示
@@ -11209,11 +10985,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
           {state.error && (
             <div
-              className={`mb-6 p-4 rounded-lg flex items-center ${
-                isDarkTheme
-                  ? "bg-red-950/50 border border-red-500/30 text-red-400"
-                  : "bg-red-50 border border-red-200 text-red-700"
-              }`}
+              className={`mb-6 p-4 rounded-lg flex items-center ${isDarkTheme
+                ? "bg-red-950/50 border border-red-500/30 text-red-400"
+                : "bg-red-50 border border-red-200 text-red-700"
+                }`}
             >
               <AlertCircle className="w-5 h-5 mr-2" />
               {state.error}
@@ -11236,62 +11011,62 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   >
                     {miningMode === "existing-website-audit"
                       ? (() => {
-                          const title =
-                            t.auditInputTitle || "Expand Your Reach";
-                          // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
-                          if (state.uiLanguage === "zh") {
-                            const lastFourChars = title.slice(-4);
-                            const restChars = title.slice(0, -4);
-                            return (
-                              <>
-                                {restChars}
-                                <span className="text-emerald-500">
-                                  {lastFourChars}
-                                </span>
-                              </>
-                            );
-                          } else {
-                            const words = title.split(" ");
-                            const lastWord = words.pop() || "";
-                            const restWords = words.join(" ");
-                            return (
-                              <>
-                                {restWords}{" "}
-                                <span className="text-emerald-500">
-                                  {lastWord}
-                                </span>
-                              </>
-                            );
-                          }
-                        })()
+                        const title =
+                          t.auditInputTitle || "Expand Your Reach";
+                        // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
+                        if (state.uiLanguage === "zh") {
+                          const lastFourChars = title.slice(-4);
+                          const restChars = title.slice(0, -4);
+                          return (
+                            <>
+                              {restChars}
+                              <span className="text-emerald-500">
+                                {lastFourChars}
+                              </span>
+                            </>
+                          );
+                        } else {
+                          const words = title.split(" ");
+                          const lastWord = words.pop() || "";
+                          const restWords = words.join(" ");
+                          return (
+                            <>
+                              {restWords}{" "}
+                              <span className="text-emerald-500">
+                                {lastWord}
+                              </span>
+                            </>
+                          );
+                        }
+                      })()
                       : (() => {
-                          const title = t.inputTitle || "Define Your Niche";
-                          // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
-                          if (state.uiLanguage === "zh") {
-                            const lastFourChars = title.slice(-4);
-                            const restChars = title.slice(0, -4);
-                            return (
-                              <>
-                                {restChars}
-                                <span className="text-emerald-500">
-                                  {lastFourChars}
-                                </span>
-                              </>
-                            );
-                          } else {
-                            const words = title.split(" ");
-                            const lastWord = words.pop() || "";
-                            const restWords = words.join(" ");
-                            return (
-                              <>
-                                {restWords}{" "}
-                                <span className="text-emerald-500">
-                                  {lastWord}
-                                </span>
-                              </>
-                            );
-                          }
-                        })()}
+                        const title = t.inputTitle || "Define Your Niche";
+                        // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
+                        if (state.uiLanguage === "zh") {
+                          const lastFourChars = title.slice(-4);
+                          const restChars = title.slice(0, -4);
+                          return (
+                            <>
+                              {restChars}
+                              <span className="text-emerald-500">
+                                {lastFourChars}
+                              </span>
+                            </>
+                          );
+                        } else {
+                          const words = title.split(" ");
+                          const lastWord = words.pop() || "";
+                          const restWords = words.join(" ");
+                          return (
+                            <>
+                              {restWords}{" "}
+                              <span className="text-emerald-500">
+                                {lastWord}
+                              </span>
+                            </>
+                          );
+                        }
+                      })()}
                   </h2>
                   <p
                     className={cn(
@@ -11328,8 +11103,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         miningMode === "blue-ocean"
                           ? "bg-emerald-600 text-white shadow-lg"
                           : isDarkTheme
-                          ? "text-neutral-500 hover:text-neutral-300"
-                          : "text-gray-600 hover:text-gray-900"
+                            ? "text-neutral-500 hover:text-neutral-300"
+                            : "text-gray-600 hover:text-gray-900"
                       )}
                     >
                       <Layers size={14} />
@@ -11348,8 +11123,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         miningMode === "existing-website-audit"
                           ? "bg-emerald-600 text-white shadow-lg"
                           : isDarkTheme
-                          ? "text-neutral-500 hover:text-neutral-300"
-                          : "text-gray-600 hover:text-gray-900"
+                            ? "text-neutral-500 hover:text-neutral-300"
+                            : "text-gray-600 hover:text-gray-900"
                       )}
                     >
                       <RefreshCw size={14} />
@@ -11371,8 +11146,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       activeTab === "mining"
                         ? "bg-emerald-500 text-white shadow-sm border-emerald-500"
                         : isDarkTheme
-                        ? "text-neutral-500 hover:text-neutral-300 border-white/10"
-                        : "text-gray-600 hover:text-gray-900 border-gray-200"
+                          ? "text-neutral-500 hover:text-neutral-300 border-white/10"
+                          : "text-gray-600 hover:text-gray-900 border-gray-200"
                     )}
                   >
                     {t.tabMining}
@@ -11384,8 +11159,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       activeTab === "batch"
                         ? "bg-emerald-500 text-white shadow-sm border-emerald-500"
                         : isDarkTheme
-                        ? "text-neutral-500 hover:text-neutral-300 border-white/10"
-                        : "text-gray-600 hover:text-gray-900 border-gray-200"
+                          ? "text-neutral-500 hover:text-neutral-300 border-white/10"
+                          : "text-gray-600 hover:text-gray-900 border-gray-200"
                     )}
                   >
                     {t.tabBatch}
@@ -11404,9 +11179,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         <div className="flex items-center gap-2">
                           <BrainCircuit className="w-5 h-5 text-emerald-400" />
                           <span
-                            className={`text-sm font-semibold ${
-                              isDarkTheme ? "text-white" : "text-gray-900"
-                            }`}
+                            className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                              }`}
                           >
                             {state.uiLanguage === "zh"
                               ? "需要帮助？"
@@ -11600,9 +11374,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           <div className="flex items-center gap-2">
                             <BrainCircuit className="w-5 h-5 text-emerald-400" />
                             <span
-                              className={`text-sm font-semibold ${
-                                isDarkTheme ? "text-white" : "text-gray-900"
-                              }`}
+                              className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                                }`}
                             >
                               {state.uiLanguage === "zh"
                                 ? "需要帮助？"
@@ -11870,7 +11643,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                     className={cn(
                                       "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors flex items-center justify-between",
                                       selectedWebsite?.id === website.id &&
-                                        "bg-emerald-500/20",
+                                      "bg-emerald-500/20",
                                       isDarkTheme
                                         ? "text-white"
                                         : "text-gray-900"
@@ -11902,11 +11675,11 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 className={cn(
                                   "text-xs flex items-center gap-1 mt-1",
                                   urlValidationStatus === "valid" &&
-                                    "text-emerald-500",
+                                  "text-emerald-500",
                                   urlValidationStatus === "invalid" &&
-                                    "text-red-500",
+                                  "text-red-500",
                                   urlValidationStatus === "validating" &&
-                                    "text-yellow-500"
+                                  "text-yellow-500"
                                 )}
                               >
                                 {urlValidationStatus === "validating" && (
@@ -12488,17 +12261,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     <div className="flex items-center gap-2">
                       <BrainCircuit className="w-5 h-5 text-emerald-400" />
                       <span
-                        className={`text-sm font-semibold ${
-                          isDarkTheme ? "text-white" : "text-gray-900"
-                        }`}
+                        className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                          }`}
                       >
                         {state.uiLanguage === "zh"
                           ? miningMode === "existing-website-audit"
                             ? "网站现有关键词的跨市场分析"
                             : "将翻译keyword到目标语言并分析蓝海机会"
                           : miningMode === "existing-website-audit"
-                          ? "Cross-market analysis of existing website keywords"
-                          : "Will translate keywords to target language and analyze blue ocean opportunities"}
+                            ? "Cross-market analysis of existing website keywords"
+                            : "Will translate keywords to target language and analyze blue ocean opportunities"}
                       </span>
                     </div>
                     <button
@@ -12755,7 +12527,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                   className={cn(
                                     "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors flex items-center justify-between",
                                     batchSelectedWebsite?.id === website.id &&
-                                      "bg-emerald-500/20",
+                                    "bg-emerald-500/20",
                                     isDarkTheme ? "text-white" : "text-gray-900"
                                   )}
                                 >
@@ -12785,11 +12557,11 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                               className={cn(
                                 "text-xs flex items-center gap-1 mt-1",
                                 batchUrlValidationStatus === "valid" &&
-                                  "text-emerald-500",
+                                "text-emerald-500",
                                 batchUrlValidationStatus === "invalid" &&
-                                  "text-red-500",
+                                "text-red-500",
                                 batchUrlValidationStatus === "validating" &&
-                                  "text-yellow-500"
+                                "text-yellow-500"
                               )}
                             >
                               {batchUrlValidationStatus === "validating" && (
@@ -12866,8 +12638,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         miningMode === "blue-ocean"
                           ? !batchInput.trim()
                           : miningMode === "existing-website-audit"
-                          ? !batchSelectedWebsite
-                          : !batchInput.trim()
+                            ? !batchSelectedWebsite
+                            : !batchInput.trim()
                       }
                       className={cn(
                         "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
@@ -13052,53 +12824,47 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   {state.batchArchives.length > 0 && (
                     <div className="mt-12">
                       <h3
-                        className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${
-                          isDarkTheme ? "text-slate-400" : "text-gray-600"
-                        }`}
+                        className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                          }`}
                       >
                         <History className="w-4 h-4" /> {t.batchArchives}
                       </h3>
                       <div
-                        className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${
-                          isDarkTheme
-                            ? "bg-black/40 border-emerald-500/20"
-                            : "bg-white border-emerald-200"
-                        }`}
+                        className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${isDarkTheme
+                          ? "bg-black/40 border-emerald-500/20"
+                          : "bg-white border-emerald-200"
+                          }`}
                       >
                         <div
-                          className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${
-                            isDarkTheme
-                              ? "divide-emerald-500/10"
-                              : "divide-gray-200"
-                          }`}
+                          className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${isDarkTheme
+                            ? "divide-emerald-500/10"
+                            : "divide-gray-200"
+                            }`}
                         >
                           {state.batchArchives.map((arch) => (
                             <div
                               key={arch.id}
                               onClick={() => loadBatchArchive(arch)}
-                              className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${
-                                isDarkTheme
-                                  ? "hover:bg-emerald-500/10"
-                                  : "hover:bg-emerald-50"
-                              }`}
+                              className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${isDarkTheme
+                                ? "hover:bg-emerald-500/10"
+                                : "hover:bg-emerald-50"
+                                }`}
                             >
                               <div className="flex items-center gap-3">
                                 <div
-                                  className={`p-2 rounded text-emerald-400 transition-colors ${
-                                    isDarkTheme
-                                      ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
-                                      : "bg-emerald-100 group-hover:bg-emerald-200"
-                                  }`}
+                                  className={`p-2 rounded text-emerald-400 transition-colors ${isDarkTheme
+                                    ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
+                                    : "bg-emerald-100 group-hover:bg-emerald-200"
+                                    }`}
                                 >
                                   <Languages className="w-4 h-4" />
                                 </div>
                                 <div>
                                   <div
-                                    className={`font-medium flex items-center gap-2 ${
-                                      isDarkTheme
-                                        ? "text-white"
-                                        : "text-gray-900"
-                                    }`}
+                                    className={`font-medium flex items-center gap-2 ${isDarkTheme
+                                      ? "text-white"
+                                      : "text-gray-900"
+                                      }`}
                                   >
                                     {arch.inputKeywords
                                       .split(/[,，]/)
@@ -13107,21 +12873,19 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                     {arch.inputKeywords.split(/[,，]/).length >
                                       3 && "..."}
                                     <span
-                                      className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${
-                                        isDarkTheme
-                                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                                      }`}
+                                      className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${isDarkTheme
+                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                        : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                                        }`}
                                     >
                                       {arch.targetLanguage}
                                     </span>
                                   </div>
                                   <div
-                                    className={`text-xs ${
-                                      isDarkTheme
-                                        ? "text-slate-500"
-                                        : "text-gray-500"
-                                    }`}
+                                    className={`text-xs ${isDarkTheme
+                                      ? "text-slate-500"
+                                      : "text-gray-500"
+                                      }`}
                                   >
                                     {new Date(arch.timestamp).toLocaleString()}{" "}
                                     • {arch.totalCount} keywords
@@ -13130,11 +12894,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                               </div>
                               <button
                                 onClick={(e) => deleteBatchArchive(arch.id, e)}
-                                className={`p-2 transition-colors ${
-                                  isDarkTheme
-                                    ? "text-slate-600 hover:text-red-400"
-                                    : "text-gray-500 hover:text-red-600"
-                                }`}
+                                className={`p-2 transition-colors ${isDarkTheme
+                                  ? "text-slate-600 hover:text-red-400"
+                                  : "text-gray-500 hover:text-red-600"
+                                  }`}
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -13149,11 +12912,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
               {/* Prompt Config (Collapsible) */}
               <div
-                className={`mt-12 border rounded-xl backdrop-blur-sm shadow-sm overflow-hidden max-w-2xl mx-auto ${
-                  isDarkTheme
-                    ? "border-emerald-500/20 bg-black/40"
-                    : "border-emerald-200 bg-white"
-                }`}
+                className={`mt-12 border rounded-xl backdrop-blur-sm shadow-sm overflow-hidden max-w-2xl mx-auto ${isDarkTheme
+                  ? "border-emerald-500/20 bg-black/40"
+                  : "border-emerald-200 bg-white"
+                  }`}
               >
                 <button
                   onClick={() =>
@@ -13162,20 +12924,18 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       showPrompts: !prev.showPrompts,
                     }))
                   }
-                  className={`w-full flex items-center justify-between p-4 transition-colors font-medium ${
-                    isDarkTheme
-                      ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-white"
-                      : "bg-emerald-50 hover:bg-emerald-100 text-gray-900"
-                  }`}
+                  className={`w-full flex items-center justify-between p-4 transition-colors font-medium ${isDarkTheme
+                    ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-white"
+                    : "bg-emerald-50 hover:bg-emerald-100 text-gray-900"
+                    }`}
                 >
                   <div className="flex items-center gap-2">
                     <Settings className="w-4 h-4 text-emerald-400" />
                     {t.configPrompts}
                   </div>
                   <div
-                    className={`transform transition-transform ${
-                      state.showPrompts ? "rotate-180" : ""
-                    }`}
+                    className={`transform transition-transform ${state.showPrompts ? "rotate-180" : ""
+                      }`}
                   >
                     <ChevronDown className="w-4 h-4 text-emerald-400" />
                   </div>
@@ -13187,15 +12947,14 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     <div className="flex items-center justify-end">
                       <button
                         onClick={togglePromptTranslation}
-                        className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${
-                          state.showPromptTranslation
-                            ? isDarkTheme
-                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                              : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                            : isDarkTheme
+                        className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${state.showPromptTranslation
+                          ? isDarkTheme
+                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                            : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                          : isDarkTheme
                             ? "bg-black/60 text-slate-400 border-emerald-500/20"
                             : "bg-gray-100 text-gray-600 border-emerald-200"
-                        }`}
+                          }`}
                       >
                         <Languages className="w-3 h-3" />
                         {t.showTransRef}
@@ -13205,9 +12964,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     <div>
                       <div className="flex justify-between items-center mb-2">
                         <label
-                          className={`text-sm font-semibold ${
-                            isDarkTheme ? "text-white" : "text-gray-900"
-                          }`}
+                          className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                            }`}
                         >
                           {t.promptGenLabel}
                         </label>
@@ -13222,11 +12980,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
                       <div className="grid grid-cols-1 gap-4">
                         <textarea
-                          className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${
-                            isDarkTheme
-                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                          }`}
+                          className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${isDarkTheme
+                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
+                            }`}
                           value={state.genPrompt}
                           onChange={(e) =>
                             setState((prev) => ({
@@ -13237,18 +12994,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         />
                         {state.showPromptTranslation && (
                           <div
-                            className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${
-                              isDarkTheme
-                                ? "bg-black/60 border-emerald-500/30 text-slate-300"
-                                : "bg-gray-50 border-emerald-200 text-gray-700"
-                            }`}
+                            className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${isDarkTheme
+                              ? "bg-black/60 border-emerald-500/30 text-slate-300"
+                              : "bg-gray-50 border-emerald-200 text-gray-700"
+                              }`}
                           >
                             <div
-                              className={`text-[10px] uppercase font-bold mb-1 ${
-                                isDarkTheme
-                                  ? "text-emerald-400"
-                                  : "text-emerald-600"
-                              }`}
+                              className={`text-[10px] uppercase font-bold mb-1 ${isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                                }`}
                             >
                               {t.transRefLabel}
                             </div>
@@ -13256,11 +13011,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                               state.translatedGenPrompt
                             ) : (
                               <div
-                                className={`animate-pulse ${
-                                  isDarkTheme
-                                    ? "text-slate-500"
-                                    : "text-gray-500"
-                                }`}
+                                className={`animate-pulse ${isDarkTheme
+                                  ? "text-slate-500"
+                                  : "text-gray-500"
+                                  }`}
                               >
                                 Translating...
                               </div>
@@ -13273,9 +13027,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     <div>
                       <div className="flex justify-between items-center mb-2">
                         <label
-                          className={`text-sm font-semibold ${
-                            isDarkTheme ? "text-white" : "text-gray-900"
-                          }`}
+                          className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                            }`}
                         >
                           {t.promptAnlzLabel}
                         </label>
@@ -13289,11 +13042,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       </div>
                       <div className="grid grid-cols-1 gap-4">
                         <textarea
-                          className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${
-                            isDarkTheme
-                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                          }`}
+                          className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${isDarkTheme
+                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
+                            }`}
                           value={state.analyzePrompt}
                           onChange={(e) =>
                             setState((prev) => ({
@@ -13304,18 +13056,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         />
                         {state.showPromptTranslation && (
                           <div
-                            className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${
-                              isDarkTheme
-                                ? "bg-black/60 border-emerald-500/30 text-slate-300"
-                                : "bg-gray-50 border-emerald-200 text-gray-700"
-                            }`}
+                            className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${isDarkTheme
+                              ? "bg-black/60 border-emerald-500/30 text-slate-300"
+                              : "bg-gray-50 border-emerald-200 text-gray-700"
+                              }`}
                           >
                             <div
-                              className={`text-[10px] uppercase font-bold mb-1 ${
-                                isDarkTheme
-                                  ? "text-emerald-400"
-                                  : "text-emerald-600"
-                              }`}
+                              className={`text-[10px] uppercase font-bold mb-1 ${isDarkTheme
+                                ? "text-emerald-400"
+                                : "text-emerald-600"
+                                }`}
                             >
                               {t.transRefLabel}
                             </div>
@@ -13323,11 +13073,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                               state.translatedAnalyzePrompt
                             ) : (
                               <div
-                                className={`animate-pulse ${
-                                  isDarkTheme
-                                    ? "text-slate-500"
-                                    : "text-gray-500"
-                                }`}
+                                className={`animate-pulse ${isDarkTheme
+                                  ? "text-slate-500"
+                                  : "text-gray-500"
+                                  }`}
                               >
                                 Translating...
                               </div>
@@ -13400,11 +13149,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                             .map((cfg) => (
                               <div
                                 key={cfg.id}
-                                className={`p-3 rounded-lg border flex items-center justify-between group transition-colors ${
-                                  state.currentConfigId === cfg.id
-                                    ? "bg-emerald-50 border-emerald-200"
-                                    : "bg-slate-50 border-slate-200 hover:bg-slate-100"
-                                }`}
+                                className={`p-3 rounded-lg border flex items-center justify-between group transition-colors ${state.currentConfigId === cfg.id
+                                  ? "bg-emerald-50 border-emerald-200"
+                                  : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                                  }`}
                               >
                                 <div className="flex-1">
                                   <div className="font-medium text-slate-800 text-sm flex items-center gap-2">
@@ -13452,11 +13200,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                         </div>
                       ) : (
                         <div
-                          className={`text-sm text-center py-4 rounded-lg border border-dashed ${
-                            isDarkTheme
-                              ? "text-slate-400 bg-slate-50 border-slate-200"
-                              : "text-gray-600 bg-gray-50 border-gray-200"
-                          }`}
+                          className={`text-sm text-center py-4 rounded-lg border border-dashed ${isDarkTheme
+                            ? "text-slate-400 bg-slate-50 border-slate-200"
+                            : "text-gray-600 bg-gray-50 border-gray-200"
+                            }`}
                         >
                           {t.noConfigs}
                         </div>
@@ -13477,27 +13224,24 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     <BrainCircuit className="w-8 h-8 text-black" />
                   </div>
                   <h2
-                    className={`text-3xl font-bold ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
+                    className={`text-3xl font-bold ${isDarkTheme ? "text-white" : "text-gray-900"
+                      }`}
                   >
                     {t.workflowConfig}
                   </h2>
                 </div>
                 <p
-                  className={`mb-4 ${
-                    isDarkTheme ? "text-slate-400" : "text-gray-600"
-                  }`}
+                  className={`mb-4 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                    }`}
                 >
                   {t.workflowConfigDesc}
                 </p>
                 <button
                   onClick={() => switchStepWithTaskPreservation("input")}
-                  className={`inline-flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                    isDarkTheme
-                      ? "text-slate-400 hover:text-emerald-400"
-                      : "text-gray-600 hover:text-emerald-600"
-                  }`}
+                  className={`inline-flex items-center gap-2 px-4 py-2 text-sm transition-colors ${isDarkTheme
+                    ? "text-slate-400 hover:text-emerald-400"
+                    : "text-gray-600 hover:text-emerald-600"
+                    }`}
                 >
                   <ArrowRight className="w-4 h-4 rotate-180" />
                   {state.uiLanguage === "en" ? "Back to Home" : "返回首页"}
@@ -13507,24 +13251,21 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               <div className="space-y-8">
                 {/* Mining Workflow */}
                 <div
-                  className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
-                    isDarkTheme
-                      ? "bg-black/40 border-emerald-500/20"
-                      : "bg-white border-emerald-200"
-                  }`}
+                  className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${isDarkTheme
+                    ? "bg-black/40 border-emerald-500/20"
+                    : "bg-white border-emerald-200"
+                    }`}
                 >
                   <h3
-                    className={`text-xl font-bold mb-2 flex items-center gap-2 ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
+                    className={`text-xl font-bold mb-2 flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+                      }`}
                   >
                     <Search className="w-5 h-5 text-emerald-400" />
                     {t.miningWorkflow}
                   </h3>
                   <p
-                    className={`text-sm mb-6 ${
-                      isDarkTheme ? "text-slate-400" : "text-gray-600"
-                    }`}
+                    className={`text-sm mb-6 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                      }`}
                   >
                     {MINING_WORKFLOW.description}
                   </p>
@@ -13545,24 +13286,21 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
                 {/* Batch Workflow */}
                 <div
-                  className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${
-                    isDarkTheme
-                      ? "bg-black/40 border-emerald-500/20"
-                      : "bg-white border-emerald-200"
-                  }`}
+                  className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${isDarkTheme
+                    ? "bg-black/40 border-emerald-500/20"
+                    : "bg-white border-emerald-200"
+                    }`}
                 >
                   <h3
-                    className={`text-xl font-bold mb-2 flex items-center gap-2 ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
+                    className={`text-xl font-bold mb-2 flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+                      }`}
                   >
                     <Languages className="w-5 h-5 text-emerald-400" />
                     {t.batchWorkflow}
                   </h3>
                   <p
-                    className={`text-sm mb-6 ${
-                      isDarkTheme ? "text-slate-400" : "text-gray-600"
-                    }`}
+                    className={`text-sm mb-6 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                      }`}
                   >
                     {BATCH_WORKFLOW.description}
                   </p>
@@ -13645,9 +13383,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               <div className="flex justify-between items-center mb-3">
                 <div className="flex items-center gap-3">
                   <Loader2
-                    className={`w-5 h-5 text-emerald-400 ${
-                      !state.miningSuccess && "animate-spin"
-                    }`}
+                    className={`w-5 h-5 text-emerald-400 ${!state.miningSuccess && "animate-spin"
+                      }`}
                   />
                   <div>
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
@@ -13664,11 +13401,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                     onClick={() =>
                       setState((prev) => ({ ...prev, showSuccessPrompt: true }))
                     }
-                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${
-                      isDarkTheme
-                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30"
-                        : "bg-emerald-100 border-emerald-300 text-emerald-700 hover:bg-emerald-200"
-                    }`}
+                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${isDarkTheme
+                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30"
+                      : "bg-emerald-100 border-emerald-300 text-emerald-700 hover:bg-emerald-200"
+                      }`}
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
                     {state.uiLanguage === "zh" ? "完成查看" : "Complete"}
@@ -13677,11 +13413,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                 {!state.miningSuccess && (
                   <button
                     onClick={handleStop}
-                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${
-                      isDarkTheme
-                        ? "bg-black/60 border-red-500/30 text-red-400 hover:bg-red-500/10"
-                        : "bg-white border-red-300 text-red-600 hover:bg-red-50"
-                    }`}
+                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${isDarkTheme
+                      ? "bg-black/60 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                      : "bg-white border-red-300 text-red-600 hover:bg-red-50"
+                      }`}
                   >
                     <Square className="w-3.5 h-3.5 fill-current" />
                     {t.btnStop}
@@ -13692,19 +13427,17 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               {/* Mining Control Panel */}
               {!state.miningSuccess && (
                 <div
-                  className={`mb-3 backdrop-blur-sm rounded-xl shadow-sm border px-4 py-2 ${
-                    isDarkTheme
-                      ? "bg-black/40 border-emerald-500/20"
-                      : "bg-white border-emerald-200"
-                  }`}
+                  className={`mb-3 backdrop-blur-sm rounded-xl shadow-sm border px-4 py-2 ${isDarkTheme
+                    ? "bg-black/40 border-emerald-500/20"
+                    : "bg-white border-emerald-200"
+                    }`}
                 >
                   <div className="flex flex-col md:flex-row md:items-center gap-4">
                     <div className="flex items-center gap-2 min-w-fit">
                       <Settings className="w-3.5 h-3.5 text-emerald-400" />
                       <h4
-                        className={`text-xs font-bold uppercase tracking-wider ${
-                          isDarkTheme ? "text-slate-300" : "text-gray-900"
-                        }`}
+                        className={`text-xs font-bold uppercase tracking-wider ${isDarkTheme ? "text-slate-300" : "text-gray-900"
+                          }`}
                       >
                         {t.miningSettings}
                       </h4>
@@ -13714,9 +13447,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       {/* Words Per Round */}
                       <div className="flex items-center gap-2">
                         <label
-                          className={`shrink-0 text-[11px] font-medium ${
-                            isDarkTheme ? "text-slate-400" : "text-gray-600"
-                          }`}
+                          className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                            }`}
                         >
                           {t.wordsPerRound}
                         </label>
@@ -13734,11 +13466,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                               ),
                             }))
                           }
-                          className={`flex-1 max-w-[60px] px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${
-                            isDarkTheme
-                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
-                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
-                          }`}
+                          className={`flex-1 max-w-[60px] px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
+                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
+                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
+                            }`}
                         />
                         <span className="text-[10px] text-slate-500 shrink-0 hidden md:block">
                           {t.applyNextRound}
@@ -13748,9 +13479,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       {/* Mining Strategy */}
                       <div className="flex items-center gap-2">
                         <label
-                          className={`shrink-0 text-[11px] font-medium ${
-                            isDarkTheme ? "text-slate-400" : "text-gray-600"
-                          }`}
+                          className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                            }`}
                         >
                           {t.miningStrategy}
                         </label>
@@ -13764,11 +13494,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 | "vertical",
                             }))
                           }
-                          className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${
-                            isDarkTheme
-                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
-                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
-                          }`}
+                          className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
+                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
+                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
+                            }`}
                         >
                           <option
                             value="horizontal"
@@ -13788,9 +13517,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       {/* User Suggestion */}
                       <div className="flex items-center gap-2">
                         <label
-                          className={`shrink-0 text-[11px] font-medium ${
-                            isDarkTheme ? "text-slate-400" : "text-gray-600"
-                          }`}
+                          className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                            }`}
                         >
                           {t.userSuggestion}
                         </label>
@@ -13804,11 +13532,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                             }))
                           }
                           placeholder={t.suggestionPlaceholder}
-                          className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${
-                            isDarkTheme
-                              ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                              : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                          }`}
+                          className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
+                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
+                            }`}
                         />
                       </div>
                     </div>
@@ -13883,17 +13610,15 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
                 <div>
                   <h2
-                    className={`text-2xl font-bold flex items-center gap-2 ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
+                    className={`text-2xl font-bold flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+                      }`}
                   >
                     <Languages className="w-6 h-6 text-emerald-400" />
                     {t.batchResultsTitle}
                   </h2>
                   <p
-                    className={`mt-1 ${
-                      isDarkTheme ? "text-slate-400" : "text-gray-600"
-                    }`}
+                    className={`mt-1 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                      }`}
                   >
                     {t.foundOpp} {state.batchKeywords.length} {t.opps}.
                   </p>
@@ -13908,11 +13633,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   </button>
                   <button
                     onClick={reset}
-                    className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${
-                      isDarkTheme
-                        ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
-                        : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
-                    }`}
+                    className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${isDarkTheme
+                      ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
+                      : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
+                      }`}
                   >
                     {t.newAnalysis}
                   </button>
@@ -13921,11 +13645,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
               {/* Batch Results Table */}
               <div
-                className={`backdrop-blur-sm rounded-xl shadow-sm border overflow-hidden min-h-[400px] ${
-                  isDarkTheme
-                    ? "bg-black/40 border-emerald-500/20"
-                    : "bg-white border-emerald-200"
-                }`}
+                className={`backdrop-blur-sm rounded-xl shadow-sm border overflow-hidden min-h-[400px] ${isDarkTheme
+                  ? "bg-black/40 border-emerald-500/20"
+                  : "bg-white border-emerald-200"
+                  }`}
               >
                 <div className="overflow-x-auto custom-scrollbar">
                   {(() => {
@@ -13934,16 +13657,14 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
                     return (
                       <table
-                        className={`w-full text-left text-sm ${
-                          isDarkTheme ? "text-slate-300" : "text-gray-700"
-                        }`}
+                        className={`w-full text-left text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
+                          }`}
                       >
                         <thead
-                          className={`text-xs uppercase font-semibold border-b ${
-                            isDarkTheme
-                              ? "bg-black/60 text-slate-400 border-emerald-500/20"
-                              : "bg-gray-100 text-gray-700 border-gray-200"
-                          }`}
+                          className={`text-xs uppercase font-semibold border-b ${isDarkTheme
+                            ? "bg-black/60 text-slate-400 border-emerald-500/20"
+                            : "bg-gray-100 text-gray-700 border-gray-200"
+                            }`}
                         >
                           <tr>
                             <th className="px-4 py-4 w-10"></th>
@@ -13966,11 +13687,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                             return (
                               <React.Fragment key={item.id}>
                                 <tr
-                                  className={`transition-colors ${
-                                    isExpanded
-                                      ? "bg-emerald-500/10"
-                                      : "hover:bg-emerald-500/5"
-                                  }`}
+                                  className={`transition-colors ${isExpanded
+                                    ? "bg-emerald-500/10"
+                                    : "hover:bg-emerald-500/5"
+                                    }`}
                                 >
                                   <td
                                     className="px-4 py-4 text-center cursor-pointer"
@@ -13990,11 +13710,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                     )}
                                   </td>
                                   <td
-                                    className={`px-4 py-4 cursor-pointer ${
-                                      isDarkTheme
-                                        ? "text-white/80"
-                                        : "text-gray-700"
-                                    }`}
+                                    className={`px-4 py-4 cursor-pointer ${isDarkTheme
+                                      ? "text-white/80"
+                                      : "text-gray-700"
+                                      }`}
                                     onClick={() =>
                                       setState((prev) => ({
                                         ...prev,
@@ -14007,11 +13726,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                     {item.translation}
                                   </td>
                                   <td
-                                    className={`px-4 py-4 font-medium cursor-pointer ${
-                                      isDarkTheme
-                                        ? "text-white"
-                                        : "text-gray-900"
-                                    }`}
+                                    className={`px-4 py-4 font-medium cursor-pointer ${isDarkTheme
+                                      ? "text-white"
+                                      : "text-gray-900"
+                                      }`}
                                     onClick={() =>
                                       setState((prev) => ({
                                         ...prev,
@@ -14025,11 +13743,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                   </td>
                                   {showDRComparison && (
                                     <td
-                                      className={`px-4 py-4 cursor-pointer ${
-                                        isDarkTheme
-                                          ? "text-white/80"
-                                          : "text-gray-700"
-                                      }`}
+                                      className={`px-4 py-4 cursor-pointer ${isDarkTheme
+                                        ? "text-white/80"
+                                        : "text-gray-700"
+                                        }`}
                                       onClick={() =>
                                         setState((prev) => ({
                                           ...prev,
@@ -14050,14 +13767,14 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                         </span>
                                         <span className="font-medium text-amber-400/80">
                                           {item.competitorDRs &&
-                                          item.competitorDRs.length > 0
+                                            item.competitorDRs.length > 0
                                             ? Math.round(
-                                                item.competitorDRs.reduce(
-                                                  (a: number, b: number) =>
-                                                    a + b,
-                                                  0
-                                                ) / item.competitorDRs.length
-                                              )
+                                              item.competitorDRs.reduce(
+                                                (a: number, b: number) =>
+                                                  a + b,
+                                                0
+                                              ) / item.competitorDRs.length
+                                            )
                                             : "-"}
                                         </span>
                                       </div>
@@ -14077,25 +13794,24 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                       const isHigh =
                                         normalizedProb === "high" ||
                                         normalizedProb ===
-                                          ProbabilityLevel.HIGH.toLowerCase();
+                                        ProbabilityLevel.HIGH.toLowerCase();
                                       const isMedium =
                                         normalizedProb === "medium" ||
                                         normalizedProb ===
-                                          ProbabilityLevel.MEDIUM.toLowerCase();
+                                        ProbabilityLevel.MEDIUM.toLowerCase();
                                       const displayProb = isHigh
                                         ? ProbabilityLevel.HIGH
                                         : isMedium
-                                        ? ProbabilityLevel.MEDIUM
-                                        : ProbabilityLevel.LOW;
+                                          ? ProbabilityLevel.MEDIUM
+                                          : ProbabilityLevel.LOW;
                                       return (
                                         <span
-                                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                                            isHigh
-                                              ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
-                                              : isMedium
+                                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${isHigh
+                                            ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
+                                            : isMedium
                                               ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
                                               : "bg-red-500/30 text-red-400 border-red-500/50"
-                                          }`}
+                                            }`}
                                         >
                                           {displayProb}
                                         </span>
@@ -14119,11 +13835,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                       </a>
 
                                       <button
-                                        className={`text-xs flex items-center gap-1 transition-colors ${
-                                          isDarkTheme
-                                            ? "text-white/70 hover:text-emerald-400"
-                                            : "text-gray-600 hover:text-emerald-600"
-                                        }`}
+                                        className={`text-xs flex items-center gap-1 transition-colors ${isDarkTheme
+                                          ? "text-white/70 hover:text-emerald-400"
+                                          : "text-gray-600 hover:text-emerald-600"
+                                          }`}
                                         onClick={() =>
                                           setState((prev) => ({
                                             ...prev,
@@ -14156,11 +13871,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 {/* Expanded Detail View */}
                                 {isExpanded && (
                                   <tr
-                                    className={`animate-fade-in border-b ${
-                                      isDarkTheme
-                                        ? "bg-black border-emerald-500/20"
-                                        : "bg-gray-50 border-gray-200"
-                                    }`}
+                                    className={`animate-fade-in border-b ${isDarkTheme
+                                      ? "bg-black border-emerald-500/20"
+                                      : "bg-gray-50 border-gray-200"
+                                      }`}
                                   >
                                     <td
                                       colSpan={showDRComparison ? 7 : 6}
@@ -14276,19 +13990,19 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                           {item.serankingData
                                                             .competition
                                                             ? typeof item
-                                                                .serankingData
-                                                                .competition ===
+                                                              .serankingData
+                                                              .competition ===
                                                               "number"
                                                               ? (
-                                                                  item
-                                                                    .serankingData
-                                                                    .competition *
-                                                                  100
-                                                                ).toFixed(1) +
-                                                                "%"
-                                                              : item
+                                                                item
                                                                   .serankingData
-                                                                  .competition
+                                                                  .competition *
+                                                                100
+                                                              ).toFixed(1) +
+                                                              "%"
+                                                              : item
+                                                                .serankingData
+                                                                .competition
                                                             : "N/A"}
                                                         </div>
                                                         <div
@@ -14401,7 +14115,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                                           )}
                                                                         >
                                                                           {typeof volume ===
-                                                                          "number"
+                                                                            "number"
                                                                             ? volume.toLocaleString()
                                                                             : volume}
                                                                         </div>
@@ -14421,102 +14135,102 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                           {/* Search Intent Section */}
                                           {(item.searchIntent ||
                                             item.intentAnalysis) && (
-                                            <Card
-                                              className={cn(
-                                                isDarkTheme
-                                                  ? "bg-black border-emerald-500/30"
-                                                  : "bg-white border-emerald-200"
-                                              )}
-                                            >
-                                              <CardHeader className="pb-3">
-                                                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                                  <BrainCircuit
-                                                    className={cn(
-                                                      "w-4 h-4",
-                                                      isDarkTheme
-                                                        ? "text-emerald-400"
-                                                        : "text-emerald-600"
-                                                    )}
-                                                  />
-                                                  <span
-                                                    className={cn(
-                                                      isDarkTheme
-                                                        ? "text-white"
-                                                        : "text-slate-900"
-                                                    )}
-                                                  >
-                                                    Search Intent Analysis
-                                                  </span>
-                                                </CardTitle>
-                                              </CardHeader>
-                                              <CardContent className="space-y-3">
-                                                {item.searchIntent && (
-                                                  <Card
-                                                    className={cn(
-                                                      isDarkTheme
-                                                        ? "bg-black border-emerald-500/30"
-                                                        : "bg-emerald-50 border-emerald-200"
-                                                    )}
-                                                  >
-                                                    <CardContent className="p-4">
-                                                      <div
-                                                        className={cn(
-                                                          "text-xs font-semibold mb-2",
-                                                          isDarkTheme
-                                                            ? "text-emerald-400"
-                                                            : "text-emerald-700"
-                                                        )}
-                                                      >
-                                                        USER INTENT
-                                                      </div>
-                                                      <p
-                                                        className={cn(
-                                                          "text-sm leading-relaxed",
-                                                          isDarkTheme
-                                                            ? "text-white"
-                                                            : "text-slate-700"
-                                                        )}
-                                                      >
-                                                        {item.searchIntent}
-                                                      </p>
-                                                    </CardContent>
-                                                  </Card>
+                                              <Card
+                                                className={cn(
+                                                  isDarkTheme
+                                                    ? "bg-black border-emerald-500/30"
+                                                    : "bg-white border-emerald-200"
                                                 )}
-                                                {item.intentAnalysis && (
-                                                  <Card
-                                                    className={cn(
-                                                      isDarkTheme
-                                                        ? "bg-black border-emerald-500/30"
-                                                        : "bg-emerald-50 border-emerald-200"
-                                                    )}
-                                                  >
-                                                    <CardContent className="p-4">
-                                                      <div
-                                                        className={cn(
-                                                          "text-xs font-semibold mb-2",
-                                                          isDarkTheme
-                                                            ? "text-emerald-400"
-                                                            : "text-emerald-700"
-                                                        )}
-                                                      >
-                                                        INTENT vs SERP MATCH
-                                                      </div>
-                                                      <p
-                                                        className={cn(
-                                                          "text-sm leading-relaxed",
-                                                          isDarkTheme
-                                                            ? "text-white"
-                                                            : "text-slate-700"
-                                                        )}
-                                                      >
-                                                        {item.intentAnalysis}
-                                                      </p>
-                                                    </CardContent>
-                                                  </Card>
-                                                )}
-                                              </CardContent>
-                                            </Card>
-                                          )}
+                                              >
+                                                <CardHeader className="pb-3">
+                                                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                                    <BrainCircuit
+                                                      className={cn(
+                                                        "w-4 h-4",
+                                                        isDarkTheme
+                                                          ? "text-emerald-400"
+                                                          : "text-emerald-600"
+                                                      )}
+                                                    />
+                                                    <span
+                                                      className={cn(
+                                                        isDarkTheme
+                                                          ? "text-white"
+                                                          : "text-slate-900"
+                                                      )}
+                                                    >
+                                                      Search Intent Analysis
+                                                    </span>
+                                                  </CardTitle>
+                                                </CardHeader>
+                                                <CardContent className="space-y-3">
+                                                  {item.searchIntent && (
+                                                    <Card
+                                                      className={cn(
+                                                        isDarkTheme
+                                                          ? "bg-black border-emerald-500/30"
+                                                          : "bg-emerald-50 border-emerald-200"
+                                                      )}
+                                                    >
+                                                      <CardContent className="p-4">
+                                                        <div
+                                                          className={cn(
+                                                            "text-xs font-semibold mb-2",
+                                                            isDarkTheme
+                                                              ? "text-emerald-400"
+                                                              : "text-emerald-700"
+                                                          )}
+                                                        >
+                                                          USER INTENT
+                                                        </div>
+                                                        <p
+                                                          className={cn(
+                                                            "text-sm leading-relaxed",
+                                                            isDarkTheme
+                                                              ? "text-white"
+                                                              : "text-slate-700"
+                                                          )}
+                                                        >
+                                                          {item.searchIntent}
+                                                        </p>
+                                                      </CardContent>
+                                                    </Card>
+                                                  )}
+                                                  {item.intentAnalysis && (
+                                                    <Card
+                                                      className={cn(
+                                                        isDarkTheme
+                                                          ? "bg-black border-emerald-500/30"
+                                                          : "bg-emerald-50 border-emerald-200"
+                                                      )}
+                                                    >
+                                                      <CardContent className="p-4">
+                                                        <div
+                                                          className={cn(
+                                                            "text-xs font-semibold mb-2",
+                                                            isDarkTheme
+                                                              ? "text-emerald-400"
+                                                              : "text-emerald-700"
+                                                          )}
+                                                        >
+                                                          INTENT vs SERP MATCH
+                                                        </div>
+                                                        <p
+                                                          className={cn(
+                                                            "text-sm leading-relaxed",
+                                                            isDarkTheme
+                                                              ? "text-white"
+                                                              : "text-slate-700"
+                                                          )}
+                                                        >
+                                                          {item.intentAnalysis}
+                                                        </p>
+                                                      </CardContent>
+                                                    </Card>
+                                                  )}
+                                                </CardContent>
+                                              </Card>
+                                            )}
 
                                           {/* Analysis Reasoning */}
                                           <Card
@@ -14571,8 +14285,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                                 {/* SE Ranking Volume (replaces SERP estimate) */}
                                                 {item.serankingData &&
-                                                item.serankingData
-                                                  .is_data_found ? (
+                                                  item.serankingData
+                                                    .is_data_found ? (
                                                   <div>
                                                     <span
                                                       className={cn(
@@ -14617,10 +14331,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                       )}
                                                     >
                                                       {item.serpResultCount ===
-                                                      -1
+                                                        -1
                                                         ? "Unknown (Many)"
                                                         : item.serpResultCount ??
-                                                          "Unknown"}
+                                                        "Unknown"}
                                                     </span>
                                                   </div>
                                                 )}
@@ -14650,15 +14364,15 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                               ? "text-emerald-400"
                                                               : "text-emerald-600"
                                                             : (item
-                                                                .serankingData
-                                                                .difficulty ||
-                                                                0) <= 60
-                                                            ? isDarkTheme
-                                                              ? "text-yellow-400"
-                                                              : "text-yellow-600"
-                                                            : isDarkTheme
-                                                            ? "text-red-400"
-                                                            : "text-red-600"
+                                                              .serankingData
+                                                              .difficulty ||
+                                                              0) <= 60
+                                                              ? isDarkTheme
+                                                                ? "text-yellow-400"
+                                                                : "text-yellow-600"
+                                                              : isDarkTheme
+                                                                ? "text-red-400"
+                                                                : "text-red-600"
                                                         )}
                                                       >
                                                         {item.serankingData
@@ -14967,7 +14681,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       {/* Long-tail Keywords with Analysis Button */}
                       {state.currentStrategyReport.longTailKeywords &&
                         state.currentStrategyReport.longTailKeywords.length >
-                          0 && (
+                        0 && (
                           <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
                             <div className="flex items-center justify-between mb-3">
                               <div className="text-xs text-slate-500 uppercase font-bold">
@@ -15078,34 +14792,34 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                       {state.currentStrategyReport.contentStructure.some(
                         (s) => s.header_trans || s.description_trans
                       ) && (
-                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="text-xs text-slate-500 uppercase font-bold mb-3">
-                            {t.contentStructureTranslation ||
-                              "Content Structure Translation"}
+                          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                            <div className="text-xs text-slate-500 uppercase font-bold mb-3">
+                              {t.contentStructureTranslation ||
+                                "Content Structure Translation"}
+                            </div>
+                            <div className="space-y-3">
+                              {state.currentStrategyReport.contentStructure.map(
+                                (section, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="p-3 bg-white rounded border border-slate-100"
+                                  >
+                                    {section.header_trans && (
+                                      <div className="font-bold text-sm text-slate-900 mb-1">
+                                        {section.header_trans}
+                                      </div>
+                                    )}
+                                    {section.description_trans && (
+                                      <div className="text-xs text-slate-600">
+                                        {section.description_trans}
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              )}
+                            </div>
                           </div>
-                          <div className="space-y-3">
-                            {state.currentStrategyReport.contentStructure.map(
-                              (section, idx) => (
-                                <div
-                                  key={idx}
-                                  className="p-3 bg-white rounded border border-slate-100"
-                                >
-                                  {section.header_trans && (
-                                    <div className="font-bold text-sm text-slate-900 mb-1">
-                                      {section.header_trans}
-                                    </div>
-                                  )}
-                                  {section.description_trans && (
-                                    <div className="text-xs text-slate-600">
-                                      {section.description_trans}
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </div>
-                      )}
+                        )}
 
                       {/* Long-tail Keywords Translation */}
                       {state.currentStrategyReport.longTailKeywords_trans &&
@@ -15218,17 +14932,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                               </div>
                               <div className="flex items-center gap-4 mb-4">
                                 <span
-                                  className={`px-6 py-3 rounded-xl text-xl font-bold shadow-lg ${
-                                    state.currentStrategyReport
-                                      .rankingProbability ===
+                                  className={`px-6 py-3 rounded-xl text-xl font-bold shadow-lg ${state.currentStrategyReport
+                                    .rankingProbability ===
                                     ProbabilityLevel.HIGH
-                                      ? "bg-emerald-100 text-emerald-800 border-2 border-emerald-300"
-                                      : state.currentStrategyReport
-                                          .rankingProbability ===
-                                        ProbabilityLevel.MEDIUM
+                                    ? "bg-emerald-100 text-emerald-800 border-2 border-emerald-300"
+                                    : state.currentStrategyReport
+                                      .rankingProbability ===
+                                      ProbabilityLevel.MEDIUM
                                       ? "bg-yellow-100 text-yellow-800 border-2 border-yellow-300"
                                       : "bg-red-100 text-red-800 border-2 border-red-300"
-                                  }`}
+                                    }`}
                                 >
                                   {
                                     state.currentStrategyReport
@@ -15367,16 +15080,15 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                   KD
                                                 </div>
                                                 <div
-                                                  className={`text-sm font-bold ${
-                                                    (data.serankingData
-                                                      .difficulty || 0) <= 40
-                                                      ? "text-emerald-600"
-                                                      : (data.serankingData
-                                                          .difficulty || 0) <=
-                                                        60
+                                                  className={`text-sm font-bold ${(data.serankingData
+                                                    .difficulty || 0) <= 40
+                                                    ? "text-emerald-600"
+                                                    : (data.serankingData
+                                                      .difficulty || 0) <=
+                                                      60
                                                       ? "text-yellow-600"
                                                       : "text-red-600"
-                                                  }`}
+                                                    }`}
                                                 >
                                                   {data.serankingData
                                                     .difficulty || "N/A"}
@@ -15389,10 +15101,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                 <div className="text-sm font-bold text-emerald-600">
                                                   $
                                                   {data.serankingData.cpc !==
-                                                  undefined
+                                                    undefined
                                                     ? Number(
-                                                        data.serankingData.cpc
-                                                      ).toFixed(2)
+                                                      data.serankingData.cpc
+                                                    ).toFixed(2)
                                                     : "N/A"}
                                                 </div>
                                               </div>
@@ -15404,14 +15116,14 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                   {data.serankingData
                                                     .competition
                                                     ? typeof data.serankingData
-                                                        .competition ===
+                                                      .competition ===
                                                       "number"
                                                       ? (
-                                                          data.serankingData
-                                                            .competition * 100
-                                                        ).toFixed(1) + "%"
+                                                        data.serankingData
+                                                          .competition * 100
+                                                      ).toFixed(1) + "%"
                                                       : data.serankingData
-                                                          .competition
+                                                        .competition
                                                     : "N/A"}
                                                 </div>
                                               </div>
@@ -15481,25 +15193,22 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
                 <div>
                   <h2
-                    className={`text-2xl font-bold flex items-center gap-2 ${
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    }`}
+                    className={`text-2xl font-bold flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+                      }`}
                   >
                     <span
-                      className={`px-2 py-1 rounded text-base border ${
-                        isDarkTheme
-                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                          : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                      }`}
+                      className={`px-2 py-1 rounded text-base border ${isDarkTheme
+                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                        : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                        }`}
                     >
                       {state.seedKeyword}
                     </span>
                     {t.resultsTitle}
                   </h2>
                   <p
-                    className={`mt-1 ${
-                      isDarkTheme ? "text-slate-400" : "text-gray-600"
-                    }`}
+                    className={`mt-1 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                      }`}
                   >
                     {t.foundOpp} {state.keywords.length} {t.opps}.
                   </p>
@@ -15532,11 +15241,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   </button>
                   <button
                     onClick={reset}
-                    className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${
-                      isDarkTheme
-                        ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
-                        : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
-                    }`}
+                    className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${isDarkTheme
+                      ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
+                      : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
+                      }`}
                   >
                     {t.newAnalysis}
                   </button>
@@ -15545,18 +15253,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
               {/* Toolbar */}
               <div
-                className={`backdrop-blur-sm p-3 rounded-t-xl border border-b-0 flex flex-wrap gap-4 items-center justify-between ${
-                  isDarkTheme
-                    ? "bg-black/40 border-emerald-500/20"
-                    : "bg-gray-100 border-emerald-200"
-                }`}
+                className={`backdrop-blur-sm p-3 rounded-t-xl border border-b-0 flex flex-wrap gap-4 items-center justify-between ${isDarkTheme
+                  ? "bg-black/40 border-emerald-500/20"
+                  : "bg-gray-100 border-emerald-200"
+                  }`}
               >
                 <div className="flex items-center gap-4">
                   {/* Filter */}
                   <div
-                    className={`flex items-center gap-2 text-sm ${
-                      isDarkTheme ? "text-slate-300" : "text-gray-700"
-                    }`}
+                    className={`flex items-center gap-2 text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
+                      }`}
                   >
                     <Filter className="w-4 h-4" />
                     <select
@@ -15567,11 +15273,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           filterLevel: e.target.value as any,
                         }))
                       }
-                      className={`border rounded px-2 py-1 outline-none focus:ring-1 ${
-                        isDarkTheme
-                          ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
-                          : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
-                      }`}
+                      className={`border rounded px-2 py-1 outline-none focus:ring-1 ${isDarkTheme
+                        ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
+                        : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
+                        }`}
                     >
                       <option
                         value={ProbabilityLevel.HIGH}
@@ -15604,9 +15309,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
                   {/* Sort */}
                   <div
-                    className={`flex items-center gap-2 text-sm ${
-                      isDarkTheme ? "text-slate-300" : "text-gray-700"
-                    }`}
+                    className={`flex items-center gap-2 text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
+                      }`}
                   >
                     <ArrowUpDown className="w-4 h-4" />
                     <select
@@ -15617,11 +15321,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           sortBy: e.target.value as any,
                         }))
                       }
-                      className={`border rounded px-2 py-1 outline-none focus:ring-1 ${
-                        isDarkTheme
-                          ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
-                          : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
-                      }`}
+                      className={`border rounded px-2 py-1 outline-none focus:ring-1 ${isDarkTheme
+                        ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
+                        : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
+                        }`}
                     >
                       <option
                         value="probability"
@@ -15641,11 +15344,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
                 <button
                   onClick={downloadCSV}
-                  className={`flex items-center gap-2 text-sm px-3 py-1 rounded transition-colors ${
-                    isDarkTheme
-                      ? "text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10"
-                      : "text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
-                  }`}
+                  className={`flex items-center gap-2 text-sm px-3 py-1 rounded transition-colors ${isDarkTheme
+                    ? "text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10"
+                    : "text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
+                    }`}
                 >
                   <Download className="w-4 h-4" /> {t.downloadCSV}
                 </button>
@@ -15653,11 +15355,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
               {/* Table */}
               <div
-                className={`backdrop-blur-sm rounded-b-xl shadow-sm border overflow-hidden min-h-[400px] ${
-                  isDarkTheme
-                    ? "bg-black/40 border-emerald-500/20"
-                    : "bg-white border-emerald-200"
-                }`}
+                className={`backdrop-blur-sm rounded-b-xl shadow-sm border overflow-hidden min-h-[400px] ${isDarkTheme
+                  ? "bg-black/40 border-emerald-500/20"
+                  : "bg-white border-emerald-200"
+                  }`}
               >
                 <KeywordTable
                   keywords={getProcessedKeywords()}
@@ -15673,8 +15374,8 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   miningMode={
                     state.taskManager.activeTaskId
                       ? state.taskManager.tasks.find(
-                          (t) => t.id === state.taskManager.activeTaskId
-                        )?.miningState?.miningMode || "blue-ocean"
+                        (t) => t.id === state.taskManager.activeTaskId
+                      )?.miningState?.miningMode || "blue-ocean"
                       : "blue-ocean"
                   }
                 />
@@ -15776,7 +15477,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
                 <div className="grid gap-6 sm:grid-cols-2">
                   {paymentPlans.filter((p) => p.price > 0).length === 0 &&
-                  !paymentPlansLoading ? (
+                    !paymentPlansLoading ? (
                     <div className="text-sm text-slate-400">
                       {state.uiLanguage === "zh"
                         ? "暂无可用套餐"
@@ -15793,9 +15494,9 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           selectedPaymentPlanId === plan.plan_id;
                         const priceLabel = Number.isFinite(plan.price)
                           ? `$${plan.price.toLocaleString(undefined, {
-                              minimumFractionDigits: 0,
-                              maximumFractionDigits: 2,
-                            })}`
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}`
                           : "$-";
 
                         return (
@@ -15811,18 +15512,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                 setSelectedPaymentPlanId(plan.plan_id);
                               }
                             }}
-                            className={`relative group flex flex-col rounded-[24px] border p-6 text-left transition-all duration-500 focus:outline-none ${
-                              isSelected
-                                ? `bg-gradient-to-br ${theme.gradient} ${theme.border} shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] scale-[1.02] z-10`
-                                : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10"
-                            }`}
+                            className={`relative group flex flex-col rounded-[24px] border p-6 text-left transition-all duration-500 focus:outline-none ${isSelected
+                              ? `bg-gradient-to-br ${theme.gradient} ${theme.border} shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] scale-[1.02] z-10`
+                              : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10"
+                              }`}
                           >
                             <div className="flex items-start justify-between mb-6">
                               <div>
                                 <p
-                                  className={`text-[11px] font-bold uppercase tracking-[0.2em] ${
-                                    isSelected ? "text-white" : "text-slate-400"
-                                  }`}
+                                  className={`text-[11px] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-white" : "text-slate-400"
+                                    }`}
                                 >
                                   {state.uiLanguage === "zh"
                                     ? theme.titleZh
@@ -15845,11 +15544,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                   {priceLabel}
                                 </span>
                                 <span
-                                  className={`text-xs font-medium ${
-                                    isSelected
-                                      ? "text-white/60"
-                                      : "text-slate-500"
-                                  }`}
+                                  className={`text-xs font-medium ${isSelected
+                                    ? "text-white/60"
+                                    : "text-slate-500"
+                                    }`}
                                 >
                                   {state.uiLanguage === "zh"
                                     ? "/ 一次性"
@@ -15859,11 +15557,10 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                             </div>
 
                             <div
-                              className={`inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-xl text-xs font-bold ${
-                                isSelected
-                                  ? "bg-white/10 text-white"
-                                  : "bg-white/5 text-slate-300"
-                              }`}
+                              className={`inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-xl text-xs font-bold ${isSelected
+                                ? "bg-white/10 text-white"
+                                : "bg-white/5 text-slate-300"
+                                }`}
                             >
                               <span className={theme.accentColor}>
                                 {plan.credits_monthly.toLocaleString()}
@@ -15882,18 +15579,16 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                   className="flex items-start gap-2.5"
                                 >
                                   <CheckCircle
-                                    className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
-                                      isSelected
-                                        ? "text-white/70"
-                                        : "text-slate-500"
-                                    }`}
+                                    className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isSelected
+                                      ? "text-white/70"
+                                      : "text-slate-500"
+                                      }`}
                                   />
                                   <span
-                                    className={`text-xs leading-relaxed ${
-                                      isSelected
-                                        ? "text-white/90"
-                                        : "text-slate-400"
-                                    }`}
+                                    className={`text-xs leading-relaxed ${isSelected
+                                      ? "text-white/90"
+                                      : "text-slate-400"
+                                      }`}
                                   >
                                     {bullet}
                                   </span>
@@ -15903,22 +15598,20 @@ Please generate keywords based on the opportunities and keyword suggestions ment
 
                             {plan.description && (
                               <p
-                                className={`text-[10px] mb-4 italic ${
-                                  isSelected
-                                    ? "text-white/60"
-                                    : "text-slate-500"
-                                }`}
+                                className={`text-[10px] mb-4 italic ${isSelected
+                                  ? "text-white/60"
+                                  : "text-slate-500"
+                                  }`}
                               >
                                 {plan.description}
                               </p>
                             )}
 
                             <div
-                              className={`mt-auto w-full py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-center transition-all ${
-                                isSelected
-                                  ? "bg-white text-black shadow-lg shadow-black/20"
-                                  : "bg-white/5 text-white group-hover:bg-white/10"
-                              }`}
+                              className={`mt-auto w-full py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-center transition-all ${isSelected
+                                ? "bg-white text-black shadow-lg shadow-black/20"
+                                : "bg-white/5 text-white group-hover:bg-white/10"
+                                }`}
                             >
                               {theme.cta}
                             </div>
