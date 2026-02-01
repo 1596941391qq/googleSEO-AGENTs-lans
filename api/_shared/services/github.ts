@@ -569,40 +569,33 @@ async function updateMkDocsNav(config: {
       return; // 已存在
     }
 
-    // 极简导航条目：标题前10个字: 文档路径.md
-    const shortTitle = config.articleTitle.substring(0, 10);
-    const navEntry = `  - "${shortTitle}": ${config.articleSlug}.md`;
-
     let updatedContent = currentContent;
 
-    // 在标记之前添加
-    const marker = '# 新文章将在此处自动添加';
-    if (currentContent.includes(marker)) {
+    // 自动构建导航条目
+    // 使用完整标题，并妥善转义引号
+    const safeTitle = config.articleTitle.replace(/"/g, '\\"');
+    const navEntry = `    - "${safeTitle}": ${config.articleSlug}.md`;
+
+    // 智能查找插入位置
+    if (currentContent.includes('  - Articles:')) {
+      // 场景 1: 已有 Articles 列表
+      console.log(`[GitHub updateMkDocsNav] Adding to existing Articles section`);
+      // 在 "  - Articles:" 这一行之后插入
       updatedContent = currentContent.replace(
-        marker,
-        `${navEntry}\n${marker}`
+        /  - Articles:\n/,
+        `  - Articles:\n${navEntry}\n`
+      );
+    } else if (currentContent.includes('nav:')) {
+      // 场景 2: 有 nav 但没有 Articles
+      console.log(`[GitHub updateMkDocsNav] Adding to nav root`);
+      updatedContent = currentContent.replace(
+        /nav:\n/,
+        `nav:\n  - Articles:\n${navEntry}\n`
       );
     } else {
-      // 如果没有标记，在 nav 部分末尾添加
-      const navEndPattern = /\nmarkdown_extensions:/;
-      if (navEndPattern.test(currentContent)) {
-        updatedContent = currentContent.replace(
-          navEndPattern,
-          `\n${navEntry}\n\nmarkdown_extensions:`
-        );
-      } else {
-        updatedContent = currentContent.trimEnd() + `\n${navEntry}\n`;
-      }
-    }
-
-    // 检查是否需要设置 index_file（如果是第一篇文章）
-    if (!currentContent.includes('index_file:')) {
-      // 在 use_directory_urls 后面添加 index_file 配置
-      updatedContent = updatedContent.replace(
-        /use_directory_urls: true/,
-        `use_directory_urls: true\nindex_file: ${config.articleSlug}.md`
-      );
-      console.log(`[GitHub updateMkDocsNav] Set index_file to first article: ${config.articleSlug}.md`);
+      // 场景 3: 连 nav 都没有
+      console.log(`[GitHub updateMkDocsNav] Creating new nav section`);
+      updatedContent = currentContent.trimEnd() + `\n\nnav:\n  - Home: index.md\n  - Articles:\n${navEntry}\n`;
     }
 
     // 更新文件
