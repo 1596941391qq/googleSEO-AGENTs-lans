@@ -3,6 +3,8 @@
  * 用于自动创建仓库、推送模板文件、更新内容
  */
 
+import { summarizeArticleForReadme } from '../gemini.js';
+
 const GITHUB_API_BASE = 'https://api.github.com';
 
 interface GitHubRepoConfig {
@@ -521,6 +523,29 @@ export async function addArticleToMkDocs(config: {
       articleTitle: config.articleTitle,
       branch: config.branch,
     });
+
+    // 自动更新 README.md（只在新增文章时更新，更新文章时跳过）
+    if (!config.isUpdate) {
+      console.log(`[GitHub addArticleToMkDocs] Generating article summary for README...`);
+      try {
+        const summary = await summarizeArticleForReadme(config.articleTitle, config.articleContent);
+        console.log(`[GitHub addArticleToMkDocs] Summary generated: ${summary.substring(0, 100)}...`);
+
+        await updateReadmeWithArticleSummary({
+          token: config.token,
+          owner: config.owner,
+          repoName: config.repoName,
+          articleSlug: config.articleSlug,
+          articleTitle: config.articleTitle,
+          articleSummary: summary,
+          branch: config.branch,
+        });
+        console.log(`[GitHub addArticleToMkDocs] ✅ README updated successfully`);
+      } catch (error: any) {
+        console.warn(`[GitHub addArticleToMkDocs] ⚠️ README update failed (non-critical): ${error.message}`);
+        // README 更新失败不影响文章发布
+      }
+    }
   }
 
   return {
@@ -671,4 +696,148 @@ export async function listRepoContents(config: {
       error: error.message || 'Failed to list repo contents',
     };
   }
+}
+
+/**
+ * 更新README.md，添加新文章摘要
+ * 自动提炼文章内容并插入到README中
+ */
+export async function updateReadmeWithArticleSummary(config: {
+  token: string;
+  owner: string;
+  repoName: string;
+  articleSlug: string;
+  articleTitle: string;
+  articleSummary: string;
+  branch?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[GitHub updateReadme] Updating README for: ${config.articleTitle}`);
+
+    // 获取当前 README.md
+    const response = await fetch(
+      `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/README.md?ref=${config.branch || 'main'}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      }
+    );
+
+    let currentContent = '';
+    let isNewReadme = false;
+
+    if (response.ok) {
+      const data = await response.json();
+      currentContent = Buffer.from(data.content, 'base64').toString('utf-8');
+    } else if (response.status === 404) {
+      // README 不存在，创建新的
+      console.log(`[GitHub updateReadme] README not found, creating new one`);
+      isNewReadme = true;
+      currentContent = generateInitialReadme(config.owner, config.repoName);
+    } else {
+      console.warn(`[GitHub updateReadme] Could not fetch README: ${response.status}`);
+      return { success: false, error: `Failed to fetch README: ${response.status}` };
+    }
+
+    // 检查文章是否已在 README 中
+    if (currentContent.includes(`[${config.articleTitle}]`) || currentContent.includes(config.articleSlug)) {
+      console.log(`[GitHub updateReadme] Article already in README, skipping`);
+      return { success: true };
+    }
+
+    // 生成新的文章条目
+    const articleEntry = generateArticleEntry(config.articleSlug, config.articleTitle, config.articleSummary);
+
+    // 插入到 README 中
+    let updatedContent = insertArticleIntoReadme(currentContent, articleEntry, isNewReadme);
+
+    // 更新 README.md
+    const updateResult = await createOrUpdateFile({
+      token: config.token,
+      owner: config.owner,
+      repoName: config.repoName,
+      path: 'README.md',
+      content: updatedContent,
+      message: `docs: Add "${config.articleTitle}" to README`,
+      branch: config.branch,
+    });
+
+    if (updateResult.success) {
+      console.log(`[GitHub updateReadme] ✅ README updated successfully`);
+      return { success: true };
+    } else {
+      console.error(`[GitHub updateReadme] ❌ Failed to update README: ${updateResult.error}`);
+      return { success: false, error: updateResult.error };
+    }
+  } catch (error: any) {
+    console.error('[GitHub updateReadme] Error:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * 生成初始 README 模板
+ */
+function generateInitialReadme(owner: string, repoName: string): string {
+  return `# ${repoName}
+
+Welcome to the ${repoName} knowledge base.
+
+## 📚 Articles
+
+<!-- Articles will be automatically added below -->
+
+---
+
+*This repository is automatically maintained by NicheDigger PSEO.*
+`;
+}
+
+/**
+ * 生成文章条目
+ */
+function generateArticleEntry(slug: string, title: string, summary: string): string {
+  const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  return `
+### [${title}](docs/${slug}.md)
+
+*Published: ${date}*
+
+${summary}
+
+---
+`;
+}
+
+/**
+ * 将文章条目插入到 README 中
+ */
+function insertArticleIntoReadme(currentContent: string, articleEntry: string, isNewReadme: boolean): string {
+  if (isNewReadme) {
+    // 新 README，直接追加
+    return currentContent.replace(
+      '<!-- Articles will be automatically added below -->',
+      `<!-- Articles will be automatically added below -->\n${articleEntry}`
+    );
+  }
+
+  // 查找插入位置
+  const marker = '<!-- Articles will be automatically added below -->';
+  if (currentContent.includes(marker)) {
+    return currentContent.replace(marker, `${marker}\n${articleEntry}`);
+  }
+
+  // 如果没有标记，尝试在 "## 📚 Articles" 或 "## Articles" 后面插入
+  const articlesHeaderPattern = /## (📚 )?Articles\s*\n/;
+  if (articlesHeaderPattern.test(currentContent)) {
+    return currentContent.replace(
+      articlesHeaderPattern,
+      (match) => `${match}\n${articleEntry}`
+    );
+  }
+
+  // 如果都没有，追加到文件末尾
+  return currentContent.trimEnd() + `\n\n## 📚 Articles\n${articleEntry}`;
 }

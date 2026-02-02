@@ -19,7 +19,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 验证平台类型
-        const validPlatforms = ['rtd', 'cf_pages', 'netlify', 'vercel', 'github_pages'];
+        const validPlatforms = ['rtd', 'cf_pages', 'netlify', 'vercel'];
         if (!validPlatforms.includes(newPlatform)) {
             return res.status(400).json({ error: 'Invalid platform type' });
         }
@@ -33,24 +33,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log(`[Update Site Platform] Updating site ${site.site_name} from ${site.platform} to ${newPlatform}`);
 
         // 获取对应平台的 token
-        let platformTokenId = null;
-        if (newPlatform !== 'github_pages') {
-            const tokens = await getAvailableTokensForNewSite(site.content_type);
-            if (!tokens || !tokens.platform_token) {
-                return res.status(400).json({
-                    error: `No ${newPlatform} token available. Please add one in Admin panel.`
-                });
-            }
+        const tokens = await getAvailableTokensForNewSite(site.content_type);
+        if (!tokens || !tokens.platform_token) {
+            return res.status(400).json({
+                error: `No ${newPlatform} token available. Please add one in Admin panel.`
+            });
+        }
 
             // 验证 token 平台匹配
-            if (tokens.platform_token.platform !== newPlatform) {
-                return res.status(400).json({
-                    error: `Available token is for ${tokens.platform_token.platform}, not ${newPlatform}`
-                });
-            }
-
-            platformTokenId = tokens.platform_token.id;
+        if (tokens.platform_token.platform !== newPlatform) {
+            return res.status(400).json({
+                error: `Available token is for ${tokens.platform_token.platform}, not ${newPlatform}`
+            });
         }
+
+        const platformTokenId = tokens.platform_token.id;
 
         // 更新站点平台
         const updatedSite = await updatePlatformSitePlatform(

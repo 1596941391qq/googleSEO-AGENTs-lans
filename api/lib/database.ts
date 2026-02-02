@@ -48,9 +48,9 @@ const pool = connectionString ? new Pool({
   max: parseInt(process.env.DB_POOL_MAX || (isLocalDB ? '20' : '10'), 10), // 本地数据库可以更多连接
   min: parseInt(process.env.DB_POOL_MIN || (isLocalDB ? '5' : '2'), 10),  // 本地数据库保持更多连接
   idleTimeoutMillis: isLocalDB ? 60000 : 30000, // 本地数据库：60秒，远程：30秒
-  connectionTimeoutMillis: isLocalDB ? 5000 : (process.env.DB_CONNECTION_TIMEOUT ? parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) : 10000), // 本地数据库：5秒，远程：10秒或自定义
+  connectionTimeoutMillis: isLocalDB ? 15000 : (process.env.DB_CONNECTION_TIMEOUT ? parseInt(process.env.DB_CONNECTION_TIMEOUT, 10) : 20000), // 增加超时时间：本地15秒，远程20秒
   // 本地数据库不需要查询超时
-  statement_timeout: isLocalDB ? undefined : 30000, // 远程数据库：30秒查询超时
+  statement_timeout: isLocalDB ? undefined : 60000, // 远程数据库：60秒查询超时（从30秒增加到60秒）
 }) : null;
 
 // 监听连接池错误
@@ -58,6 +58,20 @@ if (pool) {
   pool.on('error', (err) => {
     console.error('[db] Unexpected error on idle client', err);
   });
+
+  // 预热连接池：在模块加载时建立最小连接数
+  // 这样可以避免第一次请求时的冷启动延迟
+  if (process.env.NODE_ENV !== 'development') {
+    pool.connect()
+      .then(client => {
+        console.log('[db] Connection pool warmed up successfully');
+        client.release();
+      })
+      .catch(err => {
+        console.warn('[db] Failed to warm up connection pool:', err.message);
+        // 不抛出错误，让后续请求自行建立连接
+      });
+  }
 }
 
 // 原始 SQL 标记类，用于标记不应该参数化的值
@@ -2819,7 +2833,7 @@ export interface GitHubToken {
  */
 export interface PlatformToken {
   id: string;
-  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel' | 'github_pages';
+  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel';
   name: string;                    // 别名，如 "RTD Bot 1"
   token_encrypted: string;         // 加密存储
   usage_count: number;
@@ -2836,8 +2850,8 @@ export interface PlatformToken {
 export interface PlatformSite {
   id: string;
   github_token_id: string;         // 关联的 GitHub Token，用于推送代码
-  platform_token_id: string | null; // 关联的平台 Token，github_pages 可为空
-  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel' | 'github_pages';
+  platform_token_id: string | null; // 关联的平台 Token
+  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel';
   content_type: 'informational' | 'commercial'; // 内容类型
   site_name: string;               // 站点名
   site_url: string;                // 站点 URL
@@ -2878,8 +2892,8 @@ let pseoTablesInitializing: Promise<void> | null = null;
  * 
  * 发布策略:
  * - 信息型内容 -> RTD, CF Pages
- * - 商业型内容 -> Netlify, Vercel, GitHub Pages
- * 
+ * - 商业型内容 -> Netlify, Vercel, CF Pages
+ *
  * 自动创建流程:
  * 1. 系统自动创建 GitHub 仓库（pseo-site-{uuid}）
  * 2. 推送 MkDocs 模板文件
@@ -2974,7 +2988,7 @@ export async function initPSEOPublishTables() {
         DO $$
         BEGIN
           IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_platform') THEN
-            ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel', 'github_pages'));
+            ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel'));
           END IF;
         END $$
       `;
@@ -3472,11 +3486,11 @@ export async function updatePlatformSiteProjectId(
 
 /**
  * 更新站点的平台类型
- * 用于切换发布平台(如从 GitHub Pages 切换到 Netlify)
+ * 用于切换发布平台(如从 RTD 切换到 Netlify)
  */
 export async function updatePlatformSitePlatform(
   siteId: string,
-  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel' | 'github_pages',
+  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel',
   platformTokenId: string | null = null
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
@@ -3568,8 +3582,8 @@ export async function getWebsiteSiteBindings(websiteId: string): Promise<(Websit
  * 
  * 发布策略:
  * - 信息型内容 -> RTD, CF Pages
- * - 商业型内容 -> Netlify, Vercel, GitHub Pages
- * 
+ * - 商业型内容 -> Netlify, Vercel, CF Pages
+ *
  * @param websiteId - 用户网站 ID (来自 user_websites 表)
  * @param contentType - 内容类型
  */
@@ -3615,7 +3629,7 @@ export async function assignSiteToWebsite(
   // 2. 根据内容类型确定可用的平台
   const platforms = contentType === 'informational'
     ? ['rtd', 'cf_pages']
-    : ['netlify', 'vercel', 'github_pages'];
+    : ['netlify', 'vercel', 'cf_pages'];
 
   // 3. 查找使用次数最少的可用站点（已存在的站点优先）
   const availableSite = await sql<any>`
@@ -3670,7 +3684,7 @@ export async function getAvailableTokensForNewSite(
 
   const platforms = contentType === 'informational'
     ? ['rtd', 'cf_pages']
-    : ['netlify', 'vercel', 'github_pages'];
+    : ['netlify', 'vercel', 'cf_pages']; // 商业型优先 Netlify/Vercel，备选 CF Pages
 
   // 获取使用最少的 GitHub Token
   const githubTokenResult = await sql<GitHubToken>`
@@ -3685,14 +3699,13 @@ export async function getAvailableTokensForNewSite(
     return null;
   }
 
-  // 获取使用最少的平台 Token（如果需要）
-  // github_pages 不需要平台 Token
+  // 获取使用最少的平台 Token
   let platformToken: PlatformToken | null = null;
-  let selectedPlatform: PlatformSite['platform'] = 'github_pages';
+  let selectedPlatform: PlatformSite['platform'] | null = null;
 
   const platformTokenResult = await sql<PlatformToken>`
-    SELECT * FROM platform_tokens_v2 
-    WHERE status = 'active' AND platform = ANY(${platforms.filter(p => p !== 'github_pages')}::text[])
+    SELECT * FROM platform_tokens_v2
+    WHERE status = 'active' AND platform = ANY(${platforms}::text[])
     ORDER BY usage_count ASC, created_at ASC
     LIMIT 1
   `;
@@ -3700,11 +3713,10 @@ export async function getAvailableTokensForNewSite(
   if (platformTokenResult.rows.length > 0) {
     platformToken = platformTokenResult.rows[0];
     selectedPlatform = platformToken.platform as PlatformSite['platform'];
-  } else if (platforms.includes('github_pages')) {
-    // 没有平台 Token，但可以使用 GitHub Pages
-    selectedPlatform = 'github_pages';
   } else {
-    console.error(`[getAvailableTokensForNewSite] No platform token for ${contentType}`);
+    // 所有内容类型都必须有平台 Token（RTD/CF Pages/Netlify/Vercel）
+    console.error(`[getAvailableTokensForNewSite] No platform token available for ${contentType} content`);
+    console.error(`[getAvailableTokensForNewSite] Please add RTD, Cloudflare Pages, Netlify, or Vercel tokens in Admin panel`);
     return null;
   }
 

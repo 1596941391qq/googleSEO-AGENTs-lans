@@ -16,8 +16,8 @@ import {
  * 
  * 站点模型:
  * - github_token_id: 关联的 GitHub Token，用于推送代码
- * - platform_token_id: 关联的平台 Token（github_pages 可为空）
- * - platform: 发布平台 (rtd, cf_pages, netlify, vercel, github_pages)
+ * - platform_token_id: 关联的平台 Token
+ * - platform: 发布平台 (rtd, cf_pages, netlify, vercel)
  * - content_type: 内容类型 (informational, commercial)
  * - repo_name: GitHub 仓库名（系统自动生成）
  * - status: pending（等待创建）| active | disabled
@@ -95,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // 验证 platform 值
-      const validPlatforms = ['rtd', 'cf_pages', 'netlify', 'vercel', 'github_pages'];
+      const validPlatforms = ['rtd', 'cf_pages', 'netlify', 'vercel'];
       if (!validPlatforms.includes(platform)) {
         return sendErrorResponse(res, null, `Invalid platform. Must be one of: ${validPlatforms.join(', ')}`, 400);
       }
@@ -106,14 +106,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return sendErrorResponse(res, null, `Invalid content_type. Must be one of: ${validContentTypes.join(', ')}`, 400);
       }
 
-      // github_pages 不需要 platform_token_id
-      if (platform !== 'github_pages' && !platform_token_id) {
+      // 所有平台都需要 platform_token_id
+      if (!platform_token_id) {
         return sendErrorResponse(res, null, `platform_token_id is required for ${platform}`, 400);
       }
 
       const newSite = await createPlatformSite({
         github_token_id,
-        platform_token_id: platform === 'github_pages' ? null : platform_token_id,
+        platform_token_id,
         platform,
         content_type,
         site_name,

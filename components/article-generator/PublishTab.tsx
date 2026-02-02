@@ -86,7 +86,7 @@ export function PublishTab({ isDarkTheme, uiLanguage }: PublishTabProps) {
 
       const response = await apiClient.post('/api/articles/publish', {
         articleId,
-        websiteId // 传递关联的用户网站 ID
+        websiteId // 传递关联的用户网站 ID（品牌名将自动从网站域名提取）
       });
 
       if (response.success) {

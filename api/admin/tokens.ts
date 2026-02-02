@@ -118,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return sendErrorResponse(res, null, 'platform, token, and name are required', 400);
         }
 
-        // 验证 platform 值（不包含 github_pages，因为它不需要单独的 Token）
+        // 验证 platform 值
         const validPlatforms = ['rtd', 'cf_pages', 'netlify', 'vercel'];
         if (!validPlatforms.includes(platform)) {
           return sendErrorResponse(res, null, `Invalid platform. Must be one of: ${validPlatforms.join(', ')}`, 400);

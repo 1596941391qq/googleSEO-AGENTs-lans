@@ -708,3 +708,30 @@ export const translateKeywordToTarget = async (
     };
   }
 };
+
+/**
+ * 生成文档摘要（用于README更新）
+ * 提炼文章的核心内容为2-3句话的简短摘要
+ */
+export const summarizeArticleForReadme = async (
+  title: string,
+  content: string
+): Promise<string> => {
+  const prompt = `You are a technical documentation expert. Summarize the following article into 2-3 concise sentences for a README file. Focus on the key value and main topics covered. Keep it professional and informative.
+
+Article Title: "${title}"
+
+Article Content:
+${content.substring(0, 2000)}
+
+Provide ONLY the summary text, no additional formatting or explanations.`;
+
+  try {
+    const response = await callGeminiAPI(prompt);
+    return response.text.trim();
+  } catch (error: any) {
+    console.error(`Failed to generate summary for article "${title}":`, error);
+    // 返回默认摘要
+    return `Documentation for ${title}. This article covers key concepts and implementation details.`;
+  }
+};

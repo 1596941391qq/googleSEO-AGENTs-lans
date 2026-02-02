@@ -77,10 +77,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!actualProjectId) {
-      return sendErrorResponse(res, null, '未找到关联的项目或网站。请先在“我的网站”中绑定一个站点。', 400);
+      return sendErrorResponse(res, null, '未找到关联的项目或网站。请先在"我的网站"中绑定一个站点。', 400);
     }
 
-    // 4. 生成 URL slug
+    // 4. 从用户网站获取品牌名（从域名提取）
+    let brandName: string | undefined;
+    try {
+      const websiteResult = await sql`
+        SELECT website_domain FROM user_websites
+        WHERE id = ${actualProjectId} AND user_id = ${authResult.userId}
+        LIMIT 1
+      `;
+      if (websiteResult.rows.length > 0) {
+        const domain = websiteResult.rows[0].website_domain;
+        // 从域名提取品牌名：acme.com → acme, tech-corp.io → tech-corp
+        brandName = domain.split('.')[0];
+        console.log(`[Publish API] Extracted brand name from domain: ${domain} → ${brandName}`);
+      }
+    } catch (error) {
+      console.warn('[Publish API] Failed to extract brand name from website domain:', error);
+      // 品牌名提取失败不影响发布流程
+    }
+
+    // 5. 生成 URL slug
     const urlSlug = article.url_slug || article.title
       .toLowerCase()
       .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
@@ -89,6 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 5. 使用 PSEO Publisher 发布
     console.log(`[Publish API] Calling publishArticle with forceUpdate=${forceUpdate || false}`);
+    console.log(`[Publish API] Brand name: ${brandName || '(not set, will use default)'}`);
     const publishResult = await publishArticle(
       actualProjectId,
       {
@@ -99,8 +119,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         metaDescription: article.meta_description,
         contentType,
         urlSlug,
+        brandName: brandName, // 自动从网站域名提取的品牌名
       },
-      article.project_name // 用于生成站点名
+      article.project_name // 用于生成站点��（作为后备）
     );
 
     if (!publishResult.success) {

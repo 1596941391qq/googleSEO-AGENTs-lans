@@ -287,67 +287,6 @@ export async function deployToVercel(config: PlatformDeployConfig): Promise<Plat
 }
 
 // =============================================================================
-// GitHub Pages
-// =============================================================================
-
-/**
- * 启用 GitHub Pages
- * 注意: GitHub Pages 不需要额外的平台 Token，使用 GitHub Token 即可
- */
-export async function enableGitHubPages(config: {
-  token: string;
-  owner: string;
-  repoName: string;
-}): Promise<PlatformDeployResult> {
-  try {
-    // 启用 GitHub Pages，使用 main 分支
-    const response = await fetch(
-      `https://api.github.com/repos/${config.owner}/${config.repoName}/pages`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${config.token}`,
-          'Accept': 'application/vnd.github.v3+json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          source: {
-            branch: 'main',
-            path: '/site', // MkDocs 输出目录
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      // Pages 已启用
-      if (response.status === 409) {
-        return {
-          success: true,
-          siteUrl: `https://${config.owner}.github.io/${config.repoName}`,
-        };
-      }
-      return {
-        success: false,
-        error: error.message || `GitHub Pages API error: ${response.status}`,
-      };
-    }
-
-    const data = await response.json();
-    return {
-      success: true,
-      siteUrl: data.html_url || `https://${config.owner}.github.io/${config.repoName}`,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message || 'Failed to enable GitHub Pages',
-    };
-  }
-}
-
-// =============================================================================
 // 重新部署 / 触发构建
 // =============================================================================
 
@@ -688,54 +627,6 @@ export async function triggerVercelBuild(config: {
 }
 
 /**
- * 触发 GitHub Pages 重新构建
- * 通过创建一个空的 workflow dispatch 或者 push 事件来触发
- */
-export async function triggerGitHubPagesBuild(config: {
-  token: string;
-  owner: string;
-  repoName: string;
-}): Promise<RebuildResult> {
-  try {
-    console.log(`[GitHub Pages] Triggering build for: ${config.owner}/${config.repoName}`);
-
-    // GitHub Pages 会在 push 后自动构建，这里我们触发 Pages 构建 API
-    const response = await fetch(
-      `https://api.github.com/repos/${config.owner}/${config.repoName}/pages/builds`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${config.token}`,
-          'Accept': 'application/vnd.github.v3+json',
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error(`[GitHub Pages] Build trigger failed: ${response.status}`, error);
-      return {
-        success: false,
-        error: error.message || `GitHub Pages API error: ${response.status}`,
-      };
-    }
-
-    const data = await response.json();
-    console.log(`[GitHub Pages] ✅ Build triggered successfully. Status: ${data.status}`);
-    return {
-      success: true,
-      buildId: data.url,
-    };
-  } catch (error: any) {
-    console.error(`[GitHub Pages] Build trigger exception:`, error);
-    return {
-      success: false,
-      error: error.message || 'Failed to trigger GitHub Pages build',
-    };
-  }
-}
-
-/**
  * 统一触发重新构建接口
  */
 export async function triggerPlatformRebuild(
@@ -792,13 +683,6 @@ export async function triggerPlatformRebuild(
         repoName: config.repoName,
       });
 
-    case 'github_pages':
-      return triggerGitHubPagesBuild({
-        token: config.githubToken,
-        owner: config.repoOwner,
-        repoName: config.repoName,
-      });
-
     default:
       return { success: false, error: `Unknown platform: ${platform}` };
   }
@@ -808,7 +692,7 @@ export async function triggerPlatformRebuild(
 // 统一部署接口
 // =============================================================================
 
-export type PlatformType = 'rtd' | 'cf_pages' | 'netlify' | 'vercel' | 'github_pages';
+export type PlatformType = 'rtd' | 'cf_pages' | 'netlify' | 'vercel';
 
 /**
  * 根据平台类型部署站点
@@ -869,13 +753,6 @@ export async function deployToPlatform(
         repoOwner: config.repoOwner,
         repoName: config.repoName,
         siteName: config.siteName,
-      });
-
-    case 'github_pages':
-      return enableGitHubPages({
-        token: config.githubToken,
-        owner: config.repoOwner,
-        repoName: config.repoName,
       });
 
     default:

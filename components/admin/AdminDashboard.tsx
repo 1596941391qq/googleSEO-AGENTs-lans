@@ -99,12 +99,11 @@ const PLATFORM_CONFIG = {
   cf_pages: { name: 'Cloudflare Pages', icon: Cloud, color: 'text-orange-500', bg: 'bg-orange-500/10' },
   netlify: { name: 'Netlify', icon: Zap, color: 'text-teal-500', bg: 'bg-teal-500/10' },
   vercel: { name: 'Vercel', icon: Triangle, color: 'text-white', bg: 'bg-zinc-700' },
-  github_pages: { name: 'GitHub Pages', icon: Github, color: 'text-purple-500', bg: 'bg-purple-500/10' },
 };
 
 const CONTENT_TYPE_CONFIG = {
   informational: { label: '📚 信息型', color: 'bg-blue-500', platforms: ['RTD', 'CF Pages'] },
-  commercial: { label: '🏷️ 商业型', color: 'bg-amber-500', platforms: ['Netlify', 'Vercel', 'GitHub Pages'] },
+  commercial: { label: '🏷️ 商业型', color: 'bg-amber-500', platforms: ['Netlify', 'Vercel', 'CF Pages'] },
 };
 
 const STATUS_CONFIG = {
@@ -654,7 +653,6 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                         </SelectTrigger>
                         <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
                           {Object.entries(PLATFORM_CONFIG)
-                            .filter(([key]) => key !== 'github_pages')
                             .map(([key, config]) => (
                             <SelectItem key={key} value={key}>
                               <div className="flex items-center gap-2">
@@ -925,7 +923,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                     <ul className="text-sm text-zinc-400 space-y-1">
                       <li>• Netlify</li>
                       <li>• Vercel</li>
-                      <li>• GitHub Pages</li>
+                      <li>• Cloudflare Pages</li>
                     </ul>
                     <p className="text-xs text-zinc-500 mt-2">适合产品页面、对比评测等</p>
                   </div>

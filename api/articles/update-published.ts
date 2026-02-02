@@ -86,6 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .substring(0, 50);
 
     // 6. 使用 PSEO Publisher 更新文章
+    console.log('[Update Published] Attempting to update article on existing platform...');
     const updateResult = await updatePublishedArticle(
       actualProjectId,
       {
@@ -99,13 +100,84 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     );
 
-    if (!updateResult.success) {
-      return sendErrorResponse(
-        res,
-        null,
-        updateResult.error || 'Failed to update article',
-        500
+    // 检查是否需要强制重新发布（例如：平台重建失败）
+    const needsRepublish = !updateResult.success && (
+      updateResult.error?.includes('FORCE_REPUBLISH') ||
+      updateResult.error?.includes('Platform rebuild failed')
+    );
+
+    if (needsRepublish) {
+      console.warn('[Update Published] ⚠️ Update failed or requires republish, switching to a new platform...');
+      console.warn('[Update Published] Original error:', updateResult.error);
+
+      // 导入 publishArticle 函数
+      const { publishArticle } = await import('../_shared/services/pseo-publisher.js');
+
+      // 从网站域名提取品牌名
+      let brandName: string | undefined;
+      try {
+        const websiteResult = await sql`
+          SELECT website_domain FROM user_websites
+          WHERE id = ${actualProjectId} AND user_id = ${authResult.userId}
+          LIMIT 1
+        `;
+        if (websiteResult.rows.length > 0) {
+          const domain = websiteResult.rows[0].website_domain;
+          brandName = domain.split('.')[0];
+        }
+      } catch (error) {
+        console.warn('[Update Published] Failed to extract brand name:', error);
+      }
+
+      // 重新发布到新平台（Netlify/Vercel/CF Pages）
+      console.log('[Update Published] Republishing to Netlify/Vercel/CF Pages...');
+      const republishResult = await publishArticle(
+        actualProjectId,
+        {
+          id: articleId,
+          title: article.title,
+          content: article.content,
+          keyword: article.keyword || '',
+          metaDescription: article.meta_description,
+          contentType,
+          urlSlug,
+          brandName,
+        },
+        article.project_name
       );
+
+      if (!republishResult.success) {
+        return sendErrorResponse(
+          res,
+          null,
+          `Failed to republish article: ${republishResult.error}. Please check your platform tokens in Admin panel.`,
+          500
+        );
+      }
+
+      // 更新文章状态和时间戳
+      await sql`
+        UPDATE published_articles
+        SET status = 'published',
+            published_at = NOW(),
+            updated_at = NOW()
+        WHERE id = ${articleId} AND user_id::text = ${authResult.userId.toString()}
+      `;
+
+      return res.json({
+        success: true,
+        data: {
+          message: `Article republished to ${republishResult.platform} successfully (switched platform)`,
+          articleUrl: republishResult.articleUrl,
+          platform: republishResult.platform,
+          siteName: republishResult.siteName,
+          siteUrl: republishResult.siteUrl,
+          repoUrl: republishResult.repoUrl,
+          isNewSite: republishResult.isNewSite,
+          updatedAt: new Date().toISOString(),
+          wasRepublished: true,
+        }
+      });
     }
 
     // 7. 更新文章的 updated_at 时间戳

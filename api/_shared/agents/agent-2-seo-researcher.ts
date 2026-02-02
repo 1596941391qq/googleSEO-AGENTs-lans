@@ -337,10 +337,10 @@ export async function analyzeSearchPreferences(
     onProgress?.(language === 'zh' ? `🤖 正在分析 ${marketLabel} 市场的搜索引擎偏好...` : `🤖 Analyzing search engine preferences for ${marketLabel} market...`);
 
     // 调用 Gemini API（使用 JSON 模式）
-    // 设置合理的输出长度限制（3000 tokens ≈ 2000-2500 中文字符），避免生成重复内容
+    // 设置合理的输出长度限制，避免生成过长内容导致截断
     const jsonConfig = {
       responseMimeType: 'application/json',
-      maxOutputTokens: 3000,
+      maxOutputTokens: 4000, // 增加到 4000，给予更多空间但仍有限制
       responseSchema: {
         type: 'object',
         properties: {
@@ -705,7 +705,29 @@ function extractJSONRobust(text: string): string {
     extracted = jsonMatch ? jsonMatch[0] : cleaned;
   }
 
-  return extracted.trim() || '{}';
+  // 5. 增强：尝试修复截断的 JSON（特别是未闭合的字符串）
+  if (extracted) {
+    try {
+      // 先尝试直接解析
+      JSON.parse(extracted);
+      return extracted.trim();
+    } catch (e) {
+      // 解析失败，尝试修复
+      console.log('[extractJSONRobust] JSON parse failed, attempting to fix truncated JSON...');
+      const fixed = fixTruncatedJSON(extracted);
+      try {
+        JSON.parse(fixed);
+        console.log('[extractJSONRobust] ✓ Successfully fixed truncated JSON');
+        return fixed;
+      } catch (e2) {
+        // 修复后仍然失败，返回原始内容
+        console.warn('[extractJSONRobust] Failed to fix JSON, returning original');
+        return extracted.trim();
+      }
+    }
+  }
+
+  return extracted?.trim() || '{}';
 }
 
 /**
@@ -761,33 +783,41 @@ function fixTruncatedJSON(text: string): string {
 
   // 如果字符串未闭合，尝试修复
   if (inString && lastStringStart !== -1) {
+    console.log('[fixTruncatedJSON] Detected unclosed string at position', lastStringStart);
     // 找到字符串开始的位置，尝试找到合理的结束位置
     // 如果字符串在字段值中，添加闭合引号
     const beforeString = fixed.substring(0, lastStringStart);
-    const afterStringStart = fixed.substring(lastStringStart);
 
     // 检查是否是字段值（前面有 :）
     const colonIndex = beforeString.lastIndexOf(':');
     if (colonIndex !== -1) {
       // 这是一个字段值，添加闭合引号
-      fixed = fixed.substring(0, fixed.length) + '"';
+      console.log('[fixTruncatedJSON] Adding closing quote for field value');
+      fixed = fixed + '"';
+      inString = false; // 标记字符串已闭合
     }
   }
 
   // 修复未闭合的括号
   if (bracketCount > 0) {
+    console.log('[fixTruncatedJSON] Adding', bracketCount, 'closing brackets');
     fixed += ']'.repeat(bracketCount);
   }
+
   if (braceCount > 0) {
-    // 在添加闭合括号之前，确保最后一个字段有正确的格式
-    // 如果最后一个字符不是 } 或 ]，可能需要添加逗号或闭合引号
+    // 在添加闭合括号之前，确保��后一个字段有正确的格式
     const lastChar = fixed[fixed.length - 1];
-    if (lastChar !== '"' && lastChar !== '}' && lastChar !== ']' && lastChar !== '[') {
-      // 可能是一个未闭合的字符串或字段，尝试修复
+
+    // 如果最后一个字符不是有效的 JSON 结束字符，可能需要修复
+    if (lastChar !== '"' && lastChar !== '}' && lastChar !== ']' && lastChar !== '[' && lastChar !== ',' && lastChar !== ':') {
+      console.log('[fixTruncatedJSON] Last char is invalid:', lastChar, '- attempting to fix');
+      // 可能是一个未闭合的字符串值，添加引号
       if (!fixed.endsWith('"')) {
         fixed += '"';
       }
     }
+
+    console.log('[fixTruncatedJSON] Adding', braceCount, 'closing braces');
     fixed += '}'.repeat(braceCount);
   }
 

@@ -13,7 +13,8 @@
       "WebSearch",
       "Bash(vercel logs:*)",
       "WebFetch(domain:docs.dataforseo.com)",
-      "Bash(netstat:*)"
+      "Bash(netstat:*)",
+      "Bash(curl:*)"
     ]
   }
 }

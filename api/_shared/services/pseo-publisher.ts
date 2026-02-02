@@ -42,6 +42,7 @@ interface ArticleForPublish {
   metaDescription?: string;
   contentType: 'informational' | 'commercial';
   urlSlug?: string;
+  brandName?: string;      // 品牌名（用于仓库命名）
 }
 
 interface PublishResult {
@@ -57,9 +58,20 @@ interface PublishResult {
 
 /**
  * 生成站点名称
+ * @param brandName - 品牌名（可选）
+ * @param keyword - 关键词（可选）
+ * @param projectName - 项目名（可选，作为后备）
  */
-function generateSiteName(projectName?: string): string {
-  const uuid = uuidv4().split('-')[0]; // 取 UUID 的前 8 位
+function generateSiteName(brandName?: string, keyword?: string, projectName?: string): string {
+  // 优先使用品牌名-关键词格式
+  if (brandName && keyword) {
+    const sanitizedBrand = brandName.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20);
+    const sanitizedKeyword = keyword.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 30);
+    return `${sanitizedBrand}-${sanitizedKeyword}`;
+  }
+
+  // 后备方案：使用原有逻辑
+  const uuid = uuidv4().split('-')[0];
   if (projectName) {
     const sanitized = projectName.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20);
     return `pseo-${sanitized}-${uuid}`;
@@ -102,7 +114,12 @@ export async function publishArticle(
     if (!siteBinding) {
       console.log(`[PSEO Publisher] No existing site binding, creating new site...`);
 
-      const newSiteResult = await createNewSite(contentType, projectName);
+      const newSiteResult = await createNewSite(
+        contentType,
+        article.brandName,
+        article.keyword,
+        projectName
+      );
       if (!newSiteResult.success) {
         return {
           success: false,
@@ -231,8 +248,13 @@ export async function publishArticle(
     );
 
     if (!rebuildResult.success) {
-      console.warn(`[PSEO Publisher] ⚠️ Platform rebuild failed: ${rebuildResult.error}`);
-      // 不阻断发布流程，只是警告
+      console.error(`[PSEO Publisher] ❌ Platform rebuild failed: ${rebuildResult.error}`);
+      // 平台重建失败是致命错误，必须返回失败
+      // 文章虽然推送到 GitHub 了，但用户无法访问，所以算发布失败
+      return {
+        success: false,
+        error: `Platform rebuild failed: ${rebuildResult.error}. Article was pushed to GitHub but cannot be accessed. Please check your platform configuration or try again.`,
+      };
     } else {
       console.log(`[PSEO Publisher] ✅ Platform rebuild triggered. Build ID: ${rebuildResult.buildId}`);
     }
@@ -267,6 +289,8 @@ export async function publishArticle(
  */
 async function createNewSite(
   contentType: 'informational' | 'commercial',
+  brandName?: string,
+  keyword?: string,
   projectName?: string
 ): Promise<{ success: boolean; site?: PlatformSite; error?: string }> {
   // 获取可用的 Token
@@ -279,7 +303,7 @@ async function createNewSite(
   }
 
   const { github_token, platform_token, platform } = tokens;
-  const siteName = generateSiteName(projectName);
+  const siteName = generateSiteName(brandName, keyword, projectName);
   const repoName = siteName;
 
   // 创建站点记录（pending 状态）
@@ -355,12 +379,12 @@ async function initializeSite(config: {
   });
 
   if (!deployResult.success) {
-    console.warn(`[PSEO Publisher] Platform deployment warning: ${deployResult.error}`);
-    // 平台部署失败不是致命错误，仓库已创建，可以手动连接
-    // 对于 GitHub Pages，可能需要手动启用
+    console.error(`[PSEO Publisher] ❌ Platform deployment failed: ${deployResult.error}`);
+    // 部署失败是致命错误，必须返回失败状态
+    // 不能让用户以为发布成功了
     return {
-      success: true,
-      siteUrl: `https://${githubOwner}.github.io/${site.repo_name}`,
+      success: false,
+      error: `Failed to deploy to ${platform}: ${deployResult.error}. Please check your platform tokens in Admin panel or try again.`,
     };
   }
 
@@ -505,9 +529,20 @@ export async function updatePublishedArticle(
     }
 
     console.log(`[PSEO Publisher] Found existing site: ${siteBinding.site.site_name}`);
+    console.log(`[PSEO Publisher] Platform: ${siteBinding.site.platform}`);
     console.log(`[PSEO Publisher] Repository: ${siteBinding.github_token.owner_name}/${siteBinding.site.repo_name}`);
 
     const { site, github_token, platform_token } = siteBinding;
+
+    // ⚠️ Safety check: Detect legacy github_pages records
+    if (site.platform === 'github_pages' || !['rtd', 'cf_pages', 'netlify', 'vercel'].includes(site.platform)) {
+      console.error(`[PSEO Publisher] ❌ Invalid platform detected: ${site.platform}`);
+      console.error(`[PSEO Publisher] This site uses an unsupported platform. Please run the migration script or republish the article.`);
+      return {
+        success: false,
+        error: `FORCE_REPUBLISH: The article is using an unsupported platform (${site.platform}). Please republish to switch to a supported platform (RTD/CF Pages/Netlify/Vercel).`,
+      };
+    }
 
     // 2. 检查站点状态
     if (site.status !== 'active') {
@@ -572,8 +607,13 @@ export async function updatePublishedArticle(
     );
 
     if (!rebuildResult.success) {
-      console.warn(`[PSEO Publisher] ⚠️ Platform rebuild failed: ${rebuildResult.error}`);
-      // 不阻断更新流程
+      console.error(`[PSEO Publisher] ❌ Platform rebuild failed: ${rebuildResult.error}`);
+      // 平台重建失败，说明原平台可能有问题
+      // 返回错误，提示用户需要重新发布到其他平台
+      return {
+        success: false,
+        error: `Platform rebuild failed: ${rebuildResult.error}. The original platform (${site.platform}) may have issues. Please try publishing again to switch to a different platform.`,
+      };
     } else {
       console.log(`[PSEO Publisher] ✅ Platform rebuild triggered. Build ID: ${rebuildResult.buildId}`);
     }
