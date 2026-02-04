@@ -424,16 +424,8 @@ description: "${(article.metaDescription || '').replace(/"/g, '\\"')}"
 function buildArticleUrl(siteUrl: string, slug: string): string {
   if (!siteUrl) return '';
 
-  // 清理 siteUrl，移除末尾的斜杠和可能的路径
+  // 清理 siteUrl，移除末尾的斜杠
   let cleanUrl = siteUrl.replace(/\/$/, '');
-
-  // 如果 URL 已经包含 /en/latest/，移除它
-  cleanUrl = cleanUrl.replace(/\/en\/latest\/?$/, '');
-
-  // RTD 格式
-  if (cleanUrl.includes('readthedocs.io')) {
-    return `${cleanUrl}/en/latest/${slug}/`;
-  }
 
   // 其他平台
   return `${cleanUrl}/${slug}/`;
@@ -535,12 +527,12 @@ export async function updatePublishedArticle(
     const { site, github_token, platform_token } = siteBinding;
 
     // ⚠️ Safety check: Detect legacy github_pages records
-    if (site.platform === 'github_pages' || !['rtd', 'cf_pages', 'netlify', 'vercel'].includes(site.platform)) {
+    if (site.platform === 'github_pages' || !['cf_pages', 'netlify', 'vercel'].includes(site.platform)) {
       console.error(`[PSEO Publisher] ❌ Invalid platform detected: ${site.platform}`);
       console.error(`[PSEO Publisher] This site uses an unsupported platform. Please run the migration script or republish the article.`);
       return {
         success: false,
-        error: `FORCE_REPUBLISH: The article is using an unsupported platform (${site.platform}). Please republish to switch to a supported platform (RTD/CF Pages/Netlify/Vercel).`,
+        error: `FORCE_REPUBLISH: The article is using an unsupported platform (${site.platform}). Please republish to switch to a supported platform (CF Pages/Netlify/Vercel).`,
       };
     }
 

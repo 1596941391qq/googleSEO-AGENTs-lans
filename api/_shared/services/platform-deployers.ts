@@ -19,65 +19,7 @@ interface PlatformDeployResult {
   error?: string;
 }
 
-// =============================================================================
-// Read the Docs
-// =============================================================================
-
-/**
- * 在 Read the Docs 创建项目并连接 GitHub 仓库
- * API 文档: https://docs.readthedocs.io/en/stable/api/v3.html
- */
-export async function deployToReadTheDocs(config: PlatformDeployConfig): Promise<PlatformDeployResult> {
-  try {
-    // RTD API v3
-    const response = await fetch('https://readthedocs.org/api/v3/projects/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${config.token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        name: config.siteName,
-        repository: {
-          url: `https://github.com/${config.repoOwner}/${config.repoName}`,
-          type: 'git',
-        },
-        homepage: `https://${config.siteName.toLowerCase().replace(/[^a-z0-9]/g, '-')}.readthedocs.io`,
-        programming_language: 'words',
-        language: 'en',
-      }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      // 项目已存在
-      if (response.status === 400 && error.name?.[0]?.includes('already exists')) {
-        const slug = config.siteName.toLowerCase().replace(/[^a-z0-9]/g, '-');
-        return {
-          success: true,
-          siteUrl: `https://${slug}.readthedocs.io`,
-          projectId: slug,
-        };
-      }
-      return {
-        success: false,
-        error: error.detail || error.name?.[0] || `RTD API error: ${response.status}`,
-      };
-    }
-
-    const data = await response.json();
-    return {
-      success: true,
-      siteUrl: data.urls?.documentation || `https://${data.slug}.readthedocs.io`,
-      projectId: data.slug,
-    };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.message || 'Failed to deploy to RTD',
-    };
-  }
-}
+// Read the Docs support has been removed
 
 // =============================================================================
 // Cloudflare Pages
@@ -294,116 +236,6 @@ interface RebuildResult {
   success: boolean;
   buildId?: string;
   error?: string;
-}
-
-/**
- * 触发 Read the Docs 重新构建
- * API 文档: https://docs.readthedocs.io/en/stable/api/v3.html
- *
- * RTD v3 API 需要通过 webhook 或者直接触发构建
- * 这里使用 GitHub webhook 模拟方式或者直接调用构建 API
- */
-export async function triggerRTDBuild(config: {
-  token: string;
-  projectSlug: string;
-}): Promise<RebuildResult> {
-  try {
-    console.log(`[RTD] Triggering build for project: ${config.projectSlug}`);
-
-    // RTD API v3: 触发构建需要指定版本
-    // 我们触发 latest 版本的构建
-    const response = await fetch(
-      `https://readthedocs.org/api/v3/projects/${config.projectSlug}/versions/latest/builds/`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${config.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}), // 空 body 触发构建
-      }
-    );
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorDetail = errorText;
-
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorDetail = errorJson.detail || errorJson.error || errorText;
-      } catch (e) {
-        // 如果不是 JSON，使用原始文本
-      }
-
-      console.error(`[RTD] Build trigger failed: ${response.status}`, errorDetail);
-
-      // 如果 API v3 失败，尝试使用 webhook 方式
-      console.log(`[RTD] Trying alternative method: GitHub webhook simulation...`);
-      return await triggerRTDBuildViaWebhook(config);
-    }
-
-    const data = await response.json();
-    console.log(`[RTD] ✅ Build triggered successfully. Build ID: ${data.id}`);
-    return {
-      success: true,
-      buildId: data.id?.toString(),
-    };
-  } catch (error: any) {
-    console.error(`[RTD] Build trigger exception:`, error);
-
-    // 尝试备用方法
-    console.log(`[RTD] Trying alternative method due to exception...`);
-    return await triggerRTDBuildViaWebhook(config);
-  }
-}
-
-/**
- * 通过 GitHub webhook 方式触发 RTD 构建（备用方法）
- * RTD 会监听 GitHub push 事件，我们可以通过 GitHub API 触发
- */
-async function triggerRTDBuildViaWebhook(config: {
-  token: string;
-  projectSlug: string;
-}): Promise<RebuildResult> {
-  try {
-    // 使用 RTD 的 webhook 端点
-    // 这个端点不需要认证，但需要正确的 payload
-    const webhookUrl = `https://readthedocs.org/api/v2/webhook/${config.projectSlug}/1/`;
-
-    console.log(`[RTD] Triggering via webhook: ${webhookUrl}`);
-
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        ref: 'refs/heads/main',
-        // 模拟 GitHub webhook payload
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[RTD] Webhook trigger failed: ${response.status}`, errorText);
-      return {
-        success: false,
-        error: `RTD webhook failed: ${response.status} - ${errorText}`,
-      };
-    }
-
-    console.log(`[RTD] ✅ Build triggered via webhook successfully`);
-    return {
-      success: true,
-      buildId: 'webhook-triggered',
-    };
-  } catch (error: any) {
-    console.error(`[RTD] Webhook trigger exception:`, error);
-    return {
-      success: false,
-      error: error.message || 'Failed to trigger RTD build via webhook',
-    };
-  }
 }
 
 /**
@@ -644,15 +476,6 @@ export async function triggerPlatformRebuild(
   console.log(`[Platform Rebuild] Triggering rebuild for platform: ${platform}`);
 
   switch (platform) {
-    case 'rtd':
-      if (!config.platformToken || !config.projectSlug) {
-        return { success: false, error: 'RTD token and project slug are required' };
-      }
-      return triggerRTDBuild({
-        token: config.platformToken,
-        projectSlug: config.projectSlug,
-      });
-
     case 'cf_pages':
       if (!config.platformToken || !config.cfAccountId || !config.projectId) {
         return { success: false, error: 'CF Pages token, accountId, and projectId are required' };
@@ -692,7 +515,7 @@ export async function triggerPlatformRebuild(
 // 统一部署接口
 // =============================================================================
 
-export type PlatformType = 'rtd' | 'cf_pages' | 'netlify' | 'vercel';
+export type PlatformType = 'cf_pages' | 'netlify' | 'vercel';
 
 /**
  * 根据平台类型部署站点
@@ -710,17 +533,6 @@ export async function deployToPlatform(
   }
 ): Promise<PlatformDeployResult> {
   switch (platform) {
-    case 'rtd':
-      if (!config.platformToken) {
-        return { success: false, error: 'RTD token is required' };
-      }
-      return deployToReadTheDocs({
-        token: config.platformToken,
-        repoOwner: config.repoOwner,
-        repoName: config.repoName,
-        siteName: config.siteName,
-      });
-
     case 'cf_pages':
       if (!config.platformToken || !config.cfAccountId) {
         return { success: false, error: 'CF Pages token and accountId are required' };
