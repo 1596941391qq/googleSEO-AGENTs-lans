@@ -100,10 +100,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     );
 
-    // 检查是否需要强制重新发布（例如：平台重建失败）
+    // 检查是否需要强制重新发布（例如：平台重建失败、找不到发布站点）
     const needsRepublish = !updateResult.success && (
       updateResult.error?.includes('FORCE_REPUBLISH') ||
-      updateResult.error?.includes('Platform rebuild failed')
+      updateResult.error?.includes('Platform rebuild failed') ||
+      updateResult.error?.includes('No published site found') ||
+      updateResult.error?.includes('Invalid platform detected') ||
+      updateResult.error?.includes('unsupported platform')
     );
 
     if (needsRepublish) {
@@ -155,12 +158,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         );
       }
 
-      // 更新文章状态和时间戳
+      // 更新文章状态和时间戳，同时更新 platform_project_id
       await sql`
         UPDATE published_articles
         SET status = 'published',
             published_at = NOW(),
-            updated_at = NOW()
+            updated_at = NOW(),
+            platform_project_id = ${republishResult.siteName || null}
         WHERE id = ${articleId} AND user_id::text = ${authResult.userId.toString()}
       `;
 

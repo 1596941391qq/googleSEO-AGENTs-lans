@@ -127,7 +127,7 @@ import {
   MINING_WORKFLOW,
   BATCH_WORKFLOW,
   createDefaultConfig,
-} from "./workflows";
+} from "./lib/workflows";
 import {
   smartStorage,
   saveTasksCompat,

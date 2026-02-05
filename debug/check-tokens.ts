@@ -8,7 +8,7 @@ async function checkTokens() {
 
         console.log('Checking Platform Tokens for Netlify...');
         const result = await sql<PlatformToken>`
-      SELECT * FROM platform_tokens_v2 
+      SELECT * FROM platform_tokens 
       WHERE platform = 'netlify'
     `;
 
@@ -28,7 +28,7 @@ async function checkTokens() {
         console.log('\nChecking active platform tokens query (used by app):');
         const platforms = ['netlify', 'vercel', 'cf_pages'];
         const activeResult = await sql`
-      SELECT * FROM platform_tokens_v2
+      SELECT * FROM platform_tokens
       WHERE status = 'active' AND platform = ANY(${platforms}::text[])
       ORDER BY usage_count ASC, created_at ASC
     `;

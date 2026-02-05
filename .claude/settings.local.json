@@ -14,7 +14,9 @@
       "Bash(vercel logs:*)",
       "WebFetch(domain:docs.dataforseo.com)",
       "Bash(netstat:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npx tsx:*)",
+      "Bash(vercel dev)"
     ]
   }
 }

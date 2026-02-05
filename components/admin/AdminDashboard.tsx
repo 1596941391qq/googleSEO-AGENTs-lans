@@ -95,15 +95,12 @@ interface AdminDashboardProps {
 }
 
 const PLATFORM_CONFIG = {
-  rtd: { name: 'Read the Docs', icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-  cf_pages: { name: 'Cloudflare Pages', icon: Cloud, color: 'text-orange-500', bg: 'bg-orange-500/10' },
   netlify: { name: 'Netlify', icon: Zap, color: 'text-teal-500', bg: 'bg-teal-500/10' },
-  vercel: { name: 'Vercel', icon: Triangle, color: 'text-white', bg: 'bg-zinc-700' },
 };
 
 const CONTENT_TYPE_CONFIG = {
-  informational: { label: '📚 信息型', color: 'bg-blue-500', platforms: ['RTD', 'CF Pages'] },
-  commercial: { label: '🏷️ 商业型', color: 'bg-amber-500', platforms: ['Netlify', 'Vercel', 'CF Pages'] },
+  informational: { label: '📚 Informational', color: 'bg-blue-500' },
+  commercial: { label: '🏷️ Commercial', color: 'bg-amber-500' },
 };
 
 const STATUS_CONFIG = {
@@ -115,11 +112,26 @@ const STATUS_CONFIG = {
 export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
   const [githubTokens, setGitHubTokens] = useState<GitHubToken[]>([]);
   const [platformTokens, setPlatformTokens] = useState<PlatformToken[]>([]);
+  const [tokenBindings, setTokenBindings] = useState<{
+    bound: Array<{ github: GitHubToken; platform: PlatformToken }>;
+    unboundGithub: GitHubToken[];
+    unboundPlatform: PlatformToken[];
+  }>({ bound: [], unboundGithub: [], unboundPlatform: [] });
   const [sites, setSites] = useState<PlatformSite[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'github' | 'platform' | 'sites'>('github');
   const [showHelp, setShowHelp] = useState(false);
+
+  // 调试日志
+  useEffect(() => {
+    console.log('[AdminDashboard] State:', {
+      activeTab,
+      githubTokensCount: githubTokens.length,
+      platformTokensCount: platformTokens.length,
+      loading
+    });
+  }, [activeTab, githubTokens, platformTokens, loading]);
 
   // 新建 GitHub Token 表单
   const [showAddGitHubToken, setShowAddGitHubToken] = useState(false);
@@ -132,7 +144,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
   // 新建平台 Token 表单
   const [showAddPlatformToken, setShowAddPlatformToken] = useState(false);
   const [newPlatformToken, setNewPlatformToken] = useState({
-    platform: 'rtd',
+    platform: 'netlify',
     name: '',
     token: ''
   });
@@ -142,7 +154,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
   const [newSite, setNewSite] = useState({
     github_token_id: '',
     platform_token_id: '',
-    platform: 'rtd',
+    platform: 'netlify',
     content_type: 'informational',
     site_name: '',
     repo_name: '',
@@ -166,10 +178,49 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
       const tokensData = await tokensRes.json();
       const sitesData = await sitesRes.json();
 
+      console.log('[AdminDashboard] API Response:', tokensData);
+
       if (tokensData.success) {
-        setGitHubTokens(tokensData.data.githubTokens || []);
-        setPlatformTokens(tokensData.data.platformTokens || []);
-        setStats(tokensData.data.stats || null);
+        // 新 API 格式：{ bound, unboundGithub, unboundPlatform }
+        if (tokensData.data.unboundGithub !== undefined) {
+          // 使用绑定关系格式
+          setTokenBindings({
+            bound: tokensData.data.bound || [],
+            unboundGithub: tokensData.data.unboundGithub || [],
+            unboundPlatform: tokensData.data.unboundPlatform || []
+          });
+
+          // 为了兼容现有代码，也设置原始数组
+          const allGithubTokens = [
+            ...tokensData.data.unboundGithub,
+            ...(tokensData.data.bound || []).map((b: any) => b.github)
+          ];
+          setGitHubTokens(allGithubTokens);
+
+          const allPlatformTokens = [
+            ...tokensData.data.unboundPlatform,
+            ...(tokensData.data.bound || []).map((b: any) => b.platform)
+          ];
+          setPlatformTokens(allPlatformTokens);
+
+          setStats({
+            totalGitHubTokens: allGithubTokens.length,
+            activeGitHubTokens: allGithubTokens.filter((t: any) => t.status === 'active').length,
+            totalPlatformTokens: allPlatformTokens.length,
+            activePlatformTokens: allPlatformTokens.filter((t: any) => t.status === 'active').length,
+            totalSites: 0,
+            activeSites: 0,
+            pendingSites: 0,
+            totalBindings: (tokensData.data.bound || []).length,
+            platformBreakdown: [],
+            contentTypeBreakdown: []
+          });
+        } else {
+          // 旧格式（向后兼容）
+          setGitHubTokens(tokensData.data.githubTokens || []);
+          setPlatformTokens(tokensData.data.platformTokens || []);
+          setStats(tokensData.data.stats || null);
+        }
       }
       if (sitesData.success) {
         setSites(sitesData.data.sites || []);
@@ -247,7 +298,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
       const data = await res.json();
       if (data.success) {
         setShowAddPlatformToken(false);
-        setNewPlatformToken({ platform: 'rtd', name: '', token: '' });
+        setNewPlatformToken({ platform: 'netlify', name: '', token: '' });
         fetchData();
       } else {
         alert(data.error || 'Failed to add platform token');
@@ -284,6 +335,44 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
       if (data.success) fetchData();
     } catch (error) {
       alert('Failed to delete token');
+    }
+  };
+
+  // 绑定/解绑操作
+  const handleBindTokens = async (githubTokenId: string, platformTokenId: string, platform: string) => {
+    try {
+      const res = await fetch('/api/admin/tokens?action=bind', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ githubTokenId, platformTokenId, platform })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchData();
+      } else {
+        alert(data.error || 'Failed to bind tokens');
+      }
+    } catch (error) {
+      alert('Failed to bind tokens');
+    }
+  };
+
+  const handleUnbindTokens = async (githubTokenId: string, platformTokenId: string) => {
+    if (!confirm('Unbind these tokens?')) return;
+    try {
+      const res = await fetch('/api/admin/tokens?action=unbind', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ githubTokenId, platformTokenId })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchData();
+      } else {
+        alert(data.error || 'Failed to unbind tokens');
+      }
+    } catch (error) {
+      alert('Failed to unbind tokens');
     }
   };
 
@@ -564,58 +653,124 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                   </CardContent>
                 </Card>
               ) : (
-                githubTokens.map((t) => (
-                  <Card key={t.id} className="border-zinc-800 bg-zinc-900/50">
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center">
-                          <Github className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
+                githubTokens.map((t) => {
+                  // 检查是否已绑定
+                  const binding = tokenBindings.bound.find(b => b.github.id === t.id);
+                  const isBound = !!binding;
+
+                  return (
+                    <Card key={t.id} className={cn(
+                      "border-zinc-800 bg-zinc-900/50",
+                      isBound && "border-teal-500/50 bg-teal-500/5"
+                    )}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-zinc-800 flex items-center justify-center">
+                              <Github className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold">{t.name}</span>
+                                <Badge className="text-[10px] bg-zinc-700">@{t.owner_name}</Badge>
+                                <Badge className={cn(
+                                  "text-[10px]",
+                                  t.status === 'active' ? "bg-emerald-500" : "bg-zinc-600"
+                                )}>
+                                  {t.status}
+                                </Badge>
+                                {isBound && (
+                                  <Badge className="text-[10px] bg-teal-500">
+                                    ✓ Bound to {binding.platform.name}
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-zinc-500 mt-1">
+                                <span>Token: {t.token_preview}</span>
+                                <span>•</span>
+                                <span>Used: {t.usage_count}x</span>
+                              </div>
+                            </div>
+                          </div>
                           <div className="flex items-center gap-2">
-                            <span className="font-bold">{t.name}</span>
-                            <Badge className="text-[10px] bg-zinc-700">@{t.owner_name}</Badge>
-                            <Badge className={cn(
-                              "text-[10px]",
-                              t.status === 'active' ? "bg-emerald-500" : "bg-zinc-600"
-                            )}>
-                              {t.status}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-zinc-500 mt-1">
-                            <span>Token: {t.token_preview}</span>
-                            <span>•</span>
-                            <span>Used: {t.usage_count}x</span>
-                            <span>•</span>
-                            <span>Sites: {sites.filter(s => s.github_token_id === t.id).length}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleGitHubTokenStatus(t.id, t.status)}
+                              className="rounded-xl"
+                            >
+                              {t.status === 'active' ? (
+                                <PowerOff className="w-4 h-4 text-amber-500" />
+                              ) : (
+                                <Power className="w-4 h-4 text-emerald-500" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteGitHubToken(t.id)}
+                              className="rounded-xl text-red-400 hover:text-red-300"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleToggleGitHubTokenStatus(t.id, t.status)}
-                          className="rounded-xl"
-                        >
-                          {t.status === 'active' ? (
-                            <PowerOff className="w-4 h-4 text-amber-500" />
-                          ) : (
-                            <Power className="w-4 h-4 text-emerald-500" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteGitHubToken(t.id)}
-                          className="rounded-xl text-red-400 hover:text-red-300"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+
+                        {/* 绑定状态 */}
+                        {isBound ? (
+                          <div className="mt-3 p-3 rounded-lg bg-teal-500/10 border border-teal-500/30">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Zap className="w-4 h-4 text-teal-500" />
+                                <span className="text-sm font-medium">Bound to: {binding.platform.name}</span>
+                                <Badge variant="outline" className="text-xs border-teal-500/50 text-teal-400">
+                                  {binding.platform.platform}
+                                </Badge>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleUnbindTokens(t.id, binding.platform.id)}
+                                className="h-7 px-2 text-xs text-zinc-400 hover:text-white"
+                              >
+                                Unbind
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="mt-3">
+                            {tokenBindings.unboundPlatform.length > 0 ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-zinc-500">Bind to:</span>
+                                <select
+                                  className="flex-1 text-xs bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      const [platformTokenId, platform] = e.target.value.split(':');
+                                      handleBindTokens(t.id, platformTokenId, platform);
+                                    }
+                                  }}
+                                  defaultValue=""
+                                >
+                                  <option value="">Select Platform Token...</option>
+                                  {tokenBindings.unboundPlatform.map(p => (
+                                    <option key={p.id} value={`${p.id}:${p.platform}`}>
+                                      {p.name} ({p.platform})
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            ) : (
+                              <div className="text-xs text-zinc-600 italic">
+                                No Platform Tokens available. Create one first.
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
           </div>

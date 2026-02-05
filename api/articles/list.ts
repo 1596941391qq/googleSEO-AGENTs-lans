@@ -84,43 +84,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         source: 'task'
       }));
 
-    // Get articles from content_drafts
-    // Note: content_drafts table structure may vary, so we query only existing fields
-    let draftArticles: any[] = [];
-    try {
-      const draftsResult = await sql`
-        SELECT 
-          cd.id,
-          cd.title,
-          cd.content,
-          cd.status,
-          cd.created_at,
-          cd.updated_at,
-          p.name as project_name
-        FROM content_drafts cd
-        LEFT JOIN projects p ON cd.project_id = p.id
-        WHERE p.user_id::text = ${userId.toString()}
-        ORDER BY cd.updated_at DESC
-      `;
-
-      draftArticles = draftsResult.rows.map(row => ({
-        id: row.id,
-        title: row.title,
-        content: row.content,
-        keyword: null, // content_drafts doesn't have keyword field directly
-        status: row.status,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        source: 'draft'
-      }));
-    } catch (error: any) {
-      // If content_drafts table doesn't exist or has different structure, skip it
-      console.warn('[List Articles] content_drafts table not accessible:', error.message);
-      draftArticles = [];
-    }
-
     // Combine all
-    const allArticles = [...publishedArticles, ...taskArticles, ...draftArticles].sort((a, b) => 
+    const allArticles = [...publishedArticles, ...taskArticles].sort((a, b) => 
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
 

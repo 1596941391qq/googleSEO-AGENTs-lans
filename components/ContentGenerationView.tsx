@@ -1508,22 +1508,13 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                         }),
                       });
                     } else if (source === "draft") {
-                      // 更新 content_drafts 表中的文章
-                      // 注意：需要 projectId 和 keywordId，但文章列表中可能没有这些字段
-                      // 暂时尝试使用 save-draft API
-                      response = await fetch("/api/articles/save-draft", {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                          Authorization: `Bearer ${localStorage.getItem("auth_token") || ""
-                            }`,
-                        },
-                        body: JSON.stringify({
-                          articleId: editingArticle.id,
-                          title: editingArticle.title,
-                          content: newContent,
-                        }),
-                      });
+                      // Draft articles are no longer supported
+                      alert(
+                        uiLanguage === "zh"
+                          ? "草稿文章不再支持，请使用已发布的文章"
+                          : "Draft articles are no longer supported"
+                      );
+                      return;
                     } else {
                       // task 来源的文章，暂时不支持编辑
                       alert(

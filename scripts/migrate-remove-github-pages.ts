@@ -1,7 +1,7 @@
 /**
  * Migration Script: Remove GitHub Pages Platform
  *
- * This script migrates all existing platform_sites_v2 records that use 'github_pages'
+ * This script migrates all existing platform_sites records that use 'github_pages'
  * to use 'netlify' or 'vercel' instead (for commercial content) or 'cf_pages' (for informational content).
  *
  * Run this script once to clean up legacy data after removing GitHub Pages support.
@@ -29,7 +29,7 @@ async function migrateGitHubPagesRecords() {
   try {
     // 1. Check how many github_pages records exist
     const countResult = await pool.query(
-      `SELECT COUNT(*) as count FROM platform_sites_v2 WHERE platform = 'github_pages'`
+      `SELECT COUNT(*) as count FROM platform_sites WHERE platform = 'github_pages'`
     );
     const count = parseInt(countResult.rows[0]?.count || '0');
 
@@ -43,7 +43,7 @@ async function migrateGitHubPagesRecords() {
     // 2. Get all github_pages sites with their content type
     const sitesResult = await pool.query(
       `SELECT id, site_name, content_type, status, repo_name
-       FROM platform_sites_v2
+       FROM platform_sites
        WHERE platform = 'github_pages'
        ORDER BY content_type, created_at`
     );
@@ -56,21 +56,21 @@ async function migrateGitHubPagesRecords() {
 
     // 3. Get available platform tokens for migration
     const netlifyTokens = await pool.query(
-      `SELECT id FROM platform_tokens_v2
+      `SELECT id FROM platform_tokens
        WHERE platform = 'netlify' AND status = 'active'
        ORDER BY usage_count ASC
        LIMIT 1`
     );
 
     const vercelTokens = await pool.query(
-      `SELECT id FROM platform_tokens_v2
+      `SELECT id FROM platform_tokens
        WHERE platform = 'vercel' AND status = 'active'
        ORDER BY usage_count ASC
        LIMIT 1`
     );
 
     const cfPagesTokens = await pool.query(
-      `SELECT id FROM platform_tokens_v2
+      `SELECT id FROM platform_tokens
        WHERE platform = 'cf_pages' AND status = 'active'
        ORDER BY usage_count ASC
        LIMIT 1`
@@ -122,7 +122,7 @@ async function migrateGitHubPagesRecords() {
 
         // Update the record
         await pool.query(
-          `UPDATE platform_sites_v2
+          `UPDATE platform_sites
            SET platform = $1, platform_token_id = $2, status = 'pending'
            WHERE id = $3`,
           [newPlatform, newPlatformTokenId, site.id]

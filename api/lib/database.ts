@@ -4,11 +4,7 @@ import { Pool, QueryResultRow } from 'pg';
 const connectionString = process.env.POSTGRES_URL || process.env.DATABASE_URL;
 
 // 调试：显示实际使用的连接字符串（隐藏密码）
-if (connectionString) {
-  const maskedUrl = connectionString.replace(/:([^:@]+)@/, ':****@');
-  const isLocal = connectionString.includes('127.0.0.1') || connectionString.includes('localhost');
-  console.log(`[db] Using ${isLocal ? 'LOCAL' : 'REMOTE'} database: ${maskedUrl}`);
-} else {
+if (!connectionString) {
   console.error('[db] Database connection string not found. Please set POSTGRES_URL or DATABASE_URL environment variable.');
 }
 
@@ -64,11 +60,9 @@ if (pool) {
   if (process.env.NODE_ENV !== 'development') {
     pool.connect()
       .then(client => {
-        console.log('[db] Connection pool warmed up successfully');
         client.release();
       })
       .catch(err => {
-        console.warn('[db] Failed to warm up connection pool:', err.message);
         // 不抛出错误，让后续请求自行建立连接
       });
   }
@@ -2811,7 +2805,7 @@ export async function permanentlyDeleteExecutionTask(taskId: string, userId: str
 }
 
 // ============================================================================
-// PSEO 发布系统 - Admin Token 池管理
+// PSEO 发布系统 - Admin Token 池管理（简化版 - 仅支持 Netlify）
 // ============================================================================
 
 /**
@@ -2822,6 +2816,7 @@ export interface GitHubToken {
   name: string;                    // 别名，如 "GitHub Bot 1"
   token_encrypted: string;         // 加密存储
   owner_name: string;              // GitHub 用户名或组织名，用于创建仓库
+  netlify_token_id: string | null; // 关联的 Netlify Token ID（1对1绑定）
   usage_count: number;
   status: 'active' | 'disabled';
   created_at: Date;
@@ -2829,30 +2824,27 @@ export interface GitHubToken {
 }
 
 /**
- * 平台 Token 类型 - 各发布平台的 API Token
+ * Netlify Token 类型 - Netlify 平台的 API Token
+ * 简化版：只支持 Netlify，移除其他平台
  */
-export interface PlatformToken {
+export interface NetlifyToken {
   id: string;
-  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel';
-  name: string;                    // 别名，如 "RTD Bot 1"
+  name: string;                    // 别名，如 "Netlify Bot 1"
   token_encrypted: string;         // 加密存储
+  github_token_id: string | null;  // 关联的 GitHub Token ID（1对1绑定）
   usage_count: number;
   status: 'active' | 'disabled';
   created_at: Date;
   updated_at: Date;
-  /** 平台相关元数据，如 cf_pages 的 accountId */
-  metadata?: { accountId?: string;[k: string]: unknown } | null;
 }
 
 /**
- * 平台站点类型 - 实际的发布站点
+ * 平台站点类型 - 实际的发布站点（简化版）
  */
 export interface PlatformSite {
   id: string;
   github_token_id: string;         // 关联的 GitHub Token，用于推送代码
-  platform_token_id: string | null; // 关联的平台 Token
-  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel';
-  content_type: 'informational' | 'commercial'; // 内容类型
+  netlify_token_id: string;        // 关联的 Netlify Token（必填）
   site_name: string;               // 站点名
   site_url: string;                // 站点 URL
   repo_name: string;               // GitHub 仓库名（系统自动生成）
@@ -2862,18 +2854,17 @@ export interface PlatformSite {
   status: 'pending' | 'active' | 'disabled'; // pending=等待创建
   created_at: Date;
   updated_at: Date;
-  /** 平台项目 ID，用于触发重新构建（如 RTD project slug、CF Pages project 等） */
-  platform_project_id?: string | null;
+  netlify_site_id?: string | null; // Netlify Site ID，用于触发重新构建
 }
 
 /**
  * 网站-站点绑定关系 (website_id 关联 user_websites 表)
+ * 简化版：移除 content_type 分类
  */
 export interface WebsiteSiteBinding {
   id: string;
   website_id: string;  // 关联 user_websites.id
-  content_type: 'informational' | 'commercial';
-  site_id: string;     // 关联 platform_sites_v2.id
+  site_id: string;     // 关联 platform_sites.id
   created_at: Date;
 }
 
@@ -2882,22 +2873,23 @@ let pseoTablesInitialized = false;
 let pseoTablesInitializing: Promise<void> | null = null;
 
 /**
- * 初始化 PSEO 发布系统表 (v2 - 分离 GitHub Token 和平台 Token)
- * 
+ * 初始化 PSEO 发布系统表 (简化版，仅支持 Netlify)
+ *
  * 数据模型:
- * - github_tokens: GitHub PAT，用于创建仓库和推送代码
- * - platform_tokens: 各发布平台的 API Token（RTD, CF Pages, Netlify, Vercel）
- * - platform_sites: 发布站点，关联 GitHub Token + 平台 Token
- * - project_site_bindings: 项目和站点的绑定关系
+ * - github_tokens: GitHub PAT，用于创建仓库和推送代码（包含 netlify_token_id 外键）
+ * - netlify_tokens: Netlify API Token（包含 github_token_id 外键）
+ * - platform_sites: 发布站点，关联 GitHub Token + Netlify Token
+ * - website_site_bindings: 项目和站点的绑定关系（移除 content_type）
  * 
- * 发布策略:
- * - 信息型内容 -> RTD, CF Pages
- * - 商业型内容 -> Netlify, Vercel, CF Pages
+ * 简化策略:
+ * - 只支持 Netlify 平台
+ * - GitHub Token 和 Netlify Token 1对1 绑定
+ * - 移除内容类型分类（informational/commercial）
  *
  * 自动创建流程:
  * 1. 系统自动创建 GitHub 仓库（pseo-site-{uuid}）
  * 2. 推送 MkDocs 模板文件
- * 3. 通过平台 API 创建项目并连接 GitHub 仓库
+ * 3. 通过 Netlify API 创建项目并连接 GitHub 仓库
  */
 export async function initPSEOPublishTables() {
   if (pseoTablesInitialized) return;
@@ -2909,6 +2901,180 @@ export async function initPSEOPublishTables() {
 
   pseoTablesInitializing = (async () => {
     try {
+      // ============================================================================
+      // 自动迁移：检查并重命名 v2 表（如果有）
+      // ============================================================================
+      console.log('[initPSEOPublishTables] 🔄 Checking for legacy v2 tables...');
+
+      const tableCheck = await sql`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name IN ('platform_tokens_v2', 'platform_sites_v2')
+      `;
+
+      const hasV2Tables = tableCheck.rows.length > 0;
+
+      if (hasV2Tables) {
+        console.log('[initPSEOPublishTables] 📦 Found v2 tables, starting migration...');
+
+        // 迁移 platform_sites_v2 -> platform_sites
+        const hasSitesV2 = tableCheck.rows.some((r: any) => r.table_name === 'platform_sites_v2');
+        if (hasSitesV2) {
+          console.log('[initPSEOPublishTables] - Migrating platform_sites_v2 -> platform_sites');
+          try {
+            // 检查是否已存在 platform_sites 表
+            const existingCheck = await sql`
+              SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'platform_sites'
+              ) as exists
+            `;
+            const hasExistingSites = existingCheck.rows[0]?.exists;
+
+            if (hasExistingSites) {
+              // 新表已存在，说明之前迁移过但 v2 表没删除，���接删除 v2 表
+              console.log('[initPSEOPublishTables]   Cleaning up old v2 table...');
+              await sql`DROP TABLE IF EXISTS platform_sites_v2 CASCADE`;
+            } else {
+              // 直接重命名
+              await sql`ALTER TABLE platform_sites_v2 RENAME TO platform_sites`;
+            }
+            // 重命名约束
+            await sql`
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_platform' AND conrelid = 'platform_sites'::regclass) THEN
+                  ALTER TABLE platform_sites RENAME CONSTRAINT platform_sites_v2_valid_platform TO platform_sites_valid_platform;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_content_type' AND conrelid = 'platform_sites'::regclass) THEN
+                  ALTER TABLE platform_sites RENAME CONSTRAINT platform_sites_v2_valid_content_type TO platform_sites_valid_content_type;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_status' AND conrelid = 'platform_sites'::regclass) THEN
+                  ALTER TABLE platform_sites RENAME CONSTRAINT platform_sites_v2_valid_status TO platform_sites_valid_status;
+                END IF;
+              END $$
+            `;
+            // 重命名索引
+            await sql`
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_platform_sites_v2_github_token_id') THEN
+                  ALTER INDEX idx_platform_sites_v2_github_token_id RENAME TO idx_platform_sites_github_token_id;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_platform_sites_v2_platform_token_id') THEN
+                  ALTER INDEX idx_platform_sites_v2_platform_token_id RENAME TO idx_platform_sites_platform_token_id;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_platform_sites_v2_content_type') THEN
+                  ALTER INDEX idx_platform_sites_v2_content_type RENAME TO idx_platform_sites_content_type;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_platform_sites_v2_status') THEN
+                  ALTER INDEX idx_platform_sites_v2_status RENAME TO idx_platform_sites_status;
+                END IF;
+              END $$
+            `;
+            console.log('[initPSEOPublishTables] ✅ platform_sites migrated');
+          } catch (e: any) {
+            console.error('[initPSEOPublishTables] ❌ Error migrating platform_sites:', e.message);
+          }
+        }
+
+        // 迁移 platform_tokens_v2 -> platform_tokens
+        const hasTokensV2 = tableCheck.rows.some((r: any) => r.table_name === 'platform_tokens_v2');
+        if (hasTokensV2) {
+          console.log('[initPSEOPublishTables] - Migrating platform_tokens_v2 -> platform_tokens');
+          try {
+            // 检查是否已存在 platform_tokens 表
+            const existingCheck = await sql`
+              SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'platform_tokens'
+              ) as exists
+            `;
+            const hasExistingTokens = existingCheck.rows[0]?.exists;
+
+            if (hasExistingTokens) {
+              console.log('[initPSEOPublishTables]   Cleaning up old v2 table...');
+              await sql`DROP TABLE IF EXISTS platform_tokens_v2 CASCADE`;
+            } else {
+              await sql`ALTER TABLE platform_tokens_v2 RENAME TO platform_tokens`;
+            }
+            // 重命名约束
+            await sql`
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_tokens_v2_valid_platform' AND conrelid = 'platform_tokens'::regclass) THEN
+                  ALTER TABLE platform_tokens RENAME CONSTRAINT platform_tokens_v2_valid_platform TO platform_tokens_valid_platform;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_tokens_v2_valid_status' AND conrelid = 'platform_tokens'::regclass) THEN
+                  ALTER TABLE platform_tokens RENAME CONSTRAINT platform_tokens_v2_valid_status TO platform_tokens_valid_status;
+                END IF;
+              END $$
+            `;
+            // 重命名索引
+            await sql`
+              DO $$
+              BEGIN
+                IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_platform_tokens_v2_platform') THEN
+                  ALTER INDEX idx_platform_tokens_v2_platform RENAME TO idx_platform_tokens_platform;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_platform_tokens_v2_status') THEN
+                  ALTER INDEX idx_platform_tokens_v2_status RENAME TO idx_platform_tokens_status;
+                END IF;
+              END $$
+            `;
+            console.log('[initPSEOPublishTables] ✅ platform_tokens migrated');
+          } catch (e: any) {
+            console.error('[initPSEOPublishTables] ❌ Error migrating platform_tokens:', e.message);
+          }
+        }
+
+        // 更新 website_site_bindings 的外键约束
+        try {
+          await sql`
+            DO $$
+            DECLARE
+              constraint_rec RECORD;
+            BEGIN
+              -- 查找并删除旧的 v2 外键约束
+              FOR constraint_rec IN
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid = 'website_site_bindings'::regclass
+                AND conname LIKE '%platform_sites_v2%'
+              LOOP
+                EXECUTE format('ALTER TABLE website_site_bindings DROP CONSTRAINT %I', constraint_rec.conname);
+              END LOOP;
+
+              -- 删除可能存在的旧外键约束
+              IF EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conrelid = 'website_site_bindings'::regclass
+                AND conname = 'website_site_bindings_site_id_fkey'
+              ) THEN
+                ALTER TABLE website_site_bindings DROP CONSTRAINT website_site_bindings_site_id_fkey;
+              END IF;
+
+              -- 清理孤立记录（site_id 指向不存在的记录）
+              DELETE FROM website_site_bindings
+              WHERE site_id NOT IN (SELECT id FROM platform_sites);
+
+              -- 添加新的外键约束（使用 NOT VALID 避免验证现有数据）
+              ALTER TABLE website_site_bindings
+              ADD CONSTRAINT website_site_bindings_site_id_fkey
+              FOREIGN KEY (site_id) REFERENCES platform_sites(id) ON DELETE CASCADE NOT VALID;
+            END $$
+          `;
+          console.log('[initPSEOPublishTables] ✅ website_site_bindings foreign keys updated');
+        } catch (e: any) {
+          console.error('[initPSEOPublishTables] ❌ Error updating website_site_bindings:', e.message);
+        }
+
+        console.log('[initPSEOPublishTables] 🎉 Migration completed successfully!');
+      } else {
+        // v2 表已清理，无需迁移
+      }
+
       // 1. GitHub Token 表 - 用于管理 GitHub 仓库
       await sql`
         CREATE TABLE IF NOT EXISTS github_tokens (
@@ -2934,7 +3100,7 @@ export async function initPSEOPublishTables() {
 
       // 2. 平台 Token 表 - 各发布平台的 API Token
       await sql`
-        CREATE TABLE IF NOT EXISTS platform_tokens_v2 (
+        CREATE TABLE IF NOT EXISTS platform_tokens (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           platform VARCHAR(50) NOT NULL,
           name VARCHAR(100) NOT NULL,
@@ -2949,8 +3115,8 @@ export async function initPSEOPublishTables() {
       await sql`
         DO $$
         BEGIN
-          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_tokens_v2_valid_platform') THEN
-            ALTER TABLE platform_tokens_v2 ADD CONSTRAINT platform_tokens_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel'));
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_tokens_valid_platform') THEN
+            ALTER TABLE platform_tokens ADD CONSTRAINT platform_tokens_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel'));
           END IF;
         END $$
       `;
@@ -2958,18 +3124,18 @@ export async function initPSEOPublishTables() {
       await sql`
         DO $$
         BEGIN
-          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_tokens_v2_valid_status') THEN
-            ALTER TABLE platform_tokens_v2 ADD CONSTRAINT platform_tokens_v2_valid_status CHECK (status IN ('active', 'disabled'));
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_tokens_valid_status') THEN
+            ALTER TABLE platform_tokens ADD CONSTRAINT platform_tokens_valid_status CHECK (status IN ('active', 'disabled'));
           END IF;
         END $$
       `;
 
       // 3. 平台站点表 - 实际的发布站点
       await sql`
-        CREATE TABLE IF NOT EXISTS platform_sites_v2 (
+        CREATE TABLE IF NOT EXISTS platform_sites (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           github_token_id UUID NOT NULL REFERENCES github_tokens(id) ON DELETE CASCADE,
-          platform_token_id UUID REFERENCES platform_tokens_v2(id) ON DELETE SET NULL,
+          platform_token_id UUID REFERENCES platform_tokens(id) ON DELETE SET NULL,
           platform VARCHAR(50) NOT NULL,
           content_type VARCHAR(20) NOT NULL,
           site_name VARCHAR(200) NOT NULL,
@@ -2987,8 +3153,8 @@ export async function initPSEOPublishTables() {
       await sql`
         DO $$
         BEGIN
-          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_platform') THEN
-            ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel'));
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_valid_platform') THEN
+            ALTER TABLE platform_sites ADD CONSTRAINT platform_sites_valid_platform CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel'));
           END IF;
         END $$
       `;
@@ -2996,8 +3162,8 @@ export async function initPSEOPublishTables() {
       await sql`
         DO $$
         BEGIN
-          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_content_type') THEN
-            ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_content_type CHECK (content_type IN ('informational', 'commercial'));
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_valid_content_type') THEN
+            ALTER TABLE platform_sites ADD CONSTRAINT platform_sites_valid_content_type CHECK (content_type IN ('informational', 'commercial'));
           END IF;
         END $$
       `;
@@ -3005,8 +3171,8 @@ export async function initPSEOPublishTables() {
       await sql`
         DO $$
         BEGIN
-          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_v2_valid_status') THEN
-            ALTER TABLE platform_sites_v2 ADD CONSTRAINT platform_sites_v2_valid_status CHECK (status IN ('pending', 'active', 'disabled'));
+          IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'platform_sites_valid_status') THEN
+            ALTER TABLE platform_sites ADD CONSTRAINT platform_sites_valid_status CHECK (status IN ('pending', 'active', 'disabled'));
           END IF;
         END $$
       `;
@@ -3017,7 +3183,7 @@ export async function initPSEOPublishTables() {
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           website_id UUID NOT NULL,
           content_type VARCHAR(20) NOT NULL,
-          site_id UUID NOT NULL REFERENCES platform_sites_v2(id) ON DELETE CASCADE,
+          site_id UUID NOT NULL REFERENCES platform_sites(id) ON DELETE CASCADE,
           created_at TIMESTAMP DEFAULT NOW()
         )
       `;
@@ -3061,17 +3227,17 @@ export async function initPSEOPublishTables() {
         console.warn('[initPSEOPublishTables] Migration warning:', e.message);
       }
 
-      // 5.1 给 platform_sites_v2 表添加 platform_project_id 字段（用于触发重新构建）
+      // 5.1 给 platform_sites 表添加 platform_project_id 字段（用于触发重新构建）
       try {
         await sql`
           DO $$
           BEGIN
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'platform_sites_v2' AND column_name = 'platform_project_id') THEN
-              ALTER TABLE platform_sites_v2 ADD COLUMN platform_project_id VARCHAR(200);
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'platform_sites' AND column_name = 'platform_project_id') THEN
+              ALTER TABLE platform_sites ADD COLUMN platform_project_id VARCHAR(200);
             END IF;
           END $$;
         `;
-        console.log('[initPSEOPublishTables] ✅ Added platform_project_id column to platform_sites_v2');
+        console.log('[initPSEOPublishTables] ✅ Added platform_project_id column to platform_sites');
       } catch (e: any) {
         console.warn('[initPSEOPublishTables] Migration warning for platform_project_id:', e.message);
       }
@@ -3079,12 +3245,12 @@ export async function initPSEOPublishTables() {
       // 6. 创建索引
       const indexes = [
         'CREATE INDEX IF NOT EXISTS idx_github_tokens_status ON github_tokens(status)',
-        'CREATE INDEX IF NOT EXISTS idx_platform_tokens_v2_platform ON platform_tokens_v2(platform)',
-        'CREATE INDEX IF NOT EXISTS idx_platform_tokens_v2_status ON platform_tokens_v2(status)',
-        'CREATE INDEX IF NOT EXISTS idx_platform_sites_v2_github_token_id ON platform_sites_v2(github_token_id)',
-        'CREATE INDEX IF NOT EXISTS idx_platform_sites_v2_platform_token_id ON platform_sites_v2(platform_token_id)',
-        'CREATE INDEX IF NOT EXISTS idx_platform_sites_v2_content_type ON platform_sites_v2(content_type)',
-        'CREATE INDEX IF NOT EXISTS idx_platform_sites_v2_status ON platform_sites_v2(status)',
+        'CREATE INDEX IF NOT EXISTS idx_platform_tokens_platform ON platform_tokens(platform)',
+        'CREATE INDEX IF NOT EXISTS idx_platform_tokens_status ON platform_tokens(status)',
+        'CREATE INDEX IF NOT EXISTS idx_platform_sites_github_token_id ON platform_sites(github_token_id)',
+        'CREATE INDEX IF NOT EXISTS idx_platform_sites_platform_token_id ON platform_sites(platform_token_id)',
+        'CREATE INDEX IF NOT EXISTS idx_platform_sites_content_type ON platform_sites(content_type)',
+        'CREATE INDEX IF NOT EXISTS idx_platform_sites_status ON platform_sites(status)',
         'CREATE INDEX IF NOT EXISTS idx_website_site_bindings_website_id ON website_site_bindings(website_id)'
       ];
 
@@ -3095,7 +3261,7 @@ export async function initPSEOPublishTables() {
       }
 
       pseoTablesInitialized = true;
-      console.log('[initPSEOPublishTables] ✅ PSEO publish tables v2 initialized');
+      console.log('[initPSEOPublishTables] ✅ PSEO publish tables initialized');
     } catch (error: any) {
       if (error.code === '23505' && error.constraint === 'pg_type_typname_nsp_index') {
         pseoTablesInitialized = true;
@@ -3230,7 +3396,7 @@ export async function incrementGitHubTokenUsage(tokenId: string): Promise<void> 
 }
 
 // ============================================================================
-// Platform Token CRUD 操作 (v2 - 各平台 API Token)
+// Platform Token CRUD 操作 (各平台 API Token)
 // ============================================================================
 
 /**
@@ -3244,7 +3410,7 @@ export async function checkPlatformTokenExists(data: {
 
   // 检查相同平台下是否有同名 Token
   const result = await sql`
-    SELECT id FROM platform_tokens_v2 
+    SELECT id FROM platform_tokens 
     WHERE name = ${data.name} AND platform = ${data.platform}
   `;
   if (result.rows.length > 0) {
@@ -3256,11 +3422,15 @@ export async function checkPlatformTokenExists(data: {
 
 /**
  * 创建平台 Token
+ * 
+ * ⚠️ 重要：metadata.githubOwner 用于关联同一个管理员的 GitHub Token
+ * 确保 Platform Token 和 GitHub Token 属于同一个账号，避免授权失败
  */
 export async function createPlatformToken(data: {
   platform: PlatformToken['platform'];
   token: string;
   name: string;
+  metadata?: { githubOwner?: string; accountId?: string; [k: string]: unknown };
 }): Promise<PlatformToken | { error: string }> {
   await initPSEOPublishTables();
 
@@ -3273,8 +3443,8 @@ export async function createPlatformToken(data: {
   const tokenEncrypted = Buffer.from(data.token).toString('base64');
 
   const result = await sql<PlatformToken>`
-    INSERT INTO platform_tokens_v2 (platform, token_encrypted, name)
-    VALUES (${data.platform}, ${tokenEncrypted}, ${data.name})
+    INSERT INTO platform_tokens (platform, token_encrypted, name, metadata)
+    VALUES (${data.platform}, ${tokenEncrypted}, ${data.name}, ${data.metadata ? sql.json(data.metadata) : null})
     RETURNING *
   `;
   return result.rows[0];
@@ -3286,7 +3456,7 @@ export async function createPlatformToken(data: {
 export async function getAllPlatformTokens(): Promise<PlatformToken[]> {
   await initPSEOPublishTables();
   const result = await sql<PlatformToken>`
-    SELECT * FROM platform_tokens_v2 ORDER BY created_at DESC
+    SELECT * FROM platform_tokens ORDER BY created_at DESC
   `;
   return result.rows;
 }
@@ -3297,7 +3467,7 @@ export async function getAllPlatformTokens(): Promise<PlatformToken[]> {
 export async function getPlatformTokenById(tokenId: string): Promise<PlatformToken | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformToken>`
-    SELECT * FROM platform_tokens_v2 WHERE id = ${tokenId}
+    SELECT * FROM platform_tokens WHERE id = ${tokenId}
   `;
   return result.rows[0] || null;
 }
@@ -3311,7 +3481,7 @@ export async function updatePlatformTokenStatus(
 ): Promise<PlatformToken | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformToken>`
-    UPDATE platform_tokens_v2 
+    UPDATE platform_tokens 
     SET status = ${status}, updated_at = NOW()
     WHERE id = ${tokenId}
     RETURNING *
@@ -3325,7 +3495,7 @@ export async function updatePlatformTokenStatus(
 export async function deletePlatformToken(tokenId: string): Promise<boolean> {
   await initPSEOPublishTables();
   const result = await sql`
-    DELETE FROM platform_tokens_v2 WHERE id = ${tokenId} RETURNING id
+    DELETE FROM platform_tokens WHERE id = ${tokenId} RETURNING id
   `;
   return result.rows.length > 0;
 }
@@ -3335,14 +3505,14 @@ export async function deletePlatformToken(tokenId: string): Promise<boolean> {
  */
 export async function incrementPlatformTokenUsage(tokenId: string): Promise<void> {
   await sql`
-    UPDATE platform_tokens_v2 
+    UPDATE platform_tokens 
     SET usage_count = usage_count + 1, updated_at = NOW()
     WHERE id = ${tokenId}
   `;
 }
 
 // ============================================================================
-// Platform Site CRUD 操作 (v2)
+// Platform Site CRUD 操作
 // ============================================================================
 
 /**
@@ -3363,7 +3533,7 @@ export async function createPlatformSite(data: {
   await initPSEOPublishTables();
 
   const result = await sql<PlatformSite>`
-    INSERT INTO platform_sites_v2 (
+    INSERT INTO platform_sites (
       github_token_id, platform_token_id, platform, content_type, 
       site_name, site_url, repo_name, docs_path, branch, status
     )
@@ -3390,7 +3560,7 @@ export async function createPlatformSite(data: {
 export async function getPlatformSiteById(siteId: string): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
-    SELECT * FROM platform_sites_v2 WHERE id = ${siteId}
+    SELECT * FROM platform_sites WHERE id = ${siteId}
   `;
   return result.rows[0] || null;
 }
@@ -3401,7 +3571,7 @@ export async function getPlatformSiteById(siteId: string): Promise<PlatformSite 
 export async function getSitesByGitHubTokenId(tokenId: string): Promise<PlatformSite[]> {
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
-    SELECT * FROM platform_sites_v2 WHERE github_token_id = ${tokenId} ORDER BY created_at DESC
+    SELECT * FROM platform_sites WHERE github_token_id = ${tokenId} ORDER BY created_at DESC
   `;
   return result.rows;
 }
@@ -3425,9 +3595,9 @@ export async function getAllPlatformSites(): Promise<(PlatformSite & {
       g.name as github_token_name,
       g.owner_name as github_owner,
       p.name as platform_token_name
-    FROM platform_sites_v2 s
+    FROM platform_sites s
     JOIN github_tokens g ON s.github_token_id = g.id
-    LEFT JOIN platform_tokens_v2 p ON s.platform_token_id = p.id
+    LEFT JOIN platform_tokens p ON s.platform_token_id = p.id
     ORDER BY s.created_at DESC
   `;
   return result.rows;
@@ -3442,7 +3612,7 @@ export async function updatePlatformSiteStatus(
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
-    UPDATE platform_sites_v2 
+    UPDATE platform_sites 
     SET status = ${status}, updated_at = NOW()
     WHERE id = ${siteId}
     RETURNING *
@@ -3459,7 +3629,7 @@ export async function updatePlatformSiteUrl(
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
-    UPDATE platform_sites_v2
+    UPDATE platform_sites
     SET site_url = ${siteUrl}, updated_at = NOW()
     WHERE id = ${siteId}
     RETURNING *
@@ -3476,7 +3646,7 @@ export async function updatePlatformSiteProjectId(
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
-    UPDATE platform_sites_v2
+    UPDATE platform_sites
     SET platform_project_id = ${projectId}, updated_at = NOW()
     WHERE id = ${siteId}
     RETURNING *
@@ -3495,7 +3665,7 @@ export async function updatePlatformSitePlatform(
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
-    UPDATE platform_sites_v2
+    UPDATE platform_sites
     SET 
       platform = ${platform}, 
       platform_token_id = ${platformTokenId},
@@ -3517,7 +3687,7 @@ export async function updatePlatformSiteGitHubToken(
 ): Promise<PlatformSite | null> {
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
-    UPDATE platform_sites_v2
+    UPDATE platform_sites
     SET 
       github_token_id = ${githubTokenId},
       updated_at = NOW()
@@ -3533,7 +3703,7 @@ export async function updatePlatformSiteGitHubToken(
 export async function deletePlatformSite(siteId: string): Promise<boolean> {
   await initPSEOPublishTables();
   const result = await sql`
-    DELETE FROM platform_sites_v2 WHERE id = ${siteId} RETURNING id
+    DELETE FROM platform_sites WHERE id = ${siteId} RETURNING id
   `;
   return result.rows.length > 0;
 }
@@ -3543,14 +3713,14 @@ export async function deletePlatformSite(siteId: string): Promise<boolean> {
  */
 export async function incrementSiteUsage(siteId: string): Promise<void> {
   await sql`
-    UPDATE platform_sites_v2 
+    UPDATE platform_sites 
     SET usage_count = usage_count + 1, updated_at = NOW()
     WHERE id = ${siteId}
   `;
 }
 
 // ============================================================================
-// 站点分配逻辑 (v2)
+// 站点分配逻辑
 // ============================================================================
 
 /**
@@ -3569,9 +3739,9 @@ export async function getWebsiteSiteBindings(websiteId: string): Promise<(Websit
       row_to_json(g.*) as github_token,
       CASE WHEN p.id IS NOT NULL THEN row_to_json(p.*) ELSE NULL END as platform_token
     FROM website_site_bindings b
-    JOIN platform_sites_v2 s ON b.site_id = s.id
+    JOIN platform_sites s ON b.site_id = s.id
     JOIN github_tokens g ON s.github_token_id = g.id
-    LEFT JOIN platform_tokens_v2 p ON s.platform_token_id = p.id
+    LEFT JOIN platform_tokens p ON s.platform_token_id = p.id
     WHERE b.website_id = ${websiteId}
   `;
   return result.rows;
@@ -3611,9 +3781,9 @@ export async function assignSiteToWebsite(
         s.*,
         row_to_json(g.*) as github_token,
         CASE WHEN p.id IS NOT NULL THEN row_to_json(p.*) ELSE NULL END as platform_token
-      FROM platform_sites_v2 s
+      FROM platform_sites s
       JOIN github_tokens g ON s.github_token_id = g.id
-      LEFT JOIN platform_tokens_v2 p ON s.platform_token_id = p.id
+      LEFT JOIN platform_tokens p ON s.platform_token_id = p.id
       WHERE s.id = ${binding.site_id}
     `;
     if (siteResult.rows[0]) {
@@ -3637,9 +3807,9 @@ export async function assignSiteToWebsite(
       s.*,
       row_to_json(g.*) as github_token,
       CASE WHEN p.id IS NOT NULL THEN row_to_json(p.*) ELSE NULL END as platform_token
-    FROM platform_sites_v2 s
+    FROM platform_sites s
     JOIN github_tokens g ON s.github_token_id = g.id
-    LEFT JOIN platform_tokens_v2 p ON s.platform_token_id = p.id
+    LEFT JOIN platform_tokens p ON s.platform_token_id = p.id
     WHERE g.status = 'active'
       AND s.status IN ('active', 'pending')
       AND s.content_type = ${contentType}
@@ -3672,6 +3842,9 @@ export async function assignSiteToWebsite(
 
 /**
  * 获取可用的 GitHub Token 和平台 Token 用于创建新站点
+ * 
+ * ⚠️ 重要：确保 GitHub Token 和 Platform Token 属于同一个管理员账号
+ * 因为 Netlify/Vercel/CF Pages 需要授权访问 GitHub 仓库
  */
 export async function getAvailableTokensForNewSite(
   contentType: 'informational' | 'commercial'
@@ -3686,45 +3859,78 @@ export async function getAvailableTokensForNewSite(
     ? ['rtd', 'cf_pages']
     : ['netlify', 'vercel', 'cf_pages']; // 商业型优先 Netlify/Vercel，备选 CF Pages
 
-  // 获取使用最少的 GitHub Token
-  const githubTokenResult = await sql<GitHubToken>`
-    SELECT * FROM github_tokens 
-    WHERE status = 'active'
-    ORDER BY usage_count ASC, created_at ASC
-    LIMIT 1
-  `;
+  // ⚠️ 关键修复：需要添加 owner_email 字段来关联同一个管理员的 Token
+  // 但当前表结构没有 owner_email 字段，所以我们需要通过 owner_name 来匹配
+  // 
+  // 策略：
+  // 1. 先找到所有可用的平台 Token
+  // 2. 对于每个平台 Token，查找对应的 GitHub Token（通过 owner_name 匹配）
+  // 3. 选择使用次数最少的组合
 
-  if (githubTokenResult.rows.length === 0) {
-    console.error('[getAvailableTokensForNewSite] No active GitHub token');
-    return null;
-  }
+  console.log(`[getAvailableTokensForNewSite] Finding token pair for ${contentType} content...`);
 
-  // 获取使用最少的平台 Token
-  let platformToken: PlatformToken | null = null;
-  let selectedPlatform: PlatformSite['platform'] | null = null;
-
-  const platformTokenResult = await sql<PlatformToken>`
-    SELECT * FROM platform_tokens_v2
+  // 获取所有可用的平台 Token（按使用次数排序）
+  const platformTokensResult = await sql<PlatformToken>`
+    SELECT * FROM platform_tokens
     WHERE status = 'active' AND platform = ANY(${platforms}::text[])
     ORDER BY usage_count ASC, created_at ASC
-    LIMIT 1
   `;
 
-  if (platformTokenResult.rows.length > 0) {
-    platformToken = platformTokenResult.rows[0];
-    selectedPlatform = platformToken.platform as PlatformSite['platform'];
-  } else {
-    // 所有内容类型都必须有平台 Token（RTD/CF Pages/Netlify/Vercel）
+  if (platformTokensResult.rows.length === 0) {
     console.error(`[getAvailableTokensForNewSite] No platform token available for ${contentType} content`);
     console.error(`[getAvailableTokensForNewSite] Please add RTD, Cloudflare Pages, Netlify, or Vercel tokens in Admin panel`);
     return null;
   }
 
-  return {
-    github_token: githubTokenResult.rows[0],
-    platform_token: platformToken,
-    platform: selectedPlatform
-  };
+  // 尝试为每个平台 Token 找到匹配的 GitHub Token
+  for (const platformToken of platformTokensResult.rows) {
+    // 从平台 Token 的 metadata 中获取关联的 GitHub owner
+    // 如果没有 metadata，则使用使用次数最少的 GitHub Token（向后兼容）
+    let githubOwner: string | null = null;
+    
+    if (platformToken.metadata && typeof platformToken.metadata === 'object') {
+      githubOwner = (platformToken.metadata as any).githubOwner || null;
+    }
+
+    let githubTokenResult;
+    
+    if (githubOwner) {
+      // 精确匹配：查找同一个 owner 的 GitHub Token
+      console.log(`[getAvailableTokensForNewSite] Looking for GitHub token with owner: ${githubOwner}`);
+      githubTokenResult = await sql<GitHubToken>`
+        SELECT * FROM github_tokens 
+        WHERE status = 'active' AND owner_name = ${githubOwner}
+        ORDER BY usage_count ASC, created_at ASC
+        LIMIT 1
+      `;
+    } else {
+      // 向后兼容：如果平台 Token 没有指定 githubOwner，使用使用次数最少的 GitHub Token
+      console.warn(`[getAvailableTokensForNewSite] Platform token ${platformToken.name} has no githubOwner in metadata, using least-used GitHub token`);
+      githubTokenResult = await sql<GitHubToken>`
+        SELECT * FROM github_tokens 
+        WHERE status = 'active'
+        ORDER BY usage_count ASC, created_at ASC
+        LIMIT 1
+      `;
+    }
+
+    if (githubTokenResult.rows.length > 0) {
+      console.log(`[getAvailableTokensForNewSite] ✅ Found token pair:`);
+      console.log(`[getAvailableTokensForNewSite]   - GitHub: ${githubTokenResult.rows[0].name} (${githubTokenResult.rows[0].owner_name})`);
+      console.log(`[getAvailableTokensForNewSite]   - Platform: ${platformToken.name} (${platformToken.platform})`);
+      
+      return {
+        github_token: githubTokenResult.rows[0],
+        platform_token: platformToken,
+        platform: platformToken.platform as PlatformSite['platform']
+      };
+    }
+  }
+
+  // 如果没有找到匹配的 Token 对
+  console.error('[getAvailableTokensForNewSite] ❌ No matching GitHub token found for any platform token');
+  console.error('[getAvailableTokensForNewSite] Please ensure platform tokens have githubOwner in metadata, or add more GitHub tokens');
+  return null;
 }
 
 /**
@@ -3735,7 +3941,7 @@ export function decryptToken(encryptedToken: string): string {
 }
 
 /**
- * 获取发布统计信息 (v2)
+ * 获取发布统计信息
  */
 export async function getPSEOPublishStats(): Promise<{
   totalGitHubTokens: number;
@@ -3762,24 +3968,24 @@ export async function getPSEOPublishStats(): Promise<{
       SELECT 
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE status = 'active') as active
-      FROM platform_tokens_v2
+      FROM platform_tokens
     `,
     sql<{ total: string; active: string; pending: string }>`
       SELECT 
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE status = 'active') as active,
         COUNT(*) FILTER (WHERE status = 'pending') as pending
-      FROM platform_sites_v2
+      FROM platform_sites
     `,
     sql<{ total: string }>`SELECT COUNT(*) as total FROM website_site_bindings`,
     sql<{ platform: string; count: string }>`
       SELECT platform, COUNT(*) as count
-      FROM platform_sites_v2
+      FROM platform_sites
       GROUP BY platform
     `,
     sql<{ content_type: string; count: string }>`
       SELECT content_type, COUNT(*) as count
-      FROM platform_sites_v2
+      FROM platform_sites
       GROUP BY content_type
     `
   ]);

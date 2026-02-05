@@ -259,7 +259,10 @@ export const WebsiteArticlesManager: React.FC<WebsiteArticlesManagerProps> = ({
       />
 
       {/* Main Content */}
-      <div className="px-6 py-6 space-y-6">
+      <div className={cn(
+        "px-6 py-6 space-y-6 transition-all duration-300",
+        state.selectedArticles.length > 0 && "pb-32"
+      )}>
         {/* Toolbar */}
         <div className="flex items-center justify-between gap-4">
           {/* Search */}

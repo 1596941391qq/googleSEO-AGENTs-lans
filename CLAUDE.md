@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **GEO/AIO Optimization**: Geographic and AI-engine specific content optimization
 - **Image Generation**: Nano Banana 2 integration for high-quality, low-cost 4K images
 - **Fast/Slow Knife Publication Strategy**: Experimental content → Winner selection → URL inheritance
-- **High-Trust Platform Carriers**: Read the Docs, GitHub Pages, GitLab Pages, Cloudflare Pages
+- **High-Trust Platform Carriers**: Cloudflare Pages, Netlify, Vercel
 
 ## Architecture
 
@@ -151,10 +151,11 @@ All API endpoints are in `/api` directory and follow Vercel serverless function 
 
 The following features are described in documentation but not yet implemented:
 
-**Publication System - RTD via GitHub** (MVP Implemented ✅):
-- ✅ MkDocs + Read the Docs publishing via GitHub API
+**Publication System - Multi-Platform** (Implemented ✅):
+- ✅ MkDocs publishing to Cloudflare Pages/Netlify/Vercel
+- ✅ Automated GitHub repository creation and management
+- ✅ Platform-specific deployment triggers
 - ✅ Fast/Slow knife URL paths (/lab/, /guide/, /compare/, /tool/)
-- ✅ HTML to Markdown conversion
 - ✅ Internal link generation (单向漏斗原则)
 - ⏳ Ranking tracking and winner selection (TODO)
 - ⏳ URL inheritance via 301/Canonical (TODO)
@@ -254,83 +255,131 @@ VITE_MAIN_APP_URL=http://localhost:3000
 
 **Note**: The actual implementation uses a unified `/api/seo-agent` endpoint rather than separate agent/pipeline endpoints. The 4-phase workshop approach is implemented within the existing API structure.
 
-### Database Schema (To Be Implemented)
+### Database Schema (Implemented Tables)
+
+The following tables are actually implemented in the system:
+
+#### Content & Publication Tables
 
 ```sql
--- Keywords & Projects
-CREATE TABLE projects (
+-- Published articles (article storage with publication metadata)
+CREATE TABLE published_articles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id INTEGER REFERENCES users(id),
-  name VARCHAR(255) NOT NULL,
-  seed_keyword VARCHAR(500),
-  target_language VARCHAR(10),
+  user_id UUID NOT NULL,
+  title VARCHAR(500) NOT NULL,
+  content TEXT NOT NULL,
+  images JSONB, -- Array of image objects
+  keyword VARCHAR(500),
+  tone VARCHAR(100),
+  visual_style VARCHAR(100),
+  target_audience VARCHAR(100),
+  target_market VARCHAR(100),
+  status VARCHAR(50), -- draft, published, failed
   created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE keywords (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID REFERENCES projects(id),
-  keyword VARCHAR(500) NOT NULL,
-  translation VARCHAR(500),
-  intent VARCHAR(50),
-  volume INTEGER,
-  probability VARCHAR(20),
-  is_selected BOOLEAN DEFAULT false,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Content & Versions
-CREATE TABLE content_drafts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID REFERENCES projects(id),
-  keyword_id UUID REFERENCES keywords(id),
-  title VARCHAR(500),
-  content TEXT,
-  meta_description TEXT,
-  url_slug VARCHAR(500),
-  version INTEGER DEFAULT 1,
-  status VARCHAR(50), -- draft, reviewing, approved, published
-  quality_score INTEGER,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
-
--- Images & Assets
-CREATE TABLE images (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  content_draft_id UUID REFERENCES content_drafts(id),
-  prompt TEXT,
-  image_url VARCHAR(1000),
-  alt_text VARCHAR(500),
-  position INTEGER, -- Order in article
-  metadata JSONB, -- Storage EXIF, dimensions, etc.
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Publications
-CREATE TABLE publications (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  content_draft_id UUID REFERENCES content_drafts(id),
-  platform VARCHAR(100), -- wordpress, medium, ghost, etc.
-  platform_post_id VARCHAR(255),
-  post_url VARCHAR(1000),
-  status VARCHAR(50), -- pending, published, failed
+  updated_at TIMESTAMP DEFAULT NOW(),
   published_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW()
+  url_slug VARCHAR(500),
+  website_id UUID REFERENCES user_websites(id),
+  content_type VARCHAR(20), -- 'informational' | 'commercial'
+  site_id UUID REFERENCES platform_sites(id)
 );
 
--- Ranking Tracking
-CREATE TABLE ranking_records (
+-- Execution tasks (background task tracking)
+CREATE TABLE execution_tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  keyword_id UUID REFERENCES keywords(id),
-  publication_id UUID REFERENCES publications(id),
-  search_engine VARCHAR(50), -- google, chatgpt, claude, perplexity
-  position INTEGER,
-  traffic INTEGER,
-  recorded_at TIMESTAMP DEFAULT NOW()
+  user_id UUID NOT NULL,
+  type VARCHAR(100), -- 'article-generator', 'keyword-mining', etc.
+  status VARCHAR(50), -- pending, running, completed, failed
+  state JSONB, -- Task state and results
+  params JSONB, -- Input parameters
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- User websites
+CREATE TABLE user_websites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  website_domain VARCHAR(255) NOT NULL,
+  website_url VARCHAR(500) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
 );
 ```
+
+#### PSEO Platform Management Tables
+
+```sql
+-- GitHub tokens (repository management)
+CREATE TABLE github_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) NOT NULL UNIQUE,
+  token_encrypted TEXT NOT NULL,
+  owner_name VARCHAR(100) NOT NULL,
+  usage_count INT DEFAULT 0,
+  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Platform tokens (RTD, Netlify, Vercel, CF Pages)
+CREATE TABLE platform_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  platform VARCHAR(50) NOT NULL CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel')),
+  name VARCHAR(100) NOT NULL UNIQUE,
+  token_encrypted TEXT NOT NULL,
+  usage_count INT DEFAULT 0,
+  status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  metadata JSONB,
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Platform sites (deployment targets)
+CREATE TABLE platform_sites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  github_token_id UUID NOT NULL REFERENCES github_tokens(id) ON DELETE CASCADE,
+  platform_token_id UUID REFERENCES platform_tokens(id) ON DELETE SET NULL,
+  platform VARCHAR(50) NOT NULL CHECK (platform IN ('rtd', 'cf_pages', 'netlify', 'vercel')),
+  content_type VARCHAR(20) NOT NULL CHECK (content_type IN ('informational', 'commercial')),
+  site_name VARCHAR(200) NOT NULL,
+  site_url VARCHAR(500) DEFAULT '',
+  repo_name VARCHAR(100) NOT NULL,
+  docs_path VARCHAR(100) DEFAULT 'docs',
+  branch VARCHAR(100) DEFAULT 'main',
+  platform_project_id VARCHAR(200), -- Netlify/Vercel project ID for rebuilds
+  usage_count INT DEFAULT 0,
+  status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'disabled')),
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Website-site bindings (associates user websites with platform sites)
+CREATE TABLE website_site_bindings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  website_id UUID NOT NULL,
+  content_type VARCHAR(20) NOT NULL CHECK (content_type IN ('informational', 'commercial')),
+  site_id UUID NOT NULL REFERENCES platform_sites(id) ON DELETE CASCADE,
+  UNIQUE (website_id, content_type),
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### Other Tables
+
+Additional tables exist for:
+- `workflow_configs` - Workflow configuration storage
+- `subscription_plans`, `payment_orders`, `user_subscriptions`, `user_credits` - Payment/billing
+- `website_keywords`, `website_pages`, `article_rankings` - SEO data tracking
+- `api_keys` - API key management
+- `user_preferences` - User settings
+- Various cache tables for domain analysis
+
+**Note**: The following tables from the original design were never implemented:
+- `projects`, `keywords` - Keyword mining data is stored in `execution_tasks` instead
+- `content_drafts` - Drafts are stored in `execution_tasks` and `published_articles`
+- `images` - Images are stored in the `images` JSONB column of `published_articles`
+- `publications`, `ranking_records` - Publication tracking not yet implemented
 
 ### Key Features Implementation
 
@@ -382,9 +431,9 @@ CREATE TABLE ranking_records (
   6. Delete or noindex losers
 
 **Platform Carriers (载体)**:
-- **A-tier (Highest Trust)**: Read the Docs, GitHub Pages, GitLab Pages, Official Docs subdomain
-- **B-tier (Scalable)**: Cloudflare Pages, Netlify, Vercel
+- **Current Platforms**: Cloudflare Pages, Netlify, Vercel
 - Strategy: Use infrastructure-type platforms with inherent Google trust
+- Automated deployment via GitHub integration
 
 **Internal Link Architecture**:
 - **Single-direction funnel**: lab → guide/tool → compare/live (never reverse)

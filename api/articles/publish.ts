@@ -58,7 +58,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const contentType: 'informational' | 'commercial' = article.content_type || 'informational';
 
     // 3. 获取项目 ID（从参数或文章关联）
-    let actualProjectId = projectId || article.project_id;
+    // 注意：article.website_id 就是 user_websites 表的 ID，也就是 projectId
+    let actualProjectId = projectId || article.website_id;
 
     if (!actualProjectId) {
       // 尝试从用户的默认网站或任意一个活跃网站作为 fallback

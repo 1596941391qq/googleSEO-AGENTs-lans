@@ -40,11 +40,6 @@ export function initRequestContext(req: VercelRequest): void {
   const modelHeader = req.headers['x-gemini-model'] || req.headers['x-gemini-model'] || req.headers['X-Gemini-Model'];
   const model = typeof modelHeader === 'string' ? modelHeader.trim() : undefined;
 
-  // 调试：打印所有相关 header
-  console.log(`[Request Context] All headers:`, JSON.stringify(Object.keys(req.headers).filter(k => k.toLowerCase().includes('proxy') || k.toLowerCase().includes('gemini') || k.toLowerCase().includes('x-'))));
-  console.log(`[Request Context] X-Proxy-Provider header value: ${JSON.stringify(proxyProviderHeader)}, type: ${typeof proxyProviderHeader}, normalized: ${proxyProvider || '(not set)'}`);
-  console.log(`[Request Context] X-Gemini-Model header value: ${JSON.stringify(modelHeader)}, type: ${typeof modelHeader}, normalized: ${model || '(not set)'}`);
-
   // 总是设置代理选择
   if (proxyProvider === '302' || proxyProvider === 'tuzi') {
     setRequestProxyProvider(proxyProvider as '302' | 'tuzi');

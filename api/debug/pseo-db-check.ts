@@ -25,8 +25,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const tablesExist = await sql`
       SELECT 
         EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'github_tokens') as github_tokens,
-        EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'platform_tokens_v2') as platform_tokens_v2,
-        EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'platform_sites_v2') as platform_sites_v2,
+        EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'platform_tokens') as platform_tokens,
+        EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'platform_sites') as platform_sites,
         EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'website_site_bindings') as website_site_bindings
     `;
 
@@ -34,8 +34,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const counts = await sql`
       SELECT 
         (SELECT COUNT(*) FROM github_tokens)::int as github_tokens,
-        (SELECT COUNT(*) FROM platform_tokens_v2)::int as platform_tokens,
-        (SELECT COUNT(*) FROM platform_sites_v2)::int as sites,
+        (SELECT COUNT(*) FROM platform_tokens)::int as platform_tokens,
+        (SELECT COUNT(*) FROM platform_sites)::int as sites,
         (SELECT COUNT(*) FROM website_site_bindings)::int as bindings
     `;
 
@@ -47,12 +47,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     
     const platformTokens = await sql`
       SELECT id, platform, name, usage_count, status, created_at 
-      FROM platform_tokens_v2 ORDER BY created_at DESC LIMIT 10
+      FROM platform_tokens ORDER BY created_at DESC LIMIT 10
     `;
     
     const sites = await sql`
       SELECT id, platform, content_type, site_name, repo_name, status, created_at 
-      FROM platform_sites_v2 ORDER BY created_at DESC LIMIT 10
+      FROM platform_sites ORDER BY created_at DESC LIMIT 10
     `;
 
     return res.json({

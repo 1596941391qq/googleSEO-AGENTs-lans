@@ -1,6 +1,11 @@
 // Workflow Definitions
-import { WorkflowDefinition, WorkflowConfig } from "./types";
-import { DEFAULT_GEN_PROMPT_EN, DEFAULT_ANALYZE_PROMPT_EN } from "./services/gemini";
+import { WorkflowDefinition } from "../types";
+import { 
+  DEFAULT_GEN_PROMPT_EN, 
+  DEFAULT_ANALYZE_PROMPT_EN,
+  KEYWORD_MINING_PROMPTS,
+  DEFAULT_SERP_ANALYSIS 
+} from "../services/prompts/index";
 
 // === Mining Workflow ===
 export const MINING_WORKFLOW: WorkflowDefinition = {
@@ -16,12 +21,14 @@ export const MINING_WORKFLOW: WorkflowDefinition = {
       configurable: true,
       prompt: DEFAULT_GEN_PROMPT_EN,
       defaultPrompt: DEFAULT_GEN_PROMPT_EN,
+      promptZh: KEYWORD_MINING_PROMPTS.base.zh.trim(),
+      defaultPromptZh: KEYWORD_MINING_PROMPTS.base.zh.trim(),
     },
     {
-      id: 'mining-seranking',
+      id: 'mining-keyword-research',
       type: 'tool',
-      name: 'SEO词研究工具',
-      description: 'SE Ranking API - Gets keyword difficulty, volume, CPC, and competition data',
+      name: 'Keyword Research Tool',
+      description: 'DataForSEO API (primary) with SE-Ranking fallback - Gets keyword difficulty, volume, CPC, and competition data',
       configurable: false,
       isSystem: true,
     },
@@ -40,6 +47,8 @@ export const MINING_WORKFLOW: WorkflowDefinition = {
       configurable: true,
       prompt: DEFAULT_ANALYZE_PROMPT_EN,
       defaultPrompt: DEFAULT_ANALYZE_PROMPT_EN,
+      promptZh: DEFAULT_SERP_ANALYSIS.zh.trim(),
+      defaultPromptZh: DEFAULT_SERP_ANALYSIS.zh.trim(),
     },
   ],
 };
@@ -63,12 +72,18 @@ Ensure the translation is natural and commonly used by native speakers.`,
       defaultPrompt: `You are a professional translator specializing in SEO keywords.
 Translate the given keyword to the target language while preserving search intent.
 Ensure the translation is natural and commonly used by native speakers.`,
+      promptZh: `你是一位专业的SEO关键词翻译专家。
+将给定的关键词翻译成目标语言，同时保留搜索意图。
+确保翻译自然，并且是母语使用者常用的表达方式。`,
+      defaultPromptZh: `你是一位专业的SEO关键词翻译专家。
+将给定的关键词翻译成目标语言，同时保留搜索意图。
+确保翻译自然，并且是母语使用者常用的表达方式。`,
     },
     {
-      id: 'batch-seranking',
+      id: 'batch-keyword-research',
       type: 'tool',
-      name: 'SEO词研究工具',
-      description: 'SE Ranking API - Gets keyword difficulty, volume, CPC, and competition data',
+      name: 'Keyword Research Tool',
+      description: 'DataForSEO API (primary) with SE-Ranking fallback - Gets keyword difficulty, volume, CPC, and competition data',
       configurable: false,
       isSystem: true,
     },
@@ -87,6 +102,8 @@ Ensure the translation is natural and commonly used by native speakers.`,
       configurable: true,
       prompt: DEFAULT_ANALYZE_PROMPT_EN,
       defaultPrompt: DEFAULT_ANALYZE_PROMPT_EN,
+      promptZh: DEFAULT_SERP_ANALYSIS.zh.trim(),
+      defaultPromptZh: DEFAULT_SERP_ANALYSIS.zh.trim(),
     },
   ],
 };
@@ -108,10 +125,10 @@ export const DEEP_DIVE_WORKFLOW: WorkflowDefinition = {
 
     },
     {
-      id: 'deepdive-seranking',
+      id: 'deepdive-keyword-research',
       type: 'tool',
-      name: 'SEO词研究工具',
-      description: 'SE Ranking API - Gets keyword difficulty, volume, CPC, and competition data',
+      name: 'Keyword Research Tool',
+      description: 'DataForSEO API (primary) with SE-Ranking fallback - Gets keyword difficulty, volume, CPC, and competition data',
       configurable: false,
       isSystem: true,
     },
@@ -130,26 +147,10 @@ export const DEEP_DIVE_WORKFLOW: WorkflowDefinition = {
       configurable: true,
       prompt: DEFAULT_ANALYZE_PROMPT_EN,
       defaultPrompt: DEFAULT_ANALYZE_PROMPT_EN,
+      promptZh: DEFAULT_SERP_ANALYSIS.zh.trim(),
+      defaultPromptZh: DEFAULT_SERP_ANALYSIS.zh.trim(),
     },
   ],
 };
 
-// Export all workflows
-export const ALL_WORKFLOWS = [MINING_WORKFLOW, BATCH_WORKFLOW, DEEP_DIVE_WORKFLOW];
 
-// Helper function to get workflow by ID
-export function getWorkflowById(id: string): WorkflowDefinition | undefined {
-  return ALL_WORKFLOWS.find(w => w.id === id);
-}
-
-// Helper function to create default config from workflow
-export function createDefaultConfig(workflow: WorkflowDefinition, name: string): WorkflowConfig {
-  return {
-    id: `${workflow.id}-${Date.now()}`,
-    workflowId: workflow.id,
-    name,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-    nodes: JSON.parse(JSON.stringify(workflow.nodes)), // Deep clone
-  };
-}

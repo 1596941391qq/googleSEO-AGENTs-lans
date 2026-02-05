@@ -72,8 +72,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 初始化数据库表
     await initWebsiteDataTables();
 
-    console.log('[List Websites] Querying for User ID:', userId);
-
     // ==========================================
     // Step 1: 获取用户偏好设置
     // ==========================================
@@ -137,8 +135,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         w.last_accessed_at DESC NULLS LAST,
         w.created_at DESC
     `;
-
-    console.log('[List Websites] Found websites count:', websitesResult.rows.length);
 
     const websites = websitesResult.rows.map(row => ({
       id: row.id,

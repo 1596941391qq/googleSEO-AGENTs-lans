@@ -1,36 +1,205 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { verifyAdminToken } from './auth.js';
-import {
-  createGitHubToken,
-  getAllGitHubTokens,
-  updateGitHubTokenStatus,
-  deleteGitHubToken,
-  createPlatformToken,
-  getAllPlatformTokens,
-  updatePlatformTokenStatus,
-  deletePlatformToken,
-  getPSEOPublishStats
-} from '../lib/database.js';
+import { sql, initPSEOPublishTables } from '../lib/database.js';
 
 /**
- * Admin Token 池管理 API (v2 - 分离 GitHub Token 和平台 Token)
- * 
- * GitHub Tokens:
- * GET /api/admin/tokens?type=github - 获取所有 GitHub Token
- * POST /api/admin/tokens?type=github - 创建新 GitHub Token
- * PUT /api/admin/tokens?type=github - 更新 GitHub Token 状态
+ * Admin Token 管理 API
+ *
+ * GET /api/admin/tokens - 获取所有 Token 和绑定关系
+ * POST /api/admin/tokens?type=github - 创建 GitHub Token
+ * POST /api/admin/tokens?type=platform - 创建 Platform Token
+ * POST /api/admin/tokens?action=bind - 绑定 Token 对
+ * POST /api/admin/tokens?action=unbind - 解绑 Token
  * DELETE /api/admin/tokens?type=github - 删除 GitHub Token
- * 
- * Platform Tokens:
- * GET /api/admin/tokens?type=platform - 获取所有平台 Token
- * POST /api/admin/tokens?type=platform - 创建新平台 Token
- * PUT /api/admin/tokens?type=platform - 更新平台 Token 状态
- * DELETE /api/admin/tokens?type=platform - 删除平台 Token
- * 
- * Statistics:
- * GET /api/admin/tokens - 获取所有 Token 和统计信息
+ * DELETE /api/admin/tokens?type=platform - 删除 Platform Token
  */
+
+interface GitHubToken {
+  id: string;
+  name: string;
+  token_encrypted: string;
+  owner_name: string;
+  usage_count: number;
+  status: 'active' | 'disabled';
+  created_at: Date;
+  updated_at: Date;
+}
+
+interface PlatformToken {
+  id: string;
+  platform: string;
+  name: string;
+  token_encrypted: string;
+  usage_count: number;
+  status: 'active' | 'disabled';
+  metadata: any;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// ============================================================================
+// CRUD 操作
+// ============================================================================
+
+async function getAllGitHubTokens(): Promise<GitHubToken[]> {
+  await initPSEOPublishTables();
+  const result = await sql<GitHubToken>`
+    SELECT * FROM github_tokens ORDER BY created_at DESC
+  `;
+  console.log('[Admin Tokens] getAllGitHubTokens: Found', result.rows.length, 'tokens');
+  return result.rows;
+}
+
+async function createGitHubToken(data: {
+  name: string;
+  token: string;
+  owner_name: string;
+}): Promise<GitHubToken> {
+  await initPSEOPublishTables();
+
+  const tokenEncrypted = Buffer.from(data.token).toString('base64');
+
+  const result = await sql<GitHubToken>`
+    INSERT INTO github_tokens (name, token_encrypted, owner_name)
+    VALUES (${data.name}, ${tokenEncrypted}, ${data.owner_name})
+    RETURNING *
+  `;
+
+  return result.rows[0];
+}
+
+async function deleteGitHubToken(tokenId: string): Promise<boolean> {
+  await initPSEOPublishTables();
+
+  const result = await sql`
+    DELETE FROM github_tokens WHERE id = ${tokenId} RETURNING id
+  `;
+  return result.rows.length > 0;
+}
+
+async function getAllPlatformTokens(): Promise<PlatformToken[]> {
+  await initPSEOPublishTables();
+
+  const result = await sql<PlatformToken>`
+    SELECT * FROM platform_tokens ORDER BY created_at DESC
+  `;
+  console.log('[Admin Tokens] getAllPlatformTokens: Found', result.rows.length, 'tokens');
+  return result.rows;
+}
+
+async function createPlatformToken(data: {
+  platform: string;
+  name: string;
+  token: string;
+}): Promise<PlatformToken> {
+  await initPSEOPublishTables();
+
+  const tokenEncrypted = Buffer.from(data.token).toString('base64');
+
+  const result = await sql<PlatformToken>`
+    INSERT INTO platform_tokens (platform, name, token_encrypted)
+    VALUES (${data.platform}, ${data.name}, ${tokenEncrypted})
+    RETURNING *
+  `;
+
+  return result.rows[0];
+}
+
+async function deletePlatformToken(tokenId: string): Promise<boolean> {
+  await initPSEOPublishTables();
+
+  const result = await sql`
+    DELETE FROM platform_tokens WHERE id = ${tokenId} RETURNING id
+  `;
+  return result.rows.length > 0;
+}
+
+// ============================================================================
+// 绑定管理（使用 platform_sites 表的外键）
+// ============================================================================
+
+async function getTokenBindings() {
+  await initPSEOPublishTables();
+
+  const result = await sql<any>`
+    SELECT
+      g.id as github_id,
+      g.name as github_name,
+      g.owner_name,
+      g.token_encrypted as github_token_encrypted,
+      g.usage_count as github_usage_count,
+      g.status as github_status,
+      p.id as platform_id,
+      p.platform,
+      p.name as platform_name,
+      p.token_encrypted as platform_token_encrypted,
+      p.usage_count as platform_usage_count,
+      p.status as platform_status,
+      CASE WHEN ps.github_token_id = g.id THEN true ELSE false END as is_bound
+    FROM github_tokens g
+    CROSS JOIN platform_tokens p
+    LEFT JOIN platform_sites ps ON ps.github_token_id = g.id AND ps.platform_token_id = p.id
+    ORDER BY g.created_at DESC, p.created_at DESC
+  `;
+
+  return result.rows;
+}
+
+async function bindTokens(githubTokenId: string, platformTokenId: string, platform: string): Promise<boolean> {
+  await initPSEOPublishTables();
+
+  // 检查是否已存在绑定
+  const existingCheck = await sql`
+    SELECT id FROM platform_sites
+    WHERE github_token_id = ${githubTokenId}
+    AND platform_token_id = ${platformTokenId}
+    LIMIT 1
+  `;
+
+  if (existingCheck.rows.length > 0) {
+    return true; // 已绑定
+  }
+
+  // 生成唯一的 repo_name
+  const repoName = `binding-${githubTokenId.substring(0, 8)}`;
+
+  // 创建绑定记录（使用 platform_sites 表作为绑定关系）
+  const result = await sql`
+    INSERT INTO platform_sites (github_token_id, platform_token_id, platform, content_type, site_name, repo_name, status)
+    VALUES (
+      ${githubTokenId},
+      ${platformTokenId},
+      ${platform},
+      'informational',
+      'Auto-generated binding',
+      ${repoName},
+      'active'
+    )
+    ON CONFLICT DO NOTHING
+    RETURNING id
+  `;
+
+  return result.rows.length > 0;
+}
+
+async function unbindTokens(githubTokenId: string, platformTokenId: string): Promise<boolean> {
+  await initPSEOPublishTables();
+
+  const result = await sql`
+    DELETE FROM platform_sites
+    WHERE github_token_id = ${githubTokenId}
+    AND platform_token_id = ${platformTokenId}
+    RETURNING id
+  `;
+
+  return result.rows.length > 0;
+}
+
+// ============================================================================
+// HTTP Handler
+// ============================================================================
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCorsHeaders(res);
 
@@ -38,42 +207,92 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return handleOptions(res);
   }
 
-  // 验证 Admin 权限
   const authResult = verifyAdminToken(req);
   if (!authResult.valid) {
     return sendErrorResponse(res, null, authResult.error || 'Unauthorized', 401);
   }
 
   const tokenType = req.query.type as string;
+  const action = req.query.action as string;
 
-  // GET - 获取所有 Token
+  // GET - 获取所有 Token 和绑定关系
   if (req.method === 'GET') {
     try {
-      const [githubTokens, platformTokens, stats] = await Promise.all([
+      console.log('[Admin Tokens] GET request received');
+
+      const [githubTokens, platformTokens, bindings] = await Promise.all([
         getAllGitHubTokens(),
         getAllPlatformTokens(),
-        getPSEOPublishStats()
+        getTokenBindings()
       ]);
 
-      // 隐藏 token 内容，只返回前几位
-      const safeGitHubTokens = githubTokens.map(t => ({
-        ...t,
-        token_encrypted: undefined,
-        token_preview: '****' + Buffer.from(t.token_encrypted, 'base64').toString('utf-8').slice(-4)
-      }));
+      console.log('[Admin Tokens] Query results:', {
+        githubTokensCount: githubTokens.length,
+        platformTokensCount: platformTokens.length,
+        bindingsCount: bindings.length
+      });
 
-      const safePlatformTokens = platformTokens.map(t => ({
-        ...t,
-        token_encrypted: undefined,
-        token_preview: '****' + Buffer.from(t.token_encrypted, 'base64').toString('utf-8').slice(-4)
-      }));
+      // 处理绑定关系
+      const bound: any[] = [];
+      const unboundGithub: any[] = [];
+      const unboundPlatform: any[] = [];
+
+      // 分类 GitHub Tokens
+      githubTokens.forEach(g => {
+        const hasBinding = bindings.some((b: any) => b.github_id === g.id && b.is_bound);
+        if (hasBinding) {
+          // 找到绑定的 platform token
+          const binding = bindings.find((b: any) => b.github_id === g.id && b.is_bound);
+          if (binding) {
+            bound.push({
+              github: {
+                ...g,
+                token_encrypted: undefined,
+                token_preview: '****' + Buffer.from(g.token_encrypted, 'base64').toString('utf-8').slice(-4)
+              },
+              platform: {
+                id: binding.platform_id,
+                platform: binding.platform,
+                name: binding.platform_name,
+                usage_count: binding.platform_usage_count,
+                status: binding.platform_status,
+                token_preview: '****' + Buffer.from(binding.platform_token_encrypted, 'base64').toString('utf-8').slice(-4)
+              }
+            });
+          }
+        } else {
+          unboundGithub.push({
+            ...g,
+            token_encrypted: undefined,
+            token_preview: '****' + Buffer.from(g.token_encrypted, 'base64').toString('utf-8').slice(-4)
+          });
+        }
+      });
+
+      // 分类 Platform Tokens
+      platformTokens.forEach(p => {
+        const hasBinding = bindings.some((b: any) => b.platform_id === p.id && b.is_bound);
+        if (!hasBinding) {
+          unboundPlatform.push({
+            ...p,
+            token_encrypted: undefined,
+            token_preview: '****' + Buffer.from(p.token_encrypted, 'base64').toString('utf-8').slice(-4)
+          });
+        }
+      });
+
+      console.log('[Admin Tokens] Processed results:', {
+        boundCount: bound.length,
+        unboundGithubCount: unboundGithub.length,
+        unboundPlatformCount: unboundPlatform.length
+      });
 
       return res.json({
         success: true,
         data: {
-          githubTokens: safeGitHubTokens,
-          platformTokens: safePlatformTokens,
-          stats
+          bound,
+          unboundGithub,
+          unboundPlatform
         }
       });
     } catch (error: any) {
@@ -82,13 +301,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // POST - 创建新 Token
+  // POST - 创建 Token 或绑定/解绑
   if (req.method === 'POST') {
     try {
       const body = parseRequestBody(req);
-      
+
+      if (action === 'bind') {
+        const { githubTokenId, platformTokenId, platform } = body;
+
+        if (!githubTokenId || !platformTokenId || !platform) {
+          return sendErrorResponse(res, null, 'githubTokenId, platformTokenId, and platform are required', 400);
+        }
+
+        const result = await bindTokens(githubTokenId, platformTokenId, platform);
+
+        if (!result) {
+          return sendErrorResponse(res, null, 'Failed to bind tokens', 400);
+        }
+
+        return res.json({
+          success: true,
+          data: { message: 'Tokens bound successfully' }
+        });
+      }
+
+      if (action === 'unbind') {
+        const { githubTokenId, platformTokenId } = body;
+
+        if (!githubTokenId || !platformTokenId) {
+          return sendErrorResponse(res, null, 'githubTokenId and platformTokenId are required', 400);
+        }
+
+        const result = await unbindTokens(githubTokenId, platformTokenId);
+
+        if (!result) {
+          return sendErrorResponse(res, null, 'Binding not found', 404);
+        }
+
+        return res.json({
+          success: true,
+          data: { message: 'Tokens unbound successfully' }
+        });
+      }
+
       if (tokenType === 'github') {
-        // 创建 GitHub Token
         const { name, token, owner_name } = body;
 
         if (!name || !token || !owner_name) {
@@ -96,11 +352,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const result = await createGitHubToken({ name, token, owner_name });
-        
-        // 检查是否返回错误
-        if ('error' in result) {
-          return sendErrorResponse(res, null, result.error, 409);
-        }
 
         return res.json({
           success: true,
@@ -110,26 +361,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             token_preview: '****' + token.slice(-4)
           }
         });
-      } else if (tokenType === 'platform') {
-        // 创建平台 Token
-        const { platform, token, name } = body;
+      }
 
-        if (!platform || !token || !name) {
-          return sendErrorResponse(res, null, 'platform, token, and name are required', 400);
+      if (tokenType === 'platform') {
+        const { name, token, platform = 'netlify' } = body;
+
+        if (!name || !token) {
+          return sendErrorResponse(res, null, 'name and token are required', 400);
         }
 
-        // 验证 platform 值
-        const validPlatforms = ['rtd', 'cf_pages', 'netlify', 'vercel'];
-        if (!validPlatforms.includes(platform)) {
-          return sendErrorResponse(res, null, `Invalid platform. Must be one of: ${validPlatforms.join(', ')}`, 400);
-        }
-
-        const result = await createPlatformToken({ platform, token, name });
-        
-        // 检查是否返回错误
-        if ('error' in result) {
-          return sendErrorResponse(res, null, result.error, 409);
-        }
+        const result = await createPlatformToken({ name, token, platform });
 
         return res.json({
           success: true,
@@ -139,52 +380,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             token_preview: '****' + token.slice(-4)
           }
         });
-      } else {
-        return sendErrorResponse(res, null, 'type query parameter is required (github or platform)', 400);
       }
+
+      return sendErrorResponse(res, null, 'Invalid action or type parameter', 400);
     } catch (error: any) {
-      console.error('[Admin Tokens] Create error:', error);
-      return sendErrorResponse(res, error, 'Failed to create token', 500);
-    }
-  }
+      console.error('[Admin Tokens] Create/Bind error:', error);
 
-  // PUT - 更新 Token 状态
-  if (req.method === 'PUT') {
-    try {
-      const body = parseRequestBody(req);
-      const { tokenId, status } = body;
-
-      if (!tokenId || !status) {
-        return sendErrorResponse(res, null, 'tokenId and status are required', 400);
+      if (error.message?.includes('duplicate key') || error.message?.includes('unique')) {
+        return sendErrorResponse(res, null, 'Token name already exists', 409);
       }
 
-      if (!['active', 'disabled'].includes(status)) {
-        return sendErrorResponse(res, null, 'Invalid status. Must be active or disabled', 400);
-      }
-
-      let updatedToken;
-      if (tokenType === 'github') {
-        updatedToken = await updateGitHubTokenStatus(tokenId, status);
-      } else if (tokenType === 'platform') {
-        updatedToken = await updatePlatformTokenStatus(tokenId, status);
-      } else {
-        return sendErrorResponse(res, null, 'type query parameter is required (github or platform)', 400);
-      }
-
-      if (!updatedToken) {
-        return sendErrorResponse(res, null, 'Token not found', 404);
-      }
-
-      return res.json({
-        success: true,
-        data: {
-          ...updatedToken,
-          token_encrypted: undefined
-        }
-      });
-    } catch (error: any) {
-      console.error('[Admin Tokens] Update error:', error);
-      return sendErrorResponse(res, error, 'Failed to update token', 500);
+      return sendErrorResponse(res, error, 'Failed to create or bind token', 500);
     }
   }
 
