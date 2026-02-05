@@ -73,16 +73,19 @@ function generateSlug(keyword: string, existingSlug?: string): string {
 }
 
 function generateArticleMarkdown(article: ArticleForPublish): string {
+  const title = article.title || 'Untitled';
+  const description = (article.metaDescription || '').replace(/"/g, '\\"');
+
   const frontMatter = `---
-title: "${article.title.replace(/"/g, '\\"')}"
-description: "${(article.metaDescription || '').replace(/"/g, '\\"')}"
+title: "${title.replace(/"/g, '\\"')}"
+description: "${description}"
 ---
 
 `;
 
   let content = frontMatter;
-  content += `# ${article.title}\n\n`;
-  content += article.content;
+  content += `# ${title}\n\n`;
+  content += article.content || '';
 
   return content;
 }

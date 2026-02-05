@@ -33,7 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log(`[Update Site Platform] Updating site ${site.site_name} from ${site.platform} to ${newPlatform}`);
 
         // 获取对应平台的 token
-        const tokens = await getAvailableTokensForNewSite(site.content_type);
+        const tokens = await getAvailableTokensForNewSite(site.content_type as "informational" | "commercial");
         if (!tokens || !tokens.platform_token) {
             return res.status(400).json({
                 error: `No ${newPlatform} token available. Please add one in Admin panel.`

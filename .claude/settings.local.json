@@ -18,7 +18,9 @@
       "Bash(npx tsx:*)",
       "Bash(vercel dev)",
       "Bash(del:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(npm run dev:vercel)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

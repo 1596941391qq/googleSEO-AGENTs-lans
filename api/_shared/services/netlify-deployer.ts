@@ -135,50 +135,51 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
           const hasLinkedRepo = existingSite.build_settings?.repo;
           console.log(`[Netlify] GitHub repo linked: ${hasLinkedRepo ? 'Yes' : 'No'}`);
 
-          // 已有 repo 链接，直接触发构建
-          console.log(`[Netlify] ✅ GitHub repo is linked: ${existingSite.build_settings?.repo?.url}`);
-          console.log(`[Netlify] Triggering rebuild...`);
+          if (hasLinkedRepo) {
+            // 已有 repo 链接，直接触发构建
+            console.log(`[Netlify] ✅ GitHub repo is linked: ${existingSite.build_settings?.repo?.url}`);
+            console.log(`[Netlify] Triggering rebuild...`);
 
-          try {
-            const buildResponse = await fetch(
-              `https://api.netlify.com/api/v1/sites/${existingSite.id}/builds`,
-              {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${config.token}`,
-                },
+            try {
+              const buildResponse = await fetch(
+                `https://api.netlify.com/api/v1/sites/${existingSite.id}/builds`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${config.token}`,
+                  },
+                }
+              );
+
+              if (buildResponse.ok) {
+                const buildData = await buildResponse.json();
+                console.log(`[Netlify] ✅ Build triggered: ${buildData.id}`);
+              } else {
+                console.warn(`[Netlify] ⚠️ Build trigger failed: ${buildResponse.status}`);
               }
-            );
-
-            if (buildResponse.ok) {
-              const buildData = await buildResponse.json();
-              console.log(`[Netlify] ✅ Build triggered: ${buildData.id}`);
-            } else {
-              console.warn(`[Netlify] ⚠️ Build trigger failed: ${buildResponse.status}`);
+            } catch (error: any) {
+              console.warn(`[Netlify] ⚠️ Exception triggering build:`, error.message);
             }
-          } catch (error: any) {
-            console.warn(`[Netlify] ⚠��� Exception triggering build:`, error.message);
+          } else {
+            // 场景2: GitHub repo 未链接，等待 Netlify 自动检测
+            console.log(`[Netlify] ⚠️ GitHub repo not linked yet.`);
+            console.log(`[Netlify] ℹ️ Netlify will auto-detect the GitHub repo within 1-5 minutes.`);
+            console.log(`[Netlify] ℹ️ Once detected, Netlify will start building automatically.`);
+            console.log(`[Netlify] ℹ️ Site URL: ${existingSite.ssl_url || existingSite.url}`);
+
+            return {
+              success: true,
+              siteUrl: existingSite.ssl_url || existingSite.url,
+              projectId: existingSite.id,
+              warning: 'Netlify site exists but GitHub repo not linked yet. Netlify will auto-detect the repo within 1-5 minutes and start building automatically.',
+            };
           }
-        } else {
-          // 场景2: GitHub repo 未链接，等待 Netlify 自动检测
-          console.log(`[Netlify] ⚠️ GitHub repo not linked yet.`);
-          console.log(`[Netlify] ℹ️ Netlify will auto-detect the GitHub repo within 1-5 minutes.`);
-          console.log(`[Netlify] ℹ️ Once detected, Netlify will start building automatically.`);
-          console.log(`[Netlify] ℹ️ Site URL: ${existingSite.ssl_url || existingSite.url}`);
 
           return {
             success: true,
             siteUrl: existingSite.ssl_url || existingSite.url,
             projectId: existingSite.id,
-            warning: 'Netlify site exists but GitHub repo not linked yet. Netlify will auto-detect the repo within 1-5 minutes and start building automatically.',
           };
-        }
-
-        return {
-          success: true,
-          siteUrl: existingSite.ssl_url || existingSite.url,
-          projectId: existingSite.id,
-        };
         }
       }
     }
