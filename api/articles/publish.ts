@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { setCorsHeaders, handleOptions, sendErrorResponse, parseRequestBody } from '../_shared/request-handler.js';
 import { sql, initPublishedArticlesTable } from '../lib/database.js';
 import { authenticateRequest } from '../_shared/auth.js';
-import { publishArticle, getWebsitePublishingSites } from '../_shared/services/pseo-publisher.js';
+import { publishArticle } from '../_shared/services/pseo-publisher.js';
 
 /**
  * 发布文章 API (v2)
@@ -145,20 +145,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       WHERE id = ${articleId} AND user_id::text = ${authResult.userId.toString()}
     `;
 
+    // 判断构建状态
+    const buildStatus = publishResult.siteUrl
+      ? 'ready' // siteUrl 存在，站点已就绪
+      : publishResult.warning?.includes('auto-detect') || publishResult.warning?.includes('auto-build')
+        ? 'building' // siteUrl 不存在但有自动检测警告，正在等待构建
+        : 'unknown'; // 未知状态
+
     return res.json({
       success: true,
       data: {
         message: forceUpdate
           ? `Article updated on ${publishResult.platform} successfully`
           : `Article published to ${publishResult.platform} successfully`,
-        liveUrl: publishResult.articleUrl,
+        liveUrl: publishResult.articleUrl || publishResult.repoUrl, // 如果没有 articleUrl，用 repoUrl
         platform: publishResult.platform,
         siteName: publishResult.siteName,
         siteUrl: publishResult.siteUrl,
         repoUrl: publishResult.repoUrl,
         isNewSite: publishResult.isNewSite,
         publishedAt: new Date().toISOString(),
-        isUpdate: forceUpdate || false
+        isUpdate: forceUpdate || false,
+        buildStatus, // 'ready' | 'building' | 'unknown'
+        warning: publishResult.warning,
+        hasWarning: !!publishResult.warning
       }
     });
 
@@ -168,47 +178,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-/**
- * 获取项目的发布站点信息 API
- * GET /api/articles/publish?projectId=xxx
- */
-export async function getProjectSites(req: VercelRequest, res: VercelResponse) {
-  try {
-    const authResult = await authenticateRequest(req);
-    if (!authResult) {
-      return sendErrorResponse(res, null, 'Unauthorized', 401);
-    }
-
-    const { projectId } = req.query;
-    if (!projectId || typeof projectId !== 'string') {
-      return sendErrorResponse(res, null, 'projectId is required', 400);
-    }
-
-    const sites = await getWebsitePublishingSites(projectId);
-
-    return res.json({
-      success: true,
-      data: {
-        informational: sites.informational ? {
-          siteName: sites.informational.site.site_name,
-          siteUrl: sites.informational.site.site_url,
-          platform: sites.informational.site.platform,
-          repoName: sites.informational.site.repo_name,
-          status: sites.informational.site.status,
-          usageCount: sites.informational.site.usage_count,
-        } : null,
-        commercial: sites.commercial ? {
-          siteName: sites.commercial.site.site_name,
-          siteUrl: sites.commercial.site.site_url,
-          platform: sites.commercial.site.platform,
-          repoName: sites.commercial.site.repo_name,
-          status: sites.commercial.site.status,
-          usageCount: sites.commercial.site.usage_count,
-        } : null,
-      }
-    });
-  } catch (error: any) {
-    console.error('[Get Project Sites] Error:', error);
-    return sendErrorResponse(res, error, 'Failed to get project sites', 500);
-  }
-}

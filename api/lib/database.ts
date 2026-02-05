@@ -3264,7 +3264,9 @@ export async function initPSEOPublishTables() {
         'CREATE INDEX IF NOT EXISTS idx_platform_sites_platform_token_id ON platform_sites(platform_token_id)',
         'CREATE INDEX IF NOT EXISTS idx_platform_sites_content_type ON platform_sites(content_type)',
         'CREATE INDEX IF NOT EXISTS idx_platform_sites_status ON platform_sites(status)',
-        'CREATE INDEX IF NOT EXISTS idx_website_site_bindings_website_id ON website_site_bindings(website_id)'
+        'CREATE INDEX IF NOT EXISTS idx_website_site_bindings_website_id ON website_site_bindings(website_id)',
+        // 唯一索引：同一个 github_token 下的 repo_name 必须唯一
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_platform_sites_github_repo_unique ON platform_sites(github_token_id, repo_name)'
       ];
 
       for (const indexSql of indexes) {

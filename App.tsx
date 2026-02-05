@@ -10337,6 +10337,75 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     }
   }, []);
 
+  // 监听页面可见性变化，处理文章生成完成后的自动跳转
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // 当页面重新可见时
+      if (!document.hidden) {
+        // 检查是否有文章生成任务完成了
+        const activeTask = state.taskManager.tasks.find(
+          (t) => t.id === state.taskManager.activeTaskId
+        );
+        
+        if (
+          activeTask &&
+          activeTask.type === "article-generator" &&
+          activeTask.articleGeneratorState?.finalArticle &&
+          !activeTask.articleGeneratorState?.isGenerating &&
+          state.step !== "article-generator"
+        ) {
+          // 文章已生成完成，但当前不在文章生成器页面
+          // 自动切换到文章生成器页面以显示完成的文章
+          console.log("[App] Page visible: Auto-switching to completed article");
+          setState((prev) => ({
+            ...prev,
+            step: "article-generator",
+          }));
+        }
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      return () => {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
+    }
+  }, [state.taskManager.activeTaskId, state.taskManager.tasks, state.step]);
+
+  // 监听文章生成完成事件，自动切换到完成页面
+  useEffect(() => {
+    const activeTask = state.taskManager.tasks.find(
+      (t) => t.id === state.taskManager.activeTaskId
+    );
+
+    // 检查是否刚刚完成文章生成
+    if (
+      activeTask &&
+      activeTask.type === "article-generator" &&
+      activeTask.articleGeneratorState?.finalArticle &&
+      !activeTask.articleGeneratorState?.isGenerating &&
+      activeTask.articleGeneratorState?.currentStage === "complete" &&
+      state.step === "article-generator"
+    ) {
+      // 文章生成完成，确保页面在正确的状态
+      // 如果页面当前不可见（用户切换了标签），不立即跳转
+      // 等待用户切换回来时由 visibilitychange 处理
+      if (!document.hidden) {
+        console.log("[App] Article generation completed, ensuring correct view");
+        // 页面可见，确保显示完成的文章
+        // ArticleGeneratorLayout 会自动处理显示逻辑
+      }
+    }
+  }, [
+    state.taskManager.activeTaskId,
+    state.taskManager.tasks,
+    state.step,
+    state.articleGeneratorState.finalArticle,
+    state.articleGeneratorState.isGenerating,
+    state.articleGeneratorState.currentStage,
+  ]);
+
   return (
     <div
       className={`flex h-screen overflow-hidden ${isDarkTheme ? "bg-[#050505] text-[#e5e5e5]" : "bg-gray-50 text-gray-900"
@@ -10784,7 +10853,36 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                           0,
                           50
                         ),
+                      currentStage: newState.articleGeneratorState.currentStage,
+                      pageHidden: document.hidden,
                     });
+                  }
+
+                  // 检测文章生成完成：有 finalArticle 且不再生成中
+                  const articleJustCompleted =
+                    updates.finalArticle &&
+                    updates.isGenerating === false &&
+                    prev.articleGeneratorState.isGenerating === true;
+
+                  if (articleJustCompleted) {
+                    console.log(
+                      "[App.tsx] Article generation completed, page hidden:",
+                      document.hidden
+                    );
+
+                    // 如果页面当前可见，确保停留在文章生成器页面以显示结果
+                    if (!document.hidden && prev.step === "article-generator") {
+                      console.log(
+                        "[App.tsx] Page is visible, staying on article generator to show result"
+                      );
+                      // 不需要额外操作，ArticleGeneratorLayout 会自动显示预览
+                    } else if (document.hidden) {
+                      // 页面不可见（用户切换了标签），记录状态
+                      // 当用户切换回来时，visibilitychange 事件会处理跳转
+                      console.log(
+                        "[App.tsx] Page is hidden, will auto-switch when user returns"
+                      );
+                    }
                   }
 
                   // Also update the task state

@@ -152,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       // 生成 URL slug
-      const urlSlug = article.url_slug || article.title
+      const urlSlug = article.url_slug || (article.title || 'untitled')
         .toLowerCase()
         .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
         .replace(/(^-|-$)/g, '')
@@ -206,7 +206,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         data: {
           message: `Article republished to ${republishResult.platform} successfully`,
-          articleUrl: republishResult.articleUrl,
+          articleUrl: republishResult.articleUrl || republishResult.repoUrl,
           platform: republishResult.platform,
           siteName: republishResult.siteName,
           siteUrl: republishResult.siteUrl,
@@ -214,6 +214,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           isNewSite: republishResult.isNewSite,
           updatedAt: new Date().toISOString(),
           wasRepublished: true,
+          buildStatus: republishResult.siteUrl
+            ? 'ready'
+            : republishResult.warning?.includes('auto-detect') || republishResult.warning?.includes('auto-build')
+              ? 'building'
+              : 'unknown',
+          warning: republishResult.warning,
+          hasWarning: !!republishResult.warning
         }
       });
     }
@@ -323,7 +330,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: true,
         data: {
           message: `Article republished successfully (update failed, created new site)`,
-          articleUrl: republishResult.articleUrl,
+          articleUrl: republishResult.articleUrl || republishResult.repoUrl,
           platform: republishResult.platform,
           siteName: republishResult.siteName,
           siteUrl: republishResult.siteUrl,
@@ -331,6 +338,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           isNewSite: republishResult.isNewSite,
           updatedAt: new Date().toISOString(),
           wasRepublished: true,
+          buildStatus: republishResult.siteUrl
+            ? 'ready'
+            : republishResult.warning?.includes('auto-detect') || republishResult.warning?.includes('auto-build')
+              ? 'building'
+              : 'unknown',
+          warning: republishResult.warning,
+          hasWarning: !!republishResult.warning
         }
       });
     }
@@ -350,12 +364,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         siteUrl: updateResult.siteUrl || '',
         repoUrl: updateResult.repoUrl || `https://github.com/${githubOwner}/${repoName}`,
         siteName: updateResult.siteName || repoName,
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
+        buildStatus: updateResult.siteUrl
+          ? 'ready'
+          : updateResult.warning?.includes('auto-detect') || updateResult.warning?.includes('auto-build')
+            ? 'building'
+            : 'unknown',
+        warning: updateResult.warning,
+        hasWarning: !!updateResult.warning
       }
     });
 
   } catch (error: any) {
     console.error('[Update Published Article] Error:', error);
+    console.error('[Update Published Article] Error message:', error?.message);
+    console.error('[Update Published Article] Error stack:', error?.stack);
+    console.error('[Update Published Article] Error name:', error?.name);
     return sendErrorResponse(res, error, 'Failed to update article', 500);
   }
 }

@@ -64,25 +64,32 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Array<{ id: string; name: string; keyword_count: number }>>([]);
 
-  // Load favorited keywords from localStorage
+  // Load favorited keywords from server
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('keyword_favorites');
-      if (stored) {
-        const favoriteArray = JSON.parse(stored);
-        setFavoritedIds(new Set(favoriteArray));
-      }
-    } catch (error) {
-      console.error('Failed to load favorites:', error);
+    if (keywords.length > 0) {
+      const favorited = new Set(
+        keywords.filter(k => k.is_favorited).map(k => k.id)
+      );
+      setFavoritedIds(favorited);
     }
-  }, []);
+  }, [keywords]);
 
-  // Save favorited keywords to localStorage
-  const saveFavorites = (favorites: Set<string>) => {
+  // Save favorited keywords to server
+  const saveFavorites = async (id: string) => {
     try {
-      localStorage.setItem('keyword_favorites', JSON.stringify(Array.from(favorites)));
+      await fetch('/api/keywords/manage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
+        },
+        body: JSON.stringify({
+          action: 'toggle_favorite',
+          keyword: { id }
+        })
+      });
     } catch (error) {
-      console.error('Failed to save favorites:', error);
+      console.error('Failed to save favorite:', error);
     }
   };
 
@@ -94,7 +101,7 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
       } else {
         next.add(id);
       }
-      saveFavorites(next);
+      saveFavorites(id);
       return next;
     });
   };

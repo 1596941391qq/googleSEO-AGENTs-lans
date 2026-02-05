@@ -17,7 +17,8 @@
       "Bash(curl:*)",
       "Bash(npx tsx:*)",
       "Bash(vercel dev)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }

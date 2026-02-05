@@ -1844,18 +1844,117 @@ export const generateDeepDiveStrategy = async (
       : `\n\n[CRITICAL INSTRUCTION] The user's keyword "${keyword.keyword}" contains commercial intent signals (e.g. buying guide, review, comparison). For SEO purposes, "Buying Guides" MUST be classified as 'commercial', NOT 'informational'. You MUST set 'contentType' to 'commercial'. This is non-negotiable.`)
     : '';
 
-  // 从 prompts 文件获取 system instruction 和 prompt
-  const promptConfig = getSEOResearcherPrompt('deepDiveStrategy', uiLanguage, {
-    keyword: keyword.keyword,
-    targetLangName,
-    uiLangName,
-    marketLabel,
-    analysisContext,
-    referenceContext: referenceContext + intentHintContext // Inject detecting hint
-  }) as { systemInstruction: string; prompt: string };
+  // 🔧 PROMPT FIX: 使用简化的 system instruction，避免 GEO 细节污染
+  // 临时修复：如果没有自定义 prompt，使用简化版本
+  let systemInstruction: string;
+  let prompt: string;
 
-  const systemInstruction = customPrompt || (promptConfig.systemInstruction + analysisContext + referenceContext);
-  const prompt = promptConfig.prompt;
+  if (customPrompt) {
+    // 用户提供了自定义 prompt，直接使用
+    systemInstruction = customPrompt;
+    // 从 prompts 文件获取 prompt
+    const promptConfig = getSEOResearcherPrompt('deepDiveStrategy', uiLanguage, {
+      keyword: keyword.keyword,
+      targetLangName,
+      uiLangName,
+      marketLabel,
+      analysisContext,
+      referenceContext: referenceContext + intentHintContext
+    }) as { systemInstruction: string; prompt: string };
+    prompt = promptConfig.prompt;
+  } else {
+    // 使用简化的 system instruction（避免 GEO 细节污染）
+    systemInstruction = uiLanguage === 'zh'
+      ? `你是一位 SEO 内容策略专家。
+
+# 任务
+为关键词 "${keyword.keyword}" 制定内容策略。
+
+# 要求
+1. 分析用户搜索意图
+2. 设计页面标题（H1）和 Meta 描述
+3. 规划内容结构（H2 章节）
+4. 推荐长尾关键词
+5. 建议文章字数
+6. 判断内容类型（informational 或 commercial）
+
+# 分析上下文
+${analysisContext ? `\n搜索引擎偏好和竞争对手分析：\n${analysisContext.substring(0, 1000)}${analysisContext.length > 1000 ? '...' : ''}` : ''}
+${referenceContext ? `\n参考资料：\n${referenceContext.substring(0, 1000)}${referenceContext.length > 1000 ? '...' : ''}` : ''}
+${intentHintContext}
+
+# 输出格式
+返回 JSON 格式，包含以下字段：
+- pageTitleH1: 页面标题（目标语言）
+- pageTitleH1_trans: 页面标题翻译（UI语言）
+- metaDescription: Meta 描述（目标语言）
+- metaDescription_trans: Meta 描述翻译（UI语言）
+- urlSlug: URL slug
+- userIntentSummary: 用户意图分析
+- contentStructure: 内容结构数组（每个包含 header, header_trans, description, description_trans）
+- longTailKeywords: 长尾关键词数组（目标语言）
+- longTailKeywords_trans: 长尾关键词翻译（UI语言）
+- coreKeywords: 核心关键词数组
+- recommendedWordCount: 推荐字数（整数）
+- contentType: 内容类型（"informational" 或 "commercial"）
+- markdown: Markdown 格式的完整策略报告
+
+重要：只返回 JSON，不要包含任何解释或思考过程。`
+      : `You are an SEO content strategy expert.
+
+# Task
+Create a content strategy for keyword "${keyword.keyword}".
+
+# Requirements
+1. Analyze user search intent
+2. Design page title (H1) and meta description
+3. Plan content structure (H2 sections)
+4. Recommend long-tail keywords
+5. Suggest word count
+6. Determine content type (informational or commercial)
+
+# Analysis Context
+${analysisContext ? `\nSearch engine preferences and competitor analysis:\n${analysisContext.substring(0, 1000)}${analysisContext.length > 1000 ? '...' : ''}` : ''}
+${referenceContext ? `\nReference material:\n${referenceContext.substring(0, 1000)}${referenceContext.length > 1000 ? '...' : ''}` : ''}
+${intentHintContext}
+
+# Output Format
+Return JSON format with the following fields:
+- pageTitleH1: Page title (target language)
+- pageTitleH1_trans: Page title translation (UI language)
+- metaDescription: Meta description (target language)
+- metaDescription_trans: Meta description translation (UI language)
+- urlSlug: URL slug
+- userIntentSummary: User intent analysis
+- contentStructure: Content structure array (each with header, header_trans, description, description_trans)
+- longTailKeywords: Long-tail keywords array (target language)
+- longTailKeywords_trans: Long-tail keywords translation (UI language)
+- coreKeywords: Core keywords array
+- recommendedWordCount: Recommended word count (integer)
+- contentType: Content type ("informational" or "commercial")
+- markdown: Complete strategy report in Markdown format
+
+CRITICAL: Return ONLY JSON, no explanations or thinking process.`;
+
+    // 构建简化的 prompt
+    prompt = uiLanguage === 'zh'
+      ? `请为关键词 "${keyword.keyword}" 制定 SEO 内容策略。
+
+目标语言：${targetLangName}
+目标市场：${marketLabel}
+
+请分析用户搜索意图，设计页面标题、Meta 描述、内容结构，并推荐长尾关键词。
+
+返回 JSON 格式的策略报告。`
+      : `Please create an SEO content strategy for keyword "${keyword.keyword}".
+
+Target Language: ${targetLangName}
+Target Market: ${marketLabel}
+
+Analyze user search intent, design page title, meta description, content structure, and recommend long-tail keywords.
+
+Return a strategy report in JSON format.`;
+  }
 
   onProgress?.(uiLanguage === 'zh' ? `🤖 正在制定最终的 SEO 内容策略报告...` : `🤖 Generating final SEO content strategy report...`);
 

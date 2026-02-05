@@ -525,6 +525,33 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasValidFinalArticle, state.isGenerating]);
 
+  // 监听页面可见性变化，确保用户切换回来时能看到完成的文章
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // 当页面重新可见时，检查是否有已完成的文章
+      if (!document.hidden && hasValidFinalArticle && !state.isGenerating) {
+        console.log(
+          "[ArticleGeneratorLayout] 页面重新可见，已有完成的文章，确保显示预览"
+        );
+        // 确保状态正确，以便显示预览
+        if (state.currentStage !== "complete") {
+          updateState({
+            currentStage: "complete",
+            progress: 100,
+            isGenerating: false,
+          });
+        }
+      }
+    };
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+      return () => {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      };
+    }
+  }, [hasValidFinalArticle, state.isGenerating, state.currentStage]);
+
   const startGeneration = async (config: ArticleConfig) => {
     updateState({
       currentStage: "research", // Use a valid stage from the type

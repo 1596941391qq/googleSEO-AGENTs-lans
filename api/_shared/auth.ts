@@ -48,6 +48,11 @@ export async function authenticateRequest(req: VercelRequest): Promise<AuthResul
 
   const token = authHeader.substring(7);
 
+  // 确保 token 不是空字符串
+  if (!token || token.trim().length === 0) {
+    return null;
+  }
+
   // 尝试作为 JWT token 验证
   try {
     const payload = await verifyToken(token);

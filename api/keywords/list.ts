@@ -23,48 +23,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Initialize tables
-    await initDomainCacheTables();
-
-    // Fetch all keywords from keyword_analysis_cache for this user's websites
+    // 从新的 keywords 表查询数据
     const result = await sql`
       SELECT
-        kac.id,
-        kac.keyword,
-        kac.dataforseo_volume as volume,
-        kac.dataforseo_difficulty as difficulty,
-        kac.dataforseo_cpc as cpc,
-        kac.agent2_probability as probability,
-        kac.agent2_search_intent as intent,
-        kac.agent2_top_domain_type as top_domain_type,
-        kac.agent2_reasoning as reasoning,
-        kac.agent2_top_serp_snippets as top_serp_snippets,
-        kac.source,
-        kac.website_id,
-        kac.created_at,
-        uw.website_url,
+        k.id,
+        k.keyword,
+        k.translation,
+        k.intent,
+        k.volume,
+        k.difficulty,
+        k.cpc,
+        k.probability,
+        k.top_domain_type,
+        k.reasoning,
+        k.top_serp_snippets,
+        k.source,
+        k.is_favorited,
+        k.status,
+        k.content_status,
+        k.project_id,
+        k.website_id,
+        k.created_at,
+        p.name as project_name,
         uw.website_domain,
+        uw.website_url,
         CASE WHEN EXISTS (
           SELECT 1 FROM published_articles pa
-          WHERE pa.keyword = kac.keyword
+          WHERE pa.keyword = k.keyword
           AND pa.user_id::text = ${userId.toString()}
         ) THEN true ELSE false END as has_draft
-      FROM keyword_analysis_cache kac
-      LEFT JOIN user_websites uw ON kac.website_id = uw.id
-      WHERE (
-        -- 公共关键词：website_id 为 NULL 的，所有用户都能看到
-        kac.website_id IS NULL
-        OR
-        -- 私有关键词：website_id 不为 NULL 的，只有网站所有者能看到
-        (kac.website_id IS NOT NULL AND uw.user_id::text = ${userId.toString()})
-      )
-      ORDER BY kac.created_at DESC
+      FROM keywords k
+      LEFT JOIN projects p ON k.project_id = p.id
+      LEFT JOIN user_websites uw ON k.website_id = uw.id
+      WHERE k.user_id::text = ${userId.toString()}
+      ORDER BY k.created_at DESC
     `;
 
     const keywords = result.rows.map(row => ({
       id: row.id,
       keyword: row.keyword,
-      translation: null, // keyword_analysis_cache doesn't have translation
+      translation: row.translation,
       intent: row.intent || 'Informational',
       volume: row.volume,
       difficulty: row.difficulty,
@@ -74,13 +72,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       reasoning: row.reasoning,
       top_serp_snippets: row.top_serp_snippets,
       source: row.source || 'manual',
-      project_id: row.website_id, // Use website_id as project_id for compatibility
-      project_name: row.website_domain || row.website_url || null,
+      project_id: row.project_id || row.website_id, // 兼容旧数据
+      project_name: row.project_name || row.website_domain || row.website_url || null,
       task_type: null,
       mining_mode: null,
       target_language: null,
       created_at: row.created_at,
       has_draft: row.has_draft,
+      is_favorited: row.is_favorited,
+      status: row.status,
+      content_status: row.content_status,
     }));
 
     return res.json({

@@ -604,18 +604,23 @@ export interface ProjectWithStats extends Project {
 
 export interface KeywordWithStatus {
   id: string;
+  user_id?: string;
   project_id: string | null;
+  website_id?: string | null;
   keyword: string;
   translation: string | null;
   intent: string | null;
   volume: number | null;
   difficulty: number | null;
   cpc?: number | null;
+  competition?: number | null;
   probability: string | null;
   is_selected: boolean;
-  status: 'selected' | 'generating' | 'completed' | 'failed';
-  content_status?: string;
+  is_favorited?: boolean;
+  status: 'pending' | 'selected' | 'analyzing' | 'generating' | 'completed' | 'failed';
+  content_status?: 'none' | 'draft' | 'published' | null;
   created_at: string;
+  updated_at?: string;
   // Additional fields from API
   has_draft?: boolean;
   project_name?: string | null;
@@ -623,7 +628,7 @@ export interface KeywordWithStatus {
   mining_mode?: string | null;
   target_language?: string | null;
   // SERP and analysis fields
-  source?: string | null; // 'website-audit' | 'manual' | 'blue-ocean'
+  source?: 'website-audit' | 'manual' | 'mining' | 'batch' | null;
   top_domain_type?: string | null;
   reasoning?: string | null;
   top_serp_snippets?: Array<{ url?: string; title?: string; snippet?: string }> | null;
