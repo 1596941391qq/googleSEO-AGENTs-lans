@@ -16,7 +16,8 @@
       "Bash(netstat:*)",
       "Bash(curl:*)",
       "Bash(npx tsx:*)",
-      "Bash(vercel dev)"
+      "Bash(vercel dev)",
+      "Bash(del:*)"
     ]
   }
 }

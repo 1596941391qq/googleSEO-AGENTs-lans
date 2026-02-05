@@ -1,4 +1,77 @@
 /**
+ * 带超时的 fetch 辅助函数
+ */
+export async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeout = 30000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeout}ms`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * 带重试的 fetch 辅助函数
+ */
+export async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  maxRetries = 3,
+  timeout = 30000
+): Promise<Response> {
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[Netlify] Fetch attempt ${attempt}/${maxRetries}: ${url}`);
+      const response = await fetchWithTimeout(url, options, timeout);
+
+      if (response.ok || response.status < 500) {
+        return response;
+      }
+
+      // 5xx 错误可以重试，4xx 错误不重试
+      if (response.status >= 500) {
+        console.warn(`[Netlify] Server error ${response.status}, will retry...`);
+        lastError = new Error(`HTTP ${response.status}`);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000)); // 指数退避
+          continue;
+        }
+      }
+
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`[Netlify] Fetch attempt ${attempt} failed:`, error.message);
+
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+        console.log(`[Netlify] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+/**
  * Netlify 部署服务（简化版）
  * 只保留 Netlify 相关功能
  */
@@ -31,33 +104,62 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
   try {
     console.log(`[Netlify] Creating site: ${config.siteName}`);
 
-    // 创建站点
-    const createResponse = await fetch('https://api.netlify.com/api/v1/sites', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${config.token}`,
-        'Content-Type': 'application/json',
+    // 标准化站点名称
+    const normalizedSiteName = config.siteName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
+    // 先尝试查询站点是否已存在
+    console.log(`[Netlify] Checking if site exists: ${normalizedSiteName}`);
+    const checkResponse = await fetchWithRetry(
+      `https://api.netlify.com/api/v1/sites?filter[all][name]=${encodeURIComponent(normalizedSiteName)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+          'Content-Type': 'application/json',
+        },
       },
-      body: JSON.stringify({
-        name: config.siteName.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
-      }),
-    });
+      2, // 最多重试 2 次
+      15000 // 15 秒超时
+    );
+
+    if (checkResponse.ok) {
+      const sitesData = await checkResponse.json();
+      if (Array.isArray(sitesData) && sitesData.length > 0) {
+        const existingSite = sitesData.find((s: any) => s.name === normalizedSiteName || s.id === normalizedSiteName);
+        if (existingSite) {
+          console.log(`[Netlify] ✅ Site already exists: ${existingSite.id}`);
+          console.log(`[Netlify] Site URL: ${existingSite.ssl_url || existingSite.url}`);
+          return {
+            success: true,
+            siteUrl: existingSite.ssl_url || existingSite.url,
+            projectId: existingSite.id,
+          };
+        }
+      }
+    }
+
+    // 创建新站点（带重试）
+    console.log(`[Netlify] Creating new site...`);
+    const createResponse = await fetchWithRetry(
+      'https://api.netlify.com/api/v1/sites',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: normalizedSiteName,
+        }),
+      },
+      3, // 最多重试 3 次
+      30000 // 30 秒超时
+    );
 
     if (!createResponse.ok) {
       const error = await createResponse.json();
       console.error(`[Netlify] API Error - Status: ${createResponse.status}`);
       console.error(`[Netlify] Error Response:`, JSON.stringify(error, null, 2));
-
-      // 站点名已存在
-      if (createResponse.status === 422) {
-        const siteName = config.siteName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-        console.log(`[Netlify] Site already exists: ${siteName}`);
-        return {
-          success: true,
-          siteUrl: `https://${siteName}.netlify.app`,
-          projectId: siteName,
-        };
-      }
       return {
         success: false,
         error: error.message || error.error || `Netlify API error: ${createResponse.status}`,
@@ -65,7 +167,9 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
     }
 
     const siteData = await createResponse.json();
-    console.log(`[Netlify] ✅ Site created successfully. ID: ${siteData.id}`);
+    console.log(`[Netlify] ✅ Site created successfully!`);
+    console.log(`[Netlify] Site ID: ${siteData.id}`);
+    console.log(`[Netlify] Site Name: ${siteData.name}`);
     console.log(`[Netlify] Site URL: ${siteData.ssl_url || siteData.url}`);
 
     // 注意: GitHub 仓库连接需要在 Netlify UI 中手动完成
@@ -107,8 +211,18 @@ export async function triggerNetlifyBuild(config: {
       return await triggerNetlifyBuildViaWebhook({ buildHookUrl: config.buildHookUrl });
     }
 
-    // 备用方案: 使用 API
-    const response = await fetch(
+    // 验证 siteId 是否为空
+    if (!config.siteId || config.siteId === '') {
+      console.error(`[Netlify] ❌ Site ID is empty!`);
+      return {
+        success: false,
+        error: 'Site ID is empty. Cannot trigger build.',
+      };
+    }
+
+    // 备用方案: 使用 API（带重试）
+    console.log(`[Netlify] Using API endpoint: /api/v1/sites/${config.siteId}/builds`);
+    const response = await fetchWithRetry(
       `https://api.netlify.com/api/v1/sites/${config.siteId}/builds`,
       {
         method: 'POST',
@@ -116,7 +230,9 @@ export async function triggerNetlifyBuild(config: {
           'Authorization': `Bearer ${config.token}`,
           'Content-Type': 'application/json',
         },
-      }
+      },
+      3, // 最多重试 3 次
+      30000 // 30 秒超时
     );
 
     if (!response.ok) {
@@ -131,6 +247,19 @@ export async function triggerNetlifyBuild(config: {
       }
 
       console.error(`[Netlify] Build trigger failed: ${response.status}`, errorDetail);
+
+      // 404 错误的特殊处理
+      if (response.status === 404) {
+        console.error(`[Netlify] ❌ Site not found (404). Site ID: ${config.siteId}`);
+        console.error(`[Netlify] This could mean:`);
+        console.error(`[Netlify]   1. The site was deleted from Netlify`);
+        console.error(`[Netlify]   2. The Site ID is incorrect`);
+        console.error(`[Netlify]   3. The token doesn't have access to this site`);
+        return {
+          success: false,
+          error: `Site not found (404). The Netlify site may have been deleted or the Site ID is incorrect. Site ID: ${config.siteId}`,
+        };
+      }
 
       return {
         success: false,
@@ -163,13 +292,18 @@ export async function triggerNetlifyBuildViaWebhook(config: {
   try {
     console.log(`[Netlify] Triggering build via Build Hook...`);
 
-    const response = await fetch(config.buildHookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const response = await fetchWithRetry(
+      config.buildHookUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
       },
-      body: JSON.stringify({}),
-    });
+      3, // 最多重试 3 次
+      30000 // 30 秒超时
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -193,4 +327,3 @@ export async function triggerNetlifyBuildViaWebhook(config: {
     };
   }
 }
-

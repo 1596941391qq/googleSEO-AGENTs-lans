@@ -377,16 +377,19 @@ export async function getAllTokenPairs(): Promise<{
 
 export async function getAvailableTokenPair(): Promise<TokenPair | null> {
   await initializeAndMigrate();
-  
+
+  // 从 platform_sites 表查询绑定关系
   const result = await sql<any>`
-    SELECT 
+    SELECT
       g.*,
-      row_to_json(n.*) as netlify_token
+      row_to_json(p.*) as netlify_token
     FROM github_tokens g
-    JOIN netlify_tokens n ON g.netlify_token_id = n.id
-    WHERE g.status = 'active' 
-      AND n.status = 'active'
-      AND g.netlify_token_id IS NOT NULL
+    JOIN platform_sites ps ON ps.github_token_id = g.id
+    JOIN platform_tokens p ON ps.platform_token_id = p.id
+    WHERE g.status = 'active'
+      AND p.status = 'active'
+      AND ps.status = 'active'
+      AND p.platform = 'netlify'
     ORDER BY g.usage_count ASC, g.created_at ASC
     LIMIT 1
   `;
@@ -411,15 +414,15 @@ export function decryptToken(encryptedToken: string): string {
 
 export async function incrementTokenUsage(githubTokenId: string, netlifyTokenId: string): Promise<void> {
   await initializeAndMigrate();
-  
+
   await sql`
-    UPDATE github_tokens 
+    UPDATE github_tokens
     SET usage_count = usage_count + 1, updated_at = NOW()
     WHERE id = ${githubTokenId}
   `;
 
   await sql`
-    UPDATE netlify_tokens 
+    UPDATE platform_tokens
     SET usage_count = usage_count + 1, updated_at = NOW()
     WHERE id = ${netlifyTokenId}
   `;

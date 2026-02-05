@@ -22,7 +22,8 @@ import {
   X,
   AlertCircle,
   CheckCircle2,
-  Clock
+  Clock,
+  Link2
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -120,8 +121,13 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
   const [sites, setSites] = useState<PlatformSite[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'github' | 'platform' | 'sites'>('github');
+  const [activeTab, setActiveTab] = useState<'github' | 'platform' | 'sites' | 'published'>('github');
   const [showHelp, setShowHelp] = useState(false);
+
+  // 已发布文章状态
+  const [publishedArticles, setPublishedArticles] = useState<any[]>([]);
+  const [bindingArticleId, setBindingArticleId] = useState<string | null>(null);
+  const [bindingRepoName, setBindingRepoName] = useState('');
 
   // 调试日志
   useEffect(() => {
@@ -170,13 +176,15 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [tokensRes, sitesRes] = await Promise.all([
+      const [tokensRes, sitesRes, publishedRes] = await Promise.all([
         fetch('/api/admin/tokens', { headers }),
-        fetch('/api/admin/sites', { headers })
+        fetch('/api/admin/sites', { headers }),
+        fetch('/api/admin/published', { headers })
       ]);
 
       const tokensData = await tokensRes.json();
       const sitesData = await sitesRes.json();
+      const publishedData = await publishedRes.json();
 
       console.log('[AdminDashboard] API Response:', tokensData);
 
@@ -224,6 +232,16 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
       }
       if (sitesData.success) {
         setSites(sitesData.data.sites || []);
+      }
+
+      // 加载已发布文章
+      if (publishedData.success) {
+        const articles = publishedData.data.articles || [];
+        console.log('[AdminDashboard] Loaded published articles:', articles.length);
+        console.log('[AdminDashboard] Published data:', publishedData.data);
+        setPublishedArticles(articles);
+      } else {
+        console.error('[AdminDashboard] Failed to load published articles:', publishedData.error);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -436,6 +454,38 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
     }
   };
 
+  // 手动绑定文章到仓库
+  const handleBindArticleToRepo = async (articleId: string) => {
+    if (!bindingRepoName.trim()) {
+      alert('Please enter a repository name');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/admin/bind-article', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          articleId,
+          repoName: bindingRepoName.trim()
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setBindingArticleId(null);
+        setBindingRepoName('');
+        // 刷新数据
+        fetchData();
+        alert('Article bound successfully!');
+      } else {
+        alert(data.error || 'Failed to bind article');
+      }
+    } catch (error) {
+      alert('Failed to bind article');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -570,6 +620,14 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
           >
             <Globe className="w-4 h-4 mr-2" />
             Sites ({sites.length})
+          </Button>
+          <Button
+            variant={activeTab === 'published' ? 'default' : 'ghost'}
+            onClick={() => setActiveTab('published')}
+            className={cn("rounded-xl", activeTab === 'published' && "bg-orange-500")}
+          >
+            <BookOpen className="w-4 h-4 mr-2" />
+            Published Articles
           </Button>
         </div>
 
@@ -1148,6 +1206,127 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                   </ul>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Published Articles Tab */}
+      {activeTab === 'published' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-5 h-5 text-orange-500" />
+              <h2 className="text-xl font-black">Published Articles</h2>
+            </div>
+          </div>
+
+          <Card className="border-zinc-800 bg-zinc-900/50">
+            <CardContent className="p-6">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+                  <span className="ml-3 text-zinc-500">Loading articles...</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {publishedArticles.length === 0 ? (
+                    <div className="text-center py-8">
+                      <BookOpen className="w-12 h-12 mx-auto text-zinc-700 mb-4" />
+                      <p className="text-zinc-500">No published articles yet</p>
+                    </div>
+                  ) : (
+                    publishedArticles.map((article) => (
+                      <div
+                        key={article.id}
+                        className={cn(
+                          "border rounded-lg p-4 hover:bg-zinc-800/50",
+                          article.site_id ? "border-zinc-800" : "border-amber-500/50"
+                        )}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-medium">{article.title}</span>
+                              {article.site_id && article.github_owner ? (
+                                <Badge className="text-xs bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
+                                  ✓ {article.github_owner}/{article.repo_name}
+                                </Badge>
+                              ) : (
+                                <Badge className="text-xs bg-amber-500/20 text-amber-400 border-amber-500/30">
+                                  ⚠️ Not Bound
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-zinc-400 space-y-1">
+                              <p>Keyword: <span className="text-zinc-300">{article.keyword || 'N/A'}</span></p>
+                              <p>Published: {article.published_at ? new Date(article.published_at).toLocaleString() : 'N/A'}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {article.site_id ? (
+                              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setBindingArticleId(article.id);
+                                  setBindingRepoName('');
+                                }}
+                                className="h-8 px-3 text-xs rounded-lg border-amber-500/50 text-amber-400 hover:bg-amber-500/10"
+                              >
+                                <Link2 className="w-3 h-3 mr-1" />
+                                Bind
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* 手动绑定表单 */}
+                        {bindingArticleId === article.id && (
+                          <div className="mt-3 p-3 rounded-lg bg-zinc-800/50 border border-zinc-700">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-medium">Bind to Repository:</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setBindingArticleId(null)}
+                                className="h-6 w-6 p-0 rounded-full text-zinc-400 hover:text-white"
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="e.g., my-brand-best-ai-tools"
+                                value={bindingRepoName}
+                                onChange={(e) => setBindingRepoName(e.target.value)}
+                                className="flex-1 bg-zinc-900 border-zinc-700 text-sm"
+                                onKeyPress={(e) => {
+                                  if (e.key === 'Enter') handleBindArticleToRepo(article.id);
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleBindArticleToRepo(article.id)}
+                                disabled={!bindingRepoName.trim()}
+                                className="h-8 px-3 text-xs bg-orange-500 hover:bg-orange-600 disabled:opacity-50"
+                              >
+                                <Link2 className="w-3 h-3 mr-1" />
+                                Bind
+                              </Button>
+                            </div>
+                            <p className="text-xs text-zinc-500 mt-2">
+                              Enter the repository name (e.g., <code>my-brand-best-ai-tools</code>)
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

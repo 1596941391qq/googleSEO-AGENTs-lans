@@ -15,12 +15,14 @@ import {
 import {
   deployToNetlify,
   triggerNetlifyBuild,
+  fetchWithRetry,
 } from './netlify-deployer.js';
 import {
   getAvailableTokenPair,
   decryptToken,
   incrementTokenUsage,
 } from '../../lib/token-manager.js';
+import { sql } from '../../lib/database.js';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ArticleForPublish {
@@ -39,14 +41,17 @@ interface PublishResult {
   siteUrl?: string;
   repoUrl?: string;
   siteName?: string;
+  platformSiteId?: string;
+  netlifySiteId?: string; // Netlify site ID，用于触发构建
   isNewSite?: boolean;
   error?: string;
+  warning?: string;
 }
 
 function generateSiteName(brandName?: string, keyword?: string): string {
   if (brandName && keyword) {
-    const sanitizedBrand = brandName.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 20);
-    const sanitizedKeyword = keyword.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 30);
+    const sanitizedBrand = brandName.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 30);
+    const sanitizedKeyword = keyword.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 50);
     return `${sanitizedBrand}-${sanitizedKeyword}`;
   }
 
@@ -56,6 +61,7 @@ function generateSiteName(brandName?: string, keyword?: string): string {
 
 function generateSlug(keyword: string, existingSlug?: string): string {
   if (existingSlug) return existingSlug;
+  if (!keyword) return 'untitled';
   return keyword
     .toLowerCase()
     .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
@@ -181,7 +187,9 @@ export async function publishArticle(
     console.log(`[PSEO Publisher] ✅ Article pushed to GitHub`);
 
     let siteUrl = '';
-    let netlifySiteId = '';
+    let platformSiteId = '';
+    let netlifyWarning = '';
+    let netlifySiteId = ''; // Netlify 返回的 site ID，仅用于日志记录（不存储到数据库）
 
     if (isNewSite) {
       console.log(`[PSEO Publisher] Deploying to Netlify...`);
@@ -203,25 +211,166 @@ export async function publishArticle(
 
       siteUrl = deployResult.siteUrl || '';
       netlifySiteId = deployResult.projectId || '';
-      
+
       console.log(`[PSEO Publisher] ✅ Deployed to Netlify: ${siteUrl}`);
-    } else {
-      console.log(`[PSEO Publisher] Triggering Netlify rebuild...`);
+      console.log(`[PSEO Publisher] Netlify Site ID: ${netlifySiteId}`);
 
-      const rebuildResult = await triggerNetlifyBuild({
-        token: netlifyTokenDecrypted,
-        siteId: netlifySiteId,
-      });
+      // 创建或更新 platform_sites 记录（不保存 netlify_site_id）
+      const siteInsertResult = await sql`
+        INSERT INTO platform_sites (
+          github_token_id,
+          platform_token_id,
+          platform,
+          content_type,
+          site_name,
+          site_url,
+          repo_name,
+          status,
+          usage_count
+        )
+        VALUES (
+          ${github_token.id},
+          ${netlify_token.id},
+          'netlify',
+          'informational',
+          ${siteName},
+          ${siteUrl},
+          ${repoName},
+          'active',
+          1
+        )
+        ON CONFLICT (github_token_id, repo_name)
+        DO UPDATE SET
+          site_url = ${siteUrl},
+          status = 'active',
+          updated_at = NOW()
+        RETURNING id
+      `;
 
-      if (!rebuildResult.success) {
-        console.error(`[PSEO Publisher] ❌ Netlify rebuild failed: ${rebuildResult.error}`);
-        return {
-          success: false,
-          error: `Failed to trigger Netlify rebuild: ${rebuildResult.error}`,
-        };
+      if (siteInsertResult.rows.length > 0) {
+        platformSiteId = siteInsertResult.rows[0].id;
+        console.log(`[PSEO Publisher] ✅ Platform site ID: ${platformSiteId}`);
       }
 
-      console.log(`[PSEO Publisher] ✅ Netlify rebuild triggered`);
+      // 注意：刚创建的 Netlify site 还没有连接 GitHub repo
+      // Netlify 会自动检测到 repo 并开始构建（通常需要 1-5 分钟）
+      console.log(`[PSEO Publisher] ℹ️ Netlify will auto-detect the GitHub repo and start building within a few minutes`);
+      console.log(`[PSEO Publisher] ℹ️ Site URL: ${siteUrl}`);
+
+      // 设置提示信息：site 会在几分钟后自动构建
+      netlifyWarning = 'Netlify site created. Auto-build will start once Netlify detects the GitHub repo (usually 1-5 minutes).';
+    } else {
+      console.log(`[PSEO Publisher] Querying existing platform_site...`);
+
+      // 查询现有的 platform_sites 记录（包括 site_url）
+      const siteQueryResult = await sql`
+        SELECT id, site_url
+        FROM platform_sites
+        WHERE github_token_id = ${github_token.id}
+        AND repo_name = ${repoName}
+        AND platform = 'netlify'
+        LIMIT 1
+      `;
+
+      if (siteQueryResult.rows.length > 0) {
+        platformSiteId = siteQueryResult.rows[0].id;
+        siteUrl = siteQueryResult.rows[0].site_url || '';
+        console.log(`[PSEO Publisher] Found existing platform_site: ${platformSiteId}`);
+        console.log(`[PSEO Publisher] Site URL: ${siteUrl}`);
+      }
+
+      // 触发 Netlify 重新构建
+      try {
+        console.log(`[PSEO Publisher] Triggering Netlify rebuild for existing site: ${siteName}`);
+        console.log(`[PSEO Publisher] Querying Netlify API for site: ${siteName}`);
+
+        // 通过 Netlify API 查询 site（使用 site name，带重试）
+        const checkResponse = await fetchWithRetry(
+          `https://api.netlify.com/api/v1/sites?filter[all][name]=${encodeURIComponent(siteName)}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${netlifyTokenDecrypted}`,
+              'Content-Type': 'application/json',
+            },
+          },
+          3, // 最多重试 3 次
+          30000 // 30 秒超时
+        );
+
+        console.log(`[PSEO Publisher] Netlify API response status: ${checkResponse.status}`);
+
+        let actualNetlifySiteId = '';
+
+        if (checkResponse.ok) {
+          const sitesData = await checkResponse.json();
+          console.log(`[PSEO Publisher] Netlify API returned ${sitesData.length} sites`);
+
+          if (Array.isArray(sitesData) && sitesData.length > 0) {
+            const existingSite = sitesData.find((s: any) => s.name === siteName);
+            if (existingSite) {
+              actualNetlifySiteId = existingSite.id;
+              console.log(`[PSEO Publisher] ✅ Found Netlify site: ${actualNetlifySiteId}`);
+              console.log(`[PSEO Publisher] Site state: ${existingSite.state}`);
+
+              // 从 Netlify API 获取真实的 site_url
+              if (existingSite.url && !siteUrl) {
+                siteUrl = existingSite.url;
+                console.log(`[PSEO Publisher] ✅ Updated site URL from Netlify API: ${siteUrl}`);
+
+                // 更新数据库中的 site_url
+                await sql`
+                  UPDATE platform_sites
+                  SET site_url = ${siteUrl}, updated_at = NOW()
+                  WHERE id = ${platformSiteId}
+                `;
+                console.log(`[PSEO Publisher] ✅ Updated site_url in database`);
+              }
+
+              // 检查 GitHub repo 是否已链接
+              const hasLinkedRepo = existingSite.build_settings?.repo;
+
+              if (hasLinkedRepo) {
+                // 场景3: Netlify site 存在且 GitHub repo 已链接 → 触发重新构建
+                console.log(`[PSEO Publisher] ✅ GitHub repo is linked: ${hasLinkedRepo}`);
+                console.log(`[PSEO Publisher] Triggering rebuild...`);
+
+                const rebuildResult = await triggerNetlifyBuild({
+                  token: netlifyTokenDecrypted,
+                  siteId: actualNetlifySiteId,
+                });
+
+                if (rebuildResult.success) {
+                  console.log(`[PSEO Publisher] ✅ Netlify rebuild triggered successfully`);
+                } else {
+                  netlifyWarning = `Netlify build trigger failed: ${rebuildResult.error}`;
+                  console.warn(`[PSEO Publisher] ⚠️ Warning: ${netlifyWarning}`);
+                }
+              } else {
+                // 场景2: Netlify site 存在但 GitHub repo 未链接 → 等待自动检测
+                console.log(`[PSEO Publisher] ⚠️ GitHub repo not linked yet`);
+                console.log(`[PSEO Publisher] ℹ️ Netlify will auto-detect the GitHub repo and start building within a few minutes`);
+                netlifyWarning = 'Netlify site exists but GitHub repo not linked yet. Auto-build will start once Netlify detects the repo (usually 1-5 minutes).';
+              }
+            }
+          }
+        } else {
+          console.error(`[PSEO Publisher] ❌ Netlify API error: ${checkResponse.status} ${checkResponse.statusText}`);
+          const errorText = await checkResponse.text().catch(() => 'Unknown error');
+          console.error(`[PSEO Publisher] Error details: ${errorText}`);
+          netlifyWarning = `Netlify API error: ${checkResponse.status}`;
+        }
+
+        // 场景1: 如果找不到 Netlify site
+        if (!actualNetlifySiteId) {
+          netlifyWarning = `Netlify site "${siteName}" not found in API. The site may need to be recreated.`;
+          console.warn(`[PSEO Publisher] ⚠️ Warning: ${netlifyWarning}`);
+        }
+      } catch (error: any) {
+        console.error(`[PSEO Publisher] ❌ Exception during Netlify rebuild:`, error.message);
+        console.error(`[PSEO Publisher] Stack:`, error.stack);
+        netlifyWarning = `Netlify build trigger failed: ${error.message}`;
+      }
     }
 
     await incrementTokenUsage(github_token.id, netlify_token.id);
@@ -230,6 +379,9 @@ export async function publishArticle(
 
     console.log(`[PSEO Publisher] ✅ Published successfully!`);
     console.log(`[PSEO Publisher] Article URL: ${articleUrl}`);
+    if (netlifyWarning) {
+      console.log(`[PSEO Publisher] ⚠️ Warning: ${netlifyWarning}`);
+    }
 
     return {
       success: true,
@@ -237,7 +389,10 @@ export async function publishArticle(
       siteUrl,
       repoUrl: `https://github.com/${github_token.owner_name}/${repoName}`,
       siteName,
+      platformSiteId,
+      netlifySiteId,
       isNewSite,
+      warning: netlifyWarning,
     };
 
   } catch (error: any) {
@@ -254,14 +409,13 @@ export async function publishArticle(
  */
 export async function updatePublishedArticle(
   article: ArticleForPublish,
-  repoName: string,
-  netlifySiteId: string
+  repoName: string
 ): Promise<PublishResult> {
   console.log(`[PSEO Publisher] 🔄 Updating "${article.title}"`);
 
   try {
     const tokenPair = await getAvailableTokenPair();
-    
+
     if (!tokenPair) {
       return {
         success: false,
@@ -272,6 +426,21 @@ export async function updatePublishedArticle(
     const { github_token, netlify_token } = tokenPair;
     const githubTokenDecrypted = decryptToken(github_token.token_encrypted);
     const netlifyTokenDecrypted = decryptToken(netlify_token.token_encrypted);
+
+    // 检查仓库是否存在
+    const repoExists = await checkRepoExists({
+      token: githubTokenDecrypted,
+      owner: github_token.owner_name,
+      repoName: repoName,
+    });
+
+    if (!repoExists) {
+      console.log(`[PSEO Publisher] ⚠️ Repository does not exist, cannot update`);
+      return {
+        success: false,
+        error: 'FORCE_REPUBLISH: Repository not found. Please publish the article first to create the repository.',
+      };
+    }
 
     const slug = generateSlug(article.keyword, article.urlSlug);
     const finalContent = generateArticleMarkdown(article);
@@ -295,19 +464,99 @@ export async function updatePublishedArticle(
       };
     }
 
-    const rebuildResult = await triggerNetlifyBuild({
-      token: netlifyTokenDecrypted,
-      siteId: netlifySiteId,
-    });
+    console.log(`[PSEO Publisher] ✅ Article updated on GitHub`);
 
-    if (!rebuildResult.success) {
-      return {
-        success: false,
-        error: `Failed to trigger Netlify rebuild: ${rebuildResult.error}`,
-      };
+    // 尝试触发 Netlify 重新构建（不依赖数据库，直接通过 API 查询/创建）
+    let rebuildWarning = '';
+
+    try {
+      console.log(`[PSEO Publisher] Checking Netlify site by repo name: ${repoName}`);
+
+      const siteName = repoName;
+      let actualNetlifySiteId = '';
+
+      // 通过 Netlify API 查询 site 是否存在（带重试）
+      const checkResponse = await fetchWithRetry(
+        `https://api.netlify.com/api/v1/sites?filter[all][name]=${encodeURIComponent(siteName)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${netlifyTokenDecrypted}`,
+            'Content-Type': 'application/json',
+          },
+        },
+        3, // 最多重试 3 次
+        30000 // 30 秒超时
+      );
+
+      if (checkResponse.ok) {
+        const sitesData = await checkResponse.json();
+        if (Array.isArray(sitesData) && sitesData.length > 0) {
+          const existingSite = sitesData.find((s: any) => s.name === siteName);
+          if (existingSite) {
+            actualNetlifySiteId = existingSite.id;
+            console.log(`[PSEO Publisher] ✅ Found Netlify site: ${actualNetlifySiteId}`);
+            console.log(`[PSEO Publisher] Site state: ${existingSite.state}`);
+
+            // 检查 GitHub repo 是否已链接
+            const hasLinkedRepo = existingSite.build_settings?.repo;
+
+            if (hasLinkedRepo) {
+              // 场景3: Netlify site 存在且 GitHub repo 已链接 → 触发重新构建
+              console.log(`[PSEO Publisher] ✅ GitHub repo is linked: ${hasLinkedRepo}`);
+              console.log(`[PSEO Publisher] Triggering rebuild...`);
+
+              const rebuildResult = await triggerNetlifyBuild({
+                token: netlifyTokenDecrypted,
+                siteId: actualNetlifySiteId,
+              });
+
+              if (!rebuildResult.success) {
+                rebuildWarning = `Netlify build trigger failed: ${rebuildResult.error}`;
+              } else {
+                console.log(`[PSEO Publisher] ✅ Netlify rebuild triggered`);
+              }
+            } else {
+              // 场景2: Netlify site 存在但 GitHub repo 未链接 → 等待自动检测
+              console.log(`[PSEO Publisher] ⚠️ GitHub repo not linked yet`);
+              console.log(`[PSEO Publisher] ℹ️ Netlify will auto-detect the GitHub repo and start building within a few minutes`);
+              rebuildWarning = 'Netlify site exists but GitHub repo not linked yet. Auto-build will start once Netlify detects the repo (usually 1-5 minutes).';
+            }
+          }
+        }
+      } else {
+        console.error(`[PSEO Publisher] ❌ Netlify API error: ${checkResponse.status}`);
+      }
+
+      // 场景1: 如果 Netlify site 不存在，创建新的
+      if (!actualNetlifySiteId) {
+        console.log(`[PSEO Publisher] Netlify site not found, creating new one...`);
+
+        const deployResult = await deployToNetlify({
+          token: netlifyTokenDecrypted,
+          repoOwner: github_token.owner_name,
+          repoName: repoName,
+          siteName: siteName,
+        });
+
+        if (deployResult.success) {
+          actualNetlifySiteId = deployResult.projectId || '';
+          console.log(`[PSEO Publisher] ✅ Created Netlify site: ${actualNetlifySiteId}`);
+          console.log(`[PSEO Publisher] ℹ️ Netlify will auto-detect the GitHub repo and start building within a few minutes`);
+          rebuildWarning = 'Netlify site created. Auto-build will start once Netlify detects the GitHub repo (usually 1-5 minutes).';
+        } else {
+          rebuildWarning = `Failed to create Netlify site: ${deployResult.error}`;
+        }
+      }
+    } catch (error: any) {
+      console.warn(`[PSEO Publisher] ⚠️ Exception during Netlify rebuild:`, error.message);
+      rebuildWarning = `Netlify build trigger failed: ${error.message}`;
     }
 
     console.log(`[PSEO Publisher] ✅ Updated successfully!`);
+    if (rebuildWarning) {
+      console.log(`[PSEO Publisher] ⚠️ Warning: ${rebuildWarning}`);
+    }
 
     return {
       success: true,
@@ -316,6 +565,7 @@ export async function updatePublishedArticle(
       repoUrl: `https://github.com/${github_token.owner_name}/${repoName}`,
       siteName: repoName,
       isNewSite: false,
+      warning: rebuildWarning,
     };
 
   } catch (error: any) {

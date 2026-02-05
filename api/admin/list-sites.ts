@@ -28,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 github_token_name: site.github_token_name,
                 platform_token_name: site.platform_token_name,
                 usage_count: site.usage_count,
-                platform_project_id: site.platform_project_id,
+                // platform_project_id 不再存储，改为通过 API 动态查询
                 created_at: site.created_at
             }))
         });

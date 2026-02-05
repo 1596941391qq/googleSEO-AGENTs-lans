@@ -6,13 +6,13 @@ import { publishArticle, getWebsitePublishingSites } from '../_shared/services/p
 
 /**
  * 发布文章 API (v2)
- * 
+ *
  * 自动从 Admin 配置的站点池中分配站点:
  * - 用户不需要配置任何 Token
  * - 系统根据内容类型（informational/commercial）自动选择平台
  * - 首次发布时自动创建 GitHub 仓库和平台项目
  * - 后续发布复用已绑定的站点
- * 
+ *
  * POST /api/articles/publish
  * Body: { articleId, projectId? }
  */
@@ -65,10 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // 尝试从用户的默认网站或任意一个活跃网站作为 fallback
       console.log('[Publish] Project ID missing, searching for a fallback website/project...');
       const fallbackResult = await sql`
-        SELECT id FROM user_websites 
-        WHERE user_id = ${authResult.userId} 
-        AND is_active = true 
-        ORDER BY is_default DESC, created_at DESC 
+        SELECT id FROM user_websites
+        WHERE user_id = ${authResult.userId}
+        AND is_active = true
+        ORDER BY is_default DESC, created_at DESC
         LIMIT 1
       `;
       if (fallbackResult.rows.length > 0) {
@@ -107,23 +107,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .replace(/(^-|-$)/g, '')
       .substring(0, 50);
 
-    // 5. 使用 PSEO Publisher 发布
+    // 6. 使用 PSEO Publisher 发布
     console.log(`[Publish API] Calling publishArticle with forceUpdate=${forceUpdate || false}`);
     console.log(`[Publish API] Brand name: ${brandName || '(not set, will use default)'}`);
-    const publishResult = await publishArticle(
-      actualProjectId,
-      {
-        id: articleId,
-        title: article.title,
-        content: article.content,
-        keyword: article.keyword || '',
-        metaDescription: article.meta_description,
-        contentType,
-        urlSlug,
-        brandName: brandName, // 自动从网站域名提取的品牌名
-      },
-      article.project_name // 用于生成站点��（作为后备）
-    );
+    const publishResult = await publishArticle({
+      id: articleId,
+      title: article.title,
+      content: article.content,
+      keyword: article.keyword || '',
+      metaDescription: article.meta_description,
+      contentType,
+      urlSlug,
+      brandName: brandName, // 自动从网站域名提取的品牌名
+    });
 
     if (!publishResult.success) {
       return sendErrorResponse(
@@ -133,13 +129,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         publishResult.error?.includes('No available') ? 503 : 500
       );
     }
-    // 6. 更新文章状态
+    // 7. 更新文章状态并保存 site_id
+    const siteId = publishResult.platformSiteId || null;
+
+    console.log('[Publish API] Saving site_id:', siteId, 'for article:', articleId);
+
     await sql`
       UPDATE published_articles
       SET status = 'published',
           published_at = ${forceUpdate ? 'NOW()' : (article.published_at ? article.published_at : 'NOW()')},
           url_slug = ${urlSlug},
           content_type = ${contentType},
+          site_id = ${siteId},
           updated_at = NOW()
       WHERE id = ${articleId} AND user_id::text = ${authResult.userId.toString()}
     `;

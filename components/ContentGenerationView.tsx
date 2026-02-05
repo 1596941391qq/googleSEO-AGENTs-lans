@@ -1112,6 +1112,19 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const handlePublish = React.useCallback(
     async (articleId: string) => {
       setPublishingId(articleId);
+
+      // 立即显示加载窗口
+      const loadingMsg = uiLanguage === "zh"
+        ? "正在发布文章..."
+        : "Publishing article...";
+
+      setBuildingOverlay({
+        siteUrl: null,
+        message: loadingMsg
+      });
+
+      console.log('[handlePublish] Starting publish for article:', articleId);
+
       try {
         const response = await fetch("/api/articles/publish", {
           method: "POST",
@@ -1132,6 +1145,8 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
         }
 
         const result = await response.json();
+        console.log('[handlePublish] Response:', result);
+
         if (result.success) {
           // Update local state with published URL
           setArticles((prev) =>
@@ -1142,14 +1157,18 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
                   status: "published",
                   publishedAt: result.data.publishedAt,
                   urlSlug: result.data.liveUrl || result.data.urlSlug || null,
-                  siteUrl: result.data.siteUrl || null, // 保存站点首页 URL
+                  siteUrl: result.data.siteUrl || null,
                 }
                 : a
             )
           );
 
           if (result.data.siteUrl) {
+            console.log('[handlePublish] ✅ Published successfully, showing deployment page');
             setBuildingOverlay({ siteUrl: result.data.siteUrl });
+          } else {
+            // 发布成功但没有 siteUrl
+            setBuildingOverlay(null);
           }
         } else {
           throw new Error(result.error || "Publishing failed");
@@ -1159,21 +1178,36 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
         await loadArticles();
       } catch (error: any) {
         console.error("Error publishing article:", error);
-        alert(
-          uiLanguage === "zh"
-            ? `发布失败: ${error.message || "请重试"}`
-            : `Publishing failed: ${error.message || "Please try again"}`
-        );
+        setBuildingOverlay(null);
+
+        const errorMsg = uiLanguage === "zh"
+          ? `发布失败: ${error.message || "请重试"}`
+          : `Publishing failed: ${error.message || "Please try again"}`;
+
+        setTimeout(() => alert(errorMsg), 100);
       } finally {
         setPublishingId(null);
       }
     },
-    [loadArticles, uiLanguage]
+    [loadArticles, platform, uiLanguage]
   );
 
   const handleUpdate = React.useCallback(
     async (articleId: string) => {
       setUpdatingId(articleId);
+
+      // 立即显示加载窗口
+      const loadingMsg = uiLanguage === "zh"
+        ? "正在更新文章并触发重新部署..."
+        : "Updating article and triggering redeploy...";
+
+      setBuildingOverlay({
+        siteUrl: null,
+        message: loadingMsg
+      });
+
+      console.log('[handleUpdate] Starting update for article:', articleId);
+
       try {
         const response = await fetch("/api/articles/update-published", {
           method: "POST",
@@ -1192,23 +1226,43 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
         }
 
         const result = await response.json();
-        if (result.success) {
-          if (result.data.siteUrl) {
-            setBuildingOverlay({ siteUrl: result.data.siteUrl });
-          }
+        console.log('[handleUpdate] Response:', result);
+
+        if (result.success && result.data.siteUrl) {
+          // 更新成功，显示部署页面
+          const successMsg = uiLanguage === "zh"
+            ? "更新成功！正在触发重新部署..."
+            : "Update successful! Triggering redeploy...";
+
+          console.log('[handleUpdate] ✅', successMsg);
+
+          setBuildingOverlay({
+            siteUrl: result.data.siteUrl
+          });
 
           // 刷新列表
+          await loadArticles();
+        } else if (result.success) {
+          // 更新成功但没有 siteUrl
+          const successMsg = uiLanguage === "zh"
+            ? "更新成功！"
+            : "Update successful!";
+          console.log('[handleUpdate] ✅', successMsg);
+          setBuildingOverlay(null);
           await loadArticles();
         } else {
           throw new Error(result.error || "Update failed");
         }
       } catch (error: any) {
         console.error("Error updating article:", error);
-        alert(
-          uiLanguage === "zh"
-            ? `更新失败: ${error.message || "请重试"}`
-            : `Update failed: ${error.message || "Please try again"}`
-        );
+        setBuildingOverlay(null);
+
+        const errorMsg = uiLanguage === "zh"
+          ? `更新���败: ${error.message || "请重试"}`
+          : `Update failed: ${error.message || "Please try again"}`;
+
+        // 显示错误提示（可以用 toast，但暂时用 alert）
+        setTimeout(() => alert(errorMsg), 100);
       } finally {
         setUpdatingId(null);
       }

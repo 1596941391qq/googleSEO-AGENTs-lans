@@ -1932,12 +1932,22 @@ export async function initPublishedArticlesTable() {
 
           -- 新增：site_id 列（发布到的站点 ID）
           IF NOT EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name = 'published_articles' 
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'published_articles'
             AND column_name = 'site_id'
           ) THEN
             ALTER TABLE published_articles ADD COLUMN site_id UUID;
           END IF;
+
+          -- 不再使用 platform_project_id - 改为通过 Netlify API 动态查询
+          -- -- 新增：platform_project_id 列（Netlify site ID，用��触发构建）
+          -- IF NOT EXISTS (
+          --   SELECT 1 FROM information_schema.columns
+          --   WHERE table_name = 'published_articles'
+          --   AND column_name = 'platform_project_id'
+          -- ) THEN
+          --   ALTER TABLE published_articles ADD COLUMN platform_project_id VARCHAR(200);
+          -- END IF;
         END $$;
       `;
 
@@ -2845,6 +2855,8 @@ export interface PlatformSite {
   id: string;
   github_token_id: string;         // 关联的 GitHub Token，用于推送代码
   netlify_token_id: string;        // 关联的 Netlify Token（必填）
+  platform: string;                // 平台类型 (netlify, cf_pages, vercel, rtd)
+  content_type: string;            // 内容类型 (informational, commercial)
   site_name: string;               // 站点名
   site_url: string;                // 站点 URL
   repo_name: string;               // GitHub 仓库名（系统自动生成）
@@ -2854,7 +2866,7 @@ export interface PlatformSite {
   status: 'pending' | 'active' | 'disabled'; // pending=等待创建
   created_at: Date;
   updated_at: Date;
-  netlify_site_id?: string | null; // Netlify Site ID，用于触发重新构建
+  // 注意：不再存储 netlify_site_id，改为通过 Netlify API 动态查询
 }
 
 /**
@@ -3130,7 +3142,7 @@ export async function initPSEOPublishTables() {
         END $$
       `;
 
-      // 3. 平台站点表 - 实际的发布站点
+      // 3. 平台站点表 - 实际的发布��点
       await sql`
         CREATE TABLE IF NOT EXISTS platform_sites (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -3227,20 +3239,21 @@ export async function initPSEOPublishTables() {
         console.warn('[initPSEOPublishTables] Migration warning:', e.message);
       }
 
-      // 5.1 给 platform_sites 表添加 platform_project_id 字段（用于触发重新构建）
-      try {
-        await sql`
-          DO $$
-          BEGIN
-            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'platform_sites' AND column_name = 'platform_project_id') THEN
-              ALTER TABLE platform_sites ADD COLUMN platform_project_id VARCHAR(200);
-            END IF;
-          END $$;
-        `;
-        console.log('[initPSEOPublishTables] ✅ Added platform_project_id column to platform_sites');
-      } catch (e: any) {
-        console.warn('[initPSEOPublishTables] Migration warning for platform_project_id:', e.message);
-      }
+      // 不再使用 platform_project_id - 改为通过 Netlify API 动态查询
+      // // 5.1 给 platform_sites 表添加 platform_project_id 字段（用于触发重新构建）
+      // try {
+      //   await sql`
+      //     DO $$
+      //     BEGIN
+      //       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'platform_sites' AND column_name = 'platform_project_id') THEN
+      //         ALTER TABLE platform_sites ADD COLUMN platform_project_id VARCHAR(200);
+      //       END IF;
+      //     END $$;
+      //   `;
+      //   console.log('[initPSEOPublishTables] ✅ Added platform_project_id column to platform_sites');
+      // } catch (e: any) {
+      //   console.warn('[initPSEOPublishTables] Migration warning for platform_project_id:', e.message);
+      // }
 
       // 6. 创建索引
       const indexes = [
@@ -3638,7 +3651,9 @@ export async function updatePlatformSiteUrl(
 }
 
 /**
- * 更新站点的平台项目 ID（用于触发重新构建）
+ * 更新站点的平台项目 ID
+ * 注意：不再使用 platform_project_id - 改为通过 Netlify API 动态查询
+ * 此函数保留用于更新 updated_at 时间戳
  */
 export async function updatePlatformSiteProjectId(
   siteId: string,
@@ -3647,7 +3662,7 @@ export async function updatePlatformSiteProjectId(
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
     UPDATE platform_sites
-    SET platform_project_id = ${projectId}, updated_at = NOW()
+    SET updated_at = NOW()
     WHERE id = ${siteId}
     RETURNING *
   `;
@@ -3666,10 +3681,9 @@ export async function updatePlatformSitePlatform(
   await initPSEOPublishTables();
   const result = await sql<PlatformSite>`
     UPDATE platform_sites
-    SET 
-      platform = ${platform}, 
+    SET
+      platform = ${platform},
       platform_token_id = ${platformTokenId},
-      platform_project_id = NULL,
       status = 'pending',
       updated_at = NOW()
     WHERE id = ${siteId}

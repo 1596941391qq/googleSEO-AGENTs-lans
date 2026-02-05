@@ -7,6 +7,79 @@ import { summarizeArticleForReadme } from '../gemini.js';
 
 const GITHUB_API_BASE = 'https://api.github.com';
 
+/**
+ * 带超时的 fetch 辅助函数
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeout = 30000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeout}ms`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * 带重试的 fetch 辅助函数
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit = {},
+  maxRetries = 3,
+  timeout = 30000
+): Promise<Response> {
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[GitHub] Fetch attempt ${attempt}/${maxRetries}: ${url}`);
+      const response = await fetchWithTimeout(url, options, timeout);
+
+      if (response.ok || response.status < 500) {
+        return response;
+      }
+
+      // 5xx 错误可以重试，4xx 错误不重试
+      if (response.status >= 500) {
+        console.warn(`[GitHub] Server error ${response.status}, will retry...`);
+        lastError = new Error(`HTTP ${response.status}`);
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+          continue;
+        }
+      }
+
+      return response;
+    } catch (error: any) {
+      lastError = error;
+      console.warn(`[GitHub] Fetch attempt ${attempt} failed:`, error.message);
+
+      if (attempt < maxRetries) {
+        const delay = Math.pow(2, attempt) * 1000;
+        console.log(`[GitHub] Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 interface GitHubRepoConfig {
   token: string;
   owner: string;
@@ -108,7 +181,7 @@ export async function checkRepoExists(config: {
  * 获取文件的 SHA（用于更新）
  * - 404: 返回 null，表示文件不存在，可创建
  * - 成功: 返回 sha，表示需更新
- * - fetch 异常: 重试一次后仍失败则抛出，避免误走「创建」逻辑导致 422
+ * - fetch 异常: 重试机制
  */
 async function getFileSha(
   config: {
@@ -125,12 +198,17 @@ async function getFileSha(
   console.log(`[GitHub getFileSha] URL: ${url}`);
 
   try {
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${config.token}`,
-        Accept: 'application/vnd.github.v3+json',
+    const response = await fetchWithRetry(
+      url,
+      {
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+          Accept: 'application/vnd.github.v3+json',
+        },
       },
-    });
+      2, // 最多重试 2 次
+      15000 // 15 秒超时
+    );
 
     console.log(`[GitHub getFileSha] Response status: ${response.status}`);
 
@@ -149,11 +227,6 @@ async function getFileSha(
     return data.sha;
   } catch (error: any) {
     console.error(`[GitHub getFileSha] Exception:`, error.message);
-    if (!isRetry) {
-      console.log(`[GitHub getFileSha] Retrying once after fetch failure...`);
-      await new Promise((r) => setTimeout(r, 1500));
-      return getFileSha(config, true);
-    }
     throw new Error(
       `getFileSha failed (fetch error): ${error.message}. Cannot determine if file exists; retry later.`
     );
@@ -227,11 +300,16 @@ export async function createOrUpdateFile(config: {
       'Content-Type': 'application/json',
     };
 
-    let response = await fetch(putUrl, {
-      method: 'PUT',
-      headers: putHeaders,
-      body: JSON.stringify(body),
-    });
+    let response = await fetchWithRetry(
+      putUrl,
+      {
+        method: 'PUT',
+        headers: putHeaders,
+        body: JSON.stringify(body),
+      },
+      3, // 最多重试 3 次
+      30000 // 30 秒超时
+    );
 
     // 422 "sha wasn't supplied"：文件实际存在但 getFileSha 曾失败，误走了创建。重试取 sha 再更新。
     if (!response.ok) {
@@ -254,11 +332,16 @@ export async function createOrUpdateFile(config: {
           });
           if (retrySha) {
             body.sha = retrySha;
-            response = await fetch(putUrl, {
-              method: 'PUT',
-              headers: putHeaders,
-              body: JSON.stringify(body),
-            });
+            response = await fetchWithRetry(
+              putUrl,
+              {
+                method: 'PUT',
+                headers: putHeaders,
+                body: JSON.stringify(body),
+              },
+              3,
+              30000
+            );
           }
         } catch (retryErr: any) {
           console.error(`[GitHub] ❌ Retry getFileSha failed:`, retryErr.message);
