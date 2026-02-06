@@ -85,7 +85,7 @@ async function initializeAndMigrate() {
             FROM github_tokens
             ON CONFLICT (name) DO NOTHING
           `;
-          console.log(`[Token Manager] ✅ Migrated ${githubResult.count} GitHub tokens`);
+          console.log(`[Token Manager] ✅ Migrated ${githubResult.rowCount} GitHub tokens`);
         } catch (e) {
           console.log('[Token Manager] ℹ️  No old github_tokens table to migrate');
         }
@@ -99,7 +99,7 @@ async function initializeAndMigrate() {
             WHERE platform = 'netlify'
             ON CONFLICT (name) DO NOTHING
           `;
-          console.log(`[Token Manager] ✅ Migrated ${netlifyResult.count} Netlify tokens`);
+          console.log(`[Token Manager] ✅ Migrated ${netlifyResult.rowCount} Netlify tokens`);
         } catch (e) {
           console.log('[Token Manager] ℹ️  No old platform_tokens_v2 table to migrate');
         }
@@ -186,6 +186,7 @@ export interface NetlifyToken {
   github_token_id: string | null;
   usage_count: number;
   status: 'active' | 'disabled';
+  metadata?: { installation_id?: string; [key: string]: any };
   created_at: Date;
   updated_at: Date;
 }

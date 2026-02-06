@@ -62,6 +62,11 @@ export function AdminTokenManager() {
   const [platformName, setPlatformName] = useState('');
   const [platformToken, setPlatformToken] = useState('');
   const [platformType, setPlatformType] = useState('netlify');
+  const [installationId, setInstallationId] = useState('');
+
+  // 编辑 Platform Token 表单
+  const [editingTokenId, setEditingTokenId] = useState<string | null>(null);
+  const [editInstallationId, setEditInstallationId] = useState('');
 
   // 加载 Token 数据
   const loadTokens = async () => {
@@ -150,7 +155,7 @@ export function AdminTokenManager() {
   // 创建 Platform Token
   const handleCreatePlatformToken = async () => {
     if (!platformName || !platformToken) {
-      alert('请填写所有字段');
+      alert('请填写所有必填字段');
       return;
     }
 
@@ -164,7 +169,8 @@ export function AdminTokenManager() {
         body: JSON.stringify({
           name: platformName,
           token: platformToken,
-          platform: platformType
+          platform: platformType,
+          installation_id: installationId || undefined
         })
       });
 
@@ -177,6 +183,7 @@ export function AdminTokenManager() {
       setPlatformName('');
       setPlatformToken('');
       setPlatformType('netlify');
+      setInstallationId('');
       setShowPlatformForm(false);
 
       // 重新加载
@@ -272,6 +279,43 @@ export function AdminTokenManager() {
     }
   };
 
+  // 编辑 Platform Token
+  const handleEditToken = (tokenId: string, currentInstallationId?: string) => {
+    setEditingTokenId(tokenId);
+    setEditInstallationId(currentInstallationId || '');
+  };
+
+  // 更新 Platform Token
+  const handleUpdateToken = async () => {
+    if (!editingTokenId) return;
+
+    try {
+      const response = await fetch('/api/admin/tokens?type=platform', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+        },
+        body: JSON.stringify({
+          tokenId: editingTokenId,
+          installation_id: editInstallationId || undefined
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update token');
+      }
+
+      setEditingTokenId(null);
+      setEditInstallationId('');
+      await loadTokens();
+      alert('Token 更新成功！');
+    } catch (err: any) {
+      alert(`更新失败: ${err.message}`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -348,56 +392,130 @@ export function AdminTokenManager() {
                   key={pair.github.id}
                   className="border rounded-lg p-4 bg-green-50 border-green-200"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 grid grid-cols-2 gap-4">
-                      {/* GitHub Token */}
-                      <div className="flex items-start gap-3">
-                        <Github className="w-5 h-5 mt-1 text-gray-700" />
-                        <div className="flex-1">
-                          <div className="font-medium">{pair.github.name}</div>
-                          <div className="text-sm text-gray-600">
-                            Owner: {pair.github.owner_name}
+                  {editingTokenId === pair.platform.id ? (
+                    // 编辑模式
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* GitHub Token */}
+                        <div className="flex items-start gap-3">
+                          <Github className="w-5 h-5 mt-1 text-gray-700" />
+                          <div className="flex-1">
+                            <div className="font-medium">{pair.github.name}</div>
+                            <div className="text-sm text-gray-600">
+                              Owner: {pair.github.owner_name}
+                            </div>
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Token: {pair.github.token_preview}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            使用次数: {pair.github.usage_count}
+                        </div>
+
+                        {/* Platform Token */}
+                        <div className="flex items-start gap-3">
+                          <Globe className="w-5 h-5 mt-1 text-blue-600" />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium">{pair.platform.name}</div>
+                              <Badge variant="outline" className="text-xs">
+                                {pair.platform.platform}
+                              </Badge>
+                            </div>
                           </div>
                         </div>
                       </div>
 
-                      {/* Platform Token */}
-                      <div className="flex items-start gap-3">
-                        <Globe className="w-5 h-5 mt-1 text-blue-600" />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <div className="font-medium">{pair.platform.name}</div>
-                            <Badge variant="outline" className="text-xs">
-                              {pair.platform.platform}
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            Token: {pair.platform.token_preview}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            使用次数: {pair.platform.usage_count}
-                          </div>
+                      <div className="border-t pt-3">
+                        <label className="text-sm font-medium mb-2 block">
+                          GitHub App Installation ID (可选)
+                        </label>
+                        <Input
+                          placeholder="输入 Installation ID"
+                          value={editInstallationId}
+                          onChange={(e) => setEditInstallationId(e.target.value)}
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <Button onClick={handleUpdateToken} size="sm">
+                            保存
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setEditingTokenId(null);
+                              setEditInstallationId('');
+                            }}
+                            size="sm"
+                            variant="outline"
+                          >
+                            取消
+                          </Button>
                         </div>
                       </div>
                     </div>
+                  ) : (
+                    // 显示模式
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 grid grid-cols-2 gap-4">
+                        {/* GitHub Token */}
+                        <div className="flex items-start gap-3">
+                          <Github className="w-5 h-5 mt-1 text-gray-700" />
+                          <div className="flex-1">
+                            <div className="font-medium">{pair.github.name}</div>
+                            <div className="text-sm text-gray-600">
+                              Owner: {pair.github.owner_name}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Token: {pair.github.token_preview}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              使用次数: {pair.github.usage_count}
+                            </div>
+                          </div>
+                        </div>
 
-                    {/* 解绑按钮 */}
-                    <Button
-                      onClick={() => handleUnbindTokens(pair.github.id, pair.platform.id)}
-                      variant="outline"
-                      size="sm"
-                      className="ml-4"
-                    >
-                      <Unlink className="w-4 h-4 mr-1" />
-                      解绑
-                    </Button>
-                  </div>
+                        {/* Platform Token */}
+                        <div className="flex items-start gap-3">
+                          <Globe className="w-5 h-5 mt-1 text-blue-600" />
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium">{pair.platform.name}</div>
+                              <Badge variant="outline" className="text-xs">
+                                {pair.platform.platform}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Token: {pair.platform.token_preview}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              使用次数: {pair.platform.usage_count}
+                            </div>
+                            {(pair.platform as any).metadata?.installation_id && (
+                              <div className="text-xs text-green-600 mt-1 font-medium">
+                                ✓ Installation ID: {(pair.platform as any).metadata.installation_id}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 操作按钮 */}
+                      <div className="flex gap-2 ml-4">
+                        {pair.platform.platform === 'netlify' && (
+                          <Button
+                            onClick={() => handleEditToken(pair.platform.id, (pair.platform as any).metadata?.installation_id)}
+                            variant="outline"
+                            size="sm"
+                            title="编辑 Installation ID"
+                          >
+                            编辑
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() => handleUnbindTokens(pair.github.id, pair.platform.id)}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <Unlink className="w-4 h-4 mr-1" />
+                          解绑
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -565,6 +683,13 @@ export function AdminTokenManager() {
                   value={platformToken}
                   onChange={(e) => setPlatformToken(e.target.value)}
                 />
+                {platformType === 'netlify' && (
+                  <Input
+                    placeholder="GitHub App Installation ID (可选，用于主动链接 repo)"
+                    value={installationId}
+                    onChange={(e) => setInstallationId(e.target.value)}
+                  />
+                )}
                 <div className="flex gap-2">
                   <Button onClick={handleCreatePlatformToken} size="sm">
                     创建
@@ -591,47 +716,97 @@ export function AdminTokenManager() {
               {tokenData?.unboundPlatform.map((token) => (
                 <div
                   key={token.id}
-                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
+                  className="p-3 border rounded-lg hover:bg-gray-50"
                 >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="font-medium">{token.name}</div>
-                      <Badge variant="outline" className="text-xs">
-                        {token.platform}
-                      </Badge>
+                  {editingTokenId === token.id ? (
+                    // 编辑模式
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="font-medium">{token.name}</div>
+                        <Badge variant="outline" className="text-xs">
+                          {token.platform}
+                        </Badge>
+                      </div>
+                      <Input
+                        placeholder="GitHub App Installation ID (可选)"
+                        value={editInstallationId}
+                        onChange={(e) => setEditInstallationId(e.target.value)}
+                      />
+                      <div className="flex gap-2">
+                        <Button onClick={handleUpdateToken} size="sm">
+                          保存
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setEditingTokenId(null);
+                            setEditInstallationId('');
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          取消
+                        </Button>
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {token.token_preview} · 使用 {token.usage_count} 次
+                  ) : (
+                    // 显示模式
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium">{token.name}</div>
+                          <Badge variant="outline" className="text-xs">
+                            {token.platform}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {token.token_preview} · 使用 {token.usage_count} 次
+                        </div>
+                        {(token as any).metadata?.installation_id && (
+                          <div className="text-xs text-green-600 mt-1">
+                            ✓ Installation ID: {(token as any).metadata.installation_id}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        {token.platform === 'netlify' && (
+                          <Button
+                            onClick={() => handleEditToken(token.id, (token as any).metadata?.installation_id)}
+                            variant="outline"
+                            size="sm"
+                            title="编辑 Installation ID"
+                          >
+                            编辑
+                          </Button>
+                        )}
+                        {tokenData?.unboundGithub.length > 0 && (
+                          <select
+                            className="border rounded px-2 py-1 text-sm"
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                handleBindTokens(e.target.value, token.id, token.platform);
+                                e.target.value = '';
+                              }
+                            }}
+                            defaultValue=""
+                          >
+                            <option value="">绑定到 GitHub...</option>
+                            {tokenData?.unboundGithub.map((github) => (
+                              <option key={github.id} value={github.id}>
+                                {github.name} ({github.owner_name})
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <Button
+                          onClick={() => handleDeleteToken(token.id, 'platform')}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    {tokenData?.unboundGithub.length > 0 && (
-                      <select
-                        className="border rounded px-2 py-1 text-sm"
-                        onChange={(e) => {
-                          if (e.target.value) {
-                            handleBindTokens(e.target.value, token.id, token.platform);
-                            e.target.value = '';
-                          }
-                        }}
-                        defaultValue=""
-                      >
-                        <option value="">绑定到 GitHub...</option>
-                        {tokenData?.unboundGithub.map((github) => (
-                          <option key={github.id} value={github.id}>
-                            {github.name} ({github.owner_name})
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <Button
-                      onClick={() => handleDeleteToken(token.id, 'platform')}
-                      variant="outline"
-                      size="sm"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>

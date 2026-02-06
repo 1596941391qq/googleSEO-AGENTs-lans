@@ -81,6 +81,7 @@ interface NetlifyDeployConfig {
   repoOwner: string;
   repoName: string;
   siteName: string;
+  installationId?: string; // GitHub App Installation ID
 }
 
 interface NetlifyDeployResult {
@@ -95,6 +96,84 @@ interface NetlifyRebuildResult {
   success: boolean;
   buildId?: string;
   error?: string;
+}
+
+/**
+ * 等待 Netlify 自动链接 GitHub repo
+ * 轮询检查 build_settings.repo 字段，最多等待 2 分钟
+ */
+export async function waitForRepoLinking(config: {
+  token: string;
+  siteId: string;
+}): Promise<{ success: boolean; linked: boolean; error?: string }> {
+  const maxWaitTime = 120000; // 2 minutes
+  const intervals = [10000, 15000, 20000]; // 10s, 15s, 20s
+  const startTime = Date.now();
+  let attemptCount = 0;
+
+  console.log(`[Netlify] Waiting for GitHub repo to be linked (max 2 minutes)...`);
+
+  while (Date.now() - startTime < maxWaitTime) {
+    try {
+      attemptCount++;
+      const intervalIndex = Math.min(attemptCount - 1, intervals.length - 1);
+      const waitTime = intervals[intervalIndex];
+
+      console.log(`[Netlify] Checking repo link status (attempt ${attemptCount})...`);
+
+      const response = await fetch(
+        `https://api.netlify.com/api/v1/sites/${config.siteId}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${config.token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        // API errors (401, 403, 404) - return immediately
+        if (response.status === 401 || response.status === 403 || response.status === 404) {
+          console.error(`[Netlify] API error ${response.status}, stopping poll`);
+          return {
+            success: false,
+            linked: false,
+            error: `Netlify API error: ${response.status}`,
+          };
+        }
+        // Other errors - continue polling
+        console.warn(`[Netlify] API error ${response.status}, will retry...`);
+      } else {
+        const siteData = await response.json();
+        const hasLinkedRepo = siteData.build_settings?.repo;
+
+        if (hasLinkedRepo) {
+          console.log(`[Netlify] ✅ GitHub repo linked: ${siteData.build_settings.repo.url}`);
+          return {
+            success: true,
+            linked: true,
+          };
+        }
+
+        console.log(`[Netlify] Repo not linked yet, waiting ${waitTime / 1000}s...`);
+      }
+
+      // Wait before next attempt
+      if (Date.now() - startTime + waitTime < maxWaitTime) {
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    } catch (error: any) {
+      console.warn(`[Netlify] Poll attempt ${attemptCount} failed:`, error.message);
+      // Continue polling on network errors
+    }
+  }
+
+  console.log(`[Netlify] ⏱️ Timeout: GitHub repo not linked within 2 minutes`);
+  return {
+    success: true, // Not an error, just timeout
+    linked: false,
+  };
 }
 
 /**
@@ -161,18 +240,50 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
               console.warn(`[Netlify] ⚠️ Exception triggering build:`, error.message);
             }
           } else {
-            // 场景2: GitHub repo 未链接，等待 Netlify 自动检测
+            // 场景2: GitHub repo 未链接，主动等待 Netlify 自动检测
             console.log(`[Netlify] ⚠️ GitHub repo not linked yet.`);
-            console.log(`[Netlify] ℹ️ Netlify will auto-detect the GitHub repo within 1-5 minutes.`);
-            console.log(`[Netlify] ℹ️ Once detected, Netlify will start building automatically.`);
-            console.log(`[Netlify] ℹ️ Site URL: ${existingSite.ssl_url || existingSite.url}`);
+            console.log(`[Netlify] ℹ️ Actively waiting for Netlify to link the repo...`);
 
-            return {
-              success: true,
-              siteUrl: existingSite.ssl_url || existingSite.url,
-              projectId: existingSite.id,
-              warning: 'Netlify site exists but GitHub repo not linked yet. Netlify will auto-detect the repo within 1-5 minutes and start building automatically.',
-            };
+            const linkResult = await waitForRepoLinking({
+              token: config.token,
+              siteId: existingSite.id,
+            });
+
+            if (linkResult.linked) {
+              // 链接成功，触发构建
+              console.log(`[Netlify] ✅ Repo linked! Triggering build...`);
+              try {
+                const buildResponse = await fetch(
+                  `https://api.netlify.com/api/v1/sites/${existingSite.id}/builds`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${config.token}`,
+                    },
+                  }
+                );
+
+                if (buildResponse.ok) {
+                  const buildData = await buildResponse.json();
+                  console.log(`[Netlify] ✅ Build triggered: ${buildData.id}`);
+                } else {
+                  console.warn(`[Netlify] ⚠️ Build trigger failed: ${buildResponse.status}`);
+                }
+              } catch (error: any) {
+                console.warn(`[Netlify] ⚠️ Exception triggering build:`, error.message);
+              }
+            } else {
+              // 超时或错误
+              console.log(`[Netlify] ℹ️ Repo linking timeout. Netlify will continue linking in background.`);
+              console.log(`[Netlify] ℹ️ Site URL: ${existingSite.ssl_url || existingSite.url}`);
+
+              return {
+                success: true,
+                siteUrl: existingSite.ssl_url || existingSite.url,
+                projectId: existingSite.id,
+                warning: linkResult.error || 'GitHub repo not linked within 2 minutes. Netlify will continue linking in background and start building automatically once linked.',
+              };
+            }
           }
 
           return {
@@ -186,6 +297,36 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
 
     // 创建新站点（带重试）并配置 GitHub repo
     console.log(`[Netlify] Creating new site with GitHub repo connection...`);
+
+    // 构建请求体
+    const requestBody: any = {
+      name: normalizedSiteName,
+    };
+
+    // 如果提供了 installation_id，使用正确的 repo 结构主动链接
+    if (config.installationId) {
+      console.log(`[Netlify] Using GitHub App installation_id: ${config.installationId}`);
+      requestBody.repo = {
+        provider: 'github',
+        repo: `${config.repoOwner}/${config.repoName}`,
+        branch: 'main',
+        cmd: 'mkdocs build',
+        dir: 'site',
+        installation_id: config.installationId
+      };
+    } else {
+      // 兼容旧方式（被动等待）
+      console.log(`[Netlify] No installation_id provided, using build_settings (passive linking)`);
+      requestBody.build_settings = {
+        repo: {
+          url: `https://github.com/${config.repoOwner}/${config.repoName}`,
+          branch: 'main',
+          cmd: 'mkdocs build',
+          dir: 'site'
+        }
+      };
+    }
+
     const createResponse = await fetchWithRetry(
       'https://api.netlify.com/api/v1/sites',
       {
@@ -194,17 +335,7 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
           'Authorization': `Bearer ${config.token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: normalizedSiteName,
-          build_settings: {
-            repo: {
-              url: `https://github.com/${config.repoOwner}/${config.repoName}`,
-              branch: 'main',
-              cmd: 'mkdocs build',
-              dir: 'site'
-            }
-          }
-        }),
+        body: JSON.stringify(requestBody),
       },
       3, // 最多重试 3 次
       30000 // 30 秒超时
@@ -254,17 +385,66 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
     console.log(`[Netlify] Site Name: ${siteData.name}`);
     console.log(`[Netlify] Site URL: ${siteData.ssl_url || siteData.url}`);
     console.log(`[Netlify] ℹ️ GitHub repo info was included in site creation`);
-    console.log(`[Netlify] ℹ️ Netlify will auto-detect and link the GitHub repo within 1-5 minutes`);
-    console.log(`[Netlify] ℹ️ Once linked, Netlify will automatically start building`);
+    console.log(`[Netlify] ℹ️ Actively waiting for Netlify to link the GitHub repo...`);
     console.log(`[Netlify] Repository: ${config.repoOwner}/${config.repoName}`);
     console.log(`[Netlify] Build command: mkdocs build → Publish directory: site`);
 
-    return {
-      success: true,
-      siteUrl: siteData.ssl_url || siteData.url,
-      projectId: siteData.id,
-      warning: 'Netlify site created. GitHub repo will be auto-detected and linked within 1-5 minutes. Building will start automatically once linked.',
-    };
+    // 主动等待 GitHub repo 链接
+    const linkResult = await waitForRepoLinking({
+      token: config.token,
+      siteId: siteData.id,
+    });
+
+    if (linkResult.linked) {
+      // 链接成功，触发构建
+      console.log(`[Netlify] ✅ Repo linked! Triggering build...`);
+      try {
+        const buildResponse = await fetch(
+          `https://api.netlify.com/api/v1/sites/${siteData.id}/builds`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${config.token}`,
+            },
+          }
+        );
+
+        if (buildResponse.ok) {
+          const buildData = await buildResponse.json();
+          console.log(`[Netlify] ✅ Build triggered: ${buildData.id}`);
+          return {
+            success: true,
+            siteUrl: siteData.ssl_url || siteData.url,
+            projectId: siteData.id,
+          };
+        } else {
+          console.warn(`[Netlify] ⚠️ Build trigger failed: ${buildResponse.status}`);
+          return {
+            success: true,
+            siteUrl: siteData.ssl_url || siteData.url,
+            projectId: siteData.id,
+            warning: `Site created and repo linked, but build trigger failed: ${buildResponse.status}`,
+          };
+        }
+      } catch (error: any) {
+        console.warn(`[Netlify] ⚠️ Exception triggering build:`, error.message);
+        return {
+          success: true,
+          siteUrl: siteData.ssl_url || siteData.url,
+          projectId: siteData.id,
+          warning: `Site created and repo linked, but build trigger failed: ${error.message}`,
+        };
+      }
+    } else {
+      // 超时或错误
+      console.log(`[Netlify] ℹ️ Repo linking timeout. Netlify will continue linking in background.`);
+      return {
+        success: true,
+        siteUrl: siteData.ssl_url || siteData.url,
+        projectId: siteData.id,
+        warning: linkResult.error || 'Site created. GitHub repo not linked within 2 minutes. Netlify will continue linking in background and start building automatically once linked.',
+      };
+    }
   } catch (error: any) {
     console.error(`[Netlify] Exception:`, error);
     return {

@@ -92,14 +92,18 @@ async function createPlatformToken(data: {
   platform: string;
   name: string;
   token: string;
+  installation_id?: string;
 }): Promise<PlatformToken> {
   await initPSEOPublishTables();
 
   const tokenEncrypted = Buffer.from(data.token).toString('base64');
 
+  // 构建 metadata 对象
+  const metadata = data.installation_id ? { installation_id: data.installation_id } : null;
+
   const result = await sql<PlatformToken>`
-    INSERT INTO platform_tokens (platform, name, token_encrypted)
-    VALUES (${data.platform}, ${data.name}, ${tokenEncrypted})
+    INSERT INTO platform_tokens (platform, name, token_encrypted, metadata)
+    VALUES (${data.platform}, ${data.name}, ${tokenEncrypted}, ${metadata ? JSON.stringify(metadata) : null})
     RETURNING *
   `;
 
@@ -113,6 +117,25 @@ async function deletePlatformToken(tokenId: string): Promise<boolean> {
     DELETE FROM platform_tokens WHERE id = ${tokenId} RETURNING id
   `;
   return result.rows.length > 0;
+}
+
+async function updatePlatformToken(tokenId: string, data: {
+  installation_id?: string;
+}): Promise<PlatformToken | null> {
+  await initPSEOPublishTables();
+
+  // 构建 metadata 对象
+  const metadata = data.installation_id ? { installation_id: data.installation_id } : null;
+
+  const result = await sql<PlatformToken>`
+    UPDATE platform_tokens
+    SET metadata = ${metadata ? JSON.stringify(metadata) : null},
+        updated_at = NOW()
+    WHERE id = ${tokenId}
+    RETURNING *
+  `;
+
+  return result.rows.length > 0 ? result.rows[0] : null;
 }
 
 // ============================================================================
@@ -364,13 +387,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       if (tokenType === 'platform') {
-        const { name, token, platform = 'netlify' } = body;
+        const { name, token, platform = 'netlify', installation_id } = body;
 
         if (!name || !token) {
           return sendErrorResponse(res, null, 'name and token are required', 400);
         }
 
-        const result = await createPlatformToken({ name, token, platform });
+        const result = await createPlatformToken({ name, token, platform, installation_id });
 
         return res.json({
           success: true,
@@ -424,6 +447,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (error: any) {
       console.error('[Admin Tokens] Delete error:', error);
       return sendErrorResponse(res, error, 'Failed to delete token', 500);
+    }
+  }
+
+  // PUT - 更新 Token
+  if (req.method === 'PUT') {
+    try {
+      const body = parseRequestBody(req);
+
+      if (tokenType === 'platform') {
+        const { tokenId, installation_id } = body;
+
+        if (!tokenId) {
+          return sendErrorResponse(res, null, 'tokenId is required', 400);
+        }
+
+        const result = await updatePlatformToken(tokenId, { installation_id });
+
+        if (!result) {
+          return sendErrorResponse(res, null, 'Token not found', 404);
+        }
+
+        return res.json({
+          success: true,
+          data: {
+            ...result,
+            token_encrypted: undefined,
+            token_preview: '****' + Buffer.from(result.token_encrypted, 'base64').toString('utf-8').slice(-4)
+          }
+        });
+      }
+
+      return sendErrorResponse(res, null, 'Invalid type parameter', 400);
+    } catch (error: any) {
+      console.error('[Admin Tokens] Update error:', error);
+      return sendErrorResponse(res, error, 'Failed to update token', 500);
     }
   }
 

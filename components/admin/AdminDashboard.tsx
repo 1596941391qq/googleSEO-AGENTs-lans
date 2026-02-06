@@ -56,6 +56,9 @@ interface PlatformToken {
   status: string;
   token_preview: string;
   created_at: string;
+  metadata?: {
+    installation_id?: string;
+  } | null;
 }
 
 interface PlatformSite {
@@ -128,6 +131,10 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
   const [publishedArticles, setPublishedArticles] = useState<any[]>([]);
   const [bindingArticleId, setBindingArticleId] = useState<string | null>(null);
   const [bindingRepoName, setBindingRepoName] = useState('');
+
+  // Platform Token Installation ID 编辑状态
+  const [editingPlatformTokenId, setEditingPlatformTokenId] = useState<string | null>(null);
+  const [editInstallationId, setEditInstallationId] = useState('');
 
   // 调试日志
   useEffect(() => {
@@ -353,6 +360,40 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
       if (data.success) fetchData();
     } catch (error) {
       alert('Failed to delete token');
+    }
+  };
+
+  // 编辑 Platform Token Installation ID（仅 Netlify）
+  const handleEditPlatformInstallation = (token: PlatformToken) => {
+    setEditingPlatformTokenId(token.id);
+    setEditInstallationId(token.metadata?.installation_id || '');
+  };
+
+  const handleUpdatePlatformInstallation = async () => {
+    if (!editingPlatformTokenId) return;
+
+    try {
+      const res = await fetch('/api/admin/tokens?type=platform', {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({
+          tokenId: editingPlatformTokenId,
+          installation_id: editInstallationId || undefined
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setEditingPlatformTokenId(null);
+        setEditInstallationId('');
+        // 重新加载最新数据以在 UI 中展示 "✓ Installation ID: xxx"
+        fetchData();
+        // 明确提示保存成功，方便确认
+        alert('Installation ID 已保存');
+      } else {
+        alert(data.error || 'Installation ID 保存失败');
+      }
+    } catch (error) {
+      alert('Installation ID 保存失败');
     }
   };
 
@@ -777,23 +818,75 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                         {/* 绑定状态 */}
                         {isBound ? (
                           <div className="mt-3 p-3 rounded-lg bg-teal-500/10 border border-teal-500/30">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Zap className="w-4 h-4 text-teal-500" />
-                                <span className="text-sm font-medium">Bound to: {binding.platform.name}</span>
-                                <Badge variant="outline" className="text-xs border-teal-500/50 text-teal-400">
-                                  {binding.platform.platform}
-                                </Badge>
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Zap className="w-4 h-4 text-teal-500" />
+                                  <span className="text-sm font-medium">Bound to: {binding.platform.name}</span>
+                                  <Badge variant="outline" className="text-xs border-teal-500/50 text-teal-400">
+                                    {binding.platform.platform}
+                                  </Badge>
+                                </div>
+                                {binding.platform.metadata?.installation_id && (
+                                  <div className="text-xs text-emerald-400 font-medium">
+                                    ✓ Installation ID: {binding.platform.metadata.installation_id}
+                                  </div>
+                                )}
                               </div>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleUnbindTokens(t.id, binding.platform.id)}
-                                className="h-7 px-2 text-xs text-zinc-400 hover:text-white"
-                              >
-                                Unbind
-                              </Button>
+                              <div className="flex items-center gap-2">
+                                {binding.platform.platform === 'netlify' && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleEditPlatformInstallation(binding.platform)}
+                                    className="h-7 px-3 text-xs rounded-lg border-teal-500/60 text-teal-400 hover:bg-teal-500/10"
+                                  >
+                                    编辑
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleUnbindTokens(t.id, binding.platform.id)}
+                                  className="h-7 px-2 text-xs text-zinc-400 hover:text-white"
+                                >
+                                  Unbind
+                                </Button>
+                              </div>
                             </div>
+                            {editingPlatformTokenId === binding.platform.id && (
+                              <div className="mt-3 border-t border-teal-500/30 pt-3 space-y-2">
+                                <label className="text-xs font-bold text-zinc-400 block">
+                                  GitHub App Installation ID (可选)
+                                </label>
+                                <Input
+                                  placeholder="输入 Installation ID"
+                                  value={editInstallationId}
+                                  onChange={(e) => setEditInstallationId(e.target.value)}
+                                  className="rounded-xl bg-zinc-900 border-zinc-700 text-sm"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={handleUpdatePlatformInstallation}
+                                    className="h-8 px-3 text-xs bg-teal-500 hover:bg-teal-600"
+                                  >
+                                    保存
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditingPlatformTokenId(null);
+                                      setEditInstallationId('');
+                                    }}
+                                    className="h-8 px-3 text-xs rounded-lg border-zinc-700"
+                                  >
+                                    取消
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <div className="mt-3">
@@ -929,54 +1022,107 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
               ) : (
                 platformTokens.map((t) => {
                   const platformConfig = PLATFORM_CONFIG[t.platform as keyof typeof PLATFORM_CONFIG];
+                  const isEditing = editingPlatformTokenId === t.id;
+                  const hasInstallation = t.metadata?.installation_id;
                   return (
                     <Card key={t.id} className="border-zinc-800 bg-zinc-900/50">
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", platformConfig?.bg)}>
-                            {platformConfig && <platformConfig.icon className={cn("w-5 h-5", platformConfig.color)} />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold">{t.name}</span>
-                              <Badge className={cn(
-                                "text-[10px]",
-                                t.status === 'active' ? "bg-emerald-500" : "bg-zinc-600"
-                              )}>
-                                {t.status}
-                              </Badge>
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4">
+                            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", platformConfig?.bg)}>
+                              {platformConfig && <platformConfig.icon className={cn("w-5 h-5", platformConfig.color)} />}
                             </div>
-                            <div className="flex items-center gap-3 text-xs text-zinc-500 mt-1">
-                              <span>{platformConfig?.name}</span>
-                              <span>•</span>
-                              <span>Token: {t.token_preview}</span>
-                              <span>•</span>
-                              <span>Used: {t.usage_count}x</span>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold">{t.name}</span>
+                                <Badge className={cn(
+                                  "text-[10px]",
+                                  t.status === 'active' ? "bg-emerald-500" : "bg-zinc-600"
+                                )}>
+                                  {t.status}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-zinc-500 mt-1">
+                                <span>{platformConfig?.name}</span>
+                                <span>•</span>
+                                <span>Token: {t.token_preview}</span>
+                                <span>•</span>
+                                <span>Used: {t.usage_count}x</span>
+                              </div>
+                              {hasInstallation && (
+                                <div className="text-xs text-emerald-400 mt-1">
+                                  ✓ Installation ID: {t.metadata!.installation_id}
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleTogglePlatformTokenStatus(t.id, t.status)}
-                            className="rounded-xl"
-                          >
-                            {t.status === 'active' ? (
-                              <PowerOff className="w-4 h-4 text-amber-500" />
-                            ) : (
-                              <Power className="w-4 h-4 text-emerald-500" />
+                          <div className="flex items-center gap-2">
+                            {t.platform === 'netlify' && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditPlatformInstallation(t)}
+                                className="rounded-xl border-teal-500/60 text-teal-400 hover:bg-teal-500/10 text-xs h-8 px-3"
+                              >
+                                编辑
+                              </Button>
                             )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeletePlatformToken(t.id)}
-                            className="rounded-xl text-red-400 hover:text-red-300"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleTogglePlatformTokenStatus(t.id, t.status)}
+                              className="rounded-xl"
+                            >
+                              {t.status === 'active' ? (
+                                <PowerOff className="w-4 h-4 text-amber-500" />
+                              ) : (
+                                <Power className="w-4 h-4 text-emerald-500" />
+                              )}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeletePlatformToken(t.id)}
+                              className="rounded-xl text-red-400 hover:text-red-300"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
                         </div>
+
+                        {isEditing && t.platform === 'netlify' && (
+                          <div className="border-t border-zinc-800 pt-3 space-y-2">
+                            <label className="text-xs font-bold text-zinc-400 block">
+                              GitHub App Installation ID (可选)
+                            </label>
+                            <Input
+                              placeholder="输入 Installation ID"
+                              value={editInstallationId}
+                              onChange={(e) => setEditInstallationId(e.target.value)}
+                              className="rounded-xl bg-zinc-900 border-zinc-700 text-sm"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                onClick={handleUpdatePlatformInstallation}
+                                className="h-8 px-3 text-xs bg-teal-500 hover:bg-teal-600"
+                              >
+                                保存
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingPlatformTokenId(null);
+                                  setEditInstallationId('');
+                                }}
+                                className="h-8 px-3 text-xs rounded-lg border-zinc-700"
+                              >
+                                取消
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
                   );

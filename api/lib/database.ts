@@ -2849,6 +2849,21 @@ export interface NetlifyToken {
 }
 
 /**
+ * 平台 Token 数据 - 支持多平台的 API Token
+ */
+export interface PlatformToken {
+  id: string;
+  platform: 'rtd' | 'cf_pages' | 'netlify' | 'vercel';
+  token_encrypted: string;
+  name: string;
+  metadata?: { githubOwner?: string; accountId?: string; [k: string]: unknown };
+  usage_count: number;
+  status: 'active' | 'disabled';
+  created_at: Date;
+  updated_at: Date;
+}
+
+/**
  * 平台站点类型 - 实际的发布站点（简化版）
  */
 export interface PlatformSite {
@@ -3119,6 +3134,7 @@ export async function initPSEOPublishTables() {
           token_encrypted TEXT NOT NULL,
           usage_count INT DEFAULT 0,
           status VARCHAR(20) DEFAULT 'active',
+          metadata JSONB,
           created_at TIMESTAMP DEFAULT NOW(),
           updated_at TIMESTAMP DEFAULT NOW()
         )
@@ -3141,6 +3157,9 @@ export async function initPSEOPublishTables() {
           END IF;
         END $$
       `;
+
+      // 迁移：添加 metadata 列（如果不存在）
+      await sql;
 
       // 3. 平台站点表 - 实际的发布��点
       await sql`
@@ -3459,7 +3478,7 @@ export async function createPlatformToken(data: {
 
   const result = await sql<PlatformToken>`
     INSERT INTO platform_tokens (platform, token_encrypted, name, metadata)
-    VALUES (${data.platform}, ${tokenEncrypted}, ${data.name}, ${data.metadata ? sql.json(data.metadata) : null})
+    VALUES (${data.platform}, ${tokenEncrypted}, ${data.name}, ${data.metadata ? JSON.stringify(data.metadata) : null})
     RETURNING *
   `;
   return result.rows[0];

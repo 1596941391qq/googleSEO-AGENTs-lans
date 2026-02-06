@@ -1,4 +1,36 @@
 # CLAUDE.md
+## 最高优先级指令（必须严格遵守）
+
+1. **最简单方案优先**
+   - 当我让你修复 bug、实现功能时，**永远先用最简单、最直接的方案**。
+   - 禁止过度设计、过度抽象、添加不必要的类型、wrapper 函数、设计模式、新组件、新 hooks、新工具函数。
+   - 如果可以用一行代码解决，就用一行。
+   - 如果我反馈“太复杂了”，立刻简化，不要辩解。
+
+2. **改动必须一步一步来**
+   - 每次只修改**一个文件**或**一个非常小的范围**。
+   - **改完一个文件后，必须运行 tsc --noEmit** 检查类型错误。
+   - 把 tsc 的输出完整展示给我（包括错误信息）。
+   - 如果有类型错误，**先修复类型问题**，再继续下一个改动。
+   - **禁止一次性改多个文件**。
+
+3. **修复 bug 的强制流程**
+   - 在修改任何代码之前，先写一个**能复现这个 bug 的 failing test**（用 jest 或 vitest）。
+   - 展示这个 failing test 的代码和运行结果。
+   - 然后开始修复，**每次改动后都重新跑测试**。
+   - 直到所有测试通过，并且没有引入回归。
+   - 最后给我一个总结：改了什么，为什么这样改。
+
+4. **动手前必须先告诉我计划**
+   - 在开始写代码之前，用**最多 3 条 bullet point** 告诉我你的计划。
+   - 计划里必须写清楚：准备改哪个文件、改哪几行、预期效果。
+   - 等我确认或回复“可以开始”后再动手。
+
+5. **浏览器验证强制要求（加强版）**
+   - localhost:3002 的开发服务器**一直在运行**。
+   - **任何涉及页面效果、UI、交互、console、网络、DOM、渲染、样式、bug 验证的任务，必须默认先使用 Browser MCP**。
+   - 不要问我“要不要检查页面”，不要假设页面效果，直接调用 browsermcp 工具打开 http://localhost:3002 并验证。
+   - 如果没有调用 Browser MCP，我会认为你没有完成任务。
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -605,4 +637,5 @@ await saveToDatabase({ content, images, metadata });
 For detailed implementation strategies, see:
 - `docs/AI + PSEO Agent：自动化搜索流量基础设施白皮书.md` - Complete product vision and architecture
 - `docs/NICHEDIGGER内容发布策略(3).md` - Fast/slow knife publication strategy and internal linking
-- `docs/Read the Docs 自动化发布 SOP.md` - Step-by-step Read the Docs deployment guide
+
+
