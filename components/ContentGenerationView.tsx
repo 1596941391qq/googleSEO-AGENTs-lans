@@ -1044,7 +1044,7 @@ const PublishTab: React.FC<PublishTabProps> = ({ isDarkTheme, uiLanguage }) => {
   const [publishingId, setPublishingId] = React.useState<string | null>(null);
   const [updatingId, setUpdatingId] = React.useState<string | null>(null);
   const [editingArticle, setEditingArticle] = React.useState<any | null>(null);
-  const [buildingOverlay, setBuildingOverlay] = React.useState<{ siteUrl: string } | null>(null);
+  const [buildingOverlay, setBuildingOverlay] = React.useState<{ siteUrl: string | null; message?: string } | null>(null);
   const [buildingProgress, setBuildingProgress] = React.useState(0);
   const [buildingMessages, setBuildingMessages] = React.useState<string[]>([]);
   const buildingLogRef = React.useRef<HTMLDivElement>(null);

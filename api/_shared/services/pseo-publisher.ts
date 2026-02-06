@@ -724,7 +724,7 @@ export async function updatePublishedArticle(
                 } else {
                   // 超时或错误
                   console.log(`[PSEO Publisher] ℹ️ Repo linking timeout. Netlify will continue linking in background.`);
-                  rebuildWarning = linkResult.error || 'GitHub repo not linked within 2 minutes. Netlify will continue linking in background and start building automatically once linked.';
+                  rebuildWarning = linkResult.error || 'GitHub repo not linked within 5 minutes. Netlify will continue linking in background and start building automatically once linked.';
                 }
               }
             }

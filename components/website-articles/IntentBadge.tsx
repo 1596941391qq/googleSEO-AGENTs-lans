@@ -45,8 +45,8 @@ export const IntentBadge: React.FC<IntentBadgeProps> = ({
       default:
         return {
           icon: <Info className={cn(size === 'sm' ? 'w-3 h-3' : 'w-3.5 h-3.5')} />,
-          label: intent,
-          shortLabel: intent.charAt(0).toUpperCase(),
+          label: String(intent),
+          shortLabel: String(intent).charAt(0).toUpperCase(),
           color: isDarkTheme
             ? 'text-zinc-400 bg-zinc-400/10 border-zinc-400/20'
             : 'text-gray-500 bg-gray-100 border-gray-200',

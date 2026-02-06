@@ -5,7 +5,7 @@ import { KeywordStatsCards } from './KeywordStatsCards';
 import { KeywordFiltersBar, KeywordFilters } from './KeywordFiltersBar';
 import { KeywordDataTable, SortConfig } from './KeywordDataTable';
 import { KeywordPagination, PaginationConfig } from './KeywordPagination';
-import { KeywordWithStatus } from '../../types';
+import { KeywordWithStatus, ProbabilityLevel } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserId } from '../website-data/utils';
 import { Loader2 } from 'lucide-react';
@@ -176,7 +176,7 @@ export const KeywordManagerDashboard: React.FC<KeywordManagerDashboardProps> = (
 
     // Apply probability filter
     if (filters.probability.length > 0) {
-      result = result.filter(k => filters.probability.includes(k.probability));
+      result = result.filter(k => filters.probability.includes(k.probability as ProbabilityLevel));
     }
 
     // Apply source filter

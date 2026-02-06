@@ -35,6 +35,8 @@ export async function indexArticleWithDeepSearch(
     };
   }
 
+  console.log('[DeepSearch] ✓ API Key configured:', apiKey.substring(0, 10) + '...');
+
   const { articleTitle, articleUrl, promotionWebsite, promotionKeywords } = request;
 
   console.log('[DeepSearch] 🚀 Starting Deep Search indexing...');
@@ -65,6 +67,10 @@ export async function indexArticleWithDeepSearch(
   console.log('[DeepSearch] 📤 Request body:', JSON.stringify(requestBody, null, 2));
 
   try {
+    // 创建 AbortController 用于超时控制
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120000); // 120 秒超时
+
     const response = await fetch('https://api.unifuncs.com/deepsearch/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -72,7 +78,10 @@ export async function indexArticleWithDeepSearch(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(requestBody),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -138,9 +147,26 @@ export async function indexArticleWithDeepSearch(
 
   } catch (error: any) {
     console.error('[DeepSearch] ❌ Error:', error);
+
+    // 提供更详细的错误信息
+    let errorMessage = 'Unknown error';
+    if (error.name === 'AbortError') {
+      errorMessage = 'Request timeout after 120 seconds';
+    } else if (error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT') {
+      errorMessage = 'Connection timeout - unable to reach unifuncs API';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    console.error('[DeepSearch] Error details:', {
+      name: error.name,
+      message: error.message,
+      cause: error.cause,
+    });
+
     return {
       success: false,
-      error: error.message || 'Unknown error',
+      error: errorMessage,
     };
   }
 }

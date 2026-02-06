@@ -12,6 +12,7 @@ interface DomainCompetitor {
   totalKeywords: number;
   gapKeywords: number;
   gapTraffic: number;
+  visibilityScore?: number;
 }
 
 interface CompetitorsComparisonProps {

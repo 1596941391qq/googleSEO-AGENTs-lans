@@ -8,7 +8,7 @@ export interface ImageRegenerateButtonProps {
   isRegenerating?: boolean;
   uiLanguage?: 'en' | 'zh';
   variant?: 'default' | 'ghost' | 'outline';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
 }
 
@@ -32,9 +32,9 @@ export const ImageRegenerateButton: React.FC<ImageRegenerateButtonProps> = ({
         className
       )}
     >
-      <RefreshCw 
-        size={size === 'sm' ? 14 : size === 'md' ? 16 : 18} 
-        className={cn("mr-2", isRegenerating && "animate-spin")} 
+      <RefreshCw
+        size={size === 'sm' ? 14 : size === 'lg' ? 18 : 16}
+        className={cn("mr-2", isRegenerating && "animate-spin")}
       />
       {isRegenerating 
         ? (uiLanguage === 'zh' ? '重新生成中...' : 'Regenerating...')

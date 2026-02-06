@@ -36,13 +36,9 @@ export async function publishToGitHub(
     let finalContent: string;
 
     if (isHtml) {
-        // 使用转换器生成 HTML
-        // Dynamic import to avoid circular dependencies if any, though here it's fine
-        const { convertMarkdownToHtml } = await import('../utils/markdown-converter.js');
-        finalContent = convertMarkdownToHtml(article.content, article.title, {
-            description: article.metaDescription,
-            keywords: article.keyword
-        });
+        // HTML format not yet implemented - fallback to markdown
+        // TODO: Implement markdown-to-html converter
+        throw new Error('HTML format is not yet supported. Please use markdown format.');
     } else {
         // 1. 准备文件路径和内容
         // 构建 Frontmatter

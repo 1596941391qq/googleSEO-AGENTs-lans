@@ -172,12 +172,12 @@ export async function waitForRepoLinking(config: {
   token: string;
   siteId: string;
 }): Promise<{ success: boolean; linked: boolean; error?: string }> {
-  const maxWaitTime = 120000; // 2 minutes
+  const maxWaitTime = 300000; // 5 minutes
   const intervals = [10000, 15000, 20000]; // 10s, 15s, 20s
   const startTime = Date.now();
   let attemptCount = 0;
 
-  console.log(`[Netlify] Waiting for GitHub repo to be linked (max 2 minutes)...`);
+  console.log(`[Netlify] Waiting for GitHub repo to be linked (max 5 minutes)...`);
 
   while (Date.now() - startTime < maxWaitTime) {
     try {
@@ -235,7 +235,7 @@ export async function waitForRepoLinking(config: {
     }
   }
 
-  console.log(`[Netlify] ⏱️ Timeout: GitHub repo not linked within 2 minutes`);
+  console.log(`[Netlify] ⏱️ Timeout: GitHub repo not linked within 5 minutes`);
   return {
     success: true, // Not an error, just timeout
     linked: false,
@@ -347,7 +347,7 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
                 success: true,
                 siteUrl: existingSite.ssl_url || existingSite.url,
                 projectId: existingSite.id,
-                warning: linkResult.error || 'GitHub repo not linked within 2 minutes. Netlify will continue linking in background and start building automatically once linked.',
+                warning: linkResult.error || 'GitHub repo not linked within 5 minutes. Netlify will continue linking in background and start building automatically once linked.',
               };
             }
           }
@@ -508,7 +508,7 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
         success: true,
         siteUrl: siteData.ssl_url || siteData.url,
         projectId: siteData.id,
-        warning: linkResult.error || 'Site created. GitHub repo not linked within 2 minutes. Netlify will continue linking in background and start building automatically once linked.',
+        warning: linkResult.error || 'Site created. GitHub repo not linked within 5 minutes. Netlify will continue linking in background and start building automatically once linked.',
       };
     }
   } catch (error: any) {

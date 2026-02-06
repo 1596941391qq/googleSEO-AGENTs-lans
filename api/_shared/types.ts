@@ -119,6 +119,7 @@ export interface SEOStrategyReport {
     header_trans?: string;
     description: string;
     description_trans?: string;
+    subsections?: string[];
   }[];
   longTailKeywords?: string[];
   longTailKeywords_trans?: string[];

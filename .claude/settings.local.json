@@ -45,7 +45,8 @@
       "Bash(wsl.exe pip3 install:*)",
       "Bash(wsl.exe which:*)",
       "WebFetch(domain:www.mkdocs.org)",
-      "Bash(tsc:*)"
+      "Bash(tsc:*)",
+      "WebFetch(domain:unifuncs.com)"
     ]
   }
 }

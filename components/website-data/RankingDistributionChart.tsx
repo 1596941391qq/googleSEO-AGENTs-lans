@@ -47,6 +47,7 @@ export const RankingDistributionChart: React.FC<
           percentage: getPercentage(distribution.top3),
           color: "bg-emerald-500",
           bgColor: isDarkTheme ? "bg-emerald-500/20" : "bg-emerald-100",
+          change: changes?.top3,
         },
         {
           label: "Top 10",
@@ -54,6 +55,7 @@ export const RankingDistributionChart: React.FC<
           percentage: getPercentage(distribution.top10),
           color: "bg-blue-500",
           bgColor: isDarkTheme ? "bg-blue-500/20" : "bg-blue-100",
+          change: changes?.top10,
         },
         {
           label: "Top 50",
@@ -61,6 +63,7 @@ export const RankingDistributionChart: React.FC<
           percentage: getPercentage(distribution.top50),
           color: "bg-amber-500",
           bgColor: isDarkTheme ? "bg-amber-500/20" : "bg-amber-100",
+          change: undefined,
         },
         {
           label: "Top 100",
@@ -68,6 +71,7 @@ export const RankingDistributionChart: React.FC<
           percentage: getPercentage(distribution.top100),
           color: "bg-gray-500",
           bgColor: isDarkTheme ? "bg-gray-500/20" : "bg-gray-100",
+          change: changes?.top100,
         },
       ]
     : [];

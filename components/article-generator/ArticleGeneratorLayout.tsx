@@ -975,13 +975,13 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
               uiLanguage={uiLanguage}
               isDarkTheme={isDarkTheme}
               userId={userId}
-              initialKeyword={state.keyword}
-              initialTone={state.tone}
-              initialAudience={state.targetAudience as "beginner" | "expert"}
-              initialVisualStyle={state.visualStyle}
-              initialTargetMarket={state.targetMarket}
-              initialPromotedWebsites={state.promotedWebsites}
-              initialPromotionIntensity={state.promotionIntensity}
+              initialKeyword={'keyword' in state ? state.keyword : undefined}
+              initialTone={'tone' in state ? state.tone : undefined}
+              initialAudience={'targetAudience' in state ? state.targetAudience as "beginner" | "expert" : undefined}
+              initialVisualStyle={'visualStyle' in state ? state.visualStyle : undefined}
+              initialTargetMarket={'targetMarket' in state ? state.targetMarket : undefined}
+              initialPromotedWebsites={'promotedWebsites' in state ? state.promotedWebsites : undefined}
+              initialPromotionIntensity={'promotionIntensity' in state ? state.promotionIntensity : undefined}
             />
           )}
 

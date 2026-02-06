@@ -219,7 +219,7 @@ export const KeywordDataTable: React.FC<KeywordDataTableProps> = ({
                     {keyword.difficulty || '-'}
                   </td>
                   <td className="p-2">
-                    <Badge className={cn('text-[9px] font-bold border px-1.5 py-0.5', getProbabilityColor(keyword.probability))}>
+                    <Badge className={cn('text-[9px] font-bold border px-1.5 py-0.5', getProbabilityColor(keyword.probability as ProbabilityLevel))}>
                       {keyword.probability}
                     </Badge>
                   </td>

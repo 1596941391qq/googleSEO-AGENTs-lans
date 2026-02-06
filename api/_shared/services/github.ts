@@ -927,3 +927,130 @@ function insertArticleIntoReadme(currentContent: string, articleEntry: string, i
   // 如果都没有，追加到文件末尾
   return currentContent.trimEnd() + `\n\n## 📚 Articles\n${articleEntry}`;
 }
+
+/**
+ * 更新旧站点的 MkDocs 配置
+ * 将 use_directory_urls: true 改为 false，并添加首页
+ */
+export async function updateMkDocsConfig(config: {
+  token: string;
+  owner: string;
+  repoName: string;
+  siteName: string;
+  siteDescription: string;
+  branch?: string;
+}): Promise<{
+  success: boolean;
+  changes?: string[];
+  error?: string;
+}> {
+  try {
+    console.log(`[GitHub updateMkDocsConfig] Updating config for: ${config.repoName}`);
+    const changes: string[] = [];
+
+    // 1. 获取当前 mkdocs.yml
+    const response = await fetch(
+      `${GITHUB_API_BASE}/repos/${config.owner}/${config.repoName}/contents/mkdocs.yml?ref=${config.branch || 'main'}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Failed to fetch mkdocs.yml: ${response.status}`,
+      };
+    }
+
+    const data = await response.json();
+    let currentContent = Buffer.from(data.content, 'base64').toString('utf-8');
+
+    // 2. 修改 use_directory_urls: true -> false
+    if (currentContent.includes('use_directory_urls: true')) {
+      currentContent = currentContent.replace(
+        /use_directory_urls: true/g,
+        'use_directory_urls: false'
+      );
+      changes.push('Changed use_directory_urls from true to false');
+    }
+
+    // 3. 移除 index_file 配置（如果存在）
+    if (currentContent.includes('index_file:')) {
+      currentContent = currentContent.replace(/\nindex_file: .+\.md/g, '');
+      changes.push('Removed index_file workaround');
+    }
+
+    // 4. 添加首页到导航（如果不存在）
+    if (!currentContent.includes('- "Home": index.md')) {
+      currentContent = currentContent.replace(
+        /nav:\n/,
+        'nav:\n  - "Home": index.md\n'
+      );
+      changes.push('Added Home to navigation');
+    }
+
+    // 5. 更新 mkdocs.yml
+    if (changes.length > 0) {
+      const updateResult = await createOrUpdateFile({
+        token: config.token,
+        owner: config.owner,
+        repoName: config.repoName,
+        path: 'mkdocs.yml',
+        content: currentContent,
+        message: 'Update MkDocs config: use flat HTML structure',
+        branch: config.branch,
+      });
+
+      if (!updateResult.success) {
+        return {
+          success: false,
+          error: `Failed to update mkdocs.yml: ${updateResult.error}`,
+        };
+      }
+    }
+
+    // 6. 创建 docs/index.md（如果不存在）
+    const indexMd = `# Welcome to ${config.siteName}
+
+${config.siteDescription}
+
+## Latest Articles
+
+This site is powered by [NicheDigger PSEO](https://nichedigger.com) - an AI-powered automated search traffic infrastructure platform.
+
+---
+
+*Articles will be automatically listed here as they are published.*
+`;
+
+    const indexResult = await createOrUpdateFile({
+      token: config.token,
+      owner: config.owner,
+      repoName: config.repoName,
+      path: 'docs/index.md',
+      content: indexMd,
+      message: 'Add homepage for MkDocs site',
+      branch: config.branch,
+    });
+
+    if (indexResult.success) {
+      changes.push('Created docs/index.md homepage');
+    }
+
+    console.log(`[GitHub updateMkDocsConfig] ✅ Config updated successfully`);
+    return {
+      success: true,
+      changes,
+    };
+  } catch (error: any) {
+    console.error('[GitHub updateMkDocsConfig] Error:', error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}

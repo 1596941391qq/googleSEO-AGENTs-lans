@@ -138,6 +138,7 @@ export interface SEOStrategyReport {
     header_trans?: string;
     description: string;
     description_trans?: string;
+    subsections?: string[];
   }[];
   longTailKeywords?: string[];
   longTailKeywords_trans?: string[];
@@ -241,6 +242,8 @@ export interface WorkflowNode {
   configurable: boolean; // Whether user can edit this node
   prompt?: string; // Agent prompt (only for agent nodes)
   defaultPrompt?: string; // Default prompt for reset
+  promptZh?: string; // Chinese prompt (only for agent nodes)
+  defaultPromptZh?: string; // Default Chinese prompt for reset
   isSystem?: boolean; // Whether this is a system tool (non-configurable, special styling)
 }
 

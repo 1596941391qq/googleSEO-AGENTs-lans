@@ -1,5 +1,5 @@
 // Workflow Definitions
-import { WorkflowDefinition } from "../types";
+import { WorkflowDefinition, WorkflowConfig } from "../types";
 import { 
   DEFAULT_GEN_PROMPT_EN, 
   DEFAULT_ANALYZE_PROMPT_EN,
@@ -153,4 +153,14 @@ export const DEEP_DIVE_WORKFLOW: WorkflowDefinition = {
   ],
 };
 
-
+// Helper function to create default config from workflow
+export function createDefaultConfig(workflow: WorkflowDefinition, name: string) {
+  return {
+    id: `${workflow.id}-${Date.now()}`,
+    workflowId: workflow.id,
+    name,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    nodes: JSON.parse(JSON.stringify(workflow.nodes)), // Deep clone
+  };
+}
