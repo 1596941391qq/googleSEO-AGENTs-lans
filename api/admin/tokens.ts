@@ -159,6 +159,7 @@ async function getTokenBindings() {
       p.token_encrypted as platform_token_encrypted,
       p.usage_count as platform_usage_count,
       p.status as platform_status,
+      p.metadata,
       CASE WHEN ps.github_token_id = g.id THEN true ELSE false END as is_bound
     FROM github_tokens g
     CROSS JOIN platform_tokens p

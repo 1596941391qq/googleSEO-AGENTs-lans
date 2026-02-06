@@ -120,6 +120,7 @@ export async function publishArticle(
     const netlifyTokenDecrypted = decryptToken(netlify_token.token_encrypted);
 
     // 从 metadata 中获取 installation_id
+    console.log(`[PSEO Publisher] - DEBUG: netlify_token.metadata =`, netlify_token.metadata);
     const installationId = netlify_token.metadata?.installation_id;
 
     console.log(`[PSEO Publisher] Using token pair:`);
@@ -542,9 +543,12 @@ export async function updatePublishedArticle(
     const netlifyTokenDecrypted = decryptToken(netlify_token.token_encrypted);
 
     // 提取 installation_id（如果存在）
+    console.log(`[PSEO Publisher] - DEBUG: netlify_token.metadata =`, netlify_token.metadata);
     const installationId = netlify_token.metadata?.installation_id;
     if (installationId) {
       console.log(`[PSEO Publisher] - GitHub App Installation ID: ${installationId}`);
+    } else {
+      console.log(`[PSEO Publisher] - ⚠️ No installation_id found in metadata`);
     }
 
     // 检查仓库是否存在
@@ -637,33 +641,65 @@ export async function updatePublishedArticle(
                 console.log(`[PSEO Publisher] ✅ Netlify rebuild triggered`);
               }
             } else {
-              // 场景2: Netlify site 存在但 GitHub repo 未链接 → 主动等待链接
+              // 场景2: Netlify site 存在但 GitHub repo 未链接 → 主动链接
               console.log(`[PSEO Publisher] ⚠️ GitHub repo not linked yet`);
-              console.log(`[PSEO Publisher] ℹ️ Actively waiting for Netlify to link the repo...`);
 
-              const { waitForRepoLinking } = await import('./netlify-deployer');
-              const linkResult = await waitForRepoLinking({
-                token: netlifyTokenDecrypted,
-                siteId: actualNetlifySiteId,
-              });
+              // 如果有 installation_id，主动链接 repo
+              if (installationId) {
+                console.log(`[PSEO Publisher] ℹ️ Actively linking repo using installation_id...`);
 
-              if (linkResult.linked) {
-                // 链接成功，触发构建
-                console.log(`[PSEO Publisher] ✅ Repo linked! Triggering rebuild...`);
-                const rebuildResult = await triggerNetlifyBuild({
+                const { linkRepoToSite } = await import('./netlify-deployer.js');
+                const linkResult = await linkRepoToSite({
+                  token: netlifyTokenDecrypted,
+                  siteId: actualNetlifySiteId,
+                  repoOwner: github_token.owner_name,
+                  repoName: repoName,
+                  installationId: installationId,
+                });
+
+                if (linkResult.success) {
+                  console.log(`[PSEO Publisher] ✅ Repo linked successfully! Triggering rebuild...`);
+                  const rebuildResult = await triggerNetlifyBuild({
+                    token: netlifyTokenDecrypted,
+                    siteId: actualNetlifySiteId,
+                  });
+
+                  if (!rebuildResult.success) {
+                    rebuildWarning = `Netlify build trigger failed: ${rebuildResult.error}`;
+                  } else {
+                    console.log(`[PSEO Publisher] ✅ Netlify rebuild triggered`);
+                  }
+                } else {
+                  console.error(`[PSEO Publisher] ❌ Failed to link repo: ${linkResult.error}`);
+                  rebuildWarning = `Failed to link GitHub repo: ${linkResult.error}`;
+                }
+              } else {
+                // 没有 installation_id，使用被动等待
+                console.log(`[PSEO Publisher] ℹ️ No installation_id, passively waiting for Netlify to link the repo...`);
+
+                const { waitForRepoLinking } = await import('./netlify-deployer.js');
+                const linkResult = await waitForRepoLinking({
                   token: netlifyTokenDecrypted,
                   siteId: actualNetlifySiteId,
                 });
 
-                if (!rebuildResult.success) {
-                  rebuildWarning = `Netlify build trigger failed: ${rebuildResult.error}`;
+                if (linkResult.linked) {
+                  console.log(`[PSEO Publisher] ✅ Repo linked! Triggering rebuild...`);
+                  const rebuildResult = await triggerNetlifyBuild({
+                    token: netlifyTokenDecrypted,
+                    siteId: actualNetlifySiteId,
+                  });
+
+                  if (!rebuildResult.success) {
+                    rebuildWarning = `Netlify build trigger failed: ${rebuildResult.error}`;
+                  } else {
+                    console.log(`[PSEO Publisher] ✅ Netlify rebuild triggered`);
+                  }
                 } else {
-                  console.log(`[PSEO Publisher] ✅ Netlify rebuild triggered`);
+                  // 超时或错误
+                  console.log(`[PSEO Publisher] ℹ️ Repo linking timeout. Netlify will continue linking in background.`);
+                  rebuildWarning = linkResult.error || 'GitHub repo not linked within 2 minutes. Netlify will continue linking in background and start building automatically once linked.';
                 }
-              } else {
-                // 超时或错误
-                console.log(`[PSEO Publisher] ℹ️ Repo linking timeout. Netlify will continue linking in background.`);
-                rebuildWarning = linkResult.error || 'GitHub repo not linked within 2 minutes. Netlify will continue linking in background and start building automatically once linked.';
               }
             }
           }

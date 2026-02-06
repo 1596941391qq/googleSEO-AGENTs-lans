@@ -380,10 +380,19 @@ export async function getAvailableTokenPair(): Promise<TokenPair | null> {
   await initializeAndMigrate();
 
   // 从 platform_sites 表查询绑定关系
+  // 注意：显式选择所有字段，特别是 metadata JSONB 字段
   const result = await sql<any>`
     SELECT
       g.*,
-      row_to_json(p.*) as netlify_token
+      p.id as netlify_token_id,
+      p.name as netlify_token_name,
+      p.token_encrypted as netlify_token_encrypted,
+      p.usage_count as netlify_usage_count,
+      p.status as netlify_status,
+      p.metadata as netlify_metadata,
+      p.created_at as netlify_created_at,
+      p.updated_at as netlify_updated_at,
+      ps.github_token_id as netlify_github_token_id
     FROM github_tokens g
     JOIN platform_sites ps ON ps.github_token_id = g.id
     JOIN platform_tokens p ON ps.platform_token_id = p.id
@@ -399,9 +408,21 @@ export async function getAvailableTokenPair(): Promise<TokenPair | null> {
     return null;
   }
 
+  const row = result.rows[0];
+
   return {
-    github_token: result.rows[0],
-    netlify_token: result.rows[0].netlify_token
+    github_token: row,
+    netlify_token: {
+      id: row.netlify_token_id,
+      name: row.netlify_token_name,
+      token_encrypted: row.netlify_token_encrypted,
+      github_token_id: row.netlify_github_token_id,
+      usage_count: row.netlify_usage_count,
+      status: row.netlify_status,
+      metadata: row.netlify_metadata,
+      created_at: row.netlify_created_at,
+      updated_at: row.netlify_updated_at,
+    }
   };
 }
 

@@ -99,6 +99,72 @@ interface NetlifyRebuildResult {
 }
 
 /**
+ * 主动链接 GitHub repo 到现有的 Netlify 站点
+ * 使用 GitHub App installation_id 立即链接仓库
+ */
+export async function linkRepoToSite(config: {
+  token: string;
+  siteId: string;
+  repoOwner: string;
+  repoName: string;
+  installationId: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[Netlify] Linking GitHub repo to site ${config.siteId}...`);
+    console.log(`[Netlify] Using installation_id: ${config.installationId}`);
+
+    const requestBody = {
+      repo: {
+        provider: 'github',
+        repo: `${config.repoOwner}/${config.repoName}`,
+        branch: 'main',
+        cmd: 'mkdocs build',
+        dir: 'site',
+        installation_id: parseInt(config.installationId, 10)
+      }
+    };
+
+    console.log(`[Netlify] Request body:`, JSON.stringify(requestBody, null, 2));
+
+    const response = await fetchWithRetry(
+      `https://api.netlify.com/api/v1/sites/${config.siteId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      },
+      3,
+      30000
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error(`[Netlify] Link repo failed - Status: ${response.status}`);
+      console.error(`[Netlify] Error Response:`, JSON.stringify(error, null, 2));
+      return {
+        success: false,
+        error: `Failed to link repo: ${error.message || response.statusText}`
+      };
+    }
+
+    const result = await response.json();
+    console.log(`[Netlify] ✅ Repo linked successfully!`);
+    console.log(`[Netlify] Site URL: ${result.url}`);
+
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[Netlify] Exception during repo linking:`, error.message);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+/**
  * 等待 Netlify 自动链接 GitHub repo
  * 轮询检查 build_settings.repo 字段，最多等待 2 分钟
  */
