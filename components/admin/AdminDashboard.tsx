@@ -23,7 +23,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Link2
+  Link2,
+  Send
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -131,6 +132,7 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
   const [publishedArticles, setPublishedArticles] = useState<any[]>([]);
   const [bindingArticleId, setBindingArticleId] = useState<string | null>(null);
   const [bindingRepoName, setBindingRepoName] = useState('');
+  const [pushingArticleId, setPushingArticleId] = useState<string | null>(null);
 
   // Platform Token Installation ID 编辑状态
   const [editingPlatformTokenId, setEditingPlatformTokenId] = useState<string | null>(null);
@@ -524,6 +526,36 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
       }
     } catch (error) {
       alert('Failed to bind article');
+    }
+  };
+
+  // 推送文章到 unifuncs
+  const handlePushToUnifuncs = async (articleId: string) => {
+    setPushingArticleId(articleId);
+
+    try {
+      const res = await fetch('/api/admin/push-to-unifuncs', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ articleId })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        const result = data.results?.[0];
+        if (result?.success) {
+          alert(`✅ Successfully pushed to unifuncs!\n${result.shareUrl ? `\nShare URL: ${result.shareUrl}` : ''}`);
+        } else {
+          alert(`❌ Failed to push: ${result?.error || 'Unknown error'}`);
+        }
+      } else {
+        alert(`❌ ${data.message || 'Failed to push to unifuncs'}`);
+      }
+    } catch (error) {
+      console.error('[AdminDashboard] Push error:', error);
+      alert('❌ Failed to push to unifuncs');
+    } finally {
+      setPushingArticleId(null);
     }
   };
 
@@ -1411,7 +1443,23 @@ export function AdminDashboard({ token, onLogout }: AdminDashboardProps) {
                           </div>
                           <div className="flex items-center gap-2">
                             {article.site_id ? (
-                              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                              <>
+                                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handlePushToUnifuncs(article.id)}
+                                  disabled={pushingArticleId === article.id}
+                                  className="h-8 px-3 text-xs rounded-lg border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+                                >
+                                  {pushingArticleId === article.id ? (
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <Send className="w-3 h-3 mr-1" />
+                                  )}
+                                  Push
+                                </Button>
+                              </>
                             ) : (
                               <Button
                                 size="sm"

@@ -496,6 +496,32 @@ export async function publishArticle(
       console.log(`[PSEO Publisher] ⚠️ Warning: ${combinedWarning}`);
     }
 
+    // 自动推送到 unifuncs 进行索引（首次发布）
+    if (articleUrl && siteUrl) {
+      try {
+        console.log(`[PSEO Publisher] 📤 Pushing to unifuncs for indexing...`);
+        const { indexArticleWithDeepSearch } = await import('./deepsearch.js');
+
+        const pushResult = await indexArticleWithDeepSearch({
+          articleTitle: article.title,
+          articleUrl: articleUrl,
+          promotionWebsite: article.brandName || '',
+          promotionKeywords: article.keyword ? [article.keyword] : []
+        });
+
+        if (pushResult.success) {
+          console.log(`[PSEO Publisher] ✅ Successfully pushed to unifuncs`);
+          if (pushResult.shareUrl) {
+            console.log(`[PSEO Publisher] 🔗 Share URL: ${pushResult.shareUrl}`);
+          }
+        } else {
+          console.warn(`[PSEO Publisher] ⚠️ Failed to push to unifuncs: ${pushResult.error}`);
+        }
+      } catch (error: any) {
+        console.warn(`[PSEO Publisher] ⚠️ Exception during unifuncs push:`, error.message);
+      }
+    }
+
     return {
       success: true,
       articleUrl,

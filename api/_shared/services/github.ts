@@ -447,9 +447,10 @@ repo_url: https://github.com/${config.repoOwner}/${config.repoName}
 repo_name: ${config.repoOwner}/${config.repoName}
 
 docs_dir: docs
-use_directory_urls: true
+use_directory_urls: false
 
 nav:
+  - "Home": index.md
 # 新文章将在此处自动添加
 
 markdown_extensions:
@@ -458,8 +459,19 @@ markdown_extensions:
       permalink: true
 `;
 
-  // index.md 不需要了，通过 index_file 配置指向第一篇文章
-  const indexMd = ``;
+  // 创建真正的首页
+  const indexMd = `# Welcome to ${config.siteName}
+
+${config.siteDescription}
+
+## Latest Articles
+
+This site is powered by [NicheDigger PSEO](https://nichedigger.com) - an AI-powered automated search traffic infrastructure platform.
+
+---
+
+*Articles will be automatically listed here as they are published.*
+`;
 
   const requirementsTxt = `mkdocs>=1.5
 mkdocs-material>=9.0
@@ -482,6 +494,7 @@ python:
 
   return [
     { path: 'mkdocs.yml', content: mkdocsYml },
+    { path: 'docs/index.md', content: indexMd },
     { path: 'requirements.txt', content: requirementsTxt },
     { path: '.readthedocs.yaml', content: readthedocsYaml },
   ];
@@ -701,16 +714,6 @@ async function updateMkDocsNav(config: {
       } else {
         updatedContent = currentContent.trimEnd() + `\n${navEntry}\n`;
       }
-    }
-
-    // 检查是否需要设置 index_file（如果是第一篇文章）
-    if (!currentContent.includes('index_file:')) {
-      // 在 use_directory_urls 后面添加 index_file 配置
-      updatedContent = updatedContent.replace(
-        /use_directory_urls: true/,
-        `use_directory_urls: true\nindex_file: ${config.articleSlug}.md`
-      );
-      console.log(`[GitHub updateMkDocsNav] Set index_file to first article: ${config.articleSlug}.md`);
     }
 
     // 更新文件

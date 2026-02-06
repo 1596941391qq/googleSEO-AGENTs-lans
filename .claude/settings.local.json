@@ -43,7 +43,9 @@
       "Bash(wsl.exe bash:*)",
       "Bash(wsl.exe ping:*)",
       "Bash(wsl.exe pip3 install:*)",
-      "Bash(wsl.exe which:*)"
+      "Bash(wsl.exe which:*)",
+      "WebFetch(domain:www.mkdocs.org)",
+      "Bash(tsc:*)"
     ]
   }
 }
