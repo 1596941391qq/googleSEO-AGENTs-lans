@@ -86,7 +86,79 @@ PRISMA_DATABASE_URL="prisma+postgres://accelerate.prisma-data.net/?api_key=eyJhb
 
 ---
 
-### 3. pencil ⚠️
+### 3. postgres-local ✅
+**状态**: 已安装
+**用途**: 本地开发数据库操作
+
+**连接信息**:
+- 数据库: PostgreSQL 127.0.0.1:5432
+- 用途: 本地开发和测试
+
+**主要功能**:
+- 执行 SQL 查询
+- 查看表结构
+- 数据库调试
+- 迁移脚本测试
+
+**典型命令**:
+```
+"使用 postgres-local 查询 published_articles 表"
+"查看本地数据库的所有表"
+"检查 platform_sites 表结构"
+```
+
+**典型风险**:
+- 🔴 **高风险**: 可以执行 DELETE/DROP 等破坏性操作
+- ⚠️ 仅限本地开发环境使用
+
+**使用场景**:
+- ✅ 本地数据库调试
+- ✅ 测试迁移脚本
+- ✅ 开发环境数据查询
+
+---
+
+### 4. postgres-prod ✅
+**状态**: 已安装
+**用途**: 线上生产数据库操作
+
+**连接信息**:
+- 数据库: Prisma db.prisma.io:5432
+- 用途: 生产环境数据库
+
+**主要功能**:
+- 执行只读查询（推荐）
+- 查看线上表结构
+- 生产数据分析
+- 迁移脚本执行
+
+**典型命令**:
+```
+"使用 postgres-prod 查询最近发布的文章"
+"检查线上数据库的表结构"
+"统计生产环境的用户数量"
+```
+
+**典型风险**:
+- 🔴 **极高风险**: 直接操作生产数据库
+- 🔴 可能影响线上服务
+- 🔴 数据删除无法恢复
+
+**使用场景**:
+- ✅ 生产数据分析
+- ✅ 迁移脚本执行（谨慎）
+- ✅ 数据库结构对比
+- ❌ 避免直接修改数据
+
+**安全建议**:
+- 仅执行只读查询
+- 修改操作需要明确确认
+- 定期备份数据库
+- 使用事务保护
+
+---
+
+### 5. pencil ⚠️
 **状态**: 已安装（Cursor 扩展相关）
 **用途**: Cursor IDE 集成功能
 
@@ -399,3 +471,155 @@ claude mcp add filesystem -- npx -y @modelcontextprotocol/server-filesystem D:\g
 ---
 
 **注意**: 本文档会随着项目需求变化而更新。如有问题，请查看 `.claude/settings.local.json` 中的实际配置。
+
+---
+
+## 🔄 数据库迁移自动化
+
+### 核心功能
+
+利用 `postgres-local` 和 `postgres-prod` 两个 MCP，可以实现：
+
+1. **自动对比数据库差异**
+   - 对比表结构（新增/删除/修改）
+   - 对比列定义（类型/约束/默认值）
+   - 对比索引和约束
+
+2. **自动生成迁移 SQL**
+   - CREATE TABLE 语句
+   - ALTER TABLE 语句
+   - CREATE INDEX 语句
+   - 回滚脚本
+
+3. **安全执行迁移**
+   - 本地测试验证
+   - 事务保护
+   - 备份建议
+
+### 快速开始
+
+#### 1. 全量对比并生成迁移
+
+```
+用户: "对比本地和线上数据库，生成迁移 SQL"
+```
+
+Claude Code 会：
+- 读取本地数据库结构（postgres-local）
+- 读取线上数据库结构（postgres-prod）
+- 对比差异
+- 生成迁移文件到 `migrations/` 目录
+
+#### 2. 检查特定表的差异
+
+```
+用户: "检查 platform_sites 表在本地和线上的差异"
+```
+
+#### 3. 生成迁移并执行
+
+```
+用户: "生成迁移 SQL 并在本地测试"
+```
+
+### 迁移示例
+
+#### 场景 1：新增表
+
+```sql
+-- 本地新增了 article_tags 表
+CREATE TABLE IF NOT EXISTS article_tags (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  article_id UUID NOT NULL REFERENCES published_articles(id),
+  tag_name VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+#### 场景 2：新增列
+
+```sql
+-- 给 published_articles 表新增 seo_score 列
+ALTER TABLE published_articles
+ADD COLUMN seo_score INTEGER DEFAULT 0;
+```
+
+#### 场景 3：修改列类型
+
+```sql
+-- 将 content 列从 VARCHAR 改为 TEXT
+ALTER TABLE published_articles
+ALTER COLUMN content TYPE TEXT;
+```
+
+### 安全检查清单
+
+执行迁移前必须确认：
+
+- [ ] ✅ 已备份生产数据库
+- [ ] ✅ 已在本地测试迁移脚本
+- [ ] ✅ 已检查所有 SQL 语句
+- [ ] ✅ 已确认删除操作的必要性
+- [ ] ✅ 已准备回滚方案
+- [ ] ✅ 已选择低流量时段
+
+### 详细文档
+
+完整的迁移指南请查看：[DB-MIGRATION-GUIDE.md](./DB-MIGRATION-GUIDE.md)
+
+包含：
+- 详细使用方法
+- 迁移类型说明
+- 安全最佳实践
+- 故障排查
+- 示例对话
+
+---
+
+## 📊 MCP 使用统计
+
+### 当前已安装（8个）
+
+| MCP | 状态 | 用途 | 风险等级 |
+|-----|------|------|----------|
+| browsermcp | ✅ 已安装 | 浏览器自动化 | ⚠️ 中 |
+| context7 | ✅ 已安装 | 上下文管理 | ⚠️ 低 |
+| postgres-local | ✅ 已安装 | 本地数据库 | 🔴 高 |
+| postgres-prod | ✅ 已安装 | 线上数据库 | 🔴 极高 |
+| pencil | ⚠️ 已安装 | Cursor 集成 | ⚠️ 低 |
+| github | ✅ 已安装 | GitHub 管理 | 🔴 高 |
+| filesystem | ✅ 已安装 | 文件系统 | 🔴 高 |
+| fetch | ✅ 已安装 | HTTP 请求 | ⚠️ 中 |
+
+### 推荐配置优先级
+
+**必需（已安装）**:
+1. ✅ browsermcp - UI 测试验证
+2. ✅ postgres-local - 本地数据库开发
+3. ✅ postgres-prod - 生产数据库管理
+4. ✅ github - 发布系统自动化
+
+**推荐（已安装）**:
+5. ✅ filesystem - 文件批量操作
+6. ✅ fetch - API 测试
+7. ✅ context7 - 上下文管理
+
+**可选**:
+8. ⚠️ pencil - 仅 Cursor 用户需要
+
+---
+
+## 更新日志
+
+- **2026-02-06 v2.0**: 
+  - ✅ 新增 postgres-local 和 postgres-prod MCP
+  - ✅ 实现数据库迁移自动化功能
+  - ✅ 新增 DB-MIGRATION-GUIDE.md 详细文档
+  - ✅ 新增 github、filesystem、fetch MCP
+  - ✅ 更新 MCP 使用统计表格
+
+- **2026-02-06 v1.0**: 初始版本
+  - 记录已安装的 MCP（browsermcp, context7, pencil）
+  - 推荐项目所需的 MCP
+  - 添加详细的使用说明和风险提示
+

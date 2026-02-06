@@ -3159,7 +3159,17 @@ export async function initPSEOPublishTables() {
       `;
 
       // 迁移：添加 metadata 列（如果不存在）
-      await sql;
+      await sql`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'platform_tokens' AND column_name = 'metadata'
+          ) THEN
+            ALTER TABLE platform_tokens ADD COLUMN metadata JSONB;
+          END IF;
+        END $$
+      `;
 
       // 3. 平台站点表 - 实际的发布��点
       await sql`
