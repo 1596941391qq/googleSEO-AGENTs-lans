@@ -76,6 +76,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           url_slug: article.url_slug  // 添加 url_slug 诊断
         });
 
+        // 🔧 如果 url_slug 为空，从 title 生成（与 publish.ts 逻辑一致）
+        let urlSlug = article.url_slug;
+        if (!urlSlug && article.title) {
+          urlSlug = article.title
+            .toLowerCase()
+            .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '-')
+            .replace(/(^-|-$)/g, '')
+            .substring(0, 50);
+
+          console.log(`[Push to Unifuncs] 🔧 Generated url_slug from title: ${urlSlug}`);
+
+          // 更新数据库
+          try {
+            await sql`
+              UPDATE published_articles
+              SET url_slug = ${urlSlug}, updated_at = NOW()
+              WHERE id = ${article.id}
+            `;
+            console.log(`[Push to Unifuncs] ✅ Updated url_slug in database`);
+          } catch (updateError: any) {
+            console.warn(`[Push to Unifuncs] ⚠️ Failed to update url_slug:`, updateError.message);
+          }
+        }
+
         // 🔧 修复：直接根据 repo_name 拼接 Netlify URL
         // Netlify 站点 URL 格式：https://{repo_name}.netlify.app/
         let siteUrl = '';
@@ -104,12 +128,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         // 推送到 unifuncs 使用 Deep Search API
-        const articleUrl = article.url_slug
-          ? `${siteUrl}/${article.url_slug}/`  // ✅ 使用完整文章 URL
+        const articleUrl = urlSlug  // 使用生成或已有的 urlSlug
+          ? `${siteUrl}/${urlSlug}/`  // ✅ 使用完整文章 URL
           : siteUrl;  // Fallback 到站点根 URL（如果没有 slug）
 
         console.log(`[Push to Unifuncs] 📍 Constructed article URL: ${articleUrl}`);
-        console.log(`[Push to Unifuncs] 📍 url_slug: "${article.url_slug || 'EMPTY'}"`);
+        console.log(`[Push to Unifuncs] 📍 url_slug: "${urlSlug || 'EMPTY'}"`);
 
         const pushResult = await indexArticleWithDeepSearch({
           articleTitle: article.title,

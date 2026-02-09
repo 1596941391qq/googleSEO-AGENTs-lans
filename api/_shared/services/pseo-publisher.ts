@@ -543,6 +543,28 @@ export async function publishArticle(
 
     const articleUrl = buildArticleUrl(siteUrl, slug);
 
+    // 更新数据库中的 url_slug 和 site_id
+    try {
+      console.log(`[PSEO Publisher] 💾 Updating article in database...`);
+      console.log(`[PSEO Publisher] Article ID: ${article.id}`);
+      console.log(`[PSEO Publisher] URL Slug: ${slug}`);
+      console.log(`[PSEO Publisher] Site ID: ${platformSiteId}`);
+
+      await sql`
+        UPDATE published_articles
+        SET
+          url_slug = ${slug},
+          site_id = ${platformSiteId},
+          updated_at = NOW()
+        WHERE id = ${article.id}
+      `;
+
+      console.log(`[PSEO Publisher] ✅ Database updated successfully`);
+    } catch (dbError: any) {
+      console.error(`[PSEO Publisher] ⚠️ Failed to update database:`, dbError.message);
+      // 不阻断发布流程，只记录警告
+    }
+
     // 合并所有警告信息
     const allWarnings = [];
     if (githubError) {
