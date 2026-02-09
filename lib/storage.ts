@@ -470,6 +470,15 @@ export class SmartStorage {
         wordsPerRound: task.miningState.wordsPerRound,
         miningStrategy: task.miningState.miningStrategy,
         miningMode: task.miningState.miningMode,
+        skipSerpVerification: task.miningState.skipSerpVerification,
+        userSuggestion: task.miningState.userSuggestion,
+        miningConfig: task.miningState.miningConfig,
+        selectedWebsite: task.miningState.selectedWebsite,
+        websiteId: task.miningState.websiteId,
+        websiteUrl: task.miningState.websiteUrl,
+        websiteDomain: task.miningState.websiteDomain,
+        websiteAnalysis: task.miningState.websiteAnalysis,
+        competitorAnalysis: task.miningState.competitorAnalysis,
         keywords: task.miningState.keywords?.slice(0, 50).map(compressKeyword), // 只保留前50个
         agentThoughts: [], // 不保存思维流
         logs: [],

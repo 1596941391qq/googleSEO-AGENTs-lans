@@ -553,6 +553,10 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
   }, [hasValidFinalArticle, state.isGenerating, state.currentStage]);
 
   const startGeneration = async (config: ArticleConfig) => {
+    // 在单次生成会话中维护本地的阶段与进度，避免依赖可能滞后的外部 state
+    let streamStage: GenerationStage = "research";
+    let streamProgress = 0;
+
     updateState({
       currentStage: "research", // Use a valid stage from the type
       streamEvents: [],
@@ -560,8 +564,6 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
       isGenerating: true,
       keyword: config.keyword,
       tone: config.tone,
-      targetAudience: config.targetAudience,
-      visualStyle: config.visualStyle,
       targetMarket: config.targetMarket,
       websiteId: config.websiteId,
       websiteUrl: config.websiteUrl,
@@ -627,29 +629,79 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                 currentEvents = [...currentEvents, event];
               }
 
-              // Update progress and stage based on agent
-              let newProgress = state.progress || 0;
-              let newStage: GenerationStage = state.currentStage || "research";
+              // 基于 agent 活动更新阶段，并在当前阶段内做平滑递增
+              let newStage: GenerationStage = streamStage || "research";
 
-              // Calculate progress based on agent activity
+              // 根据 agentId 映射阶段
               if (event.agentId === "researcher") {
                 newStage = "research";
-                newProgress = Math.max(newProgress, 20);
               } else if (event.agentId === "strategist") {
                 newStage = "strategy";
-                newProgress = Math.max(newProgress, 40);
               } else if (event.agentId === "writer") {
                 newStage = "writing";
-                newProgress = Math.max(newProgress, 60);
               } else if (event.agentId === "artist") {
                 newStage = "visualizing";
-                newProgress = Math.max(newProgress, 80);
+              }
+
+              // 各阶段基础进度，与 `OverallProgressBar` 中的阶段划分保持一致
+              const stageBaseProgress: Record<GenerationStage, number> = {
+                input: 0,
+                research: 20,
+                strategy: 40,
+                writing: 60,
+                visualizing: 80,
+                complete: 100,
+              };
+
+              // 按顺序列出生成阶段（不含 input）以便计算阶段上限
+              const orderedStages: GenerationStage[] = [
+                "research",
+                "strategy",
+                "writing",
+                "visualizing",
+                "complete",
+              ];
+
+              // 默认目标阶段为当前阶段
+              const targetStage = newStage;
+              const stageIndex = orderedStages.indexOf(targetStage);
+
+              // 计算当前阶段上限（略低于下一阶段的起始值，避免过早显示下一阶段的进度）
+              const currentBase =
+                stageBaseProgress[targetStage] ?? streamProgress;
+              const nextStage =
+                stageIndex >= 0 && stageIndex < orderedStages.length - 1
+                  ? orderedStages[stageIndex + 1]
+                  : "complete";
+              const nextBase = stageBaseProgress[nextStage];
+              const stageUpperBound =
+                targetStage === "complete"
+                  ? 100
+                  : Math.max(currentBase, nextBase - 5);
+
+              // 如果阶段发生变化，至少跳到该阶段的基础进度
+              if (targetStage !== streamStage) {
+                streamStage = targetStage;
+                streamProgress = Math.max(streamProgress, currentBase);
+              } else {
+                // 同一阶段内，每条事件让进度缓慢上升，直至该阶段上限
+                const increment = 1;
+                streamProgress = Math.min(
+                  Math.max(streamProgress, currentBase),
+                  stageUpperBound
+                );
+                if (streamProgress < stageUpperBound) {
+                  streamProgress = Math.min(
+                    streamProgress + increment,
+                    stageUpperBound
+                  );
+                }
               }
 
               updateState({
                 streamEvents: currentEvents,
-                progress: newProgress,
-                currentStage: newStage,
+                progress: streamProgress,
+                currentStage: streamStage,
               });
             } else if (json.type === "done") {
               // Parse the final article data - handle both object and string formats
@@ -878,6 +930,7 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
                   streamEvents: currentEvents,
                   isGenerating: false, // 明确设置为 false，确保切换到预览模式
                   currentStage: "complete",
+                  // 生成完成时强制拉满进度条，避免停在前一阶段
                   progress: 100,
                 });
               } else {
@@ -977,8 +1030,6 @@ export const ArticleGeneratorLayout: React.FC<ArticleGeneratorLayoutProps> = ({
               userId={userId}
               initialKeyword={'keyword' in state ? state.keyword : undefined}
               initialTone={'tone' in state ? state.tone : undefined}
-              initialAudience={'targetAudience' in state ? state.targetAudience as "beginner" | "expert" : undefined}
-              initialVisualStyle={'visualStyle' in state ? state.visualStyle : undefined}
               initialTargetMarket={'targetMarket' in state ? state.targetMarket : undefined}
               initialPromotedWebsites={'promotedWebsites' in state ? state.promotedWebsites : undefined}
               initialPromotionIntensity={'promotionIntensity' in state ? state.promotionIntensity : undefined}

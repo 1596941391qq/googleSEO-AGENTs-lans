@@ -170,6 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           contentType,
           urlSlug,
           brandName,
+          targetLanguage: article.target_language || 'en',  // 传递文章语言
         },
         article.project_name
       );
@@ -300,6 +301,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           contentType,
           urlSlug,
           brandName,
+          targetLanguage: article.target_language || 'en',  // 传递文章语言
         },
         article.project_name
       );

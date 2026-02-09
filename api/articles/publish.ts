@@ -119,6 +119,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       contentType,
       urlSlug,
       brandName: brandName, // 自动从网站域名提取的品牌名
+      targetLanguage: article.target_language || 'en',  // 传递文章语言
     });
 
     if (!publishResult.success) {

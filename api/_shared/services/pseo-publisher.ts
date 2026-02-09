@@ -563,7 +563,10 @@ export async function publishArticle(
     // 🔧 修复：只推送站点根 URL，不包含文章路径
     if (siteUrl) {
       try {
-        console.log(`[PSEO Publisher] 📤 Pushing to unifuncs for indexing...`);
+        console.log(`[PSEO Publisher] 📤 Starting unifuncs push...`);
+        console.log(`[PSEO Publisher] Article URL: ${articleUrl}`);
+        console.log(`[PSEO Publisher] Target Language: ${article.targetLanguage || 'en'}`);
+
         const { indexArticleWithDeepSearch } = await import('./deepsearch.js');
 
         // 确保 siteUrl 使用 HTTPS
@@ -571,24 +574,30 @@ export async function publishArticle(
 
         const pushResult = await indexArticleWithDeepSearch({
           articleTitle: article.title,
-          articleUrl: finalSiteUrl, // 使用站点根 URL，不包含文章路径
+          articleUrl: articleUrl,  // ✅ 使用已构建的完整文章 URL（line 544）
           promotionWebsite: article.brandName || '', // 使用 brandName
           promotionKeywords: article.keyword ? [article.keyword] : [],
           targetLanguage: article.targetLanguage || 'en'  // 传递文章语言
         });
 
+        console.log(`[PSEO Publisher] 📥 Unifuncs push completed`);
+
         if (pushResult.success) {
           console.log(`[PSEO Publisher] ✅ Successfully pushed to unifuncs`);
-          if (pushResult.shareUrl) {
-            console.log(`[PSEO Publisher] 🔗 Share URL: ${pushResult.shareUrl}`);
-          }
+          console.log(`[PSEO Publisher] 📋 Task ID: ${pushResult.taskId}`);
+          console.log(`[PSEO Publisher] 💬 Message: ${pushResult.message}`);
         } else {
           console.warn(`[PSEO Publisher] ⚠️ Failed to push to unifuncs: ${pushResult.error}`);
         }
       } catch (error: any) {
         console.warn(`[PSEO Publisher] ⚠️ Exception during unifuncs push:`, error.message);
+        console.warn(`[PSEO Publisher] Stack:`, error.stack);
       }
+    } else {
+      console.log(`[PSEO Publisher] ⏭️ Skipping unifuncs push (no siteUrl)`);
     }
+
+    console.log(`[PSEO Publisher] 🎉 Preparing final response...`);
 
     return {
       success: true,

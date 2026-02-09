@@ -159,6 +159,7 @@ export const ArticlePreview: React.FC<ArticlePreviewProps> = ({
           visualStyle: articleConfig?.visualStyle || null,
           targetAudience: articleConfig?.targetAudience || null,
           targetMarket: articleConfig?.targetMarket || null,
+          targetLanguage: articleConfig?.targetLanguage || 'en',
           websiteId,
           contentType,
         }),

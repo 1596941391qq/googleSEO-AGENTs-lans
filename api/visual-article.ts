@@ -142,8 +142,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const {
       keyword,
       tone,
-      visualStyle,
-      targetAudience,
       targetMarket,
       uiLanguage,
       targetLanguage,
@@ -155,7 +153,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       projectName,
       skipCreditsCheck = false,
       websiteId,       // 关联的用户网站 ID（用于获取缓存的网站内容）
-      websiteUrl       // 网站 URL
+      websiteUrl,      // 网站 URL
+      skipCompetitorAnalysis,  // 跳过竞对分析
+      skipImageGeneration      // 跳过图片生成
     } = body;
 
     // Validate keyword
@@ -452,8 +452,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const finalArticle = await generateVisualArticle({
         keyword: keywordString,
         tone: (tone && typeof tone === 'string') ? tone : 'professional',
-        visualStyle: (visualStyle && typeof visualStyle === 'string') ? visualStyle : 'realistic',
-        targetAudience: (targetAudience === 'expert' ? 'expert' : 'beginner') as 'beginner' | 'expert',
         targetMarket: (targetMarket && typeof targetMarket === 'string') ? targetMarket : 'global',
         uiLanguage: (uiLanguage === 'zh' ? 'zh' : 'en') as 'zh' | 'en',
         targetLanguage: finalTargetLanguage as any,
@@ -464,6 +462,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         promotedWebsites: (Array.isArray(promotedWebsites)) ? promotedWebsites : undefined,
         processedPromotedWebsites: processedPromotedWebsites.length > 0 ? processedPromotedWebsites : undefined,
         promotionIntensity: (promotionIntensity === 'strong' ? 'strong' : 'natural') as 'natural' | 'strong',
+        skipCompetitorAnalysis: skipCompetitorAnalysis === true,
+        skipImageGeneration: skipImageGeneration === true,
         onEvent: (event) => {
           sendEvent({ type: 'event', data: event });
         }

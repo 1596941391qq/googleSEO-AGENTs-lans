@@ -14,6 +14,8 @@
 
 // 静态导入 SE-Ranking 模块（避免动态导入问题）
 import { isSERankingAvailable, fetchSERankingData } from './seranking.js';
+// 导入数据库函数用于缓存
+import { getKeywordAnalysisCacheBatch, saveKeywordAnalysisCache } from '../../lib/database.js';
 
 export type SearchEngine = 'google' | 'baidu' | 'bing' | 'yandex';
 
@@ -834,6 +836,96 @@ export async function fetchSingleKeywordData(
   }
 }
 
+// ============================================================================
+// 缓存辅助函数
+// ============================================================================
+
+/**
+ * 从缓存中批量获取关键词数据
+ */
+async function getCachedKeywordDataBatch(
+  keywords: string[],
+  locationCode: number,
+  languageCode: string,
+  engine: SearchEngine
+): Promise<Map<string, any>> {
+  const cachedData = new Map<string, any>();
+
+  if (!process.env.ENABLE_DATAFORSEO_CACHE || process.env.ENABLE_DATAFORSEO_CACHE === 'false') {
+    return cachedData; // 缓存功能未启用
+  }
+
+  try {
+    // 批量查询缓存
+    const cacheMap = await getKeywordAnalysisCacheBatch(keywords, locationCode, engine);
+
+    const cacheEntries = Array.from(cacheMap.entries());
+    for (const [keyword, cache] of cacheEntries) {
+      if (cache.dataforseo_is_data_found) {
+        cachedData.set(keyword, {
+          keyword: keyword,
+          is_data_found: true,
+          volume: cache.dataforseo_volume,
+          cpc: cache.dataforseo_cpc ? parseFloat(cache.dataforseo_cpc.toString()) : undefined,
+          competition: cache.dataforseo_competition ? parseFloat(cache.dataforseo_competition.toString()) : undefined,
+          difficulty: cache.dataforseo_difficulty,
+          history_trend: cache.dataforseo_history_trend
+        });
+      }
+    }
+
+    console.log(`[DataForSEO Cache] Hit: ${cachedData.size}/${keywords.length} keywords`);
+  } catch (error: any) {
+    console.error('[DataForSEO Cache] Failed to read cache:', error.message);
+  }
+
+  return cachedData;
+}
+
+/**
+ * 批量保存关键词数据到缓存
+ */
+async function saveCachedKeywordDataBatch(
+  data: Array<{
+    keyword: string;
+    is_data_found: boolean;
+    volume?: number;
+    cpc?: number;
+    competition?: number;
+    difficulty?: number;
+    history_trend?: { [date: string]: number };
+  }>,
+  locationCode: number,
+  languageCode: string,
+  engine: SearchEngine
+): Promise<void> {
+  if (!process.env.ENABLE_DATAFORSEO_CACHE || process.env.ENABLE_DATAFORSEO_CACHE === 'false') {
+    return; // 缓存功能未启用
+  }
+
+  try {
+    for (const item of data) {
+      if (item.is_data_found) {
+        await saveKeywordAnalysisCache({
+          keyword: item.keyword,
+          location_code: locationCode,
+          search_engine: engine,
+          dataforseo_volume: item.volume,
+          dataforseo_difficulty: item.difficulty,
+          dataforseo_cpc: item.cpc,
+          dataforseo_competition: item.competition,
+          dataforseo_history_trend: item.history_trend,
+          dataforseo_is_data_found: true,
+          source: 'dataforseo-api'
+        });
+      }
+    }
+    console.log(`[DataForSEO Cache] Saved ${data.filter(d => d.is_data_found).length} keywords to cache`);
+  } catch (error: any) {
+    console.error('[DataForSEO Cache] Failed to save cache:', error.message);
+  }
+}
+
 /**
  * 批量获取关键词数据
  * 
@@ -866,23 +958,40 @@ export async function fetchKeywordData(
     return [];
   }
 
-  // 1. 尝试使用 SE-Ranking API（更快）
+  // 1. 检查缓存
+  const cachedData = await getCachedKeywordDataBatch(validKeywords, locationCode, languageCode, engine);
+  const uncachedKeywords = validKeywords.filter(kw => !cachedData.has(kw));
+
+  console.log(`[Keyword Research] Cache stats: ${cachedData.size} hits, ${uncachedKeywords.length} misses`);
+
+  // 如果所有关键词都在缓存中，直接返回
+  if (uncachedKeywords.length === 0) {
+    console.log(`[Keyword Research] All keywords found in cache, skipping API calls`);
+    return validKeywords.map(kw => cachedData.get(kw));
+  }
+
+  // 2. 尝试使用 SE-Ranking API（更快）获取未缓存的关键词
   const seRankingAvailable = isSERankingAvailable();
   console.log(`[Keyword Research] SE-Ranking available: ${seRankingAvailable}`);
 
+  let apiResults: any[] = [];
+
   if (seRankingAvailable) {
-    console.log(`[Keyword Research] Trying SE-Ranking first (${validKeywords.length} keywords)...`);
+    console.log(`[Keyword Research] Trying SE-Ranking first (${uncachedKeywords.length} keywords)...`);
 
     try {
-      const seRankingResults = await fetchSERankingData(validKeywords, languageCode);
+      const seRankingResults = await fetchSERankingData(uncachedKeywords, languageCode);
 
       // 检查是否有有效数据
       const foundCount = seRankingResults.filter((r: any) => r.is_data_found).length;
       if (foundCount > 0) {
         console.log(`[Keyword Research] SE-Ranking returned ${foundCount}/${seRankingResults.length} valid results`);
-        return seRankingResults;
+        apiResults = seRankingResults;
+        // 保存到缓存
+        await saveCachedKeywordDataBatch(apiResults, locationCode, languageCode, engine);
+      } else {
+        console.log(`[Keyword Research] SE-Ranking returned no data, falling back to DataForSEO`);
       }
-      console.log(`[Keyword Research] SE-Ranking returned no data, falling back to DataForSEO`);
     } catch (seError: any) {
       console.warn(`[Keyword Research] SE-Ranking failed: ${seError.message}, falling back to DataForSEO`);
     }
@@ -890,33 +999,49 @@ export async function fetchKeywordData(
     console.log(`[Keyword Research] SE-Ranking API key not configured, using DataForSEO`);
   }
 
-  // 2. 回退到 DataForSEO API
-  try {
-    console.log(`[Keyword Research] Using DataForSEO (${validKeywords.length} keywords)...`);
+  // 3. 如果 SE-Ranking 没有返回数据，回退到 DataForSEO API
+  if (apiResults.length === 0) {
+    try {
+      console.log(`[Keyword Research] Using DataForSEO (${uncachedKeywords.length} keywords)...`);
 
-    const volumeResults = await fetchDataForSEOData(validKeywords, locationCode, languageCode, engine);
+      const volumeResults = await fetchDataForSEOData(uncachedKeywords, locationCode, languageCode, engine);
 
-    // 转换数据，直接用 competition_index 作为 difficulty
-    const results = volumeResults.map(data => ({
-      keyword: data.keyword,
-      is_data_found: data.is_data_found || false,
-      volume: data.search_volume, // search_volume -> volume
-      cpc: data.cpc,
-      competition: data.competition,
-      difficulty: data.competition_index, // 直接使用 competition_index 作为 difficulty
-      history_trend: data.history_trend,
-    }));
+      // 转换数据，直接用 competition_index 作为 difficulty
+      apiResults = volumeResults.map(data => ({
+        keyword: data.keyword,
+        is_data_found: data.is_data_found || false,
+        volume: data.search_volume, // search_volume -> volume
+        cpc: data.cpc,
+        competition: data.competition,
+        difficulty: data.competition_index, // 直接使用 competition_index 作为 difficulty
+        history_trend: data.history_trend,
+      }));
 
-    const foundCount = results.filter(r => r.is_data_found).length;
-    console.log(`[Keyword Research] DataForSEO returned ${foundCount}/${results.length} valid results`);
+      const foundCount = apiResults.filter(r => r.is_data_found).length;
+      console.log(`[Keyword Research] DataForSEO returned ${foundCount}/${apiResults.length} valid results`);
 
-    return results;
-  } catch (dataForSEOError: any) {
-    console.error(`[Keyword Research] DataForSEO failed: ${dataForSEOError.message}`);
-    // 返回空数据而不是抛出错误
-    return validKeywords.map(kw => ({
-      keyword: kw,
-      is_data_found: false,
-    }));
+      // 保存到缓存
+      await saveCachedKeywordDataBatch(apiResults, locationCode, languageCode, engine);
+    } catch (dataForSEOError: any) {
+      console.error(`[Keyword Research] DataForSEO failed: ${dataForSEOError.message}`);
+      // 返回空数据而不是抛出错误
+      apiResults = uncachedKeywords.map(kw => ({
+        keyword: kw,
+        is_data_found: false,
+      }));
+    }
   }
+
+  // 4. 合并缓存数据和 API 数据
+  const finalResults = validKeywords.map(kw => {
+    if (cachedData.has(kw)) {
+      return cachedData.get(kw);
+    }
+    return apiResults.find(r => r.keyword === kw) || { keyword: kw, is_data_found: false };
+  });
+
+  const cacheHitRate = cachedData.size > 0 ? ((cachedData.size / validKeywords.length) * 100).toFixed(1) : '0.0';
+  console.log(`[Keyword Research] Final results: ${finalResults.length} keywords, cache hit rate: ${cacheHitRate}%`);
+
+  return finalResults;
 }

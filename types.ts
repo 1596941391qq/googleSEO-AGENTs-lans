@@ -358,6 +358,7 @@ export interface TaskState {
     miningSuccess: boolean;
     wordsPerRound: number;
     miningStrategy: 'horizontal' | 'vertical';
+    skipSerpVerification: boolean;
     userSuggestion: string;
     logs: LogEntry[];
     miningConfig?: {
@@ -477,6 +478,7 @@ export interface AppState {
   miningSuccess: boolean;
   wordsPerRound: number; // 5-20
   miningStrategy: 'horizontal' | 'vertical'; // horizontal: broad topics, vertical: deep dive into specific
+  skipSerpVerification: boolean; // 跳过SERP验证（快速挖词）
   userSuggestion: string; // Real-time user suggestions during mining
   miningIndustry?: string; // User selected industry for targeted keyword generation
   miningConfig?: {

@@ -19,7 +19,7 @@
    - 展示这个 failing test 的代码和运行结果。
    - 然后开始修复，**每次改动后都重新跑测试**。
    - 直到所有测试通过，并且没有引入回归。
-   - 最后给我一个总结：改了什么，为什么这样改。
+   - 最后给我一个总结：改了什么，为什么这样改。但是不用生成多余的总结文件。
 
 4. **动手前必须先告诉我计划**
    - 在开始写代码之前，用**最多 3 条 bullet point** 告诉我你的计划。
@@ -29,7 +29,7 @@
 5. **浏览器验证强制要求（加强版）**
    - localhost:3002 的开发服务器**一直在运行**。
    - **任何涉及页面效果、UI、交互、console、网络、DOM、渲染、样式、bug 验证的任务，必须默认先使用 Browser MCP**。
-   - 不要问我“要不要检查页面”，不要假设页面效果，直接调用 browsermcp 工具打开 http://localhost:3002 并验证。
+   - 不要问我“要不要检查页面”，不要假设页面效果，直接进入wsl环境（必须先进入WSL环境，如果进不去则停下来）然后调用 browsermcp 工具打开 http://localhost:3002 并验证。
    - 如果没有调用 Browser MCP，我会认为你没有完成任务。
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.

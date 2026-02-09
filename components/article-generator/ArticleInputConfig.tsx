@@ -22,7 +22,7 @@ import {
 import { cn } from "../../lib/utils";
 import { fetchWithAuth, postWithAuth } from "../../lib/api-client";
 
-// Tone Options
+// Tone Options (简化为3个)
 const getToneOptions = (uiLanguage: "en" | "zh" = "en") => [
   {
     id: "professional",
@@ -34,35 +34,6 @@ const getToneOptions = (uiLanguage: "en" | "zh" = "en") => [
     id: "persuasive",
     label: uiLanguage === "zh" ? "说服性" : "Persuasive",
     emoji: "🔥",
-  },
-  {
-    id: "educational",
-    label: uiLanguage === "zh" ? "教育性" : "Educational",
-    emoji: "📚",
-  },
-];
-
-// Visual Styles
-const getVisualStyles = (uiLanguage: "en" | "zh" = "en") => [
-  {
-    id: "realistic",
-    label: uiLanguage === "zh" ? "写实照片" : "Realistic Photo",
-    emoji: "📷",
-  },
-  {
-    id: "minimalist",
-    label: uiLanguage === "zh" ? "极简主义" : "Minimalist",
-    emoji: "🎨",
-  },
-  {
-    id: "cyberpunk",
-    label: uiLanguage === "zh" ? "赛博朋克" : "Cyberpunk",
-    emoji: "🤖",
-  },
-  {
-    id: "watercolor",
-    label: uiLanguage === "zh" ? "水彩画" : "Watercolor",
-    emoji: "🖌️",
   },
 ];
 
@@ -122,8 +93,6 @@ interface ArticleInputConfigProps {
   userId?: number | string;
   initialKeyword?: string;
   initialTone?: string;
-  initialVisualStyle?: string;
-  initialAudience?: "beginner" | "expert";
   initialTargetMarket?: string;
   initialPromotedWebsites?: string[];
   initialPromotionIntensity?: "natural" | "strong";
@@ -132,12 +101,12 @@ interface ArticleInputConfigProps {
 export interface ArticleConfig {
   keyword: string;
   tone: string;
-  visualStyle: string;
-  targetAudience: "beginner" | "expert";
   targetMarket: string;
   websiteId: string; // 必需：关联的用户网站 ID (来自 user_websites 表)
   websiteUrl?: string; // 可选：网站 URL，用于在文章中推广
   promotionIntensity?: "natural" | "strong"; // 推广强度
+  skipCompetitorAnalysis?: boolean; // 跳过竞对分析（抢新词场景）
+  skipImageGeneration?: boolean; // 跳过图片生成（节省成本）
   reference?: {
     type: "document" | "url";
     document?: {
@@ -159,20 +128,18 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   userId,
   initialKeyword = "",
   initialTone = "professional",
-  initialVisualStyle = "realistic",
-  initialAudience = "beginner",
   initialTargetMarket = "global",
   initialPromotedWebsites = [],
   initialPromotionIntensity = "natural",
 }) => {
   const [keyword, setKeyword] = useState(initialKeyword);
   const [tone, setTone] = useState(initialTone);
-  const [visualStyle, setVisualStyle] = useState(initialVisualStyle);
-  const [audience, setAudience] = useState<"beginner" | "expert">(
-    initialAudience
-  );
   const [targetMarket, setTargetMarket] = useState(initialTargetMarket);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // 新增：跳过选项
+  const [skipCompetitorAnalysis, setSkipCompetitorAnalysis] = useState(false);
+  const [skipImageGeneration, setSkipImageGeneration] = useState(false);
 
   // Promotion state - 单选必填
   const [selectedWebsiteId, setSelectedWebsiteId] = useState<string>("");
@@ -226,14 +193,6 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   }, [initialTone]);
 
   React.useEffect(() => {
-    if (initialVisualStyle) setVisualStyle(initialVisualStyle);
-  }, [initialVisualStyle]);
-
-  React.useEffect(() => {
-    if (initialAudience) setAudience(initialAudience);
-  }, [initialAudience]);
-
-  React.useEffect(() => {
     if (initialTargetMarket) setTargetMarket(initialTargetMarket);
   }, [initialTargetMarket]);
 
@@ -259,7 +218,6 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
   };
 
   const toneOptions = getToneOptions(uiLanguage as "en" | "zh");
-  const visualStyles = getVisualStyles(uiLanguage as "en" | "zh");
   const targetMarketOptions = getTargetMarketOptions(uiLanguage as "en" | "zh");
 
   // Handle document upload
@@ -500,12 +458,12 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
     const config: ArticleConfig = {
       keyword,
       tone,
-      visualStyle,
-      targetAudience: audience,
       targetMarket,
       websiteId: selectedWebsiteId,
       websiteUrl: selectedWebsiteUrl,
       promotionIntensity,
+      skipCompetitorAnalysis,
+      skipImageGeneration,
     };
 
     // Add reference if provided
@@ -823,31 +781,11 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                     <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
                   </div>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "内容深度" : "Content Depth"}</label>
-                  <div className="flex p-0.5 bg-black/40 rounded-lg border border-white/5">
-                    <button
-                      type="button"
-                      onClick={() => setAudience("beginner")}
-                      className={cn("flex-1 py-1.5 text-[9px] font-bold rounded-md transition-all", audience === "beginner" ? "bg-white/10 text-white" : "text-gray-500")}
-                    >
-                      {uiLanguage === "zh" ? "初学者" : "Junior"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAudience("expert")}
-                      className={cn("flex-1 py-1.5 text-[9px] font-bold rounded-md transition-all", audience === "expert" ? "bg-emerald-500/20 text-emerald-400" : "text-gray-500")}
-                    >
-                      {uiLanguage === "zh" ? "专业" : "Expert"}
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
 
-          {/* Column 3: Narrative & Style */}
+          {/* Column 3: Narrative Tone & Advanced Options */}
           <div className={cn(
             "p-5 rounded-2xl border transition-all flex flex-col",
             isDarkTheme ? "bg-black/20 border-white/5" : "bg-white border-gray-100 shadow-sm"
@@ -885,48 +823,64 @@ export const ArticleInputConfig: React.FC<ArticleInputConfigProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2 pt-3 border-t border-white/5 mt-auto">
-                <div className="flex items-center justify-between">
-                  <label className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "配图风格" : "Visuals"}</label>
-                  <span className="text-[9px] text-purple-400 font-bold">{visualStyles.find(s => s.id === visualStyle)?.label}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {visualStyles.map(style => (
-                    <button
-                      key={style.id}
-                      type="button"
-                      onClick={() => setVisualStyle(style.id)}
-                      className={cn(
-                        "flex items-center space-x-2 p-2 rounded-lg border transition-all text-left",
-                        visualStyle === style.id ? "bg-purple-500/10 border-purple-500/40" : "bg-black/20 border-white/5"
-                      )}
-                    >
-                      <span className="text-sm">{style.emoji}</span>
-                      <span className={cn("text-[10px] font-bold", visualStyle === style.id ? "text-purple-300" : "text-gray-500")}>{style.label}</span>
-                    </button>
-                  ))}
-                </div>
+              {/* 高级选项 */}
+              <div className="space-y-3 pt-3 border-t border-white/5 mt-auto">
+                <label className="text-[9px] font-black text-gray-500 uppercase">{uiLanguage === "zh" ? "高级选项" : "Advanced Options"}</label>
+
+                {/* 跳过竞对分析 */}
+                <label className="flex items-center space-x-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={skipCompetitorAnalysis}
+                    onChange={(e) => setSkipCompetitorAnalysis(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-white/10 bg-black/40 text-emerald-500 focus:ring-emerald-500/50 focus:ring-offset-0"
+                  />
+                  <div className="flex-1">
+                    <div className="text-[10px] font-bold text-gray-300 group-hover:text-white transition-colors">
+                      {uiLanguage === "zh" ? "跳过竞对分析" : "Skip Competitor Analysis"}
+                    </div>
+                    <div className="text-[8px] text-gray-500">
+                      {uiLanguage === "zh" ? "适合抢新词，加快生成速度" : "For new keywords, faster generation"}
+                    </div>
+                  </div>
+                </label>
+
+                {/* 跳过图片生成 */}
+                <label className="flex items-center space-x-2 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={skipImageGeneration}
+                    onChange={(e) => setSkipImageGeneration(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-white/10 bg-black/40 text-blue-500 focus:ring-blue-500/50 focus:ring-offset-0"
+                  />
+                  <div className="flex-1">
+                    <div className="text-[10px] font-bold text-gray-300 group-hover:text-white transition-colors">
+                      {uiLanguage === "zh" ? "跳过图片生成" : "Skip Image Generation"}
+                    </div>
+                    <div className="text-[8px] text-gray-500">
+                      {uiLanguage === "zh" ? "节省成本 $0.20-0.48/篇" : "Save $0.20-0.48 per article"}
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
           </div>
         </div>
 
         {/* Floating Quick Settings Info (Only show when modified) */}
-        {(tone !== "professional" || visualStyle !== "realistic" || targetMarket !== "global" || selectedWebsiteId) && (
-          <div className="flex justify-center pt-2">
-            <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-full flex items-center space-x-3">
-              <MousePointer2 size={10} className="text-emerald-400" />
-              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
-                {uiLanguage === "zh" ? "自定义配置已激活" : "Custom Config Active"}
-              </span>
-              <div className="flex -space-x-1.5">
-                {selectedWebsiteId && <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">W</div>}
-                {tone !== "professional" && <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">T</div>}
-                {visualStyle !== "realistic" && <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">V</div>}
-              </div>
+        <div className="flex justify-center pt-2">
+          <div className="px-4 py-2 bg-white/5 border border-white/10 rounded-full flex items-center space-x-3">
+            <MousePointer2 size={10} className="text-emerald-400" />
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">
+              {uiLanguage === "zh" ? "自定义配置已激活" : "Custom Config Active"}
+            </span>
+            <div className="flex -space-x-1.5">
+              {selectedWebsiteId && <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">W</div>}
+              {tone !== "professional" && <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">T</div>}
+              {(skipCompetitorAnalysis || skipImageGeneration) && <div className="w-5 h-5 rounded-full bg-purple-500 flex items-center justify-center text-[8px] ring-2 ring-black font-black">A</div>}
             </div>
           </div>
-        )}
+        </div>
       </form>
       <input ref={fileInputRef} type="file" accept=".pdf,.txt,.md,.docx" onChange={handleFileInputChange} className="hidden" />
     </div>

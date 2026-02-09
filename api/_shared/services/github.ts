@@ -104,9 +104,12 @@ interface GitHubCommitResult {
 export async function createGitHubRepo(config: GitHubRepoConfig): Promise<{
   success: boolean;
   repoUrl?: string;
+  repoId?: number; // 添加 repoId 字段
   error?: string;
 }> {
   try {
+    console.log(`[GitHub createRepo] Creating repo: ${config.repoName} for owner: ${config.owner}`);
+
     const response = await fetch(`${GITHUB_API_BASE}/user/repos`, {
       method: 'POST',
       headers: {
@@ -125,30 +128,118 @@ export async function createGitHubRepo(config: GitHubRepoConfig): Promise<{
       }),
     });
 
+    console.log(`[GitHub createRepo] Response status: ${response.status}`);
+
     if (!response.ok) {
-      const error = await response.json();
+      const errorText = await response.text();
+      console.error(`[GitHub createRepo] Error response:`, errorText);
+
+      let error;
+      try {
+        error = JSON.parse(errorText);
+      } catch {
+        error = { message: errorText };
+      }
+
       // 如果仓库已存在，返回成功
       if (response.status === 422 && error.errors?.[0]?.message?.includes('already exists')) {
+        console.log(`[GitHub createRepo] Repo already exists, returning success`);
         return {
           success: true,
           repoUrl: `https://github.com/${config.owner}/${config.repoName}`,
         };
       }
+
+      const errorMessage = error.message || error.errors?.[0]?.message || `GitHub API error: ${response.status}`;
+      console.error(`[GitHub createRepo] Failed:`, errorMessage);
+
       return {
         success: false,
-        error: error.message || `GitHub API error: ${response.status}`,
+        error: errorMessage,
       };
     }
 
     const data = await response.json();
+    console.log(`[GitHub createRepo] Success! Repo URL: ${data.html_url}`);
+    console.log(`[GitHub createRepo] Repo ID: ${data.id}`);
+
     return {
       success: true,
       repoUrl: data.html_url,
+      repoId: data.id, // 返回仓库 ID，用于后续操作
     };
   } catch (error: any) {
+    console.error(`[GitHub createRepo] Exception:`, error);
+    console.error(`[GitHub createRepo] Error message:`, error.message);
+    console.error(`[GitHub createRepo] Error stack:`, error.stack);
+
     return {
       success: false,
       error: error.message || 'Failed to create GitHub repo',
+    };
+  }
+}
+
+/**
+ * 🔧 修复：显式地将仓库添加到 GitHub App Installation
+ *
+ * 即使用户已授予"All repositories"权限，Netlify 使用的 Installation Access Token
+ * 可能是在仓库创建之前生成的。通过显式添加仓库到 Installation，可以触发
+ * GitHub 刷新权限列表，让 Netlify 立即看到新仓库。
+ *
+ * @see https://docs.github.com/en/rest/apps/installations#add-a-repository-to-an-app-installation
+ */
+export async function addRepoToInstallation(config: {
+  token: string;
+  installationId: string;
+  repoId: number;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log(`[GitHub] Adding repo ${config.repoId} to installation ${config.installationId}...`);
+
+    const response = await fetch(
+      `${GITHUB_API_BASE}/user/installations/${config.installationId}/repositories/${config.repoId}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${config.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+        },
+      }
+    );
+
+    console.log(`[GitHub] Add repo to installation response status: ${response.status}`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[GitHub] Add repo to installation error:`, errorText);
+
+      // 如果返回 304 Not Modified，说明仓库已经在 Installation 中了（这是好事）
+      if (response.status === 304) {
+        console.log(`[GitHub] Repo already in installation (304 Not Modified)`);
+        return { success: true };
+      }
+
+      // 如果返回 404，可能是因为用户已经授予了"All repositories"权限
+      // 在这种情况下，不需要显式添加
+      if (response.status === 404) {
+        console.log(`[GitHub] Cannot add repo explicitly (404) - likely using "All repositories" mode`);
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        error: `Failed to add repo to installation: ${response.status} ${errorText}`,
+      };
+    }
+
+    console.log(`[GitHub] ✅ Repo added to installation successfully`);
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[GitHub] Exception adding repo to installation:`, error);
+    return {
+      success: false,
+      error: error.message || 'Failed to add repo to installation',
     };
   }
 }
@@ -466,7 +557,7 @@ ${config.siteDescription}
 
 ## Latest Articles
 
-This site is powered by [NicheDigger PSEO](https://nichedigger.com) - an AI-powered automated search traffic infrastructure platform.
+This site is powered by [NicheDigger PSEO](https://nichedigger.ai) - an AI-powered automated search traffic infrastructure platform.
 
 ---
 
@@ -514,8 +605,11 @@ export async function initializeMkDocsRepo(config: {
 }): Promise<{
   success: boolean;
   repoUrl?: string;
+  repoId?: number; // 添加 repoId 字段
   error?: string;
 }> {
+  console.log(`[GitHub initializeMkDocsRepo] Starting initialization for ${config.owner}/${config.repoName}`);
+
   // 1. 创建仓库
   const createResult = await createGitHubRepo({
     token: config.token,
@@ -526,13 +620,17 @@ export async function initializeMkDocsRepo(config: {
   });
 
   if (!createResult.success) {
+    console.error(`[GitHub initializeMkDocsRepo] Failed to create repo:`, createResult.error);
     return createResult;
   }
+
+  console.log(`[GitHub initializeMkDocsRepo] Repo created successfully, waiting 2s...`);
 
   // 等待仓库初始化完成
   await new Promise(resolve => setTimeout(resolve, 2000));
 
   // 2. 生成模板文件
+  console.log(`[GitHub initializeMkDocsRepo] Generating MkDocs template files...`);
   const files = generateMkDocsTemplate({
     siteName: config.siteName,
     siteUrl: config.siteUrl,
@@ -541,7 +639,10 @@ export async function initializeMkDocsRepo(config: {
     repoName: config.repoName,
   });
 
+  console.log(`[GitHub initializeMkDocsRepo] Generated ${files.length} template files`);
+
   // 3. 推送模板文件
+  console.log(`[GitHub initializeMkDocsRepo] Pushing template files to repo...`);
   const pushResult = await createMultipleFiles({
     token: config.token,
     owner: config.owner,
@@ -552,15 +653,20 @@ export async function initializeMkDocsRepo(config: {
   });
 
   if (!pushResult.success) {
+    const errorMsg = `Failed to push template files: ${pushResult.errors?.join(', ')}`;
+    console.error(`[GitHub initializeMkDocsRepo] ${errorMsg}`);
     return {
       success: false,
-      error: `Failed to push template files: ${pushResult.errors?.join(', ')}`,
+      error: errorMsg,
     };
   }
+
+  console.log(`[GitHub initializeMkDocsRepo] ✅ Initialization complete!`);
 
   return {
     success: true,
     repoUrl: createResult.repoUrl,
+    repoId: createResult.repoId, // 传递 repoId
   };
 }
 
@@ -1020,7 +1126,7 @@ ${config.siteDescription}
 
 ## Latest Articles
 
-This site is powered by [NicheDigger PSEO](https://nichedigger.com) - an AI-powered automated search traffic infrastructure platform.
+This site is powered by [NicheDigger PSEO](https://nichedigger.ai) - an AI-powered automated search traffic infrastructure platform.
 
 ---
 

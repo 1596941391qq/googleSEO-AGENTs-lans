@@ -47,7 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             pa.keyword,
             pa.url_slug,
             pa.site_id,
-            ps.site_url,
+            pa.target_language,
+            ps.repo_name,
             uw.website_url
           FROM published_articles pa
           LEFT JOIN platform_sites ps ON pa.site_id = ps.id
@@ -66,34 +67,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const article = articleResult.rows[0];
 
-        // 构建文章 URL
-        const articleUrl = article.site_url
-          ? `${article.site_url.replace(/\/$/, '')}/${article.url_slug}/`
-          : null;
+        console.log(`[Push to Unifuncs] Article data:`, {
+          id: article.id,
+          title: article.title,
+          site_id: article.site_id,
+          repo_name: article.repo_name,
+          keyword: article.keyword,
+          url_slug: article.url_slug  // 添加 url_slug 诊断
+        });
 
-        if (!articleUrl) {
+        // 🔧 修复：直接根据 repo_name 拼接 Netlify URL
+        // Netlify 站点 URL 格式：https://{repo_name}.netlify.app/
+        let siteUrl = '';
+
+        if (article.repo_name) {
+          siteUrl = `https://${article.repo_name}.netlify.app`;
+          console.log(`[Push to Unifuncs] ✅ Constructed site URL: ${siteUrl}`);
+        } else {
+          console.error(`[Push to Unifuncs] ❌ repo_name is missing`);
+        }
+
+        if (!siteUrl) {
+          const diagnosticInfo = {
+            site_id: article.site_id || 'NULL',
+            repo_name: article.repo_name || 'NULL',
+            keyword: article.keyword || 'NULL',
+          };
+
           results.push({
             articleId: id,
             success: false,
-            error: 'Article URL not available'
+            error: 'Cannot construct site URL: repo_name is missing',
+            diagnostic: diagnosticInfo
           });
           continue;
         }
 
         // 推送到 unifuncs 使用 Deep Search API
+        const articleUrl = article.url_slug
+          ? `${siteUrl}/${article.url_slug}/`  // ✅ 使用完整文章 URL
+          : siteUrl;  // Fallback 到站点根 URL（如果没有 slug）
+
+        console.log(`[Push to Unifuncs] 📍 Constructed article URL: ${articleUrl}`);
+        console.log(`[Push to Unifuncs] 📍 url_slug: "${article.url_slug || 'EMPTY'}"`);
+
         const pushResult = await indexArticleWithDeepSearch({
           articleTitle: article.title,
           articleUrl: articleUrl,
           promotionWebsite: article.website_url || '',
-          promotionKeywords: article.keyword ? [article.keyword] : []
+          promotionKeywords: article.keyword ? [article.keyword] : [],
+          targetLanguage: article.target_language || 'en'
         });
 
         results.push({
           articleId: id,
           title: article.title,
-          url: articleUrl,
+          url: siteUrl,
           success: pushResult.success,
-          shareUrl: pushResult.shareUrl,
+          taskId: pushResult.taskId,
+          message: pushResult.message,
           error: pushResult.error
         });
       }

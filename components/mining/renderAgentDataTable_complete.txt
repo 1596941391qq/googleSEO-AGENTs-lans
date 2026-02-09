@@ -1,0 +1,24 @@
+import React from "react";
+import { Globe, Network } from "lucide-react";
+
+// Helper function to translate intent labels
+export const translateIntent = (intent: string, uiLanguage: string): string => {
+  if (uiLanguage === "zh") {
+    const intentMap: Record<string, string> = {
+      Informational: "信息型",
+      Commercial: "商业型",
+      Transactional: "交易型",
+      Local: "本地型",
+    };
+    return intentMap[intent] || intent;
+  }
+  return intent;
+};
+
+// Helper function to get reasoning text
+export const getReasoningText = (
+  reasoning: string | undefined,
+  uiLanguage: string
+): string | undefined => {
+  return reasoning;
+};

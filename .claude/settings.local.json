@@ -46,7 +46,18 @@
       "Bash(wsl.exe which:*)",
       "WebFetch(domain:www.mkdocs.org)",
       "Bash(tsc:*)",
-      "WebFetch(domain:unifuncs.com)"
+      "WebFetch(domain:unifuncs.com)",
+      "Bash(uvx:*)",
+      "Bash(wsl browsermcp navigate:*)",
+      "Bash(wsl which:*)",
+      "Bash(npx playwright:*)",
+      "Bash(Select-Object:*)",
+      "Bash(timeout:*)",
+      "Bash(./agent-browser.exe --headed open:*)",
+      "Bash(where:*)",
+      "WebFetch(domain:docs.github.com)",
+      "Bash(browser-use open:*)",
+      "Bash(python:*)"
     ]
   }
 }

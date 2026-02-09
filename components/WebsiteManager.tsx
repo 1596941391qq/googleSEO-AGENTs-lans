@@ -259,8 +259,11 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
         throw new Error("Invalid save response");
       }
 
-      // Step 3: If onAddWebsite callback is provided, trigger the demo flow with scraped data
-      if (onAddWebsite) {
+      // Step 3: Only trigger demo flow for first website, skip for subsequent ones
+      const isFirstWebsite = !data || data.websites.length === 0;
+
+      if (isFirstWebsite && onAddWebsite) {
+        // First website: trigger demo flow with scraped data
         onAddWebsite(processedUrl, {
           title: scrapeData.data.title,
           description: scrapeData.data.description,
@@ -270,7 +273,7 @@ export const WebsiteManager: React.FC<WebsiteManagerProps> = ({
         setNewWebsiteUrl("");
         setShowAddWebsite(false);
       } else {
-        // Otherwise, just reload list
+        // Subsequent websites: skip demo, just reload list for faster experience
         await loadWebsites();
         setNewWebsiteUrl("");
         setShowAddWebsite(false);

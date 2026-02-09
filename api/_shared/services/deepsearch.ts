@@ -8,13 +8,14 @@ interface DeepSearchRequest {
   articleUrl: string;
   promotionWebsite: string;
   promotionKeywords?: string[];
+  targetLanguage?: string;  // 文章目标语言
 }
 
 interface DeepSearchResponse {
   success: boolean;
-  shareUrl?: string;
+  taskId?: string;
   error?: string;
-  rawResponse?: string;
+  message?: string;
 }
 
 /**
@@ -37,14 +38,48 @@ export async function indexArticleWithDeepSearch(
 
   console.log('[DeepSearch] ✓ API Key configured:', apiKey.substring(0, 10) + '...');
 
-  const { articleTitle, articleUrl, promotionWebsite, promotionKeywords } = request;
+  const { articleTitle, articleUrl, promotionWebsite, promotionKeywords, targetLanguage } = request;
 
   console.log('[DeepSearch] 🚀 Starting Deep Search indexing...');
   console.log(`[DeepSearch] Article: "${articleTitle}"`);
   console.log(`[DeepSearch] Article URL: ${articleUrl}`);
   console.log(`[DeepSearch] Promotion Website: ${promotionWebsite}`);
+  console.log(`[DeepSearch] Target Language: ${targetLanguage || 'en'}`);
 
-  // 构建请求体
+  // 🔧 根据目标语言生成提示
+  const languageNames: Record<string, string> = {
+    'en': 'English',
+    'zh': 'Chinese',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'fr': 'French',
+    'ru': 'Russian',
+    'pt': 'Portuguese',
+    'id': 'Indonesian',
+    'es': 'Spanish',
+    'ar': 'Arabic',
+  };
+
+  const languageName = languageNames[targetLanguage || 'en'] || 'English';
+
+  const importantPrompt = `Search the web to compare this product with other products and promoted websites, and naturally highlight the promoted product. IMPORTANT: Generate all content in ${languageName}. The output language must match the article's language (${languageName}).`;
+
+  console.log(`[DeepSearch] 📝 Important Prompt: ${importantPrompt}`);
+
+  // 🔧 修复：确保 promotionWebsite 是有效的 URL
+  // 如果不是 URL（不包含 http:// 或 https://），则不添加到 important_urls
+  const isValidUrl = promotionWebsite && (
+    promotionWebsite.startsWith('http://') ||
+    promotionWebsite.startsWith('https://')
+  );
+
+  const importantUrls = isValidUrl
+    ? [promotionWebsite, articleUrl]
+    : [articleUrl];
+
+  console.log(`[DeepSearch] Important URLs:`, importantUrls);
+
+  // 构建请求体（异步任务版本）
   const requestBody = {
     model: 's2',
     messages: [
@@ -53,13 +88,9 @@ export async function indexArticleWithDeepSearch(
         content: articleTitle, // 使用文章标题作为搜索内容
       },
     ],
-    stream: true,
-    important_urls: [
-      promotionWebsite,
-      articleUrl,
-    ],
+    important_urls: importantUrls,
     important_keywords: promotionKeywords || [promotionWebsite],
-    important_prompt: '联网搜索将其他产品和推广网站进行评测对比，并用自然的方式突出推广的产品',
+    important_prompt: importantPrompt,  // 使用动态生成的语言特定提示
     push_to_share: true,
     set_public: true,
   };
@@ -67,11 +98,13 @@ export async function indexArticleWithDeepSearch(
   console.log('[DeepSearch] 📤 Request body:', JSON.stringify(requestBody, null, 2));
 
   try {
-    // 创建 AbortController 用于超时控制
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000); // 120 秒超时
+    console.log('[DeepSearch] 🔄 Creating async task...');
 
-    const response = await fetch('https://api.unifuncs.com/deepsearch/v1/chat/completions', {
+    // 添加超时控制（30 秒）
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    const response = await fetch('https://api.unifuncs.com/deepsearch/v1/create_task', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
@@ -93,80 +126,44 @@ export async function indexArticleWithDeepSearch(
       };
     }
 
-    console.log('[DeepSearch] ✅ API request successful, processing stream...');
+    const result = await response.json();
+    console.log('[DeepSearch] 📥 Response:', JSON.stringify(result, null, 2));
 
-    // 处理流式响应
-    const reader = response.body?.getReader();
-    if (!reader) {
-      console.error('[DeepSearch] ❌ No response body reader available');
+    // 检查响应格式
+    if (result.code === 0 && result.data?.task_id) {
+      console.log(`[DeepSearch] ✅ Task created successfully!`);
+      console.log(`[DeepSearch] Task ID: ${result.data.task_id}`);
+      console.log(`[DeepSearch] Status: ${result.data.status}`);
+      console.log(`[DeepSearch] Created at: ${result.data.created_at}`);
+
+      return {
+        success: true,
+        taskId: result.data.task_id,
+        message: 'Article indexing task created successfully',
+      };
+    } else {
+      console.error('[DeepSearch] ❌ Unexpected response format:', result);
       return {
         success: false,
-        error: 'No response body',
+        error: result.message || 'Unexpected response format',
       };
     }
 
-    const decoder = new TextDecoder();
-    let fullResponse = '';
-    let shareUrl: string | undefined;
-
-    console.log('[DeepSearch] 📥 Stream output:');
-    console.log('─'.repeat(80));
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      fullResponse += chunk;
-
-      // 实时输出到控制台
-      process.stdout.write(chunk);
-
-      // 尝试提取分享链接（如果有的话）
-      // 格式可能是: {"share_url": "https://s.unifuncs.com/share/xxx"}
-      const shareUrlMatch = chunk.match(/"share_url"\s*:\s*"([^"]+)"/);
-      if (shareUrlMatch) {
-        shareUrl = shareUrlMatch[1];
-        console.log(`\n[DeepSearch] 🔗 Found share URL: ${shareUrl}`);
-      }
-    }
-
-    console.log('\n' + '─'.repeat(80));
-    console.log('[DeepSearch] ✅ Stream completed');
-    console.log(`[DeepSearch] Total response length: ${fullResponse.length} characters`);
-
-    if (shareUrl) {
-      console.log(`[DeepSearch] 🎉 Share URL: ${shareUrl}`);
-    }
-
-    return {
-      success: true,
-      shareUrl,
-      rawResponse: fullResponse,
-    };
-
   } catch (error: any) {
-    console.error('[DeepSearch] ❌ Error:', error);
+    console.error('[DeepSearch] ❌ Request failed:', error.message);
 
-    // 提供更详细的错误信息
-    let errorMessage = 'Unknown error';
+    // 特殊处理超时错误
     if (error.name === 'AbortError') {
-      errorMessage = 'Request timeout after 120 seconds';
-    } else if (error.cause?.code === 'UND_ERR_CONNECT_TIMEOUT') {
-      errorMessage = 'Connection timeout - unable to reach unifuncs API';
-    } else if (error.message) {
-      errorMessage = error.message;
+      console.error('[DeepSearch] ⏱️ Request timeout after 30 seconds');
+      return {
+        success: false,
+        error: 'Request timeout - unifuncs API did not respond in time',
+      };
     }
-
-    console.error('[DeepSearch] Error details:', {
-      name: error.name,
-      message: error.message,
-      cause: error.cause,
-    });
 
     return {
       success: false,
-      error: errorMessage,
+      error: error.message || 'Unknown error',
     };
   }
 }

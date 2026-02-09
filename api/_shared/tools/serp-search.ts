@@ -1,11 +1,13 @@
 /**
  * SERP搜索工具
- * 
+ *
  * 职责：获取Google搜索结果
  * 特点：纯数据获取，无AI逻辑
  */
 
 import { SerpSnippet } from "../types.js";
+// 导入数据库函数用于缓存
+import { getSerpCache, saveSerpCache } from '../../lib/database.js';
 
 const THORDATA_API_TOKEN = process.env.THORDATA_API_TOKEN || '3802a36b781d24a4979a53c42fee5361';
 const THORDATA_API_URL = process.env.THORDATA_API_URL || 'https://scraperapi.thordata.com/request';
@@ -236,8 +238,42 @@ export async function fetchSerpResults(
   engine: string = 'google',
   location: string = 'us'
 ): Promise<SerpData> {
+  // 检查缓存功能是否启用
+  const cacheEnabled = !process.env.ENABLE_SERP_CACHE || process.env.ENABLE_SERP_CACHE !== 'false';
+
+  // 1. 检查缓存
+  if (cacheEnabled) {
+    try {
+      const cached = await getSerpCache(keyword, language, engine);
+      if (cached && cached.results) {
+        console.log(`[SERP Cache] Hit for keyword: "${keyword}"`);
+        return {
+          keyword: cached.keyword,
+          results: cached.results,
+          totalResults: cached.total_results || undefined
+        };
+      }
+    } catch (error: any) {
+      console.error('[SERP Cache] Failed to read cache:', error.message);
+    }
+  }
+
+  // 2. 缓存未命中，调用 API
+  console.log(`[SERP Cache] Miss for keyword: "${keyword}", fetching from API...`);
   try {
-    return await fetchThorDataSerp(keyword, language, engine);
+    const serpData = await fetchThorDataSerp(keyword, language, engine);
+
+    // 3. 保存到缓存
+    if (cacheEnabled && serpData.results && serpData.results.length > 0) {
+      try {
+        await saveSerpCache(keyword, language, engine, serpData.results, serpData.totalResults);
+        console.log(`[SERP Cache] Saved results for keyword: "${keyword}"`);
+      } catch (error: any) {
+        console.error('[SERP Cache] Failed to save cache:', error.message);
+      }
+    }
+
+    return serpData;
   } catch (error: any) {
     console.error(`Failed to fetch SERP from ThorData:`, error);
     return {

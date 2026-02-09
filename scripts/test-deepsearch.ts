@@ -398,7 +398,7 @@ async function main() {
   const testRequest: DeepSearchRequest = {
     articleTitle: 'Best SEO Tools for 2024: Complete Guide',
     articleUrl: 'https://example-site.pages.dev/best-seo-tools-2024/',
-    promotionWebsite: 'https://nichedigger.com',
+    promotionWebsite: 'https://nichedigger.ai',
     promotionKeywords: ['nichedigger', 'SEO tool', 'keyword research'],
   };
 

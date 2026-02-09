@@ -1717,6 +1717,24 @@ export async function initDomainCacheTables() {
       await sql`CREATE INDEX IF NOT EXISTS idx_website_content_type ON website_content_cache(content_type)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_website_content_expires ON website_content_cache(cache_expires_at)`;
 
+      // --- SERP 缓存表（用于缓存 SERP 查询结果，避免重复调用 API）---
+      await sql`
+        CREATE TABLE IF NOT EXISTS serp_cache (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          keyword VARCHAR(500) NOT NULL,
+          language VARCHAR(10) DEFAULT 'en',
+          engine VARCHAR(50) DEFAULT 'google',
+          results JSONB NOT NULL,
+          total_results INTEGER,
+          cache_expires_at TIMESTAMP DEFAULT NOW() + INTERVAL '7 days',
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(keyword, language, engine)
+        )
+      `;
+      await sql`CREATE INDEX IF NOT EXISTS idx_serp_cache_keyword ON serp_cache(keyword)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_serp_cache_expires ON serp_cache(cache_expires_at)`;
+      await sql`CREATE INDEX IF NOT EXISTS idx_serp_cache_composite ON serp_cache(keyword, language, engine)`;
+
       domainCacheTablesInitialized = true;
     } catch (error) {
       console.error('[initDomainCacheTables] Error:', error);
@@ -1861,6 +1879,7 @@ export async function initPublishedArticlesTable() {
           visual_style VARCHAR(50),
           target_audience VARCHAR(50),
           target_market VARCHAR(50),
+          target_language VARCHAR(10) DEFAULT 'en',
           status VARCHAR(50) DEFAULT 'draft',
           published_at TIMESTAMP,
           created_at TIMESTAMP DEFAULT NOW(),
@@ -1939,6 +1958,15 @@ export async function initPublishedArticlesTable() {
             ALTER TABLE published_articles ADD COLUMN site_id UUID;
           END IF;
 
+          -- 新增：target_language 列（文章目标语言）
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'published_articles'
+            AND column_name = 'target_language'
+          ) THEN
+            ALTER TABLE published_articles ADD COLUMN target_language VARCHAR(10) DEFAULT 'en';
+          END IF;
+
           -- 不再使用 platform_project_id - 改为通过 Netlify API 动态查询
           -- -- 新增：platform_project_id 列（Netlify site ID，用��触发构建）
           -- IF NOT EXISTS (
@@ -1956,6 +1984,30 @@ export async function initPublishedArticlesTable() {
       await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_created ON published_articles(created_at DESC)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_website ON published_articles(website_id)`;
       await sql`CREATE INDEX IF NOT EXISTS idx_published_articles_content_type ON published_articles(content_type)`;
+
+      // 数据迁移：根据 target_market 推断现有文章的语言
+      try {
+        await sql`
+          UPDATE published_articles
+          SET target_language = CASE
+            WHEN target_market = 'us' THEN 'en'
+            WHEN target_market = 'jp' THEN 'ja'
+            WHEN target_market = 'cn' THEN 'zh'
+            WHEN target_market = 'fr' THEN 'fr'
+            WHEN target_market = 'ru' THEN 'ru'
+            WHEN target_market = 'kr' THEN 'ko'
+            WHEN target_market = 'br' THEN 'pt'
+            WHEN target_market = 'id' THEN 'id'
+            WHEN target_market = 'es' THEN 'es'
+            WHEN target_market = 'ar' THEN 'ar'
+            ELSE 'en'
+          END
+          WHERE target_language IS NULL OR target_language = 'en'
+        `;
+        console.log('[Database] ✅ Migrated existing articles target_language based on target_market');
+      } catch (e) {
+        console.error('[Database] Could not migrate target_language:', e);
+      }
 
       publishedArticlesTableInitialized = true;
     } catch (error) {
@@ -2506,6 +2558,95 @@ export async function saveKeywordAnalysisCache(
     `;
   } catch (error) {
     console.error('[saveKeywordAnalysisCache] Error:', error);
+    // 不抛出错误，避免影响主流程
+  }
+}
+
+// ============================================================================
+// SERP 缓存相关函数
+// ============================================================================
+
+export interface SerpCache {
+  id: string;
+  keyword: string;
+  language: string;
+  engine: string;
+  results: any;
+  total_results: number | null;
+  cache_expires_at: Date;
+  created_at: Date;
+}
+
+/**
+ * 获取 SERP 缓存
+ */
+export async function getSerpCache(
+  keyword: string,
+  language: string = 'en',
+  engine: string = 'google'
+): Promise<SerpCache | null> {
+  try {
+    await initDomainCacheTables();
+
+    const result = await sql<SerpCache>`
+      SELECT * FROM serp_cache
+      WHERE keyword = ${keyword}
+        AND language = ${language}
+        AND engine = ${engine}
+        AND cache_expires_at > NOW()
+      LIMIT 1
+    `;
+
+    return result.rows.length > 0 ? result.rows[0] : null;
+  } catch (error) {
+    console.error('[getSerpCache] Error:', error);
+    return null;
+  }
+}
+
+/**
+ * 保存 SERP 缓存
+ */
+export async function saveSerpCache(
+  keyword: string,
+  language: string,
+  engine: string,
+  results: any,
+  totalResults?: number
+): Promise<void> {
+  try {
+    await initDomainCacheTables();
+
+    // 删除旧缓存（如果存在）
+    await sql`
+      DELETE FROM serp_cache
+      WHERE keyword = ${keyword}
+        AND language = ${language}
+        AND engine = ${engine}
+    `;
+
+    // 插入新缓存
+    await sql`
+      INSERT INTO serp_cache (
+        keyword,
+        language,
+        engine,
+        results,
+        total_results,
+        cache_expires_at,
+        created_at
+      ) VALUES (
+        ${keyword},
+        ${language},
+        ${engine},
+        ${JSON.stringify(results)}::JSONB,
+        ${totalResults || null}::INTEGER,
+        NOW() + INTERVAL '7 days',
+        NOW()
+      )
+    `;
+  } catch (error) {
+    console.error('[saveSerpCache] Error:', error);
     // 不抛出错误，避免影响主流程
   }
 }
