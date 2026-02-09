@@ -34,6 +34,7 @@ interface ArticleForPublish {
   urlSlug?: string;
   brandName?: string;
   contentType?: 'informational' | 'commercial';
+  targetLanguage?: string;  // 文章目标语言
 }
 
 interface PublishResult {
@@ -145,7 +146,7 @@ export async function publishArticle(
 
     if (!repoExists) {
       console.log(`[PSEO Publisher] Creating new GitHub repo...`);
-      
+
       const repoResult = await initializeMkDocsRepo({
         token: githubTokenDecrypted,
         owner: github_token.owner_name,
@@ -162,7 +163,30 @@ export async function publishArticle(
         };
       }
 
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // 🔧 修复：显式地将新仓库添加到 GitHub App Installation
+      // 这会触发 GitHub 刷新权限列表，让 Netlify 能立即访问新仓库
+      if (repoResult.repoId && installationId) {
+        console.log(`[PSEO Publisher] 🔄 Adding repo to GitHub App Installation...`);
+        const { addRepoToInstallation } = await import('./github.js');
+        const addResult = await addRepoToInstallation({
+          token: githubTokenDecrypted,
+          installationId: installationId,
+          repoId: repoResult.repoId,
+        });
+
+        if (addResult.success) {
+          console.log(`[PSEO Publisher] ✅ Repo added to installation successfully`);
+        } else {
+          console.warn(`[PSEO Publisher] ⚠️ Failed to add repo to installation: ${addResult.error}`);
+          console.warn(`[PSEO Publisher] This may cause Netlify access issues, but continuing...`);
+        }
+      }
+
+      // 🔧 修复：增加等待时间，让 GitHub App 权限同步完成
+      // GitHub App 需要时间来更新权限列表，否则 Netlify 会因为权限问题无法访问仓库
+      console.log(`[PSEO Publisher] ⏳ Waiting for GitHub App permissions to sync (15s)...`);
+      await new Promise(resolve => setTimeout(resolve, 15000)); // 从 3 秒增加到 15 秒
+
       isNewSite = true;
     }
 
@@ -349,6 +373,45 @@ export async function publishArticle(
         siteUrl = siteQueryResult.rows[0].site_url || '';
         console.log(`[PSEO Publisher] Found existing platform_site: ${platformSiteId}`);
         console.log(`[PSEO Publisher] Site URL: ${siteUrl}`);
+      } else {
+        // 仓库存在但没有 platform_sites 记录，创建新记录
+        console.log(`[PSEO Publisher] ⚠️ Repo exists but no platform_sites record found. Creating new record...`);
+
+        try {
+          const newSiteResult = await sql`
+            INSERT INTO platform_sites (
+              github_token_id,
+              platform_token_id,
+              platform,
+              content_type,
+              site_name,
+              site_url,
+              repo_name,
+              status,
+              usage_count
+            )
+            VALUES (
+              ${github_token.id},
+              ${netlify_token.id},
+              'netlify',
+              'informational',
+              ${siteName},
+              '',
+              ${repoName},
+              'active',
+              1
+            )
+            RETURNING id
+          `;
+
+          if (newSiteResult.rows.length > 0) {
+            platformSiteId = newSiteResult.rows[0].id;
+            console.log(`[PSEO Publisher] ✅ Created new platform_site record: ${platformSiteId}`);
+          }
+        } catch (insertError: any) {
+          console.error(`[PSEO Publisher] ❌ Failed to create platform_sites record: ${insertError.message}`);
+          // 继续执行，不阻塞发布流程
+        }
       }
 
       // 触发 Netlify 重新构建
@@ -497,16 +560,21 @@ export async function publishArticle(
     }
 
     // 自动推送到 unifuncs 进行索引（首次发布）
-    if (articleUrl && siteUrl) {
+    // 🔧 修复：只推送站点根 URL，不包含文章路径
+    if (siteUrl) {
       try {
         console.log(`[PSEO Publisher] 📤 Pushing to unifuncs for indexing...`);
         const { indexArticleWithDeepSearch } = await import('./deepsearch.js');
 
+        // 确保 siteUrl 使用 HTTPS
+        const finalSiteUrl = siteUrl.replace(/^http:\/\//, 'https://');
+
         const pushResult = await indexArticleWithDeepSearch({
           articleTitle: article.title,
-          articleUrl: articleUrl,
-          promotionWebsite: article.brandName || '',
-          promotionKeywords: article.keyword ? [article.keyword] : []
+          articleUrl: finalSiteUrl, // 使用站点根 URL，不包含文章路径
+          promotionWebsite: article.brandName || '', // 使用 brandName
+          promotionKeywords: article.keyword ? [article.keyword] : [],
+          targetLanguage: article.targetLanguage || 'en'  // 传递文章语言
         });
 
         if (pushResult.success) {
@@ -647,13 +715,22 @@ export async function updatePublishedArticle(
             actualNetlifySiteId = existingSite.id;
             console.log(`[PSEO Publisher] ✅ Found Netlify site: ${actualNetlifySiteId}`);
             console.log(`[PSEO Publisher] Site state: ${existingSite.state}`);
+            console.log(`[PSEO Publisher] Site URL: ${existingSite.url}`);
 
             // 检查 GitHub repo 是否已链接
-            const hasLinkedRepo = existingSite.build_settings?.repo;
+            // 注意：build_settings 可能有多种结构
+            const hasLinkedRepo = existingSite.build_settings?.repo ||
+                                  existingSite.build_settings?.repo_url ||
+                                  existingSite.repo_url;
 
-            if (hasLinkedRepo) {
+            console.log(`[PSEO Publisher] - DEBUG: build_settings =`, JSON.stringify(existingSite.build_settings, null, 2));
+            console.log(`[PSEO Publisher] - DEBUG: hasLinkedRepo =`, hasLinkedRepo);
+
+            // 🔧 修复：对于更新操作，如果 site 存在就直接触发构建
+            // 因为 site 存在就意味着仓库已经链接（否则 site 无法创建）
+            if (hasLinkedRepo || existingSite.state === 'ready') {
               // 场景3: Netlify site 存在且 GitHub repo 已链接 → 触发重新构建
-              console.log(`[PSEO Publisher] ✅ GitHub repo is linked: ${hasLinkedRepo}`);
+              console.log(`[PSEO Publisher] ✅ GitHub repo is linked (or site is ready)`);
               console.log(`[PSEO Publisher] Triggering rebuild...`);
 
               const rebuildResult = await triggerNetlifyBuild({
@@ -675,13 +752,40 @@ export async function updatePublishedArticle(
                 console.log(`[PSEO Publisher] ℹ️ Actively linking repo using installation_id...`);
 
                 const { linkRepoToSite } = await import('./netlify-deployer.js');
-                const linkResult = await linkRepoToSite({
-                  token: netlifyTokenDecrypted,
-                  siteId: actualNetlifySiteId,
-                  repoOwner: github_token.owner_name,
-                  repoName: repoName,
-                  installationId: installationId,
-                });
+
+                // 🔧 修复：添加重试机制，处理 GitHub App 权限同步延迟
+                // 使用指数退避策略：0s, 5s, 10s, 20s
+                let linkResult: any = null;
+                const maxRetries = 4;
+                const retryDelays = [0, 5000, 10000, 20000]; // 毫秒
+
+                for (let attempt = 0; attempt < maxRetries; attempt++) {
+                  if (attempt > 0) {
+                    const delay = retryDelays[attempt];
+                    console.log(`[PSEO Publisher] ⏳ Retry ${attempt}/${maxRetries - 1}: Waiting ${delay / 1000}s for GitHub App permissions to sync...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                  }
+
+                  linkResult = await linkRepoToSite({
+                    token: netlifyTokenDecrypted,
+                    siteId: actualNetlifySiteId,
+                    repoOwner: github_token.owner_name,
+                    repoName: repoName,
+                    installationId: installationId,
+                  });
+
+                  if (linkResult.success) {
+                    if (attempt > 0) {
+                      console.log(`[PSEO Publisher] ✅ Repo linked successfully on retry ${attempt}!`);
+                    }
+                    break;
+                  } else {
+                    console.log(`[PSEO Publisher] ⚠️ Attempt ${attempt + 1}/${maxRetries} failed: ${linkResult.error}`);
+                    if (attempt === maxRetries - 1) {
+                      console.error(`[PSEO Publisher] ❌ All ${maxRetries} attempts failed. GitHub App permissions may need manual sync.`);
+                    }
+                  }
+                }
 
                 if (linkResult.success) {
                   console.log(`[PSEO Publisher] ✅ Repo linked successfully! Triggering rebuild...`);

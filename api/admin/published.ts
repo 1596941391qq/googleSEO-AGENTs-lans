@@ -24,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // 获取所有已发布的文章
+    // 获取所有文章（包括草稿和已发布）
     const result = await sql`
       SELECT
         pa.id,
@@ -35,10 +35,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         pa.published_at,
         pa.site_id,
         pa.content_type,
-        pa.url_slug
+        pa.url_slug,
+        pa.created_at
       FROM published_articles pa
-      WHERE pa.status = 'published'
-      ORDER BY pa.published_at DESC
+      WHERE pa.status IN ('draft', 'published')
+      ORDER BY COALESCE(pa.published_at, pa.created_at) DESC
       LIMIT 100
     `;
 

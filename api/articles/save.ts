@@ -47,6 +47,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       visualStyle,
       targetAudience,
       targetMarket,
+      targetLanguage,  // 文章目标语言
       websiteId,      // 关联的用户网站 ID (必需)
       contentType,    // 内容类型: 'informational' | 'commercial' (AI 生成时标记)
     } = body;
@@ -90,9 +91,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const result = await sql`
       INSERT INTO published_articles (
         user_id, title, content, images,
-        keyword, tone, visual_style, target_audience, target_market,
+        keyword, tone, visual_style, target_audience, target_market, target_language,
         website_id, content_type,
-        status
+        status, published_at
       )
       VALUES (
         ${userId},
@@ -104,11 +105,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ${visualStyle || null},
         ${targetAudience || null},
         ${targetMarket || null},
+        ${targetLanguage || 'en'},
         ${websiteId},
         ${finalContentType},
-        'draft'
+        'draft', NULL
       )
-      RETURNING id, created_at, website_id, content_type
+      RETURNING id, created_at, published_at, website_id, content_type
     `;
 
     const article = result.rows[0];
