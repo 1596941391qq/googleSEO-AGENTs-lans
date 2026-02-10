@@ -3548,16 +3548,28 @@ export default function App() {
     if (!taskToDelete) return;
 
     // Prevent deletion of running tasks
+    const isBatchRunning = taskToDelete.type === "batch" && taskToDelete.batchState &&
+      taskToDelete.batchState.batchCurrentIndex < taskToDelete.batchState.batchTotalCount;
+
     if (
       taskToDelete.miningState?.isMining ||
-      taskToDelete.deepDiveState?.isDeepDiving
+      taskToDelete.deepDiveState?.isDeepDiving ||
+      isBatchRunning ||
+      taskToDelete.articleGeneratorState?.isGenerating
     ) {
+      console.log("[DEBUG] User trying to delete running task, attempting to auto-stop first.");
+      // Auto-trigger stop if it's the active one
+      if (taskId === state.taskManager.activeTaskId) {
+        if (taskToDelete.miningState?.isMining) handleStopMining();
+        if (isBatchRunning) handleStopBatch();
+      }
+
       setState((prev) => ({
         ...prev,
         error:
           state.uiLanguage === "zh"
-            ? "无法删除正在运行的任务，请先停止它。"
-            : "Cannot delete a running task. Please stop it first.",
+            ? "检测到任务正在运行，已尝试为您停止。请稍等几秒后再尝试删除。"
+            : "Task is running. Attempting to stop it... Please wait a few seconds before deleting.",
       }));
       return;
     }
@@ -6986,34 +6998,17 @@ Please generate keywords based on the opportunities and keyword suggestions ment
       return;
     }
 
-    // Auto-create task if no active task exists
-    if (!state.taskManager.activeTaskId) {
-      addTask({
-        type: "article-generator",
-        keyword: keyword,
-        targetLanguage: state.targetLanguage,
-      });
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      return; // Exit and let user start article generator in the new task
-    }
+    // Always create a new task for article generation from mining/audit results
+    // This ensures isolation and clean state
+    addTask({
+      type: "article-generator",
+      keyword: keyword,
+      targetLanguage: state.targetLanguage,
+      name: `${keyword.keyword.slice(0, 30)}${keyword.keyword.length > 30 ? "..." : ""}`,
+    });
 
-    // Capture taskId at the start for isolation
-    const currentTaskId = state.taskManager.activeTaskId;
-
-    setState((prev) => ({
-      ...prev,
-      step: "article-generator",
-      articleGeneratorState: {
-        ...prev.articleGeneratorState,
-        keyword: keyword.keyword,
-        isGenerating: false,
-        currentStage: "input",
-      },
-      logs: [],
-    }));
-
-    // Start the article generator flow
-    runArticleGenerator(keyword, currentTaskId);
+    // We don't need to manually set state here because addTask will call hydrateTask 
+    // for the new task, which will set up a clean articleGeneratorState.
   };
 
   const runArticleGenerator = async (keyword: KeywordData, taskId: string) => {
@@ -7042,6 +7037,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
   };
 
   const handleStopBatch = () => {
+    console.log("[DEBUG] handleStopBatch called. setting stopBatchRef to true.");
     stopBatchRef.current = true;
     addLog("Batch analysis stopped by user.", "warning");
   };
@@ -8638,7 +8634,7 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         const activeTask = state.taskManager.tasks.find(
           (t) => t.id === state.taskManager.activeTaskId
         );
-        
+
         if (
           activeTask &&
           activeTask.type === "article-generator" &&
@@ -8707,3887 +8703,3774 @@ Please generate keywords based on the opportunities and keyword suggestions ment
               className={`flex h-screen overflow-hidden ${isDarkTheme ? "bg-[#050505] text-[#e5e5e5]" : "bg-gray-50 text-gray-900"
                 }`}
             >
-      {/* 移动端顶部导航栏 */}
-      <MobileHeader
-        isDarkTheme={isDarkTheme}
-        isMenuOpen={!state.isSidebarCollapsed}
-        onMenuToggle={handleToggleSidebar}
-        title="Niche Digger"
-      />
+              {/* 移动端顶部导航栏 */}
+              <MobileHeader
+                isDarkTheme={isDarkTheme}
+                isMenuOpen={!state.isSidebarCollapsed}
+                onMenuToggle={handleToggleSidebar}
+                title="Niche Digger"
+              />
 
-      <Sidebar
-        tasks={state.taskManager.tasks}
-        activeTaskId={state.taskManager.activeTaskId}
-        maxTasks={state.taskManager.maxTasks}
-        onTaskSwitch={switchTask}
-        onTaskAdd={() => setShowTaskMenu(true)}
-        onTaskDelete={deleteTask}
-        onLanguageToggle={() => {
-          setState((prev) => {
-            const newLanguage = prev.uiLanguage === "en" ? "zh" : "en";
-            // Save to localStorage
-            try {
-              localStorage.setItem("ui_language", newLanguage);
-            } catch (e) {
-              console.error("Failed to save UI language to localStorage:", e);
-            }
-            return {
-              ...prev,
-              uiLanguage: newLanguage,
-            };
-          });
-        }}
-        onThemeToggle={handleThemeToggle}
-        uiLanguage={state.uiLanguage}
-        step={state.step}
-        isDarkTheme={isDarkTheme}
-        onContentGeneration={(tab) => {
-          // 在切换之前，先保存当前活跃任务的状态（如果有），然后切换到"我的网站"视图
-          setState((prev) => {
-            const currentActiveTaskId = prev.taskManager.activeTaskId;
-            let updatedTasks = prev.taskManager.tasks;
-
-            // 如果有活跃任务，先保存其状态
-            if (currentActiveTaskId) {
-              const currentTask = updatedTasks.find(
-                (t) => t.id === currentActiveTaskId
-              );
-              if (currentTask) {
-                updatedTasks = updatedTasks.map((task) => {
-                  if (task.id === currentActiveTaskId) {
-                    return {
-                      ...snapshotCurrentTask(prev, task),
-                      isActive: false,
-                    };
-                  }
-                  return {
-                    ...task,
-                    isActive: false,
-                  };
-                });
-              } else {
-                // 如果没有找到任务，只更新 isActive
-                updatedTasks = updatedTasks.map((task) => ({
-                  ...task,
-                  isActive: false,
-                }));
-              }
-            } else {
-              // 没有活跃任务，只更新 isActive
-              updatedTasks = updatedTasks.map((task) => ({
-                ...task,
-                isActive: false,
-              }));
-            }
-
-            // 保存到 localStorage
-            try {
-              localStorage.setItem(
-                STORAGE_KEYS.TASKS,
-                JSON.stringify(updatedTasks)
-              );
-            } catch (e) {
-              console.error("Failed to save tasks", e);
-            }
-
-            // 同步当前任务状态到后端（确保任务看板能获取最新状态）
-            if (currentActiveTaskId && authenticated) {
-              const taskToSync = updatedTasks.find(
-                (t) => t.id === currentActiveTaskId
-              );
-              if (taskToSync && !taskToSync.id.startsWith("task-")) {
-                syncTaskToBackend(taskToSync);
-              }
-            }
-
-            return {
-              ...prev,
-              step: "content-generation",
-              // 切换到"我的网站"时，清除activeTaskId，但保留任务状态（任务继续运行）
-              taskManager: {
-                ...prev.taskManager,
-                activeTaskId: null,
-                tasks: updatedTasks,
-              },
-              contentGeneration: {
-                ...prev.contentGeneration,
-                activeTab: tab || prev.contentGeneration.activeTab,
-              },
-            };
-          });
-        }}
-        contentGenerationTab={state.contentGeneration.activeTab}
-        onDeepDive={() =>
-          setState((prev) => ({ ...prev, step: "article-generator" }))
-        }
-        isCollapsed={state.isSidebarCollapsed}
-        onToggleCollapse={handleToggleSidebar}
-      />
-
-      {/* Main Container */}
-      <div className="flex-1 flex flex-col min-w-0 pt-16 md:pt-0 pb-20 md:pb-0">
-        {/* Header: Process Indicators & User Info */}
-        {state.step !== "article-generator" && (
-          <header
-            className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0 ${isDarkTheme
-              ? "border-white/5 bg-[#0a0a0a]/50"
-              : "border-gray-200 bg-white/80"
-              }`}
-          >
-            {/* Left: Step Indicators */}
-            <div className="flex items-center space-x-8">
-              {state.step === "content-generation" ? (
-                // Content Generation Mode: Show tabs as steps
-                <>
-                  <StepItem
-                    number={1}
-                    label={t.tabMyWebsite}
-                    active={state.contentGeneration.activeTab === "my-website"}
-                    isDarkTheme={isDarkTheme}
-                  />
-                  <ChevronRight
-                    size={14}
-                    className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-300"
-                    }
-                  />
-                  <StepItem
-                    number={2}
-                    label={t.tabWebsiteData}
-                    active={
-                      state.contentGeneration.activeTab === "website-data"
-                    }
-                    isDarkTheme={isDarkTheme}
-                  />
-                  <ChevronRight
-                    size={14}
-                    className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-500"
-                    }
-                  />
-                  <StepItem
-                    number={3}
-                    label={t.tabProjects}
-                    active={state.contentGeneration.activeTab === "projects"}
-                    isDarkTheme={isDarkTheme}
-                  />
-                  <ChevronRight
-                    size={14}
-                    className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-500"
-                    }
-                  />
-                  <StepItem
-                    number={4}
-                    label={t.tabPublish}
-                    active={state.contentGeneration.activeTab === "publish"}
-                    isDarkTheme={isDarkTheme}
-                  />
-                </>
-              ) : (
-                // Default Mode: Show input/process/results
-                <>
-                  <StepItem
-                    number={1}
-                    label={t.step1}
-                    active={state.step === "input"}
-                    isDarkTheme={isDarkTheme}
-                  />
-                  <ChevronRight
-                    size={14}
-                    className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-500"
-                    }
-                  />
-                  <StepItem
-                    number={2}
-                    label={t.step2}
-                    active={
-                      state.step === "mining" || state.step === "batch-analyzing"
-                    }
-                    isDarkTheme={isDarkTheme}
-                  />
-                  <ChevronRight
-                    size={14}
-                    className={
-                      isDarkTheme ? "text-neutral-800" : "text-gray-500"
-                    }
-                  />
-                  <StepItem
-                    number={3}
-                    label={t.step3}
-                    active={
-                      state.step === "results" || state.step === "batch-results"
-                    }
-                    isDarkTheme={isDarkTheme}
-                  />
-                </>
-              )}
-            </div>
-
-            {/* Right: Credits + User Info */}
-            <div className="flex items-center space-x-6 shrink-0">
-              {/* Credits */}
-              {(authenticated || (import.meta.env.DEV && credits)) && (
-                <div className="flex items-center space-x-3 bg-emerald-500/5 border border-emerald-500/10 px-4 py-2 rounded shrink-0">
-                  {creditsLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
-                      <span
-                        className={`text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                          }`}
-                      >
-                        {state.uiLanguage === "zh" ? "加载中..." : "Loading..."}
-                      </span>
-                    </>
-                  ) : credits !== null ? (
-                    <>
-                      <div className="p-1 bg-emerald-500/10 rounded shrink-0">
-                        <CreditCard size={14} className="text-emerald-500" />
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span
-                          className={`text-xs font-black mono leading-none tracking-tight whitespace-nowrap ${isDarkTheme ? "text-white" : "text-gray-900"
-                            }`}
-                        >
-                          {credits.remaining.toLocaleString()}
-                        </span>
-                        <span className="text-[8px] lg:text-[10px] font-black text-emerald-500 uppercase tracking-tighter mt-0.5 whitespace-nowrap">
-                          {state.uiLanguage === "zh" ? "可用点数" : "Credits"}
-                        </span>
-                      </div>
-                      <div
-                        className={`w-[1px] h-6 mx-2 shrink-0 ${isDarkTheme ? "bg-white/10" : "bg-gray-300"
-                          }`}
-                      />
-                      <button
-                        className={`text-[9px] lg:text-xs font-black uppercase tracking-widest transition-colors shrink-0 whitespace-nowrap ${isDarkTheme
-                          ? "text-neutral-400 hover:text-white"
-                          : "text-gray-600 hover:text-gray-900"
-                          }`}
-                        onClick={() => setShowPaymentModal(true)}
-                      >
-                        {state.uiLanguage === "zh" ? "充值" : "Recharge"}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        className={`p-1 rounded shrink-0 ${isDarkTheme ? "bg-white/5" : "bg-gray-100"
-                          }`}
-                      >
-                        <Coins
-                          size={14}
-                          className={
-                            isDarkTheme ? "text-neutral-600" : "text-gray-400"
-                          }
-                        />
-                      </div>
-                      <span
-                        className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-600" : "text-gray-500"
-                          }`}
-                      >
-                        --
-                      </span>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* User Profile */}
-              {authLoading ? (
-                <div className="flex items-center space-x-2 shrink-0">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
-                  <span
-                    className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                      }`}
-                  >
-                    {state.uiLanguage === "zh" ? "验证中..." : "Verifying..."}
-                  </span>
-                </div>
-              ) : authenticated ? (
-                <div
-                  className={`flex items-center space-x-4 border-l pl-6 shrink-0 ${isDarkTheme ? "border-white/5" : "border-gray-200"
-                    }`}
-                >
-                  <div className="text-right shrink-0">
-                    <p
-                      className={`text-xs font-bold leading-none whitespace-nowrap ${isDarkTheme ? "text-white" : "text-gray-900"
-                        }`}
-                    >
-                      {user?.name || user?.email}
-                    </p>
-                    <p className="text-[9px] lg:text-xs font-bold text-emerald-500/60 uppercase tracking-widest mt-1 whitespace-nowrap">
-                      {state.uiLanguage === "zh" ? "已登录" : "Logged In"}
-                    </p>
-                  </div>
-                  {user?.picture && (
-                    <img
-                      src={user.picture}
-                      className={`w-8 h-8 rounded border shrink-0 ${isDarkTheme ? "border-white/10" : "border-gray-200"
-                        }`}
-                      alt="avatar"
-                    />
-                  )}
-                  <button
-                    onClick={logout}
-                    className={`p-2 transition-colors shrink-0 ${isDarkTheme
-                      ? "text-neutral-500 hover:text-white"
-                      : "text-gray-500 hover:text-gray-900"
-                      }`}
-                    title={state.uiLanguage === "zh" ? "登出" : "Logout"}
-                  >
-                    <LogOut size={16} />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center space-x-3 shrink-0">
-                  <User
-                    className={`w-4 h-4 shrink-0 ${isDarkTheme ? "text-neutral-500" : "text-gray-500"
-                      }`}
-                  />
-                  <span
-                    className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                      }`}
-                  >
-                    {state.uiLanguage === "zh" ? "未登录" : "Not Logged In"}
-                  </span>
-                  <a
-                    href={MAIN_APP_URL}
-                    className="text-emerald-500 hover:text-emerald-400 text-xs font-bold uppercase tracking-widest transition-colors shrink-0 whitespace-nowrap"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    {state.uiLanguage === "zh"
-                      ? "前往主应用"
-                      : "Go to Main App"}
-                  </a>
-                </div>
-              )}
-            </div>
-          </header>
-        )}
-
-        {/* Content Area */}
-        <main className="flex-1 overflow-y-auto bg-grid-40 px-8 py-6">
-          {state.step === "article-generator" && (
-            <ArticleGeneratorLayout
-              onBack={() => {
-                // Switch to a different task or go back to input
-                const activeTask = state.taskManager.tasks.find(
-                  (t) => t.id === state.taskManager.activeTaskId
-                );
-                if (activeTask && activeTask.type === "article-generator") {
-                  // Save current state before going back
+              <Sidebar
+                tasks={state.taskManager.tasks}
+                activeTaskId={state.taskManager.activeTaskId}
+                maxTasks={state.taskManager.maxTasks}
+                onTaskSwitch={switchTask}
+                onTaskAdd={() => setShowTaskMenu(true)}
+                onTaskDelete={deleteTask}
+                onLanguageToggle={() => {
                   setState((prev) => {
-                    const updatedTasks = prev.taskManager.tasks.map((task) => {
-                      if (task.id === prev.taskManager.activeTaskId) {
-                        return {
-                          ...task,
-                          articleGeneratorState: {
-                            ...prev.articleGeneratorState,
-                            currentStage: "input" as const,
-                          },
-                        };
-                      }
-                      return task;
-                    });
+                    const newLanguage = prev.uiLanguage === "en" ? "zh" : "en";
+                    // Save to localStorage
+                    try {
+                      localStorage.setItem("ui_language", newLanguage);
+                    } catch (e) {
+                      console.error("Failed to save UI language to localStorage:", e);
+                    }
                     return {
+                      ...prev,
+                      uiLanguage: newLanguage,
+                    };
+                  });
+                }}
+                onThemeToggle={handleThemeToggle}
+                onTaskStop={(taskId) => {
+                  const task = state.taskManager.tasks.find(t => t.id === taskId);
+                  if (!task) return;
+
+                  // If it's the active task, use normal handlers
+                  if (taskId === state.taskManager.activeTaskId) {
+                    if (task.type === 'mining') handleStopMining();
+                    if (task.type === 'batch') handleStopBatch();
+                    // Article generator doesn't have a clear stop ref yet, but we can set isGenerating to false
+                    if (task.type === 'article-generator') {
+                      setState(prev => ({
+                        ...prev,
+                        articleGeneratorState: { ...prev.articleGeneratorState, isGenerating: false }
+                      }));
+                    }
+                  } else {
+                    // For background tasks, we need to update their saved state
+                    setState(prev => ({
                       ...prev,
                       taskManager: {
                         ...prev.taskManager,
-                        tasks: updatedTasks as TaskState[],
-                      },
-                    };
-                  });
-                } else {
-                  switchStepWithTaskPreservation("input");
-                }
-              }}
-              uiLanguage={state.uiLanguage}
-              isDarkTheme={isDarkTheme}
-              token={token}
-              userId={user?.userId || "1"}
-              articleGeneratorState={{
-                keyword: state.articleGeneratorState.keyword,
-                tone: state.articleGeneratorState.tone,
-                targetAudience: state.articleGeneratorState.targetAudience,
-                visualStyle: state.articleGeneratorState.visualStyle,
-                targetMarket: state.articleGeneratorState.targetMarket,
-                promotedWebsites: state.articleGeneratorState.promotedWebsites,
-                promotionIntensity:
-                  state.articleGeneratorState.promotionIntensity,
-                websiteId: state.articleGeneratorState.websiteId,
-                websiteUrl: state.articleGeneratorState.websiteUrl,
-                isGenerating: state.articleGeneratorState.isGenerating,
-                progress: state.articleGeneratorState.progress,
-                currentStage: state.articleGeneratorState.currentStage,
-                streamEvents: state.articleGeneratorState.streamEvents,
-                finalArticle: state.articleGeneratorState.finalArticle,
-              }}
-              onStateChange={(updates) => {
-                setState((prev) => {
-                  const newState = {
-                    ...prev,
-                    articleGeneratorState: {
-                      ...prev.articleGeneratorState,
-                      ...updates,
-                    },
-                  };
-
-                  // 调试日志：检查状态更新
-                  if (process.env.NODE_ENV === "development") {
-                    console.log("[App.tsx] ArticleGeneratorState updated:", {
-                      updates,
-                      isGenerating: newState.articleGeneratorState.isGenerating,
-                      hasFinalArticle:
-                        !!newState.articleGeneratorState.finalArticle,
-                      finalArticleTitle:
-                        newState.articleGeneratorState.finalArticle?.title,
-                      finalArticleContent:
-                        newState.articleGeneratorState.finalArticle?.content?.substring(
-                          0,
-                          50
-                        ),
-                      currentStage: newState.articleGeneratorState.currentStage,
-                      pageHidden: document.hidden,
-                    });
+                        tasks: prev.taskManager.tasks.map(t => {
+                          if (t.id === taskId) {
+                            if (t.miningState) return { ...t, miningState: { ...t.miningState, isMining: false } };
+                            if (t.batchState) return { ...t, batchState: { ...t.batchState, batchCurrentIndex: t.batchState.batchTotalCount } };
+                            if (t.articleGeneratorState) return { ...t, articleGeneratorState: { ...t.articleGeneratorState, isGenerating: false } };
+                          }
+                          return t;
+                        })
+                      }
+                    }));
+                    addLog(`任务 ${task.name} 已强制停止。`, "warning");
                   }
+                }}
+                uiLanguage={state.uiLanguage}
+                step={state.step}
+                isDarkTheme={isDarkTheme}
+                onContentGeneration={(tab) => {
+                  // 在切换之前，先保存当前活跃任务的状态（如果有），然后切换到"我的网站"视图
+                  setState((prev) => {
+                    const currentActiveTaskId = prev.taskManager.activeTaskId;
+                    let updatedTasks = prev.taskManager.tasks;
 
-                  // 检测文章生成完成：有 finalArticle 且不再生成中
-                  const articleJustCompleted =
-                    updates.finalArticle &&
-                    updates.isGenerating === false &&
-                    prev.articleGeneratorState.isGenerating === true;
-
-                  if (articleJustCompleted) {
-                    console.log(
-                      "[App.tsx] Article generation completed, page hidden:",
-                      document.hidden
-                    );
-
-                    // 如果页面当前可见，确保停留在文章生成器页面以显示结果
-                    if (!document.hidden && prev.step === "article-generator") {
-                      console.log(
-                        "[App.tsx] Page is visible, staying on article generator to show result"
+                    // 如果有活跃任务，先保存其状态
+                    if (currentActiveTaskId) {
+                      const currentTask = updatedTasks.find(
+                        (t) => t.id === currentActiveTaskId
                       );
-                      // 不需要额外操作，ArticleGeneratorLayout 会自动显示预览
-                    } else if (document.hidden) {
-                      // 页面不可见（用户切换了标签），记录状态
-                      // 当用户切换回来时，visibilitychange 事件会处理跳转
-                      console.log(
-                        "[App.tsx] Page is hidden, will auto-switch when user returns"
-                      );
-                    }
-                  }
-
-                  // Also update the task state
-                  const activeTask = newState.taskManager.tasks.find(
-                    (t) => t.id === newState.taskManager.activeTaskId
-                  );
-                  if (activeTask && activeTask.type === "article-generator") {
-                    // Create new task when generation starts (if current task has results)
-                    if (
-                      updates.isGenerating === true &&
-                      prev.articleGeneratorState.isGenerating === false &&
-                      updates.keyword &&
-                      updates.keyword.trim()
-                    ) {
-                      // If current task has finalArticle, create a new task
-                      const currentTaskHasResult =
-                        activeTask.articleGeneratorState?.finalArticle;
-                      if (currentTaskHasResult) {
-                        // Create a new task for this execution
-                        const taskName =
-                          prev.uiLanguage === "zh"
-                            ? `图文 #${updates.keyword.trim()}`
-                            : `Article #${updates.keyword.trim()}`;
-                        addTask({
-                          type: "article-generator",
-
-                          targetLanguage: prev.targetLanguage,
-                          targetMarket:
-                            updates.targetMarket ||
-                            prev.articleGeneratorState.targetMarket ||
-                            "global",
-                          name: taskName,
-                        });
-                        // Wait for task creation, then continue with state update
-                        setTimeout(() => {
-                          setState((prevState) => {
-                            const newActiveTaskId =
-                              prevState.taskManager.activeTaskId;
-                            if (!newActiveTaskId) return prevState;
-
+                      if (currentTask) {
+                        updatedTasks = updatedTasks.map((task) => {
+                          if (task.id === currentActiveTaskId) {
                             return {
-                              ...prevState,
-                              articleGeneratorState: {
-                                ...prevState.articleGeneratorState,
-                                ...updates,
-                              },
+                              ...snapshotCurrentTask(prev, task),
+                              isActive: false,
                             };
-                          });
-                        }, 100);
-                        return newState;
+                          }
+                          return {
+                            ...task,
+                            isActive: false,
+                          };
+                        });
                       } else {
-                        // Update task name for existing task
-                        const taskName =
-                          prev.uiLanguage === "zh"
-                            ? `图文 #${updates.keyword.trim()}`
-                            : `Article #${updates.keyword.trim()}`;
-                        // Update task name immediately
-                        newState.taskManager = {
-                          ...newState.taskManager,
-                          tasks: newState.taskManager.tasks.map((task) =>
-                            task.id === newState.taskManager.activeTaskId
-                              ? {
-                                ...task,
-                                name: taskName,
-                                updatedAt: Date.now(),
-                              }
-                              : task
-                          ),
-                        };
-                        // Save to localStorage
-                        setTimeout(() => saveTasksToLocalStorage(), 0);
+                        // 如果没有找到任务，只更新 isActive
+                        updatedTasks = updatedTasks.map((task) => ({
+                          ...task,
+                          isActive: false,
+                        }));
+                      }
+                    } else {
+                      // 没有活跃任务，只更新 isActive
+                      updatedTasks = updatedTasks.map((task) => ({
+                        ...task,
+                        isActive: false,
+                      }));
+                    }
+
+                    // 保存到 localStorage
+                    try {
+                      localStorage.setItem(
+                        STORAGE_KEYS.TASKS,
+                        JSON.stringify(updatedTasks)
+                      );
+                    } catch (e) {
+                      console.error("Failed to save tasks", e);
+                    }
+
+                    // 同步当前任务状态到后端（确保任务看板能获取最新状态）
+                    if (currentActiveTaskId && authenticated) {
+                      const taskToSync = updatedTasks.find(
+                        (t) => t.id === currentActiveTaskId
+                      );
+                      if (taskToSync && !taskToSync.id.startsWith("task-")) {
+                        syncTaskToBackend(taskToSync);
                       }
                     }
 
-                    setTimeout(() => {
-                      setState((prevState) => {
-                        const updatedTasks = prevState.taskManager.tasks.map(
-                          (task) => {
-                            if (
-                              task.id === prevState.taskManager.activeTaskId
-                            ) {
-                              return {
-                                ...task,
-                                articleGeneratorState: {
-                                  ...prevState.articleGeneratorState,
-                                  ...updates,
-                                },
-                              };
-                            }
-                            return task;
-                          }
-                        );
-                        return {
-                          ...prevState,
-                          taskManager: {
-                            ...prevState.taskManager,
-                            tasks: updatedTasks,
-                          },
-                        };
-                      });
-                    }, 0);
-                  }
-
-                  return newState;
-                });
-              }}
-            />
-          )}
-
-          {state.step === "content-generation" && (
-            <ContentGenerationView
-              state={state.contentGeneration}
-              setState={(update) => {
-                if (typeof update === "function") {
-                  // Support function form: setState((prev) => ({ ... }))
-                  console.log("[App.tsx] setState called with function form");
-                  setState((prev) => {
-                    const updatedContentGeneration = update(
-                      prev.contentGeneration as any
-                    );
-                    console.log("[App.tsx] Updated contentGeneration:", {
-                      onboardingStep: updatedContentGeneration?.onboardingStep,
-                      hasDemoContent: !!updatedContentGeneration?.demoContent,
-                      hasChatGPTDemo:
-                        !!updatedContentGeneration?.demoContent?.chatGPTDemo,
-                      hasArticleDemo:
-                        !!updatedContentGeneration?.demoContent?.articleDemo,
-                    });
                     return {
                       ...prev,
-                      contentGeneration:
-                        updatedContentGeneration as AppState["contentGeneration"],
+                      step: "content-generation",
+                      // 切换到"我的网站"时，清除activeTaskId，但保留任务状态（任务继续运行）
+                      taskManager: {
+                        ...prev.taskManager,
+                        activeTaskId: null,
+                        tasks: updatedTasks,
+                      },
+                      contentGeneration: {
+                        ...prev.contentGeneration,
+                        activeTab: tab || prev.contentGeneration.activeTab,
+                      },
                     };
                   });
-                } else {
-                  // Support object form: setState({ ... })
-                  console.log(
-                    "[App.tsx] setState called with object form:",
-                    update
-                  );
-                  setState((prev) => ({
-                    ...prev,
-                    contentGeneration: { ...prev.contentGeneration, ...update },
-                  }));
+                }}
+                contentGenerationTab={state.contentGeneration.activeTab}
+                onDeepDive={() =>
+                  setState((prev) => ({ ...prev, step: "article-generator" }))
                 }
-              }}
-              isDarkTheme={isDarkTheme}
-              uiLanguage={state.uiLanguage}
-              onGenerateArticle={(keyword: KeywordData) => {
-                // 检查认证
-                if (!authenticated) {
-                  setState((prev) => ({
-                    ...prev,
-                    error:
-                      state.uiLanguage === "zh"
-                        ? "请先登录才能使用生成图文功能"
-                        : "Please login to use article generation",
-                  }));
-                  return;
-                }
+                isCollapsed={state.isSidebarCollapsed}
+                onToggleCollapse={handleToggleSidebar}
+              />
 
-                // 检查任务数量限制
-                if (
-                  state.taskManager.tasks.length >= state.taskManager.maxTasks
-                ) {
-                  setState((prev) => ({
-                    ...prev,
-                    error:
-                      state.uiLanguage === "zh"
-                        ? `最多只能同时开启${state.taskManager.maxTasks}个任务。请先关闭一些任务再继续。`
-                        : `Maximum ${state.taskManager.maxTasks} tasks allowed. Please close some tasks first.`,
-                  }));
-                  return;
-                }
-
-                // 创建图文工场任务
-                addTask({
-                  type: "article-generator",
-                  keyword: keyword,
-                  targetLanguage: state.targetLanguage,
-                  targetMarket:
-                    state.contentGeneration.website?.location || "global",
-                  name: `${keyword.keyword.slice(0, 30)}${keyword.keyword.length > 30 ? "..." : ""
-                    }`,
-                });
-
-                // 成功提示
-                setState((prev) => ({
-                  ...prev,
-                  successMessage:
-                    state.uiLanguage === "zh"
-                      ? `已创建图文生成任务: ${keyword.keyword}`
-                      : `Created article generation task: ${keyword.keyword}`,
-                }));
-              }}
-            />
-          )}
-
-          {state.error && (
-            <div
-              className={`mb-6 p-4 rounded-lg flex items-center ${isDarkTheme
-                ? "bg-red-950/50 border border-red-500/30 text-red-400"
-                : "bg-red-50 border border-red-200 text-red-700"
-                }`}
-            >
-              <AlertCircle className="w-5 h-5 mr-2" />
-              {state.error}
-            </div>
-          )}
-
-          {/* WEBSITE BUILDER PAGE - Now using independent route #/website */}
-
-          {/* STEP 1: INPUT */}
-          {state.step === "input" && (
-            <div className="max-w-6xl mx-auto mt-8 flex-1 w-full">
-              {/* Hero Text */}
-              <div className="text-center space-y-6">
-                <div className="space-y-4">
-                  <h2
-                    className={cn(
-                      "text-4xl font-black tracking-tight",
-                      isDarkTheme ? "text-white" : "text-gray-900"
-                    )}
+              {/* Main Container */}
+              <div className="flex-1 flex flex-col min-w-0 pt-16 md:pt-0 pb-20 md:pb-0">
+                {/* Header: Process Indicators & User Info */}
+                {state.step !== "article-generator" && (
+                  <header
+                    className={`h-16 border-b backdrop-blur-md flex items-center justify-between px-4 md:px-8 shrink-0 ${isDarkTheme
+                      ? "border-white/5 bg-[#0a0a0a]/50"
+                      : "border-gray-200 bg-white/80"
+                      }`}
                   >
-                    {miningMode === "existing-website-audit"
-                      ? (() => {
-                        const title =
-                          t.auditInputTitle || "Expand Your Reach";
-                        // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
-                        if (state.uiLanguage === "zh") {
-                          const lastFourChars = title.slice(-4);
-                          const restChars = title.slice(0, -4);
-                          return (
-                            <>
-                              {restChars}
-                              <span className="text-emerald-500">
-                                {lastFourChars}
-                              </span>
-                            </>
-                          );
-                        } else {
-                          const words = title.split(" ");
-                          const lastWord = words.pop() || "";
-                          const restWords = words.join(" ");
-                          return (
-                            <>
-                              {restWords}{" "}
-                              <span className="text-emerald-500">
-                                {lastWord}
-                              </span>
-                            </>
-                          );
-                        }
-                      })()
-                      : (() => {
-                        const title = t.inputTitle || "Define Your Niche";
-                        // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
-                        if (state.uiLanguage === "zh") {
-                          const lastFourChars = title.slice(-4);
-                          const restChars = title.slice(0, -4);
-                          return (
-                            <>
-                              {restChars}
-                              <span className="text-emerald-500">
-                                {lastFourChars}
-                              </span>
-                            </>
-                          );
-                        } else {
-                          const words = title.split(" ");
-                          const lastWord = words.pop() || "";
-                          const restWords = words.join(" ");
-                          return (
-                            <>
-                              {restWords}{" "}
-                              <span className="text-emerald-500">
-                                {lastWord}
-                              </span>
-                            </>
-                          );
-                        }
-                      })()}
-                  </h2>
-                  <p
-                    className={cn(
-                      "text-sm max-w-xl mx-auto leading-relaxed px-4",
-                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                    )}
-                  >
-                    {miningMode === "existing-website-audit"
-                      ? t.auditInputDesc
-                      : t.inputDesc}
-                  </p>
-                </div>
-
-                {/* Redesigned Major Mode Switcher */}
-                <div className="flex items-center justify-center pt-2">
-                  <div
-                    className={cn(
-                      "inline-flex p-1 rounded-xl shadow-2xl border",
-                      isDarkTheme
-                        ? "bg-neutral-900/80 border-white/10"
-                        : "bg-gray-100 border-gray-200"
-                    )}
-                  >
-                    <button
-                      onClick={() => {
-                        setMiningMode("blue-ocean");
-                        // 切换到蓝海模式时，清空存量拓新模式的选择（完全分离两种模式）
-                        setBatchSelectedWebsite(null);
-                        setBatchManualWebsiteUrl("");
-                        setBatchUrlValidationStatus("idle");
-                      }}
-                      className={cn(
-                        "flex items-center space-x-3 px-8 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                        miningMode === "blue-ocean"
-                          ? "bg-emerald-600 text-white shadow-lg"
-                          : isDarkTheme
-                            ? "text-neutral-500 hover:text-neutral-300"
-                            : "text-gray-600 hover:text-gray-900"
+                    {/* Left: Step Indicators */}
+                    <div className="flex items-center space-x-8">
+                      {state.step === "content-generation" ? (
+                        // Content Generation Mode: Show tabs as steps
+                        <>
+                          <StepItem
+                            number={1}
+                            label={t.tabMyWebsite}
+                            active={state.contentGeneration.activeTab === "my-website"}
+                            isDarkTheme={isDarkTheme}
+                          />
+                          <ChevronRight
+                            size={14}
+                            className={
+                              isDarkTheme ? "text-neutral-800" : "text-gray-300"
+                            }
+                          />
+                          <StepItem
+                            number={2}
+                            label={t.tabWebsiteData}
+                            active={
+                              state.contentGeneration.activeTab === "website-data"
+                            }
+                            isDarkTheme={isDarkTheme}
+                          />
+                          <ChevronRight
+                            size={14}
+                            className={
+                              isDarkTheme ? "text-neutral-800" : "text-gray-500"
+                            }
+                          />
+                          <StepItem
+                            number={3}
+                            label={t.tabProjects}
+                            active={state.contentGeneration.activeTab === "projects"}
+                            isDarkTheme={isDarkTheme}
+                          />
+                          <ChevronRight
+                            size={14}
+                            className={
+                              isDarkTheme ? "text-neutral-800" : "text-gray-500"
+                            }
+                          />
+                          <StepItem
+                            number={4}
+                            label={t.tabPublish}
+                            active={state.contentGeneration.activeTab === "publish"}
+                            isDarkTheme={isDarkTheme}
+                          />
+                        </>
+                      ) : (
+                        // Default Mode: Show input/process/results
+                        <>
+                          <StepItem
+                            number={1}
+                            label={t.step1}
+                            active={state.step === "input"}
+                            isDarkTheme={isDarkTheme}
+                          />
+                          <ChevronRight
+                            size={14}
+                            className={
+                              isDarkTheme ? "text-neutral-800" : "text-gray-500"
+                            }
+                          />
+                          <StepItem
+                            number={2}
+                            label={t.step2}
+                            active={
+                              state.step === "mining" || state.step === "batch-analyzing"
+                            }
+                            isDarkTheme={isDarkTheme}
+                          />
+                          <ChevronRight
+                            size={14}
+                            className={
+                              isDarkTheme ? "text-neutral-800" : "text-gray-500"
+                            }
+                          />
+                          <StepItem
+                            number={3}
+                            label={t.step3}
+                            active={
+                              state.step === "results" || state.step === "batch-results"
+                            }
+                            isDarkTheme={isDarkTheme}
+                          />
+                        </>
                       )}
-                    >
-                      <Layers size={14} />
-                      <span>
-                        {state.uiLanguage === "zh" ? "蓝海发现" : "Blue Ocean"}
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        setMiningMode("existing-website-audit");
-                        // 切换到存量拓新模式时，清空蓝海模式的输入（完全分离两种模式）
-                        setBatchInput("");
-                      }}
-                      className={cn(
-                        "flex items-center space-x-3 px-8 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
-                        miningMode === "existing-website-audit"
-                          ? "bg-emerald-600 text-white shadow-lg"
-                          : isDarkTheme
-                            ? "text-neutral-500 hover:text-neutral-300"
-                            : "text-gray-600 hover:text-gray-900"
+                    </div>
+
+                    {/* Right: Credits + User Info */}
+                    <div className="flex items-center space-x-6 shrink-0">
+                      {/* Credits */}
+                      {(authenticated || (import.meta.env.DEV && credits)) && (
+                        <div className="flex items-center space-x-3 bg-emerald-500/5 border border-emerald-500/10 px-4 py-2 rounded shrink-0">
+                          {creditsLoading ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
+                              <span
+                                className={`text-[9px] font-black uppercase tracking-widest whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                                  }`}
+                              >
+                                {state.uiLanguage === "zh" ? "加载中..." : "Loading..."}
+                              </span>
+                            </>
+                          ) : credits !== null ? (
+                            <>
+                              <div className="p-1 bg-emerald-500/10 rounded shrink-0">
+                                <CreditCard size={14} className="text-emerald-500" />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span
+                                  className={`text-xs font-black mono leading-none tracking-tight whitespace-nowrap ${isDarkTheme ? "text-white" : "text-gray-900"
+                                    }`}
+                                >
+                                  {credits.remaining.toLocaleString()}
+                                </span>
+                                <span className="text-[8px] lg:text-[10px] font-black text-emerald-500 uppercase tracking-tighter mt-0.5 whitespace-nowrap">
+                                  {state.uiLanguage === "zh" ? "可用点数" : "Credits"}
+                                </span>
+                              </div>
+                              <div
+                                className={`w-[1px] h-6 mx-2 shrink-0 ${isDarkTheme ? "bg-white/10" : "bg-gray-300"
+                                  }`}
+                              />
+                              <button
+                                className={`text-[9px] lg:text-xs font-black uppercase tracking-widest transition-colors shrink-0 whitespace-nowrap ${isDarkTheme
+                                  ? "text-neutral-400 hover:text-white"
+                                  : "text-gray-600 hover:text-gray-900"
+                                  }`}
+                                onClick={() => setShowPaymentModal(true)}
+                              >
+                                {state.uiLanguage === "zh" ? "充值" : "Recharge"}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div
+                                className={`p-1 rounded shrink-0 ${isDarkTheme ? "bg-white/5" : "bg-gray-100"
+                                  }`}
+                              >
+                                <Coins
+                                  size={14}
+                                  className={
+                                    isDarkTheme ? "text-neutral-600" : "text-gray-400"
+                                  }
+                                />
+                              </div>
+                              <span
+                                className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                                  }`}
+                              >
+                                --
+                              </span>
+                            </>
+                          )}
+                        </div>
                       )}
-                    >
-                      <RefreshCw size={14} />
-                      <span>
-                        {state.uiLanguage === "zh"
-                          ? "存量拓新"
-                          : "Website Audit"}
-                      </span>
-                    </button>
-                  </div>
-                </div>
 
-                {/* Sub Tabs */}
-                <div className="flex items-center justify-center space-x-2 pt-4">
-                  <button
-                    onClick={() => setActiveTab("mining")}
-                    className={cn(
-                      "px-5 py-2 rounded-md text-sm font-medium transition-all border",
-                      activeTab === "mining"
-                        ? "bg-emerald-500 text-white shadow-sm border-emerald-500"
-                        : isDarkTheme
-                          ? "text-neutral-500 hover:text-neutral-300 border-white/10"
-                          : "text-gray-600 hover:text-gray-900 border-gray-200"
-                    )}
-                  >
-                    {t.tabMining}
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("batch")}
-                    className={cn(
-                      "px-5 py-2 rounded-md text-sm font-medium transition-all border",
-                      activeTab === "batch"
-                        ? "bg-emerald-500 text-white shadow-sm border-emerald-500"
-                        : isDarkTheme
-                          ? "text-neutral-500 hover:text-neutral-300 border-white/10"
-                          : "text-gray-600 hover:text-gray-900 border-gray-200"
-                    )}
-                  >
-                    {t.tabBatch}
-                  </button>
-                </div>
-              </div>
-
-              {/* Mining Tab Content */}
-              {activeTab === "mining" && (
-                <div className="max-w-3xl mx-auto">
-                  {/* Blue Ocean Mode - Show keyword input */}
-                  {miningMode === "blue-ocean" && (
-                    <>
-                      {/* Refine Industry Button */}
-                      <div className="mb-4 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                      {/* User Profile */}
+                      {authLoading ? (
+                        <div className="flex items-center space-x-2 shrink-0">
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-500 border-t-transparent"></div>
                           <span
-                            className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                            className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
                               }`}
                           >
-                            {state.uiLanguage === "zh"
-                              ? "需要帮助？"
-                              : "Need Help?"}
+                            {state.uiLanguage === "zh" ? "验证中..." : "Verifying..."}
                           </span>
                         </div>
-                        <button
-                          onClick={() => setShowMiningGuide(true)}
-                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
-                        >
-                          <Lightbulb className="w-3.5 h-3.5" />
-                          {state.uiLanguage === "zh"
-                            ? "精确行业"
-                            : "Refine Industry"}
-                        </button>
-                      </div>
-
-                      {/* Display Saved Mining Configuration */}
-                      {state.miningConfig && (
-                        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Lightbulb className="w-4 h-4 text-emerald-400" />
-                            <span className="text-sm font-semibold text-emerald-400">
-                              {state.uiLanguage === "zh"
-                                ? "已保存的配置"
-                                : "Saved Configuration"}
-                            </span>
-                          </div>
-                          <div className="space-y-1 text-sm">
-                            <p
-                              className={
-                                isDarkTheme ? "text-white" : "text-gray-700"
-                              }
-                            >
-                              <span className="text-emerald-400 font-medium">
-                                {state.uiLanguage === "zh"
-                                  ? "行业:"
-                                  : "Industry:"}
-                              </span>{" "}
-                              {state.miningConfig.industry}
-                            </p>
-                            {state.miningConfig.additionalSuggestions && (
-                              <p
-                                className={
-                                  isDarkTheme ? "text-white" : "text-gray-700"
-                                }
-                              >
-                                <span className="text-emerald-400 font-medium">
-                                  {state.uiLanguage === "zh"
-                                    ? "建议:"
-                                    : "Suggestions:"}
-                                </span>{" "}
-                                {state.miningConfig.additionalSuggestions}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Redesigned Input Design */}
-                      <div
-                        className={cn(
-                          "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
-                          isDarkTheme
-                            ? "bg-[#0f0f0f] border-white/10"
-                            : "bg-gray-50 border-gray-200"
-                        )}
-                      >
-                        {/* Target Language Selector */}
-                        <Select
-                          value={state.targetLanguage}
-                          onValueChange={(value) =>
-                            setState((prev) => ({
-                              ...prev,
-                              targetLanguage: value as TargetLanguage,
-                            }))
-                          }
-                        >
-                          <SelectTrigger
-                            hideIcon
-                            className={cn(
-                              "md:w-40 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
-                              isDarkTheme
-                                ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
-                                : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
-                            )}
-                          >
-                            <div className="flex items-center space-x-3 overflow-hidden">
-                              <Globe
-                                size={14}
-                                className={cn(
-                                  "shrink-0",
-                                  isDarkTheme
-                                    ? "text-emerald-500"
-                                    : "text-emerald-600"
-                                )}
-                              />
-                              <span className="text-[11px] font-bold truncate">
-                                <SelectValue />
-                              </span>
-                            </div>
-                            <ChevronRight
-                              size={14}
-                              className={cn(
-                                "shrink-0",
-                                isDarkTheme
-                                  ? "text-neutral-700"
-                                  : "text-gray-500"
-                              )}
-                            />
-                          </SelectTrigger>
-                          <SelectContent
-                            className={cn(
-                              isDarkTheme
-                                ? "bg-black/90 border-emerald-500/30"
-                                : "bg-white border-emerald-500/30"
-                            )}
-                          >
-                            {LANGUAGES.map((l) => (
-                              <SelectItem
-                                key={l.code}
-                                value={l.code}
-                                className={cn(
-                                  isDarkTheme
-                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                                )}
-                              >
-                                {l.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        {/* Input Field */}
+                      ) : authenticated ? (
                         <div
-                          className={cn(
-                            "flex-1 rounded-lg flex items-center px-4 h-14 transition-all border",
-                            isDarkTheme
-                              ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
-                              : "bg-white border-gray-200 focus-within:border-emerald-500/50"
-                          )}
+                          className={`flex items-center space-x-4 border-l pl-6 shrink-0 ${isDarkTheme ? "border-white/5" : "border-gray-200"
+                            }`}
                         >
-                          <Search
-                            className={cn(
-                              isDarkTheme ? "text-neutral-600" : "text-gray-400"
-                            )}
-                            size={18}
-                          />
-                          <input
-                            type="text"
-                            placeholder={t.placeholder}
-                            className={cn(
-                              "bg-transparent border-none outline-none w-full text-sm font-medium px-4 h-14",
-                              isDarkTheme
-                                ? "text-white placeholder:text-neutral-700"
-                                : "text-gray-900 placeholder:text-gray-500"
-                            )}
-                            value={state.seedKeyword}
-                            onChange={(e) =>
-                              setState((prev) => ({
-                                ...prev,
-                                seedKeyword: e.target.value,
-                              }))
-                            }
-                            onKeyDown={(e) =>
-                              e.key === "Enter" && startMining(false)
-                            }
-                          />
-                        </div>
-                        <button
-                          onClick={() => startMining(false)}
-                          disabled={!state.seedKeyword.trim()}
-                          className={cn(
-                            "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
-                            isDarkTheme && "shadow-emerald-900/20"
-                          )}
-                        >
-                          {t.btnStart}
-                        </button>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Existing Website Audit Mode - Show website selector and audit button */}
-                  {miningMode === "existing-website-audit" && (
-                    <>
-                      {/* Refine Industry Button - 仅在非策略模式下显示（策略模式有行业上下文模块） */}
-                      {!useStrategyMode && (
-                        <div className="mb-4 flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <BrainCircuit className="w-5 h-5 text-emerald-400" />
-                            <span
-                              className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                          <div className="text-right shrink-0">
+                            <p
+                              className={`text-xs font-bold leading-none whitespace-nowrap ${isDarkTheme ? "text-white" : "text-gray-900"
                                 }`}
                             >
-                              {state.uiLanguage === "zh"
-                                ? "需要帮助？"
-                                : "Need Help?"}
-                            </span>
+                              {user?.name || user?.email}
+                            </p>
+                            <p className="text-[9px] lg:text-xs font-bold text-emerald-500/60 uppercase tracking-widest mt-1 whitespace-nowrap">
+                              {state.uiLanguage === "zh" ? "已登录" : "Logged In"}
+                            </p>
                           </div>
+                          {user?.picture && (
+                            <img
+                              src={user.picture}
+                              className={`w-8 h-8 rounded border shrink-0 ${isDarkTheme ? "border-white/10" : "border-gray-200"
+                                }`}
+                              alt="avatar"
+                            />
+                          )}
                           <button
-                            onClick={() => setShowMiningGuide(true)}
-                            className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                            onClick={logout}
+                            className={`p-2 transition-colors shrink-0 ${isDarkTheme
+                              ? "text-neutral-500 hover:text-white"
+                              : "text-gray-500 hover:text-gray-900"
+                              }`}
+                            title={state.uiLanguage === "zh" ? "登出" : "Logout"}
                           >
-                            <Lightbulb className="w-3.5 h-3.5" />
-                            {state.uiLanguage === "zh"
-                              ? "精确行业"
-                              : "Refine Industry"}
+                            <LogOut size={16} />
                           </button>
                         </div>
-                      )}
-
-                      {/* Display Saved Mining Configuration - 仅在非策略模式下显示 */}
-                      {!useStrategyMode && state.miningConfig && (
-                        <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Lightbulb className="w-4 h-4 text-emerald-400" />
-                            <span className="text-sm font-semibold text-emerald-400">
-                              {state.uiLanguage === "zh"
-                                ? "已保存的配置"
-                                : "Saved Configuration"}
-                            </span>
-                          </div>
-                          <div className="space-y-1 text-sm">
-                            <p
-                              className={
-                                isDarkTheme ? "text-white" : "text-gray-700"
-                              }
-                            >
-                              <span className="text-emerald-400 font-medium">
-                                {state.uiLanguage === "zh"
-                                  ? "行业:"
-                                  : "Industry:"}
-                              </span>{" "}
-                              {state.miningConfig.industry}
-                            </p>
-                            {state.miningConfig.additionalSuggestions && (
-                              <p
-                                className={
-                                  isDarkTheme ? "text-white" : "text-gray-700"
-                                }
-                              >
-                                <span className="text-emerald-400 font-medium">
-                                  {state.uiLanguage === "zh"
-                                    ? "建议:"
-                                    : "Suggestions:"}
-                                </span>{" "}
-                                {state.miningConfig.additionalSuggestions}
-                              </p>
-                            )}
-                          </div>
+                      ) : (
+                        <div className="flex items-center space-x-3 shrink-0">
+                          <User
+                            className={`w-4 h-4 shrink-0 ${isDarkTheme ? "text-neutral-500" : "text-gray-500"
+                              }`}
+                          />
+                          <span
+                            className={`text-xs font-bold whitespace-nowrap ${isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                              }`}
+                          >
+                            {state.uiLanguage === "zh" ? "未登录" : "Not Logged In"}
+                          </span>
+                          <a
+                            href={MAIN_APP_URL}
+                            className="text-emerald-500 hover:text-emerald-400 text-xs font-bold uppercase tracking-widest transition-colors shrink-0 whitespace-nowrap"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            {state.uiLanguage === "zh"
+                              ? "前往主应用"
+                              : "Go to Main App"}
+                          </a>
                         </div>
                       )}
+                    </div>
+                  </header>
+                )}
 
-                      {/* 策略模式下的顶部间距 */}
-                      {useStrategyMode && <div className="mt-4" />}
-
-                      {/* Redesigned Input Design - Similar to Blue Ocean Mode */}
-                      <div
-                        className={cn(
-                          "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
-                          isDarkTheme
-                            ? "bg-[#0f0f0f] border-white/10"
-                            : "bg-gray-50 border-gray-200"
-                        )}
-                      >
-                        {/* Target Language Selector */}
-                        <Select
-                          value={state.targetLanguage}
-                          onValueChange={(value) =>
-                            setState((prev) => ({
+                {/* Content Area */}
+                <main className="flex-1 overflow-y-auto bg-grid-40 px-8 py-6">
+                  {state.step === "article-generator" && (
+                    <ArticleGeneratorLayout
+                      onBack={() => {
+                        // Switch to a different task or go back to input
+                        const activeTask = state.taskManager.tasks.find(
+                          (t) => t.id === state.taskManager.activeTaskId
+                        );
+                        if (activeTask && activeTask.type === "article-generator") {
+                          // Save current state before going back
+                          setState((prev) => {
+                            const updatedTasks = prev.taskManager.tasks.map((task) => {
+                              if (task.id === prev.taskManager.activeTaskId) {
+                                return {
+                                  ...task,
+                                  articleGeneratorState: {
+                                    ...prev.articleGeneratorState,
+                                    currentStage: "input" as const,
+                                  },
+                                };
+                              }
+                              return task;
+                            });
+                            return {
                               ...prev,
-                              targetLanguage: value as TargetLanguage,
-                            }))
-                          }
-                        >
-                          <SelectTrigger
-                            hideIcon
-                            className={cn(
-                              "md:w-48 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
-                              isDarkTheme
-                                ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
-                                : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
-                            )}
-                          >
-                            <div className="flex items-center space-x-3 overflow-hidden">
-                              <Globe
-                                size={14}
-                                className={cn(
-                                  "shrink-0",
-                                  isDarkTheme
-                                    ? "text-emerald-500"
-                                    : "text-emerald-600"
-                                )}
-                              />
-                              <span className="text-[11px] font-bold truncate">
-                                <SelectValue />
-                              </span>
-                            </div>
-                            <ChevronRight
-                              size={14}
-                              className={cn(
-                                "shrink-0",
-                                isDarkTheme
-                                  ? "text-neutral-700"
-                                  : "text-gray-500"
-                              )}
-                            />
-                          </SelectTrigger>
-                          <SelectContent
-                            className={cn(
-                              isDarkTheme
-                                ? "bg-black/90 border-emerald-500/30"
-                                : "bg-white border-emerald-500/30"
-                            )}
-                          >
-                            {LANGUAGES.map((l) => (
-                              <SelectItem
-                                key={l.code}
-                                value={l.code}
-                                className={cn(
-                                  isDarkTheme
-                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                                )}
-                              >
-                                {l.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                              taskManager: {
+                                ...prev.taskManager,
+                                tasks: updatedTasks as TaskState[],
+                              },
+                            };
+                          });
+                        } else {
+                          switchStepWithTaskPreservation("input");
+                        }
+                      }}
+                      uiLanguage={state.uiLanguage}
+                      isDarkTheme={isDarkTheme}
+                      token={token}
+                      userId={user?.userId || "1"}
+                      articleGeneratorState={{
+                        keyword: state.articleGeneratorState.keyword,
+                        tone: state.articleGeneratorState.tone,
+                        targetAudience: state.articleGeneratorState.targetAudience,
+                        visualStyle: state.articleGeneratorState.visualStyle,
+                        targetMarket: state.articleGeneratorState.targetMarket,
+                        promotedWebsites: state.articleGeneratorState.promotedWebsites,
+                        promotionIntensity:
+                          state.articleGeneratorState.promotionIntensity,
+                        websiteId: state.articleGeneratorState.websiteId,
+                        websiteUrl: state.articleGeneratorState.websiteUrl,
+                        isGenerating: state.articleGeneratorState.isGenerating,
+                        progress: state.articleGeneratorState.progress,
+                        currentStage: state.articleGeneratorState.currentStage,
+                        streamEvents: state.articleGeneratorState.streamEvents,
+                        finalArticle: state.articleGeneratorState.finalArticle,
+                      }}
+                      onStateChange={(updates) => {
+                        setState((prev) => {
+                          const newState = {
+                            ...prev,
+                            articleGeneratorState: {
+                              ...prev.articleGeneratorState,
+                              ...updates,
+                            },
+                          };
 
-                        {/* Website Input Field with Dropdown */}
-                        <div className="flex-1 relative website-dropdown-container">
+                          // 调试日志：检查状态更新
+                          if (process.env.NODE_ENV === "development") {
+                            console.log("[App.tsx] ArticleGeneratorState updated:", {
+                              updates,
+                              isGenerating: newState.articleGeneratorState.isGenerating,
+                              hasFinalArticle:
+                                !!newState.articleGeneratorState.finalArticle,
+                              finalArticleTitle:
+                                newState.articleGeneratorState.finalArticle?.title,
+                              finalArticleContent:
+                                newState.articleGeneratorState.finalArticle?.content?.substring(
+                                  0,
+                                  50
+                                ),
+                              currentStage: newState.articleGeneratorState.currentStage,
+                              pageHidden: document.hidden,
+                            });
+                          }
+
+                          // 检测文章生成完成：有 finalArticle 且不再生成中
+                          const articleJustCompleted =
+                            updates.finalArticle &&
+                            updates.isGenerating === false &&
+                            prev.articleGeneratorState.isGenerating === true;
+
+                          if (articleJustCompleted) {
+                            console.log(
+                              "[App.tsx] Article generation completed, page hidden:",
+                              document.hidden
+                            );
+
+                            // 如果页面当前可见，确保停留在文章生成器页面以显示结果
+                            if (!document.hidden && prev.step === "article-generator") {
+                              console.log(
+                                "[App.tsx] Page is visible, staying on article generator to show result"
+                              );
+                              // 不需要额外操作，ArticleGeneratorLayout 会自动显示预览
+                            } else if (document.hidden) {
+                              // 页面不可见（用户切换了标签），记录状态
+                              // 当用户切换回来时，visibilitychange 事件会处理跳转
+                              console.log(
+                                "[App.tsx] Page is hidden, will auto-switch when user returns"
+                              );
+                            }
+                          }
+
+                          // Also update the task state
+                          const activeTask = newState.taskManager.tasks.find(
+                            (t) => t.id === newState.taskManager.activeTaskId
+                          );
+                          if (activeTask && activeTask.type === "article-generator") {
+                            // Create new task when generation starts (if current task has results)
+                            if (
+                              updates.isGenerating === true &&
+                              prev.articleGeneratorState.isGenerating === false &&
+                              updates.keyword &&
+                              updates.keyword.trim()
+                            ) {
+                              // If current task has finalArticle, create a new task
+                              const currentTaskHasResult =
+                                activeTask.articleGeneratorState?.finalArticle;
+                              if (currentTaskHasResult) {
+                                // Create a new task for this execution
+                                const taskName =
+                                  prev.uiLanguage === "zh"
+                                    ? `图文 #${updates.keyword.trim()}`
+                                    : `Article #${updates.keyword.trim()}`;
+                                addTask({
+                                  type: "article-generator",
+
+                                  targetLanguage: prev.targetLanguage,
+                                  targetMarket:
+                                    updates.targetMarket ||
+                                    prev.articleGeneratorState.targetMarket ||
+                                    "global",
+                                  name: taskName,
+                                });
+                                // Wait for task creation, then continue with state update
+                                setTimeout(() => {
+                                  setState((prevState) => {
+                                    const newActiveTaskId =
+                                      prevState.taskManager.activeTaskId;
+                                    if (!newActiveTaskId) return prevState;
+
+                                    return {
+                                      ...prevState,
+                                      articleGeneratorState: {
+                                        ...prevState.articleGeneratorState,
+                                        ...updates,
+                                      },
+                                    };
+                                  });
+                                }, 100);
+                                return newState;
+                              } else {
+                                // Update task name for existing task
+                                const taskName =
+                                  prev.uiLanguage === "zh"
+                                    ? `图文 #${updates.keyword.trim()}`
+                                    : `Article #${updates.keyword.trim()}`;
+                                // Update task name immediately
+                                newState.taskManager = {
+                                  ...newState.taskManager,
+                                  tasks: newState.taskManager.tasks.map((task) =>
+                                    task.id === newState.taskManager.activeTaskId
+                                      ? {
+                                        ...task,
+                                        name: taskName,
+                                        updatedAt: Date.now(),
+                                      }
+                                      : task
+                                  ),
+                                };
+                                // Save to localStorage
+                                setTimeout(() => saveTasksToLocalStorage(), 0);
+                              }
+                            }
+
+                            setTimeout(() => {
+                              setState((prevState) => {
+                                const updatedTasks = prevState.taskManager.tasks.map(
+                                  (task) => {
+                                    if (
+                                      task.id === prevState.taskManager.activeTaskId
+                                    ) {
+                                      return {
+                                        ...task,
+                                        articleGeneratorState: {
+                                          ...prevState.articleGeneratorState,
+                                          ...updates,
+                                        },
+                                      };
+                                    }
+                                    return task;
+                                  }
+                                );
+                                return {
+                                  ...prevState,
+                                  taskManager: {
+                                    ...prevState.taskManager,
+                                    tasks: updatedTasks,
+                                  },
+                                };
+                              });
+                            }, 0);
+                          }
+
+                          return newState;
+                        });
+                      }}
+                    />
+                  )}
+
+                  {state.step === "content-generation" && (
+                    <ContentGenerationView
+                      state={state.contentGeneration}
+                      setState={(update) => {
+                        if (typeof update === "function") {
+                          // Support function form: setState((prev) => ({ ... }))
+                          console.log("[App.tsx] setState called with function form");
+                          setState((prev) => {
+                            const updatedContentGeneration = update(
+                              prev.contentGeneration as any
+                            );
+                            console.log("[App.tsx] Updated contentGeneration:", {
+                              onboardingStep: updatedContentGeneration?.onboardingStep,
+                              hasDemoContent: !!updatedContentGeneration?.demoContent,
+                              hasChatGPTDemo:
+                                !!updatedContentGeneration?.demoContent?.chatGPTDemo,
+                              hasArticleDemo:
+                                !!updatedContentGeneration?.demoContent?.articleDemo,
+                            });
+                            return {
+                              ...prev,
+                              contentGeneration:
+                                updatedContentGeneration as AppState["contentGeneration"],
+                            };
+                          });
+                        } else {
+                          // Support object form: setState({ ... })
+                          console.log(
+                            "[App.tsx] setState called with object form:",
+                            update
+                          );
+                          setState((prev) => ({
+                            ...prev,
+                            contentGeneration: { ...prev.contentGeneration, ...update },
+                          }));
+                        }
+                      }}
+                      isDarkTheme={isDarkTheme}
+                      uiLanguage={state.uiLanguage}
+                      onGenerateArticle={(keyword: KeywordData) => {
+                        // 检查认证
+                        if (!authenticated) {
+                          setState((prev) => ({
+                            ...prev,
+                            error:
+                              state.uiLanguage === "zh"
+                                ? "请先登录才能使用生成图文功能"
+                                : "Please login to use article generation",
+                          }));
+                          return;
+                        }
+
+                        // 检查任务数量限制
+                        if (
+                          state.taskManager.tasks.length >= state.taskManager.maxTasks
+                        ) {
+                          setState((prev) => ({
+                            ...prev,
+                            error:
+                              state.uiLanguage === "zh"
+                                ? `最多只能同时开启${state.taskManager.maxTasks}个任务。请先关闭一些任务再继续。`
+                                : `Maximum ${state.taskManager.maxTasks} tasks allowed. Please close some tasks first.`,
+                          }));
+                          return;
+                        }
+
+                        // 创建图文工场任务
+                        addTask({
+                          type: "article-generator",
+                          keyword: keyword,
+                          targetLanguage: state.targetLanguage,
+                          targetMarket:
+                            state.contentGeneration.website?.location || "global",
+                          name: `${keyword.keyword.slice(0, 30)}${keyword.keyword.length > 30 ? "..." : ""
+                            }`,
+                        });
+
+                        // 成功提示
+                        setState((prev) => ({
+                          ...prev,
+                          successMessage:
+                            state.uiLanguage === "zh"
+                              ? `已创建图文生成任务: ${keyword.keyword}`
+                              : `Created article generation task: ${keyword.keyword}`,
+                        }));
+                      }}
+                    />
+                  )}
+
+                  {state.error && (
+                    <div
+                      className={`mb-6 p-4 rounded-lg flex items-center ${isDarkTheme
+                        ? "bg-red-950/50 border border-red-500/30 text-red-400"
+                        : "bg-red-50 border border-red-200 text-red-700"
+                        }`}
+                    >
+                      <AlertCircle className="w-5 h-5 mr-2" />
+                      {state.error}
+                    </div>
+                  )}
+
+                  {/* WEBSITE BUILDER PAGE - Now using independent route #/website */}
+
+                  {/* STEP 1: INPUT */}
+                  {state.step === "input" && (
+                    <div className="max-w-6xl mx-auto mt-8 flex-1 w-full">
+                      {/* Hero Text */}
+                      <div className="text-center space-y-6">
+                        <div className="space-y-4">
+                          <h2
+                            className={cn(
+                              "text-4xl font-black tracking-tight",
+                              isDarkTheme ? "text-white" : "text-gray-900"
+                            )}
+                          >
+                            {miningMode === "existing-website-audit"
+                              ? (() => {
+                                const title =
+                                  t.auditInputTitle || "Expand Your Reach";
+                                // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
+                                if (state.uiLanguage === "zh") {
+                                  const lastFourChars = title.slice(-4);
+                                  const restChars = title.slice(0, -4);
+                                  return (
+                                    <>
+                                      {restChars}
+                                      <span className="text-emerald-500">
+                                        {lastFourChars}
+                                      </span>
+                                    </>
+                                  );
+                                } else {
+                                  const words = title.split(" ");
+                                  const lastWord = words.pop() || "";
+                                  const restWords = words.join(" ");
+                                  return (
+                                    <>
+                                      {restWords}{" "}
+                                      <span className="text-emerald-500">
+                                        {lastWord}
+                                      </span>
+                                    </>
+                                  );
+                                }
+                              })()
+                              : (() => {
+                                const title = t.inputTitle || "Define Your Niche";
+                                // 如果是中文，取最后四个字符；如果是英文，取最后一个单词
+                                if (state.uiLanguage === "zh") {
+                                  const lastFourChars = title.slice(-4);
+                                  const restChars = title.slice(0, -4);
+                                  return (
+                                    <>
+                                      {restChars}
+                                      <span className="text-emerald-500">
+                                        {lastFourChars}
+                                      </span>
+                                    </>
+                                  );
+                                } else {
+                                  const words = title.split(" ");
+                                  const lastWord = words.pop() || "";
+                                  const restWords = words.join(" ");
+                                  return (
+                                    <>
+                                      {restWords}{" "}
+                                      <span className="text-emerald-500">
+                                        {lastWord}
+                                      </span>
+                                    </>
+                                  );
+                                }
+                              })()}
+                          </h2>
+                          <p
+                            className={cn(
+                              "text-sm max-w-xl mx-auto leading-relaxed px-4",
+                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                            )}
+                          >
+                            {miningMode === "existing-website-audit"
+                              ? t.auditInputDesc
+                              : t.inputDesc}
+                          </p>
+                        </div>
+
+                        {/* Redesigned Major Mode Switcher */}
+                        <div className="flex items-center justify-center pt-2">
                           <div
                             className={cn(
-                              "flex items-center rounded-lg px-4 h-14 transition-all border relative",
+                              "inline-flex p-1 rounded-xl shadow-2xl border",
                               isDarkTheme
-                                ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
-                                : "bg-white border-gray-200 focus-within:border-emerald-500/50"
+                                ? "bg-neutral-900/80 border-white/10"
+                                : "bg-gray-100 border-gray-200"
                             )}
                           >
-                            <Globe
-                              className={cn(
-                                "w-4 h-4 mr-3 shrink-0",
-                                isDarkTheme
-                                  ? "text-neutral-600"
-                                  : "text-gray-400"
-                              )}
-                            />
-                            <input
-                              type="text"
-                              value={
-                                manualWebsiteUrl.trim()
-                                  ? manualWebsiteUrl
-                                  : selectedWebsite?.url || ""
-                              }
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setManualWebsiteUrl(value);
-                                setShowWebsiteDropdown(false); // Close dropdown when typing
-                                // Clear selected website from dropdown when typing manually
-                                if (value.trim()) {
-                                  setSelectedWebsite(null);
-                                }
-                              }}
-                              placeholder={
-                                state.uiLanguage === "zh"
-                                  ? "例如: example.com 或 https://example.com"
-                                  : "e.g., example.com or https://example.com"
-                              }
-                              className={cn(
-                                "bg-transparent border-none outline-none w-full text-sm font-medium flex-1",
-                                isDarkTheme
-                                  ? "text-white placeholder:text-neutral-700"
-                                  : "text-gray-900 placeholder:text-gray-500"
-                              )}
-                              onFocus={() => {
-                                // Load websites when input is focused
-                                if (!websiteListData) {
-                                  loadWebsiteList();
-                                }
-                                setShowWebsiteDropdown(true); // Show dropdown when focused
-                              }}
-                            />
-                            {/* Dropdown Arrow */}
                             <button
-                              type="button"
                               onClick={() => {
-                                if (!websiteListData) {
-                                  loadWebsiteList();
-                                }
-                                setShowWebsiteDropdown(!showWebsiteDropdown);
+                                setMiningMode("blue-ocean");
+                                // 切换到蓝海模式时，清空存量拓新模式的选择（完全分离两种模式）
+                                setBatchSelectedWebsite(null);
+                                setBatchManualWebsiteUrl("");
+                                setBatchUrlValidationStatus("idle");
                               }}
                               className={cn(
-                                "ml-2 p-1 shrink-0 transition-colors",
-                                isDarkTheme
-                                  ? "text-neutral-600 hover:text-white"
-                                  : "text-gray-400 hover:text-gray-600"
+                                "flex items-center space-x-3 px-8 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
+                                miningMode === "blue-ocean"
+                                  ? "bg-emerald-600 text-white shadow-lg"
+                                  : isDarkTheme
+                                    ? "text-neutral-500 hover:text-neutral-300"
+                                    : "text-gray-600 hover:text-gray-900"
                               )}
                             >
-                              <ChevronDown
-                                size={16}
-                                className={cn(
-                                  "transition-transform",
-                                  showWebsiteDropdown && "rotate-180"
-                                )}
-                              />
+                              <Layers size={14} />
+                              <span>
+                                {state.uiLanguage === "zh" ? "蓝海发现" : "Blue Ocean"}
+                              </span>
                             </button>
-                            {/* Validation Status Icon */}
-                            {manualWebsiteUrl.trim() && (
-                              <div className="absolute right-10 top-1/2 -translate-y-1/2">
-                                {urlValidationStatus === "validating" && (
-                                  <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
-                                )}
-                                {urlValidationStatus === "valid" && (
-                                  <CheckCircle className="w-4 h-4 text-emerald-500" />
-                                )}
-                                {urlValidationStatus === "invalid" && (
-                                  <AlertCircle className="w-4 h-4 text-red-500" />
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          {/* Website Dropdown */}
-                          {showWebsiteDropdown && websiteListData && (
-                            <div
+                            <button
+                              onClick={() => {
+                                setMiningMode("existing-website-audit");
+                                // 切换到存量拓新模式时，清空蓝海模式的输入（完全分离两种模式）
+                                setBatchInput("");
+                              }}
                               className={cn(
-                                "absolute z-50 w-full mt-1 rounded-lg border shadow-lg max-h-60 overflow-y-auto",
-                                isDarkTheme
-                                  ? "bg-black/90 border-emerald-500/30"
-                                  : "bg-white border-emerald-500/30"
+                                "flex items-center space-x-3 px-8 py-3 rounded-lg text-xs font-black uppercase tracking-widest transition-all",
+                                miningMode === "existing-website-audit"
+                                  ? "bg-emerald-600 text-white shadow-lg"
+                                  : isDarkTheme
+                                    ? "text-neutral-500 hover:text-neutral-300"
+                                    : "text-gray-600 hover:text-gray-900"
                               )}
                             >
-                              {websiteListData.websites.length === 0 ? (
+                              <RefreshCw size={14} />
+                              <span>
+                                {state.uiLanguage === "zh"
+                                  ? "存量拓新"
+                                  : "Website Audit"}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Sub Tabs */}
+                        <div className="flex items-center justify-center space-x-2 pt-4">
+                          <button
+                            onClick={() => setActiveTab("mining")}
+                            className={cn(
+                              "px-5 py-2 rounded-md text-sm font-medium transition-all border",
+                              activeTab === "mining"
+                                ? "bg-emerald-500 text-white shadow-sm border-emerald-500"
+                                : isDarkTheme
+                                  ? "text-neutral-500 hover:text-neutral-300 border-white/10"
+                                  : "text-gray-600 hover:text-gray-900 border-gray-200"
+                            )}
+                          >
+                            {t.tabMining}
+                          </button>
+                          <button
+                            onClick={() => setActiveTab("batch")}
+                            className={cn(
+                              "px-5 py-2 rounded-md text-sm font-medium transition-all border",
+                              activeTab === "batch"
+                                ? "bg-emerald-500 text-white shadow-sm border-emerald-500"
+                                : isDarkTheme
+                                  ? "text-neutral-500 hover:text-neutral-300 border-white/10"
+                                  : "text-gray-600 hover:text-gray-900 border-gray-200"
+                            )}
+                          >
+                            {t.tabBatch}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Mining Tab Content */}
+                      {activeTab === "mining" && (
+                        <div className="max-w-3xl mx-auto">
+                          {/* Blue Ocean Mode - Show keyword input */}
+                          {miningMode === "blue-ocean" && (
+                            <>
+                              {/* Refine Industry Button */}
+                              <div className="mb-4 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                                  <span
+                                    className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                                      }`}
+                                  >
+                                    {state.uiLanguage === "zh"
+                                      ? "需要帮助？"
+                                      : "Need Help?"}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => setShowMiningGuide(true)}
+                                  className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                                >
+                                  <Lightbulb className="w-3.5 h-3.5" />
+                                  {state.uiLanguage === "zh"
+                                    ? "精确行业"
+                                    : "Refine Industry"}
+                                </button>
+                              </div>
+
+                              {/* Display Saved Mining Configuration */}
+                              {state.miningConfig && (
+                                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Lightbulb className="w-4 h-4 text-emerald-400" />
+                                    <span className="text-sm font-semibold text-emerald-400">
+                                      {state.uiLanguage === "zh"
+                                        ? "已保存的配置"
+                                        : "Saved Configuration"}
+                                    </span>
+                                  </div>
+                                  <div className="space-y-1 text-sm">
+                                    <p
+                                      className={
+                                        isDarkTheme ? "text-white" : "text-gray-700"
+                                      }
+                                    >
+                                      <span className="text-emerald-400 font-medium">
+                                        {state.uiLanguage === "zh"
+                                          ? "行业:"
+                                          : "Industry:"}
+                                      </span>{" "}
+                                      {state.miningConfig.industry}
+                                    </p>
+                                    {state.miningConfig.additionalSuggestions && (
+                                      <p
+                                        className={
+                                          isDarkTheme ? "text-white" : "text-gray-700"
+                                        }
+                                      >
+                                        <span className="text-emerald-400 font-medium">
+                                          {state.uiLanguage === "zh"
+                                            ? "建议:"
+                                            : "Suggestions:"}
+                                        </span>{" "}
+                                        {state.miningConfig.additionalSuggestions}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Redesigned Input Design */}
+                              <div
+                                className={cn(
+                                  "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
+                                  isDarkTheme
+                                    ? "bg-[#0f0f0f] border-white/10"
+                                    : "bg-gray-50 border-gray-200"
+                                )}
+                              >
+                                {/* Target Language Selector */}
+                                <Select
+                                  value={state.targetLanguage}
+                                  onValueChange={(value) =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      targetLanguage: value as TargetLanguage,
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger
+                                    hideIcon
+                                    className={cn(
+                                      "md:w-40 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
+                                      isDarkTheme
+                                        ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
+                                        : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
+                                    )}
+                                  >
+                                    <div className="flex items-center space-x-3 overflow-hidden">
+                                      <Globe
+                                        size={14}
+                                        className={cn(
+                                          "shrink-0",
+                                          isDarkTheme
+                                            ? "text-emerald-500"
+                                            : "text-emerald-600"
+                                        )}
+                                      />
+                                      <span className="text-[11px] font-bold truncate">
+                                        <SelectValue />
+                                      </span>
+                                    </div>
+                                    <ChevronRight
+                                      size={14}
+                                      className={cn(
+                                        "shrink-0",
+                                        isDarkTheme
+                                          ? "text-neutral-700"
+                                          : "text-gray-500"
+                                      )}
+                                    />
+                                  </SelectTrigger>
+                                  <SelectContent
+                                    className={cn(
+                                      isDarkTheme
+                                        ? "bg-black/90 border-emerald-500/30"
+                                        : "bg-white border-emerald-500/30"
+                                    )}
+                                  >
+                                    {LANGUAGES.map((l) => (
+                                      <SelectItem
+                                        key={l.code}
+                                        value={l.code}
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                            : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                        )}
+                                      >
+                                        {l.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+
+                                {/* Input Field */}
                                 <div
                                   className={cn(
-                                    "p-4 text-center text-sm",
+                                    "flex-1 rounded-lg flex items-center px-4 h-14 transition-all border",
                                     isDarkTheme
-                                      ? "text-zinc-400"
-                                      : "text-gray-500"
+                                      ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
+                                      : "bg-white border-gray-200 focus-within:border-emerald-500/50"
+                                  )}
+                                >
+                                  <Search
+                                    className={cn(
+                                      isDarkTheme ? "text-neutral-600" : "text-gray-400"
+                                    )}
+                                    size={18}
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder={t.placeholder}
+                                    className={cn(
+                                      "bg-transparent border-none outline-none w-full text-sm font-medium px-4 h-14",
+                                      isDarkTheme
+                                        ? "text-white placeholder:text-neutral-700"
+                                        : "text-gray-900 placeholder:text-gray-500"
+                                    )}
+                                    value={state.seedKeyword}
+                                    onChange={(e) =>
+                                      setState((prev) => ({
+                                        ...prev,
+                                        seedKeyword: e.target.value,
+                                      }))
+                                    }
+                                    onKeyDown={(e) =>
+                                      e.key === "Enter" && startMining(false)
+                                    }
+                                  />
+                                </div>
+                                <button
+                                  onClick={() => startMining(false)}
+                                  disabled={!state.seedKeyword.trim()}
+                                  className={cn(
+                                    "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
+                                    isDarkTheme && "shadow-emerald-900/20"
+                                  )}
+                                >
+                                  {t.btnStart}
+                                </button>
+                              </div>
+                            </>
+                          )}
+
+                          {/* Existing Website Audit Mode - Show website selector and audit button */}
+                          {miningMode === "existing-website-audit" && (
+                            <>
+                              {/* Refine Industry Button - 仅在非策略模式下显示（策略模式有行业上下文模块） */}
+                              {!useStrategyMode && (
+                                <div className="mb-4 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                                    <span
+                                      className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                                        }`}
+                                    >
+                                      {state.uiLanguage === "zh"
+                                        ? "需要帮助？"
+                                        : "Need Help?"}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={() => setShowMiningGuide(true)}
+                                    className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                                  >
+                                    <Lightbulb className="w-3.5 h-3.5" />
+                                    {state.uiLanguage === "zh"
+                                      ? "精确行业"
+                                      : "Refine Industry"}
+                                  </button>
+                                </div>
+                              )}
+
+                              {/* Display Saved Mining Configuration - 仅在非策略模式下显示 */}
+                              {!useStrategyMode && state.miningConfig && (
+                                <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Lightbulb className="w-4 h-4 text-emerald-400" />
+                                    <span className="text-sm font-semibold text-emerald-400">
+                                      {state.uiLanguage === "zh"
+                                        ? "已保存的配置"
+                                        : "Saved Configuration"}
+                                    </span>
+                                  </div>
+                                  <div className="space-y-1 text-sm">
+                                    <p
+                                      className={
+                                        isDarkTheme ? "text-white" : "text-gray-700"
+                                      }
+                                    >
+                                      <span className="text-emerald-400 font-medium">
+                                        {state.uiLanguage === "zh"
+                                          ? "行业:"
+                                          : "Industry:"}
+                                      </span>{" "}
+                                      {state.miningConfig.industry}
+                                    </p>
+                                    {state.miningConfig.additionalSuggestions && (
+                                      <p
+                                        className={
+                                          isDarkTheme ? "text-white" : "text-gray-700"
+                                        }
+                                      >
+                                        <span className="text-emerald-400 font-medium">
+                                          {state.uiLanguage === "zh"
+                                            ? "建议:"
+                                            : "Suggestions:"}
+                                        </span>{" "}
+                                        {state.miningConfig.additionalSuggestions}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 策略模式下的顶部间距 */}
+                              {useStrategyMode && <div className="mt-4" />}
+
+                              {/* Redesigned Input Design - Similar to Blue Ocean Mode */}
+                              <div
+                                className={cn(
+                                  "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
+                                  isDarkTheme
+                                    ? "bg-[#0f0f0f] border-white/10"
+                                    : "bg-gray-50 border-gray-200"
+                                )}
+                              >
+                                {/* Target Language Selector */}
+                                <Select
+                                  value={state.targetLanguage}
+                                  onValueChange={(value) =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      targetLanguage: value as TargetLanguage,
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger
+                                    hideIcon
+                                    className={cn(
+                                      "md:w-48 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
+                                      isDarkTheme
+                                        ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
+                                        : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
+                                    )}
+                                  >
+                                    <div className="flex items-center space-x-3 overflow-hidden">
+                                      <Globe
+                                        size={14}
+                                        className={cn(
+                                          "shrink-0",
+                                          isDarkTheme
+                                            ? "text-emerald-500"
+                                            : "text-emerald-600"
+                                        )}
+                                      />
+                                      <span className="text-[11px] font-bold truncate">
+                                        <SelectValue />
+                                      </span>
+                                    </div>
+                                    <ChevronRight
+                                      size={14}
+                                      className={cn(
+                                        "shrink-0",
+                                        isDarkTheme
+                                          ? "text-neutral-700"
+                                          : "text-gray-500"
+                                      )}
+                                    />
+                                  </SelectTrigger>
+                                  <SelectContent
+                                    className={cn(
+                                      isDarkTheme
+                                        ? "bg-black/90 border-emerald-500/30"
+                                        : "bg-white border-emerald-500/30"
+                                    )}
+                                  >
+                                    {LANGUAGES.map((l) => (
+                                      <SelectItem
+                                        key={l.code}
+                                        value={l.code}
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                            : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                        )}
+                                      >
+                                        {l.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+
+                                {/* Website Input Field with Dropdown */}
+                                <div className="flex-1 relative website-dropdown-container">
+                                  <div
+                                    className={cn(
+                                      "flex items-center rounded-lg px-4 h-14 transition-all border relative",
+                                      isDarkTheme
+                                        ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
+                                        : "bg-white border-gray-200 focus-within:border-emerald-500/50"
+                                    )}
+                                  >
+                                    <Globe
+                                      className={cn(
+                                        "w-4 h-4 mr-3 shrink-0",
+                                        isDarkTheme
+                                          ? "text-neutral-600"
+                                          : "text-gray-400"
+                                      )}
+                                    />
+                                    <input
+                                      type="text"
+                                      value={
+                                        manualWebsiteUrl.trim()
+                                          ? manualWebsiteUrl
+                                          : selectedWebsite?.url || ""
+                                      }
+                                      onChange={(e) => {
+                                        const value = e.target.value;
+                                        setManualWebsiteUrl(value);
+                                        setShowWebsiteDropdown(false); // Close dropdown when typing
+                                        // Clear selected website from dropdown when typing manually
+                                        if (value.trim()) {
+                                          setSelectedWebsite(null);
+                                        }
+                                      }}
+                                      placeholder={
+                                        state.uiLanguage === "zh"
+                                          ? "例如: example.com 或 https://example.com"
+                                          : "e.g., example.com or https://example.com"
+                                      }
+                                      className={cn(
+                                        "bg-transparent border-none outline-none w-full text-sm font-medium flex-1",
+                                        isDarkTheme
+                                          ? "text-white placeholder:text-neutral-700"
+                                          : "text-gray-900 placeholder:text-gray-500"
+                                      )}
+                                      onFocus={() => {
+                                        // Load websites when input is focused
+                                        if (!websiteListData) {
+                                          loadWebsiteList();
+                                        }
+                                        setShowWebsiteDropdown(true); // Show dropdown when focused
+                                      }}
+                                    />
+                                    {/* Dropdown Arrow */}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (!websiteListData) {
+                                          loadWebsiteList();
+                                        }
+                                        setShowWebsiteDropdown(!showWebsiteDropdown);
+                                      }}
+                                      className={cn(
+                                        "ml-2 p-1 shrink-0 transition-colors",
+                                        isDarkTheme
+                                          ? "text-neutral-600 hover:text-white"
+                                          : "text-gray-400 hover:text-gray-600"
+                                      )}
+                                    >
+                                      <ChevronDown
+                                        size={16}
+                                        className={cn(
+                                          "transition-transform",
+                                          showWebsiteDropdown && "rotate-180"
+                                        )}
+                                      />
+                                    </button>
+                                    {/* Validation Status Icon */}
+                                    {manualWebsiteUrl.trim() && (
+                                      <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                                        {urlValidationStatus === "validating" && (
+                                          <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
+                                        )}
+                                        {urlValidationStatus === "valid" && (
+                                          <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                        )}
+                                        {urlValidationStatus === "invalid" && (
+                                          <AlertCircle className="w-4 h-4 text-red-500" />
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {/* Website Dropdown */}
+                                  {showWebsiteDropdown && websiteListData && (
+                                    <div
+                                      className={cn(
+                                        "absolute z-50 w-full mt-1 rounded-lg border shadow-lg max-h-60 overflow-y-auto",
+                                        isDarkTheme
+                                          ? "bg-black/90 border-emerald-500/30"
+                                          : "bg-white border-emerald-500/30"
+                                      )}
+                                    >
+                                      {websiteListData.websites.length === 0 ? (
+                                        <div
+                                          className={cn(
+                                            "p-4 text-center text-sm",
+                                            isDarkTheme
+                                              ? "text-zinc-400"
+                                              : "text-gray-500"
+                                          )}
+                                        >
+                                          {state.uiLanguage === "zh"
+                                            ? "还没有绑定网站"
+                                            : "No websites bound yet"}
+                                        </div>
+                                      ) : (
+                                        websiteListData.websites.map((website) => (
+                                          <button
+                                            key={website.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setSelectedWebsite(website);
+                                              setManualWebsiteUrl("");
+                                              setUrlValidationStatus("idle");
+                                              setShowWebsiteDropdown(false);
+                                            }}
+                                            className={cn(
+                                              "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors flex items-center justify-between",
+                                              selectedWebsite?.id === website.id &&
+                                              "bg-emerald-500/20",
+                                              isDarkTheme
+                                                ? "text-white"
+                                                : "text-gray-900"
+                                            )}
+                                          >
+                                            <span className="truncate">
+                                              {website.url}
+                                            </span>
+                                            {website.isDefault && (
+                                              <Badge
+                                                variant="secondary"
+                                                className="flex-shrink-0 text-xs ml-2"
+                                              >
+                                                <CheckCircle className="w-2.5 h-2.5 mr-0.5" />
+                                                {state.uiLanguage === "zh"
+                                                  ? "默认"
+                                                  : "Default"}
+                                              </Badge>
+                                            )}
+                                          </button>
+                                        ))
+                                      )}
+                                    </div>
+                                  )}
+                                  {/* Validation Status Message */}
+                                  {manualWebsiteUrl.trim() &&
+                                    urlValidationStatus !== "idle" && (
+                                      <div
+                                        className={cn(
+                                          "text-xs flex items-center gap-1 mt-1",
+                                          urlValidationStatus === "valid" &&
+                                          "text-emerald-500",
+                                          urlValidationStatus === "invalid" &&
+                                          "text-red-500",
+                                          urlValidationStatus === "validating" &&
+                                          "text-yellow-500"
+                                        )}
+                                      >
+                                        {urlValidationStatus === "validating" && (
+                                          <>
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                            <span>
+                                              {state.uiLanguage === "zh"
+                                                ? "正在验证..."
+                                                : "Validating..."}
+                                            </span>
+                                          </>
+                                        )}
+                                        {urlValidationStatus === "valid" && (
+                                          <>
+                                            <CheckCircle className="w-3 h-3" />
+                                            <span>
+                                              {state.uiLanguage === "zh"
+                                                ? "网址有效，将用于关键词挖掘分析"
+                                                : "URL valid, will be used for keyword mining analysis"}
+                                            </span>
+                                          </>
+                                        )}
+                                        {urlValidationStatus === "invalid" && (
+                                          <>
+                                            <AlertCircle className="w-3 h-3" />
+                                            <span>
+                                              {state.uiLanguage === "zh"
+                                                ? "请输入有效的网址"
+                                                : "Please enter a valid URL"}
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
+                                    )}
+                                </div>
+                                <button
+                                  onClick={() => startMining(false)}
+                                  disabled={!selectedWebsite}
+                                  className={cn(
+                                    "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
+                                    isDarkTheme && "shadow-emerald-900/20"
                                   )}
                                 >
                                   {state.uiLanguage === "zh"
-                                    ? "还没有绑定网站"
-                                    : "No websites bound yet"}
+                                    ? "开始分析网站"
+                                    : "Start Website Audit"}
+                                </button>
+                              </div>
+
+                              {/* Strategy Selector - 策略模块化挖词 */}
+                              <section className="space-y-4 mt-8">
+                                <div className="flex items-center justify-between px-2">
+                                  <div className="flex items-center space-x-2">
+                                    <Layers
+                                      size={14}
+                                      className={cn(
+                                        isDarkTheme
+                                          ? "text-emerald-500"
+                                          : "text-emerald-600"
+                                      )}
+                                    />
+                                    <h3
+                                      className={cn(
+                                        "text-[10px] font-black uppercase tracking-[0.2em]",
+                                        isDarkTheme
+                                          ? "text-neutral-400"
+                                          : "text-gray-600"
+                                      )}
+                                    >
+                                      {state.uiLanguage === "zh"
+                                        ? "挖词策略模块"
+                                        : "Mining Strategy Modules"}
+                                    </h3>
+                                  </div>
                                 </div>
-                              ) : (
-                                websiteListData.websites.map((website) => (
-                                  <button
-                                    key={website.id}
-                                    type="button"
-                                    onClick={() => {
-                                      setSelectedWebsite(website);
-                                      setManualWebsiteUrl("");
-                                      setUrlValidationStatus("idle");
-                                      setShowWebsiteDropdown(false);
-                                    }}
+                                {/* 策略模式选择器（存量拓新始终使用策略模式） */}
+                                <div
+                                  className={cn(
+                                    "p-4 rounded-lg border",
+                                    isDarkTheme
+                                      ? "bg-black/40 border-emerald-500/20"
+                                      : "bg-white border-emerald-500/30"
+                                  )}
+                                >
+                                  <StrategySelector
+                                    value={strategyConfig}
+                                    onChange={setStrategyConfig}
+                                    maxTotalKeywords={50}
+                                    language={state.uiLanguage}
+                                    hasHighPerformerKeywords={false}
+                                    isDarkTheme={isDarkTheme}
+                                  />
+                                </div>
+                              </section>
+
+                              {/* Mining Settings Panel - Same as blue-ocean mode */}
+                              {!useStrategyMode && (
+                                <section className="space-y-4 mt-8">
+                                  <div className="flex items-center space-x-2 px-2">
+                                    <Settings
+                                      size={14}
+                                      className={cn(
+                                        isDarkTheme
+                                          ? "text-emerald-500"
+                                          : "text-emerald-600"
+                                      )}
+                                    />
+                                    <h3
+                                      className={cn(
+                                        "text-[10px] font-black uppercase tracking-[0.2em]",
+                                        isDarkTheme
+                                          ? "text-neutral-400"
+                                          : "text-gray-600"
+                                      )}
+                                    >
+                                      {state.uiLanguage === "zh"
+                                        ? "挖词设置"
+                                        : "Mining Settings"}
+                                    </h3>
+                                  </div>
+                                  <div
                                     className={cn(
-                                      "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors flex items-center justify-between",
-                                      selectedWebsite?.id === website.id &&
-                                      "bg-emerald-500/20",
+                                      "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
                                       isDarkTheme
-                                        ? "text-white"
-                                        : "text-gray-900"
+                                        ? "bg-black/40 border-emerald-500/20"
+                                        : "bg-white border-emerald-500/30"
                                     )}
                                   >
-                                    <span className="truncate">
-                                      {website.url}
-                                    </span>
-                                    {website.isDefault && (
-                                      <Badge
-                                        variant="secondary"
-                                        className="flex-shrink-0 text-xs ml-2"
+                                    {/* Words Per Round */}
+                                    <div className="space-y-2">
+                                      <label
+                                        className={cn(
+                                          "flex items-center gap-2 text-xs font-semibold",
+                                          isDarkTheme
+                                            ? "text-neutral-400"
+                                            : "text-gray-600"
+                                        )}
                                       >
-                                        <CheckCircle className="w-2.5 h-2.5 mr-0.5" />
+                                        <Cpu
+                                          size={14}
+                                          className={cn(
+                                            isDarkTheme
+                                              ? "text-emerald-500"
+                                              : "text-emerald-600"
+                                          )}
+                                        />
                                         {state.uiLanguage === "zh"
-                                          ? "默认"
-                                          : "Default"}
-                                      </Badge>
-                                    )}
-                                  </button>
-                                ))
+                                          ? "每轮词语数"
+                                          : "Words Per Round"}
+                                      </label>
+                                      <Input
+                                        type="number"
+                                        min="5"
+                                        max="20"
+                                        value={state.wordsPerRound}
+                                        onChange={(e) =>
+                                          setState((prev) => ({
+                                            ...prev,
+                                            wordsPerRound: Math.max(
+                                              5,
+                                              Math.min(
+                                                20,
+                                                parseInt(e.target.value) || 10
+                                              )
+                                            ),
+                                          }))
+                                        }
+                                        className={cn(
+                                          "text-sm font-medium h-10",
+                                          isDarkTheme
+                                            ? "border-white/10 bg-white/5 text-white"
+                                            : "border-gray-200 bg-white text-gray-900"
+                                        )}
+                                      />
+                                      <p
+                                        className={cn(
+                                          "text-[10px]",
+                                          isDarkTheme
+                                            ? "text-neutral-600"
+                                            : "text-gray-500"
+                                        )}
+                                      >
+                                        {state.uiLanguage === "zh"
+                                          ? "范围: 5-20"
+                                          : "Range: 5-20"}
+                                      </p>
+                                    </div>
+
+                                    {/* Mining Strategy */}
+                                    <div className="space-y-2">
+                                      <label
+                                        className={cn(
+                                          "flex items-center gap-2 text-xs font-semibold",
+                                          isDarkTheme
+                                            ? "text-neutral-400"
+                                            : "text-gray-600"
+                                        )}
+                                      >
+                                        <LayoutGrid
+                                          size={14}
+                                          className={cn(
+                                            isDarkTheme
+                                              ? "text-emerald-500"
+                                              : "text-emerald-600"
+                                          )}
+                                        />
+                                        {state.uiLanguage === "zh"
+                                          ? "挖掘策略"
+                                          : "Mining Strategy"}
+                                      </label>
+                                      <Select
+                                        value={state.miningStrategy}
+                                        onValueChange={(value) =>
+                                          setState((prev) => ({
+                                            ...prev,
+                                            miningStrategy: value as
+                                              | "horizontal"
+                                              | "vertical",
+                                          }))
+                                        }
+                                      >
+                                        <SelectTrigger
+                                          className={cn(
+                                            "text-sm font-medium h-10",
+                                            isDarkTheme
+                                              ? "border-white/10 bg-white/5 text-white"
+                                              : "border-gray-200 bg-white text-gray-900"
+                                          )}
+                                        >
+                                          <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent
+                                          className={cn(
+                                            isDarkTheme
+                                              ? "bg-black/90 border-emerald-500/30"
+                                              : "bg-white border-emerald-500/30"
+                                          )}
+                                        >
+                                          <SelectItem
+                                            value="horizontal"
+                                            className={cn(
+                                              isDarkTheme
+                                                ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                                : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                            )}
+                                          >
+                                            {state.uiLanguage === "zh"
+                                              ? "横向挖掘(广泛主题)"
+                                              : "Horizontal Mining (Broad Topics)"}
+                                          </SelectItem>
+                                          <SelectItem
+                                            value="vertical"
+                                            className={cn(
+                                              isDarkTheme
+                                                ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                                : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                            )}
+                                          >
+                                            {state.uiLanguage === "zh"
+                                              ? "纵向挖掘(深度挖掘)"
+                                              : "Vertical Mining (Deep Dive)"}
+                                          </SelectItem>
+                                        </SelectContent>
+                                      </Select>
+                                      <p
+                                        className={cn(
+                                          "text-[10px]",
+                                          isDarkTheme
+                                            ? "text-neutral-600"
+                                            : "text-gray-500"
+                                        )}
+                                      >
+                                        {state.uiLanguage === "zh"
+                                          ? "探索不同的平行主题"
+                                          : "Explore different parallel topics"}
+                                      </p>
+                                    </div>
+
+                                    {/* Quick Mining (Skip SERP Verification) */}
+                                    <div className="space-y-2 md:col-span-2">
+                                      <label
+                                        className={cn(
+                                          "flex items-center gap-3 cursor-pointer p-4 rounded-lg border transition-all",
+                                          state.skipSerpVerification
+                                            ? isDarkTheme
+                                              ? "bg-emerald-500/10 border-emerald-500/30"
+                                              : "bg-emerald-50 border-emerald-500/30"
+                                            : isDarkTheme
+                                              ? "bg-black/20 border-white/10 hover:border-white/20"
+                                              : "bg-gray-50 border-gray-200 hover:border-gray-300"
+                                        )}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={state.skipSerpVerification}
+                                          onChange={(e) =>
+                                            setState((prev) => ({
+                                              ...prev,
+                                              skipSerpVerification: e.target.checked,
+                                            }))
+                                          }
+                                          className="w-4 h-4 text-emerald-500 bg-zinc-700 border-zinc-600 rounded focus:ring-emerald-500 focus:ring-2"
+                                        />
+                                        <div className="flex-1">
+                                          <div
+                                            className={cn(
+                                              "flex items-center gap-2 text-sm font-semibold",
+                                              state.skipSerpVerification
+                                                ? "text-emerald-500"
+                                                : isDarkTheme
+                                                  ? "text-neutral-300"
+                                                  : "text-gray-700"
+                                            )}
+                                          >
+                                            <Zap
+                                              size={16}
+                                              className={cn(
+                                                state.skipSerpVerification
+                                                  ? "text-emerald-500"
+                                                  : isDarkTheme
+                                                    ? "text-neutral-500"
+                                                    : "text-gray-400"
+                                              )}
+                                            />
+                                            {state.uiLanguage === "zh"
+                                              ? "快速挖词（跳过SERP验证）"
+                                              : "Quick Mining (Skip SERP Verification)"}
+                                          </div>
+                                          <p
+                                            className={cn(
+                                              "text-[10px] mt-1",
+                                              isDarkTheme
+                                                ? "text-neutral-600"
+                                                : "text-gray-500"
+                                            )}
+                                          >
+                                            {state.uiLanguage === "zh"
+                                              ? "跳过竞对SERP分析，只生成关键词和获取基础数据。适合新种子词的快速探索。"
+                                              : "Skip competitor SERP analysis, only generate keywords and fetch basic data. Ideal for quick exploration of new seed keywords."}
+                                          </p>
+                                          {state.skipSerpVerification && (
+                                            <div className="mt-2 text-[10px] text-emerald-400 flex items-center gap-1">
+                                              <Zap size={12} />
+                                              <span>
+                                                {state.uiLanguage === "zh"
+                                                  ? "预计速度提升 3-5倍"
+                                                  : "Expected 3-5x faster"}
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </label>
+                                    </div>
+                                  </div>
+                                </section>
                               )}
-                            </div>
+                            </>
                           )}
-                          {/* Validation Status Message */}
-                          {manualWebsiteUrl.trim() &&
-                            urlValidationStatus !== "idle" && (
+
+                          {/* Mining Settings Panel - Only show for blue-ocean mode */}
+                          {miningMode === "blue-ocean" && (
+                            <section className="space-y-4 mt-8">
+                              <div className="flex items-center space-x-2 px-2">
+                                <Settings
+                                  size={14}
+                                  className={cn(
+                                    isDarkTheme
+                                      ? "text-emerald-500"
+                                      : "text-emerald-600"
+                                  )}
+                                />
+                                <h3
+                                  className={cn(
+                                    "text-[10px] font-black uppercase tracking-[0.2em]",
+                                    isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                                  )}
+                                >
+                                  {state.uiLanguage === "zh"
+                                    ? "挖词设置"
+                                    : "Mining Settings"}
+                                </h3>
+                              </div>
                               <div
                                 className={cn(
-                                  "text-xs flex items-center gap-1 mt-1",
-                                  urlValidationStatus === "valid" &&
-                                  "text-emerald-500",
-                                  urlValidationStatus === "invalid" &&
-                                  "text-red-500",
-                                  urlValidationStatus === "validating" &&
-                                  "text-yellow-500"
+                                  "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
+                                  isDarkTheme
+                                    ? "bg-black/40 border-emerald-500/20"
+                                    : "bg-white border-emerald-500/30"
                                 )}
                               >
-                                {urlValidationStatus === "validating" && (
-                                  <>
-                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                    <span>
+                                {/* Words Per Round */}
+                                <div className="space-y-2">
+                                  <label
+                                    className={cn(
+                                      "flex items-center gap-2 text-xs font-semibold",
+                                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                                    )}
+                                  >
+                                    <Cpu
+                                      size={14}
+                                      className={cn(
+                                        isDarkTheme
+                                          ? "text-emerald-500"
+                                          : "text-emerald-600"
+                                      )}
+                                    />
+                                    {state.uiLanguage === "zh"
+                                      ? "每轮词语数"
+                                      : "Words Per Round"}
+                                  </label>
+                                  <Input
+                                    type="number"
+                                    min="5"
+                                    max="20"
+                                    value={state.wordsPerRound}
+                                    onChange={(e) =>
+                                      setState((prev) => ({
+                                        ...prev,
+                                        wordsPerRound: Math.max(
+                                          5,
+                                          Math.min(20, parseInt(e.target.value) || 10)
+                                        ),
+                                      }))
+                                    }
+                                    className={cn(
+                                      "text-sm font-medium h-10",
+                                      isDarkTheme
+                                        ? "border-white/10 bg-white/5 text-white"
+                                        : "border-gray-200 bg-white text-gray-900"
+                                    )}
+                                  />
+                                  <p
+                                    className={cn(
+                                      "text-[10px]",
+                                      isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                                    )}
+                                  >
+                                    {state.uiLanguage === "zh"
+                                      ? "范围: 5-20"
+                                      : "Range: 5-20"}
+                                  </p>
+                                </div>
+
+                                {/* Mining Strategy */}
+                                <div className="space-y-2">
+                                  <label
+                                    className={cn(
+                                      "flex items-center gap-2 text-xs font-semibold",
+                                      isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                                    )}
+                                  >
+                                    <LayoutGrid
+                                      size={14}
+                                      className={cn(
+                                        isDarkTheme
+                                          ? "text-emerald-500"
+                                          : "text-emerald-600"
+                                      )}
+                                    />
+                                    {state.uiLanguage === "zh"
+                                      ? "挖掘策略"
+                                      : "Mining Strategy"}
+                                  </label>
+                                  <Select
+                                    value={state.miningStrategy}
+                                    onValueChange={(value) =>
+                                      setState((prev) => ({
+                                        ...prev,
+                                        miningStrategy: value as
+                                          | "horizontal"
+                                          | "vertical",
+                                      }))
+                                    }
+                                  >
+                                    <SelectTrigger
+                                      className={cn(
+                                        "text-sm font-medium h-10",
+                                        isDarkTheme
+                                          ? "border-white/10 bg-white/5 text-white"
+                                          : "border-gray-200 bg-white text-gray-900"
+                                      )}
+                                    >
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent
+                                      className={cn(
+                                        isDarkTheme
+                                          ? "bg-black/90 border-emerald-500/30"
+                                          : "bg-white border-emerald-500/30"
+                                      )}
+                                    >
+                                      <SelectItem
+                                        value="horizontal"
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                            : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                        )}
+                                      >
+                                        {state.uiLanguage === "zh"
+                                          ? "横向挖掘(广泛主题)"
+                                          : "Horizontal Mining (Broad Topics)"}
+                                      </SelectItem>
+                                      <SelectItem
+                                        value="vertical"
+                                        className={cn(
+                                          isDarkTheme
+                                            ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                            : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                        )}
+                                      >
+                                        {state.uiLanguage === "zh"
+                                          ? "纵向挖掘(深度挖掘)"
+                                          : "Vertical Mining (Deep Dive)"}
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <p
+                                    className={cn(
+                                      "text-[10px]",
+                                      isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                                    )}
+                                  >
+                                    {state.uiLanguage === "zh"
+                                      ? "探索不同的平行主题"
+                                      : "Explore different parallel topics"}
+                                  </p>
+                                </div>
+
+                                {/* Quick Mining (Skip SERP Verification) */}
+                                <div className="space-y-2 md:col-span-2">
+                                  <label
+                                    className={cn(
+                                      "flex items-center gap-3 cursor-pointer p-4 rounded-lg border transition-all",
+                                      state.skipSerpVerification
+                                        ? isDarkTheme
+                                          ? "bg-emerald-500/10 border-emerald-500/30"
+                                          : "bg-emerald-50 border-emerald-500/30"
+                                        : isDarkTheme
+                                          ? "bg-black/20 border-white/10 hover:border-white/20"
+                                          : "bg-gray-50 border-gray-200 hover:border-gray-300"
+                                    )}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={state.skipSerpVerification}
+                                      onChange={(e) =>
+                                        setState((prev) => ({
+                                          ...prev,
+                                          skipSerpVerification: e.target.checked,
+                                        }))
+                                      }
+                                      className="w-4 h-4 text-emerald-500 bg-zinc-700 border-zinc-600 rounded focus:ring-emerald-500 focus:ring-2"
+                                    />
+                                    <div className="flex-1">
+                                      <div
+                                        className={cn(
+                                          "flex items-center gap-2 text-sm font-semibold",
+                                          state.skipSerpVerification
+                                            ? "text-emerald-500"
+                                            : isDarkTheme
+                                              ? "text-neutral-300"
+                                              : "text-gray-700"
+                                        )}
+                                      >
+                                        <Zap
+                                          size={16}
+                                          className={cn(
+                                            state.skipSerpVerification
+                                              ? "text-emerald-500"
+                                              : isDarkTheme
+                                                ? "text-neutral-500"
+                                                : "text-gray-400"
+                                          )}
+                                        />
+                                        {state.uiLanguage === "zh"
+                                          ? "快速挖词（跳过SERP验证）"
+                                          : "Quick Mining (Skip SERP Verification)"}
+                                      </div>
+                                      <p
+                                        className={cn(
+                                          "text-[10px] mt-1",
+                                          isDarkTheme
+                                            ? "text-neutral-600"
+                                            : "text-gray-500"
+                                        )}
+                                      >
+                                        {state.uiLanguage === "zh"
+                                          ? "跳过竞对SERP分析，只生成关键词和获取基础数据。适合新种子词的快速探索。"
+                                          : "Skip competitor SERP analysis, only generate keywords and fetch basic data. Ideal for quick exploration of new seed keywords."}
+                                      </p>
+                                      {state.skipSerpVerification && (
+                                        <div className="mt-2 text-[10px] text-emerald-400 flex items-center gap-1">
+                                          <Zap size={12} />
+                                          <span>
+                                            {state.uiLanguage === "zh"
+                                              ? "预计速度提升 3-5倍"
+                                              : "Expected 3-5x faster"}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </label>
+                                </div>
+                              </div>
+                            </section>
+                          )}
+
+                          {/* Mining Archive List */}
+                          {state.archives.length > 0 && (
+                            <section className="space-y-4 mt-12">
+                              <div className="flex items-center space-x-2 px-2">
+                                <History
+                                  size={14}
+                                  className={cn(
+                                    isDarkTheme
+                                      ? "text-emerald-500"
+                                      : "text-emerald-600"
+                                  )}
+                                />
+                                <h3
+                                  className={cn(
+                                    "text-[10px] font-black uppercase tracking-[0.2em]",
+                                    isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                                  )}
+                                >
+                                  {t.miningArchives}
+                                </h3>
+                              </div>
+                              <div className="space-y-2 pb-12">
+                                {state.archives.map((arch) => (
+                                  <div
+                                    key={arch.id}
+                                    onClick={() => loadArchive(arch)}
+                                    className={cn(
+                                      "group flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer",
+                                      isDarkTheme
+                                        ? "bg-[#0a0a0a] border-white/5 hover:border-emerald-500/30"
+                                        : "bg-white border-gray-200 hover:border-emerald-500/30"
+                                    )}
+                                  >
+                                    <div className="flex items-center space-x-4">
+                                      <div
+                                        className={cn(
+                                          "w-10 h-10 rounded flex items-center justify-center transition-all group-hover:scale-105",
+                                          isDarkTheme
+                                            ? "bg-neutral-900 border border-white/10 text-emerald-500"
+                                            : "bg-gray-100 border border-gray-200 text-emerald-600"
+                                        )}
+                                      >
+                                        {miningMode === "blue-ocean" ? (
+                                          <Search size={16} />
+                                        ) : (
+                                          <Link2 size={16} />
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div className="flex items-center space-x-2">
+                                          <span
+                                            className={cn(
+                                              "text-sm font-bold transition-colors",
+                                              isDarkTheme
+                                                ? "text-white group-hover:text-emerald-400"
+                                                : "text-gray-900 group-hover:text-emerald-600"
+                                            )}
+                                          >
+                                            {arch.taskName || arch.seedKeyword}
+                                          </span>
+                                          <span
+                                            className={cn(
+                                              "px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase",
+                                              isDarkTheme
+                                                ? "bg-emerald-500/10 text-emerald-500"
+                                                : "bg-emerald-50 text-emerald-600"
+                                            )}
+                                          >
+                                            {arch.targetLanguage.toUpperCase()}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center space-x-4 mt-1">
+                                          <span
+                                            className={cn(
+                                              "text-[10px] mono",
+                                              isDarkTheme
+                                                ? "text-neutral-600"
+                                                : "text-gray-500"
+                                            )}
+                                          >
+                                            {new Date(arch.timestamp).toLocaleString()}
+                                          </span>
+                                          <span
+                                            className={cn(
+                                              "text-[10px] font-bold uppercase tracking-widest",
+                                              isDarkTheme
+                                                ? "text-neutral-500"
+                                                : "text-gray-600"
+                                            )}
+                                          >
+                                            {arch.keywords.length}{" "}
+                                            {state.uiLanguage === "zh"
+                                              ? "个关键词"
+                                              : "keywords discovered"}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={(e) => deleteArchive(arch.id, e)}
+                                      className={cn(
+                                        "p-2 transition-colors opacity-0 group-hover:opacity-100",
+                                        isDarkTheme
+                                          ? "text-neutral-700 hover:text-red-400"
+                                          : "text-gray-400 hover:text-red-600"
+                                      )}
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </section>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Batch Translation Tab Content */}
+                      {activeTab === "batch" && (
+                        <div className="max-w-3xl mx-auto">
+                          {/* Refine Industry Button */}
+                          <div className="mb-4 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <BrainCircuit className="w-5 h-5 text-emerald-400" />
+                              <span
+                                className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                                  }`}
+                              >
+                                {state.uiLanguage === "zh"
+                                  ? miningMode === "existing-website-audit"
+                                    ? "网站现有关键词的跨市场分析"
+                                    : "将翻译keyword到目标语言并分析蓝海机会"
+                                  : miningMode === "existing-website-audit"
+                                    ? "Cross-market analysis of existing website keywords"
+                                    : "Will translate keywords to target language and analyze blue ocean opportunities"}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => setShowMiningGuide(true)}
+                              className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
+                            >
+                              <Lightbulb className="w-3.5 h-3.5" />
+                              {state.uiLanguage === "zh"
+                                ? "精确行业"
+                                : "Refine Industry"}
+                            </button>
+                          </div>
+
+                          {/* Display Saved Mining Configuration */}
+                          {state.miningConfig && (
+                            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Lightbulb className="w-4 h-4 text-emerald-400" />
+                                <span className="text-sm font-semibold text-emerald-400">
+                                  {state.uiLanguage === "zh"
+                                    ? "已保存的配置"
+                                    : "Saved Configuration"}
+                                </span>
+                              </div>
+                              <div className="space-y-1 text-sm">
+                                <p
+                                  className={
+                                    isDarkTheme ? "text-white" : "text-gray-700"
+                                  }
+                                >
+                                  <span className="text-emerald-400 font-medium">
+                                    {state.uiLanguage === "zh" ? "行业:" : "Industry:"}
+                                  </span>{" "}
+                                  {state.miningConfig.industry}
+                                </p>
+                                {state.miningConfig.additionalSuggestions && (
+                                  <p
+                                    className={
+                                      isDarkTheme ? "text-white" : "text-gray-700"
+                                    }
+                                  >
+                                    <span className="text-emerald-400 font-medium">
                                       {state.uiLanguage === "zh"
-                                        ? "正在验证..."
-                                        : "Validating..."}
-                                    </span>
-                                  </>
-                                )}
-                                {urlValidationStatus === "valid" && (
-                                  <>
-                                    <CheckCircle className="w-3 h-3" />
-                                    <span>
-                                      {state.uiLanguage === "zh"
-                                        ? "网址有效，将用于关键词挖掘分析"
-                                        : "URL valid, will be used for keyword mining analysis"}
-                                    </span>
-                                  </>
-                                )}
-                                {urlValidationStatus === "invalid" && (
-                                  <>
-                                    <AlertCircle className="w-3 h-3" />
-                                    <span>
-                                      {state.uiLanguage === "zh"
-                                        ? "请输入有效的网址"
-                                        : "Please enter a valid URL"}
-                                    </span>
-                                  </>
+                                        ? "建议:"
+                                        : "Suggestions:"}
+                                    </span>{" "}
+                                    {state.miningConfig.additionalSuggestions}
+                                  </p>
                                 )}
                               </div>
-                            )}
-                        </div>
-                        <button
-                          onClick={() => startMining(false)}
-                          disabled={!selectedWebsite}
-                          className={cn(
-                            "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
-                            isDarkTheme && "shadow-emerald-900/20"
+                            </div>
                           )}
-                        >
-                          {state.uiLanguage === "zh"
-                            ? "开始分析网站"
-                            : "Start Website Audit"}
-                        </button>
-                      </div>
 
-                      {/* Strategy Selector - 策略模块化挖词 */}
-                      <section className="space-y-4 mt-8">
-                        <div className="flex items-center justify-between px-2">
-                          <div className="flex items-center space-x-2">
-                            <Layers
-                              size={14}
-                              className={cn(
-                                isDarkTheme
-                                  ? "text-emerald-500"
-                                  : "text-emerald-600"
-                              )}
-                            />
-                            <h3
-                              className={cn(
-                                "text-[10px] font-black uppercase tracking-[0.2em]",
-                                isDarkTheme
-                                  ? "text-neutral-400"
-                                  : "text-gray-600"
-                              )}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "挖词策略模块"
-                                : "Mining Strategy Modules"}
-                            </h3>
-                          </div>
-                        </div>
-                        {/* 策略模式选择器（存量拓新始终使用策略模式） */}
-                        <div
-                          className={cn(
-                            "p-4 rounded-lg border",
-                            isDarkTheme
-                              ? "bg-black/40 border-emerald-500/20"
-                              : "bg-white border-emerald-500/30"
-                          )}
-                        >
-                          <StrategySelector
-                            value={strategyConfig}
-                            onChange={setStrategyConfig}
-                            maxTotalKeywords={50}
-                            language={state.uiLanguage}
-                            hasHighPerformerKeywords={false}
-                            isDarkTheme={isDarkTheme}
-                          />
-                        </div>
-                      </section>
-
-                      {/* Mining Settings Panel - Same as blue-ocean mode */}
-                      {!useStrategyMode && (
-                        <section className="space-y-4 mt-8">
-                          <div className="flex items-center space-x-2 px-2">
-                            <Settings
-                              size={14}
-                              className={cn(
-                                isDarkTheme
-                                  ? "text-emerald-500"
-                                  : "text-emerald-600"
-                              )}
-                            />
-                            <h3
-                              className={cn(
-                                "text-[10px] font-black uppercase tracking-[0.2em]",
-                                isDarkTheme
-                                  ? "text-neutral-400"
-                                  : "text-gray-600"
-                              )}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "挖词设置"
-                                : "Mining Settings"}
-                            </h3>
-                          </div>
+                          {/* Redesigned Input Design - Similar to Blue Ocean Mode */}
                           <div
                             className={cn(
-                              "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
+                              "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
                               isDarkTheme
-                                ? "bg-black/40 border-emerald-500/20"
-                                : "bg-white border-emerald-500/30"
+                                ? "bg-[#0f0f0f] border-white/10"
+                                : "bg-gray-50 border-gray-200"
                             )}
                           >
-                            {/* Words Per Round */}
-                            <div className="space-y-2">
-                              <label
+                            {/* Target Language Selector */}
+                            <Select
+                              value={state.targetLanguage}
+                              onValueChange={(value) =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  targetLanguage: value as TargetLanguage,
+                                }))
+                              }
+                            >
+                              <SelectTrigger
+                                hideIcon
                                 className={cn(
-                                  "flex items-center gap-2 text-xs font-semibold",
+                                  "md:w-48 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
                                   isDarkTheme
-                                    ? "text-neutral-400"
-                                    : "text-gray-600"
+                                    ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
+                                    : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
                                 )}
                               >
-                                <Cpu
+                                <div className="flex items-center space-x-3 overflow-hidden">
+                                  <Globe
+                                    size={14}
+                                    className={cn(
+                                      "shrink-0",
+                                      isDarkTheme
+                                        ? "text-emerald-500"
+                                        : "text-emerald-600"
+                                    )}
+                                  />
+                                  <span className="text-[11px] font-bold truncate">
+                                    <SelectValue />
+                                  </span>
+                                </div>
+                                <ChevronRight
                                   size={14}
                                   className={cn(
-                                    isDarkTheme
-                                      ? "text-emerald-500"
-                                      : "text-emerald-600"
+                                    "shrink-0",
+                                    isDarkTheme ? "text-neutral-700" : "text-gray-500"
                                   )}
                                 />
-                                {state.uiLanguage === "zh"
-                                  ? "每轮词语数"
-                                  : "Words Per Round"}
-                              </label>
-                              <Input
-                                type="number"
-                                min="5"
-                                max="20"
-                                value={state.wordsPerRound}
-                                onChange={(e) =>
-                                  setState((prev) => ({
-                                    ...prev,
-                                    wordsPerRound: Math.max(
-                                      5,
-                                      Math.min(
-                                        20,
-                                        parseInt(e.target.value) || 10
-                                      )
-                                    ),
-                                  }))
-                                }
+                              </SelectTrigger>
+                              <SelectContent
                                 className={cn(
-                                  "text-sm font-medium h-10",
                                   isDarkTheme
-                                    ? "border-white/10 bg-white/5 text-white"
-                                    : "border-gray-200 bg-white text-gray-900"
+                                    ? "bg-black/90 border-emerald-500/30"
+                                    : "bg-white border-emerald-500/30"
+                                )}
+                              >
+                                {LANGUAGES.map((l) => (
+                                  <SelectItem
+                                    key={l.code}
+                                    value={l.code}
+                                    className={cn(
+                                      isDarkTheme
+                                        ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                        : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                    )}
+                                  >
+                                    {l.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+
+                            {/* Website Input Field with Dropdown - Only show for existing-website-audit mode */}
+                            {miningMode === "existing-website-audit" && (
+                              <div className="flex-1 min-w-0 relative batch-website-dropdown-container">
+                                <div
+                                  className={cn(
+                                    "flex items-center rounded-lg px-4 h-14 transition-all border relative",
+                                    isDarkTheme
+                                      ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
+                                      : "bg-white border-gray-200 focus-within:border-emerald-500/50"
+                                  )}
+                                >
+                                  <Globe
+                                    className={cn(
+                                      "w-4 h-4 mr-3 shrink-0",
+                                      isDarkTheme ? "text-neutral-600" : "text-gray-400"
+                                    )}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={
+                                      batchManualWebsiteUrl.trim()
+                                        ? batchManualWebsiteUrl
+                                        : batchSelectedWebsite?.url || ""
+                                    }
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      setBatchManualWebsiteUrl(value);
+                                      setShowBatchWebsiteDropdown(false); // Close dropdown when typing
+                                      // Clear selected website from dropdown when typing manually
+                                      if (value.trim()) {
+                                        setBatchSelectedWebsite(null);
+                                      }
+                                    }}
+                                    placeholder={
+                                      state.uiLanguage === "zh"
+                                        ? "例如: example.com 或 https://example.com"
+                                        : "e.g., example.com or https://example.com"
+                                    }
+                                    className={cn(
+                                      "bg-transparent border-none outline-none w-full text-sm font-medium flex-1",
+                                      isDarkTheme
+                                        ? "text-white placeholder:text-neutral-700"
+                                        : "text-gray-900 placeholder:text-gray-500"
+                                    )}
+                                    onFocus={() => {
+                                      // Load websites when input is focused
+                                      if (!websiteListData) {
+                                        loadWebsiteList("batch");
+                                      }
+                                      setShowBatchWebsiteDropdown(true); // Show dropdown when focused
+                                    }}
+                                  />
+                                  {/* Dropdown Arrow */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (!websiteListData) {
+                                        loadWebsiteList("batch");
+                                      }
+                                      setShowBatchWebsiteDropdown(
+                                        !showBatchWebsiteDropdown
+                                      );
+                                    }}
+                                    className={cn(
+                                      "ml-2 p-1 shrink-0 transition-colors",
+                                      isDarkTheme
+                                        ? "text-neutral-600 hover:text-white"
+                                        : "text-gray-400 hover:text-gray-600"
+                                    )}
+                                  >
+                                    <ChevronDown
+                                      size={16}
+                                      className={cn(
+                                        "transition-transform",
+                                        showBatchWebsiteDropdown && "rotate-180"
+                                      )}
+                                    />
+                                  </button>
+                                  {/* Validation Status Icon */}
+                                  {batchManualWebsiteUrl.trim() && (
+                                    <div className="absolute right-10 top-1/2 -translate-y-1/2">
+                                      {batchUrlValidationStatus === "validating" && (
+                                        <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
+                                      )}
+                                      {batchUrlValidationStatus === "valid" && (
+                                        <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                      )}
+                                      {batchUrlValidationStatus === "invalid" && (
+                                        <AlertCircle className="w-4 h-4 text-red-500" />
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                                {/* Website Dropdown */}
+                                {showBatchWebsiteDropdown && websiteListData && (
+                                  <div
+                                    className={cn(
+                                      "absolute z-50 w-full mt-1 rounded-lg border shadow-lg max-h-60 overflow-y-auto",
+                                      isDarkTheme
+                                        ? "bg-black/90 border-emerald-500/30"
+                                        : "bg-white border-emerald-500/30"
+                                    )}
+                                  >
+                                    {websiteListData.websites.length === 0 ? (
+                                      <div
+                                        className={cn(
+                                          "p-4 text-center text-sm",
+                                          isDarkTheme
+                                            ? "text-zinc-400"
+                                            : "text-gray-500"
+                                        )}
+                                      >
+                                        {state.uiLanguage === "zh"
+                                          ? "还没有绑定网站"
+                                          : "No websites bound yet"}
+                                      </div>
+                                    ) : (
+                                      websiteListData.websites.map((website) => (
+                                        <button
+                                          key={website.id}
+                                          type="button"
+                                          onClick={() => {
+                                            setBatchSelectedWebsite(website);
+                                            setBatchManualWebsiteUrl("");
+                                            setBatchUrlValidationStatus("idle");
+                                            setShowBatchWebsiteDropdown(false);
+                                          }}
+                                          className={cn(
+                                            "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors flex items-center justify-between",
+                                            batchSelectedWebsite?.id === website.id &&
+                                            "bg-emerald-500/20",
+                                            isDarkTheme ? "text-white" : "text-gray-900"
+                                          )}
+                                        >
+                                          <span className="truncate">
+                                            {website.url}
+                                          </span>
+                                          {website.isDefault && (
+                                            <Badge
+                                              variant="secondary"
+                                              className="flex-shrink-0 text-xs ml-2"
+                                            >
+                                              <CheckCircle className="w-2.5 h-2.5 mr-0.5" />
+                                              {state.uiLanguage === "zh"
+                                                ? "默认"
+                                                : "Default"}
+                                            </Badge>
+                                          )}
+                                        </button>
+                                      ))
+                                    )}
+                                  </div>
+                                )}
+                                {/* Validation Status Message */}
+                                {batchManualWebsiteUrl.trim() &&
+                                  batchUrlValidationStatus !== "idle" && (
+                                    <div
+                                      className={cn(
+                                        "text-xs flex items-center gap-1 mt-1",
+                                        batchUrlValidationStatus === "valid" &&
+                                        "text-emerald-500",
+                                        batchUrlValidationStatus === "invalid" &&
+                                        "text-red-500",
+                                        batchUrlValidationStatus === "validating" &&
+                                        "text-yellow-500"
+                                      )}
+                                    >
+                                      {batchUrlValidationStatus === "validating" && (
+                                        <>
+                                          <Loader2 className="w-3 h-3 animate-spin" />
+                                          <span>
+                                            {state.uiLanguage === "zh"
+                                              ? "正在验证..."
+                                              : "Validating..."}
+                                          </span>
+                                        </>
+                                      )}
+                                      {batchUrlValidationStatus === "valid" && (
+                                        <>
+                                          <CheckCircle className="w-3 h-3" />
+                                          <span>
+                                            {state.uiLanguage === "zh"
+                                              ? "网址有效，将用于跨市场分析"
+                                              : "URL valid, will be used for cross-market analysis"}
+                                          </span>
+                                        </>
+                                      )}
+                                      {batchUrlValidationStatus === "invalid" && (
+                                        <>
+                                          <AlertCircle className="w-3 h-3" />
+                                          <span>
+                                            {state.uiLanguage === "zh"
+                                              ? "请输入有效的网址"
+                                              : "Please enter a valid URL"}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                  )}
+                              </div>
+                            )}
+
+                            {/* Keyword Input Field - Only show for blue-ocean mode */}
+                            {miningMode === "blue-ocean" && (
+                              <div
+                                className={cn(
+                                  "flex-1 min-w-0 rounded-lg flex items-center px-4 h-14 transition-all border",
+                                  isDarkTheme
+                                    ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
+                                    : "bg-white border-gray-200 focus-within:border-emerald-500/50"
+                                )}
+                              >
+                                <Search
+                                  className={cn(
+                                    isDarkTheme ? "text-neutral-600" : "text-gray-400"
+                                  )}
+                                  size={18}
+                                />
+                                <input
+                                  type="text"
+                                  placeholder={t.batchInputPlaceholder}
+                                  className={cn(
+                                    "bg-transparent border-none outline-none w-full text-sm font-medium px-4 h-14",
+                                    isDarkTheme
+                                      ? "text-white placeholder:text-neutral-700"
+                                      : "text-gray-900 placeholder:text-gray-500"
+                                  )}
+                                  value={batchInput}
+                                  onChange={(e) => setBatchInput(e.target.value)}
+                                  onKeyDown={(e) =>
+                                    e.key === "Enter" && handleBatchAnalyze()
+                                  }
+                                />
+                              </div>
+                            )}
+                            <button
+                              onClick={handleBatchAnalyze}
+                              disabled={
+                                miningMode === "blue-ocean"
+                                  ? !batchInput.trim()
+                                  : miningMode === "existing-website-audit"
+                                    ? !batchSelectedWebsite
+                                    : !batchInput.trim()
+                              }
+                              className={cn(
+                                "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
+                                isDarkTheme && "shadow-emerald-900/20"
+                              )}
+                            >
+                              <Search className="w-4 h-4 inline-block mr-2" />
+                              {t.btnBatchAnalyze}
+                            </button>
+                          </div>
+
+                          {/* Mining Settings Panel - Same as blue-ocean mode */}
+                          <section className="space-y-4 mt-8">
+                            <div className="flex items-center space-x-2 px-2">
+                              <Settings
+                                size={14}
+                                className={cn(
+                                  isDarkTheme ? "text-emerald-500" : "text-emerald-600"
                                 )}
                               />
-                              <p
+                              <h3
                                 className={cn(
-                                  "text-[10px]",
-                                  isDarkTheme
-                                    ? "text-neutral-600"
-                                    : "text-gray-500"
+                                  "text-[10px] font-black uppercase tracking-[0.2em]",
+                                  isDarkTheme ? "text-neutral-400" : "text-gray-600"
                                 )}
                               >
                                 {state.uiLanguage === "zh"
-                                  ? "范围: 5-20"
-                                  : "Range: 5-20"}
-                              </p>
+                                  ? "挖词设置"
+                                  : "Mining Settings"}
+                              </h3>
                             </div>
-
-                            {/* Mining Strategy */}
-                            <div className="space-y-2">
-                              <label
-                                className={cn(
-                                  "flex items-center gap-2 text-xs font-semibold",
-                                  isDarkTheme
-                                    ? "text-neutral-400"
-                                    : "text-gray-600"
-                                )}
-                              >
-                                <LayoutGrid
-                                  size={14}
+                            <div
+                              className={cn(
+                                "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
+                                isDarkTheme
+                                  ? "bg-black/40 border-emerald-500/20"
+                                  : "bg-white border-emerald-500/30"
+                              )}
+                            >
+                              {/* Words Per Round */}
+                              <div className="space-y-2">
+                                <label
                                   className={cn(
-                                    isDarkTheme
-                                      ? "text-emerald-500"
-                                      : "text-emerald-600"
+                                    "flex items-center gap-2 text-xs font-semibold",
+                                    isDarkTheme ? "text-neutral-400" : "text-gray-600"
                                   )}
-                                />
-                                {state.uiLanguage === "zh"
-                                  ? "挖掘策略"
-                                  : "Mining Strategy"}
-                              </label>
-                              <Select
-                                value={state.miningStrategy}
-                                onValueChange={(value) =>
-                                  setState((prev) => ({
-                                    ...prev,
-                                    miningStrategy: value as
-                                      | "horizontal"
-                                      | "vertical",
-                                  }))
-                                }
-                              >
-                                <SelectTrigger
+                                >
+                                  <Cpu
+                                    size={14}
+                                    className={cn(
+                                      isDarkTheme
+                                        ? "text-emerald-500"
+                                        : "text-emerald-600"
+                                    )}
+                                  />
+                                  {state.uiLanguage === "zh"
+                                    ? "每轮词语数"
+                                    : "Words Per Round"}
+                                </label>
+                                <Input
+                                  type="number"
+                                  min="5"
+                                  max="20"
+                                  value={state.wordsPerRound}
+                                  onChange={(e) =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      wordsPerRound: Math.max(
+                                        5,
+                                        Math.min(20, parseInt(e.target.value) || 10)
+                                      ),
+                                    }))
+                                  }
                                   className={cn(
                                     "text-sm font-medium h-10",
                                     isDarkTheme
                                       ? "border-white/10 bg-white/5 text-white"
                                       : "border-gray-200 bg-white text-gray-900"
                                   )}
-                                >
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent
+                                />
+                                <p
                                   className={cn(
-                                    isDarkTheme
-                                      ? "bg-black/90 border-emerald-500/30"
-                                      : "bg-white border-emerald-500/30"
+                                    "text-[10px]",
+                                    isDarkTheme ? "text-neutral-600" : "text-gray-500"
                                   )}
                                 >
-                                  <SelectItem
-                                    value="horizontal"
+                                  {state.uiLanguage === "zh"
+                                    ? "范围: 5-20"
+                                    : "Range: 5-20"}
+                                </p>
+                              </div>
+
+                              {/* Mining Strategy */}
+                              <div className="space-y-2">
+                                <label
+                                  className={cn(
+                                    "flex items-center gap-2 text-xs font-semibold",
+                                    isDarkTheme ? "text-neutral-400" : "text-gray-600"
+                                  )}
+                                >
+                                  <LayoutGrid
+                                    size={14}
                                     className={cn(
                                       isDarkTheme
-                                        ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                        : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                        ? "text-emerald-500"
+                                        : "text-emerald-600"
+                                    )}
+                                  />
+                                  {state.uiLanguage === "zh"
+                                    ? "挖掘策略"
+                                    : "Mining Strategy"}
+                                </label>
+                                <Select
+                                  value={state.miningStrategy}
+                                  onValueChange={(value) =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      miningStrategy: value as
+                                        | "horizontal"
+                                        | "vertical",
+                                    }))
+                                  }
+                                >
+                                  <SelectTrigger
+                                    className={cn(
+                                      "text-sm font-medium h-10",
+                                      isDarkTheme
+                                        ? "border-white/10 bg-white/5 text-white"
+                                        : "border-gray-200 bg-white text-gray-900"
                                     )}
                                   >
-                                    {state.uiLanguage === "zh"
-                                      ? "横向挖掘(广泛主题)"
-                                      : "Horizontal Mining (Broad Topics)"}
-                                  </SelectItem>
-                                  <SelectItem
-                                    value="vertical"
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent
                                     className={cn(
                                       isDarkTheme
-                                        ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                        : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                        ? "bg-black/90 border-emerald-500/30"
+                                        : "bg-white border-emerald-500/30"
                                     )}
                                   >
-                                    {state.uiLanguage === "zh"
-                                      ? "纵向挖掘(深度挖掘)"
-                                      : "Vertical Mining (Deep Dive)"}
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <p
-                                className={cn(
-                                  "text-[10px]",
-                                  isDarkTheme
-                                    ? "text-neutral-600"
-                                    : "text-gray-500"
-                                )}
+                                    <SelectItem
+                                      value="horizontal"
+                                      className={cn(
+                                        isDarkTheme
+                                          ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                          : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                      )}
+                                    >
+                                      {state.uiLanguage === "zh"
+                                        ? "横向挖掘(广泛主题)"
+                                        : "Horizontal Mining (Broad Topics)"}
+                                    </SelectItem>
+                                    <SelectItem
+                                      value="vertical"
+                                      className={cn(
+                                        isDarkTheme
+                                          ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
+                                          : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
+                                      )}
+                                    >
+                                      {state.uiLanguage === "zh"
+                                        ? "纵向挖掘(深度挖掘)"
+                                        : "Vertical Mining (Deep Dive)"}
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <p
+                                  className={cn(
+                                    "text-[10px]",
+                                    isDarkTheme ? "text-neutral-600" : "text-gray-500"
+                                  )}
+                                >
+                                  {state.uiLanguage === "zh"
+                                    ? "探索不同的平行主题"
+                                    : "Explore different parallel topics"}
+                                </p>
+                              </div>
+                            </div>
+                          </section>
+
+                          {/* Batch Archive List */}
+                          {state.batchArchives.length > 0 && (
+                            <div className="mt-12">
+                              <h3
+                                className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                                  }`}
                               >
-                                {state.uiLanguage === "zh"
-                                  ? "探索不同的平行主题"
-                                  : "Explore different parallel topics"}
-                              </p>
+                                <History className="w-4 h-4" /> {t.batchArchives}
+                              </h3>
+                              <div
+                                className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${isDarkTheme
+                                  ? "bg-black/40 border-emerald-500/20"
+                                  : "bg-white border-emerald-200"
+                                  }`}
+                              >
+                                <div
+                                  className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${isDarkTheme
+                                    ? "divide-emerald-500/10"
+                                    : "divide-gray-200"
+                                    }`}
+                                >
+                                  {state.batchArchives.map((arch) => (
+                                    <div
+                                      key={arch.id}
+                                      onClick={() => loadBatchArchive(arch)}
+                                      className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${isDarkTheme
+                                        ? "hover:bg-emerald-500/10"
+                                        : "hover:bg-emerald-50"
+                                        }`}
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div
+                                          className={`p-2 rounded text-emerald-400 transition-colors ${isDarkTheme
+                                            ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
+                                            : "bg-emerald-100 group-hover:bg-emerald-200"
+                                            }`}
+                                        >
+                                          <Languages className="w-4 h-4" />
+                                        </div>
+                                        <div>
+                                          <div
+                                            className={`font-medium flex items-center gap-2 ${isDarkTheme
+                                              ? "text-white"
+                                              : "text-gray-900"
+                                              }`}
+                                          >
+                                            {arch.inputKeywords
+                                              .split(/[,，]/)
+                                              .slice(0, 3)
+                                              .join(", ")}
+                                            {arch.inputKeywords.split(/[,，]/).length >
+                                              3 && "..."}
+                                            <span
+                                              className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${isDarkTheme
+                                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                                : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                                                }`}
+                                            >
+                                              {arch.targetLanguage}
+                                            </span>
+                                          </div>
+                                          <div
+                                            className={`text-xs ${isDarkTheme
+                                              ? "text-slate-500"
+                                              : "text-gray-500"
+                                              }`}
+                                          >
+                                            {new Date(arch.timestamp).toLocaleString()}{" "}
+                                            • {arch.totalCount} keywords
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <button
+                                        onClick={(e) => deleteBatchArchive(arch.id, e)}
+                                        className={`p-2 transition-colors ${isDarkTheme
+                                          ? "text-slate-600 hover:text-red-400"
+                                          : "text-gray-500 hover:text-red-600"
+                                          }`}
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Prompt Config (Collapsible) */}
+                      <div
+                        className={`mt-12 border rounded-xl backdrop-blur-sm shadow-sm overflow-hidden max-w-2xl mx-auto ${isDarkTheme
+                          ? "border-emerald-500/20 bg-black/40"
+                          : "border-emerald-200 bg-white"
+                          }`}
+                      >
+                        <button
+                          onClick={() =>
+                            setState((prev) => ({
+                              ...prev,
+                              showPrompts: !prev.showPrompts,
+                            }))
+                          }
+                          className={`w-full flex items-center justify-between p-4 transition-colors font-medium ${isDarkTheme
+                            ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-white"
+                            : "bg-emerald-50 hover:bg-emerald-100 text-gray-900"
+                            }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Settings className="w-4 h-4 text-emerald-400" />
+                            {t.configPrompts}
+                          </div>
+                          <div
+                            className={`transform transition-transform ${state.showPrompts ? "rotate-180" : ""
+                              }`}
+                          >
+                            <ChevronDown className="w-4 h-4 text-emerald-400" />
+                          </div>
+                        </button>
+
+                        {state.showPrompts && (
+                          <div className="p-6 space-y-6">
+                            {/* Translation Toggle */}
+                            <div className="flex items-center justify-end">
+                              <button
+                                onClick={togglePromptTranslation}
+                                className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${state.showPromptTranslation
+                                  ? isDarkTheme
+                                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                    : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                                  : isDarkTheme
+                                    ? "bg-black/60 text-slate-400 border-emerald-500/20"
+                                    : "bg-gray-100 text-gray-600 border-emerald-200"
+                                  }`}
+                              >
+                                <Languages className="w-3 h-3" />
+                                {t.showTransRef}
+                              </button>
                             </div>
 
-                            {/* Quick Mining (Skip SERP Verification) */}
-                            <div className="space-y-2 md:col-span-2">
-                              <label
-                                className={cn(
-                                  "flex items-center gap-3 cursor-pointer p-4 rounded-lg border transition-all",
-                                  state.skipSerpVerification
-                                    ? isDarkTheme
-                                      ? "bg-emerald-500/10 border-emerald-500/30"
-                                      : "bg-emerald-50 border-emerald-500/30"
-                                    : isDarkTheme
-                                    ? "bg-black/20 border-white/10 hover:border-white/20"
-                                    : "bg-gray-50 border-gray-200 hover:border-gray-300"
-                                )}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={state.skipSerpVerification}
+                            <div>
+                              <div className="flex justify-between items-center mb-2">
+                                <label
+                                  className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                                    }`}
+                                >
+                                  {t.promptGenLabel}
+                                </label>
+                                <button
+                                  onClick={() => handleTranslatePrompt("gen")}
+                                  className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline"
+                                >
+                                  <RefreshCw className="w-3 h-3" />{" "}
+                                  {t.btnTranslatePrompt}
+                                </button>
+                              </div>
+
+                              <div className="grid grid-cols-1 gap-4">
+                                <textarea
+                                  className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${isDarkTheme
+                                    ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                                    : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
+                                    }`}
+                                  value={state.genPrompt}
                                   onChange={(e) =>
                                     setState((prev) => ({
                                       ...prev,
-                                      skipSerpVerification: e.target.checked,
+                                      genPrompt: e.target.value,
                                     }))
                                   }
-                                  className="w-4 h-4 text-emerald-500 bg-zinc-700 border-zinc-600 rounded focus:ring-emerald-500 focus:ring-2"
                                 />
-                                <div className="flex-1">
+                                {state.showPromptTranslation && (
                                   <div
-                                    className={cn(
-                                      "flex items-center gap-2 text-sm font-semibold",
-                                      state.skipSerpVerification
-                                        ? "text-emerald-500"
-                                        : isDarkTheme
-                                        ? "text-neutral-300"
-                                        : "text-gray-700"
-                                    )}
+                                    className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${isDarkTheme
+                                      ? "bg-black/60 border-emerald-500/30 text-slate-300"
+                                      : "bg-gray-50 border-emerald-200 text-gray-700"
+                                      }`}
                                   >
-                                    <Zap
-                                      size={16}
-                                      className={cn(
-                                        state.skipSerpVerification
-                                          ? "text-emerald-500"
-                                          : isDarkTheme
-                                          ? "text-neutral-500"
-                                          : "text-gray-400"
-                                      )}
-                                    />
-                                    {state.uiLanguage === "zh"
-                                      ? "快速挖词（跳过SERP验证）"
-                                      : "Quick Mining (Skip SERP Verification)"}
-                                  </div>
-                                  <p
-                                    className={cn(
-                                      "text-[10px] mt-1",
-                                      isDarkTheme
-                                        ? "text-neutral-600"
-                                        : "text-gray-500"
-                                    )}
-                                  >
-                                    {state.uiLanguage === "zh"
-                                      ? "跳过竞对SERP分析，只生成关键词和获取基础数据。适合新种子词的快速探索。"
-                                      : "Skip competitor SERP analysis, only generate keywords and fetch basic data. Ideal for quick exploration of new seed keywords."}
-                                  </p>
-                                  {state.skipSerpVerification && (
-                                    <div className="mt-2 text-[10px] text-emerald-400 flex items-center gap-1">
-                                      <Zap size={12} />
-                                      <span>
-                                        {state.uiLanguage === "zh"
-                                          ? "预计速度提升 3-5倍"
-                                          : "Expected 3-5x faster"}
-                                      </span>
+                                    <div
+                                      className={`text-[10px] uppercase font-bold mb-1 ${isDarkTheme
+                                        ? "text-emerald-400"
+                                        : "text-emerald-600"
+                                        }`}
+                                    >
+                                      {t.transRefLabel}
                                     </div>
-                                  )}
+                                    {state.translatedGenPrompt ? (
+                                      state.translatedGenPrompt
+                                    ) : (
+                                      <div
+                                        className={`animate-pulse ${isDarkTheme
+                                          ? "text-slate-500"
+                                          : "text-gray-500"
+                                          }`}
+                                      >
+                                        Translating...
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex justify-between items-center mb-2">
+                                <label
+                                  className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
+                                    }`}
+                                >
+                                  {t.promptAnlzLabel}
+                                </label>
+                                <button
+                                  onClick={() => handleTranslatePrompt("analyze")}
+                                  className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline"
+                                >
+                                  <RefreshCw className="w-3 h-3" />{" "}
+                                  {t.btnTranslatePrompt}
+                                </button>
+                              </div>
+                              <div className="grid grid-cols-1 gap-4">
+                                <textarea
+                                  className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${isDarkTheme
+                                    ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                                    : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
+                                    }`}
+                                  value={state.analyzePrompt}
+                                  onChange={(e) =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      analyzePrompt: e.target.value,
+                                    }))
+                                  }
+                                />
+                                {state.showPromptTranslation && (
+                                  <div
+                                    className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${isDarkTheme
+                                      ? "bg-black/60 border-emerald-500/30 text-slate-300"
+                                      : "bg-gray-50 border-emerald-200 text-gray-700"
+                                      }`}
+                                  >
+                                    <div
+                                      className={`text-[10px] uppercase font-bold mb-1 ${isDarkTheme
+                                        ? "text-emerald-400"
+                                        : "text-emerald-600"
+                                        }`}
+                                    >
+                                      {t.transRefLabel}
+                                    </div>
+                                    {state.translatedAnalyzePrompt ? (
+                                      state.translatedAnalyzePrompt
+                                    ) : (
+                                      <div
+                                        className={`animate-pulse ${isDarkTheme
+                                          ? "text-slate-500"
+                                          : "text-gray-500"
+                                          }`}
+                                      >
+                                        Translating...
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Agent Config Archive Section */}
+                            <div className="border-t border-slate-200 pt-6">
+                              <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                  <FolderOpen className="w-4 h-4 text-emerald-500" />
+                                  {t.agentConfigs}
+                                </h4>
+                                <button
+                                  onClick={() =>
+                                    switchStepWithTaskPreservation("workflow-config")
+                                  }
+                                  className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1 font-medium"
+                                >
+                                  <Settings className="w-3 h-3" />
+                                  {state.uiLanguage === "zh" ? "高级配置" : "Advanced"}
+                                </button>
+                              </div>
+                              <p className="text-xs text-slate-500 mb-4 bg-emerald-50 border border-emerald-100 rounded p-2">
+                                {state.uiLanguage === "zh"
+                                  ? "💡 这些配置同时保存在 Workflow 配置页面中，两者共通。"
+                                  : "💡 These configs are shared with the Workflow Configuration page."}
+                              </p>
+
+                              {/* Save New Config */}
+                              <div className="flex gap-2 mb-4">
+                                <input
+                                  type="text"
+                                  id="configNameInput"
+                                  placeholder={t.enterConfigName}
+                                  className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const input = e.target as HTMLInputElement;
+                                      saveAgentConfig(input.value);
+                                      input.value = "";
+                                    }
+                                  }}
+                                />
+                                <button
+                                  onClick={() => {
+                                    const input = document.getElementById(
+                                      "configNameInput"
+                                    ) as HTMLInputElement;
+                                    saveAgentConfig(input?.value || "");
+                                    if (input) input.value = "";
+                                  }}
+                                  className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium"
+                                >
+                                  <Save className="w-4 h-4" />
+                                  {t.saveConfig}
+                                </button>
+                              </div>
+
+                              {/* Config List */}
+                              {state.workflowConfigs.filter(
+                                (c) => c.workflowId === "mining"
+                              ).length > 0 ? (
+                                <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
+                                  {state.workflowConfigs
+                                    .filter((c) => c.workflowId === "mining")
+                                    .map((cfg) => (
+                                      <div
+                                        key={cfg.id}
+                                        className={`p-3 rounded-lg border flex items-center justify-between group transition-colors ${state.currentConfigId === cfg.id
+                                          ? "bg-emerald-50 border-emerald-200"
+                                          : "bg-slate-50 border-slate-200 hover:bg-slate-100"
+                                          }`}
+                                      >
+                                        <div className="flex-1">
+                                          <div className="font-medium text-slate-800 text-sm flex items-center gap-2">
+                                            {cfg.name}
+                                            <span className="text-[10px] bg-white text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase">
+                                              MINING
+                                            </span>
+                                            {state.currentConfigId === cfg.id && (
+                                              <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded font-bold">
+                                                ACTIVE
+                                              </span>
+                                            )}
+                                          </div>
+                                          <div className="text-xs text-slate-400">
+                                            {new Date(cfg.updatedAt).toLocaleString()}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          {state.currentConfigId === cfg.id ? (
+                                            <button
+                                              onClick={() => updateAgentConfig(cfg.id)}
+                                              className="px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 transition-colors font-medium"
+                                            >
+                                              {t.updateConfig}
+                                            </button>
+                                          ) : (
+                                            <button
+                                              onClick={() => loadAgentConfig(cfg)}
+                                              className="px-2 py-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors font-medium"
+                                            >
+                                              {t.loadConfig}
+                                            </button>
+                                          )}
+                                          <button
+                                            onClick={(e) =>
+                                              deleteAgentConfig(cfg.id, e)
+                                            }
+                                            className="p-1 text-slate-300 hover:text-red-500 transition-colors"
+                                          >
+                                            <Trash2 className="w-3 h-3" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
                                 </div>
-                              </label>
+                              ) : (
+                                <div
+                                  className={`text-sm text-center py-4 rounded-lg border border-dashed ${isDarkTheme
+                                    ? "text-slate-400 bg-slate-50 border-slate-200"
+                                    : "text-gray-600 bg-gray-50 border-gray-200"
+                                    }`}
+                                >
+                                  {t.noConfigs}
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </section>
-                      )}
-                    </>
+                        )}
+                      </div>
+                    </div>
                   )}
 
-                  {/* Mining Settings Panel - Only show for blue-ocean mode */}
-                  {miningMode === "blue-ocean" && (
-                    <section className="space-y-4 mt-8">
-                      <div className="flex items-center space-x-2 px-2">
-                        <Settings
-                          size={14}
-                          className={cn(
-                            isDarkTheme
-                              ? "text-emerald-500"
-                              : "text-emerald-600"
-                          )}
-                        />
-                        <h3
-                          className={cn(
-                            "text-[10px] font-black uppercase tracking-[0.2em]",
-                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                          )}
+                  {/* WORKFLOW CONFIGURATION PAGE */}
+                  {state.step === "workflow-config" && (
+                    <div className="max-w-7xl mx-auto mt-8 flex-1 w-full">
+                      <div className="text-center mb-8">
+                        <div className="flex items-center justify-center gap-3 mb-4">
+                          <div className="bg-emerald-500 p-3 rounded-lg">
+                            <BrainCircuit className="w-8 h-8 text-black" />
+                          </div>
+                          <h2
+                            className={`text-3xl font-bold ${isDarkTheme ? "text-white" : "text-gray-900"
+                              }`}
+                          >
+                            {t.workflowConfig}
+                          </h2>
+                        </div>
+                        <p
+                          className={`mb-4 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                            }`}
                         >
-                          {state.uiLanguage === "zh"
-                            ? "挖词设置"
-                            : "Mining Settings"}
-                        </h3>
+                          {t.workflowConfigDesc}
+                        </p>
+                        <button
+                          onClick={() => switchStepWithTaskPreservation("input")}
+                          className={`inline-flex items-center gap-2 px-4 py-2 text-sm transition-colors ${isDarkTheme
+                            ? "text-slate-400 hover:text-emerald-400"
+                            : "text-gray-600 hover:text-emerald-600"
+                            }`}
+                        >
+                          <ArrowRight className="w-4 h-4 rotate-180" />
+                          {state.uiLanguage === "en" ? "Back to Home" : "返回首页"}
+                        </button>
                       </div>
-                      <div
-                        className={cn(
-                          "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
-                          isDarkTheme
+
+                      <div className="space-y-8">
+                        {/* Mining Workflow */}
+                        <div
+                          className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${isDarkTheme
                             ? "bg-black/40 border-emerald-500/20"
-                            : "bg-white border-emerald-500/30"
-                        )}
-                      >
-                        {/* Words Per Round */}
-                        <div className="space-y-2">
-                          <label
-                            className={cn(
-                              "flex items-center gap-2 text-xs font-semibold",
-                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                            )}
+                            : "bg-white border-emerald-200"
+                            }`}
+                        >
+                          <h3
+                            className={`text-xl font-bold mb-2 flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+                              }`}
                           >
-                            <Cpu
-                              size={14}
-                              className={cn(
-                                isDarkTheme
-                                  ? "text-emerald-500"
-                                  : "text-emerald-600"
-                              )}
-                            />
-                            {state.uiLanguage === "zh"
-                              ? "每轮词语数"
-                              : "Words Per Round"}
-                          </label>
-                          <Input
-                            type="number"
-                            min="5"
-                            max="20"
-                            value={state.wordsPerRound}
-                            onChange={(e) =>
-                              setState((prev) => ({
-                                ...prev,
-                                wordsPerRound: Math.max(
-                                  5,
-                                  Math.min(20, parseInt(e.target.value) || 10)
-                                ),
-                              }))
+                            <Search className="w-5 h-5 text-emerald-400" />
+                            {t.miningWorkflow}
+                          </h3>
+                          <p
+                            className={`text-sm mb-6 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                              }`}
+                          >
+                            {MINING_WORKFLOW.description}
+                          </p>
+                          <WorkflowConfigPanel
+                            workflowDef={MINING_WORKFLOW}
+                            currentConfig={getCurrentWorkflowConfig("mining")}
+                            allConfigs={state.workflowConfigs}
+                            onSave={saveWorkflowConfig}
+                            onLoad={(configId) =>
+                              loadWorkflowConfig("mining", configId)
                             }
-                            className={cn(
-                              "text-sm font-medium h-10",
-                              isDarkTheme
-                                ? "border-white/10 bg-white/5 text-white"
-                                : "border-gray-200 bg-white text-gray-900"
-                            )}
+                            onReset={() => resetWorkflowToDefault("mining")}
+                            onDelete={deleteWorkflowConfig}
+                            t={t}
+                            isDarkTheme={isDarkTheme}
                           />
-                          <p
-                            className={cn(
-                              "text-[10px]",
-                              isDarkTheme ? "text-neutral-600" : "text-gray-500"
-                            )}
-                          >
-                            {state.uiLanguage === "zh"
-                              ? "范围: 5-20"
-                              : "Range: 5-20"}
-                          </p>
                         </div>
 
-                        {/* Mining Strategy */}
-                        <div className="space-y-2">
-                          <label
-                            className={cn(
-                              "flex items-center gap-2 text-xs font-semibold",
-                              isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                            )}
+                        {/* Batch Workflow */}
+                        <div
+                          className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${isDarkTheme
+                            ? "bg-black/40 border-emerald-500/20"
+                            : "bg-white border-emerald-200"
+                            }`}
+                        >
+                          <h3
+                            className={`text-xl font-bold mb-2 flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+                              }`}
                           >
-                            <LayoutGrid
-                              size={14}
-                              className={cn(
-                                isDarkTheme
-                                  ? "text-emerald-500"
-                                  : "text-emerald-600"
-                              )}
-                            />
-                            {state.uiLanguage === "zh"
-                              ? "挖掘策略"
-                              : "Mining Strategy"}
-                          </label>
-                          <Select
-                            value={state.miningStrategy}
-                            onValueChange={(value) =>
-                              setState((prev) => ({
-                                ...prev,
-                                miningStrategy: value as
-                                  | "horizontal"
-                                  | "vertical",
-                              }))
-                            }
-                          >
-                            <SelectTrigger
-                              className={cn(
-                                "text-sm font-medium h-10",
-                                isDarkTheme
-                                  ? "border-white/10 bg-white/5 text-white"
-                                  : "border-gray-200 bg-white text-gray-900"
-                              )}
-                            >
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent
-                              className={cn(
-                                isDarkTheme
-                                  ? "bg-black/90 border-emerald-500/30"
-                                  : "bg-white border-emerald-500/30"
-                              )}
-                            >
-                              <SelectItem
-                                value="horizontal"
-                                className={cn(
-                                  isDarkTheme
-                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                                )}
-                              >
-                                {state.uiLanguage === "zh"
-                                  ? "横向挖掘(广泛主题)"
-                                  : "Horizontal Mining (Broad Topics)"}
-                              </SelectItem>
-                              <SelectItem
-                                value="vertical"
-                                className={cn(
-                                  isDarkTheme
-                                    ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                    : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                                )}
-                              >
-                                {state.uiLanguage === "zh"
-                                  ? "纵向挖掘(深度挖掘)"
-                                  : "Vertical Mining (Deep Dive)"}
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
+                            <Languages className="w-5 h-5 text-emerald-400" />
+                            {t.batchWorkflow}
+                          </h3>
                           <p
-                            className={cn(
-                              "text-[10px]",
-                              isDarkTheme ? "text-neutral-600" : "text-gray-500"
-                            )}
+                            className={`text-sm mb-6 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                              }`}
                           >
-                            {state.uiLanguage === "zh"
-                              ? "探索不同的平行主题"
-                              : "Explore different parallel topics"}
+                            {BATCH_WORKFLOW.description}
                           </p>
+                          <WorkflowConfigPanel
+                            workflowDef={BATCH_WORKFLOW}
+                            currentConfig={getCurrentWorkflowConfig("batch")}
+                            allConfigs={state.workflowConfigs}
+                            onSave={saveWorkflowConfig}
+                            onLoad={(configId) => loadWorkflowConfig("batch", configId)}
+                            onReset={() => resetWorkflowToDefault("batch")}
+                            onDelete={deleteWorkflowConfig}
+                            t={t}
+                            isDarkTheme={isDarkTheme}
+                          />
                         </div>
 
-                        {/* Quick Mining (Skip SERP Verification) */}
-                        <div className="space-y-2 md:col-span-2">
-                          <label
-                            className={cn(
-                              "flex items-center gap-3 cursor-pointer p-4 rounded-lg border transition-all",
-                              state.skipSerpVerification
-                                ? isDarkTheme
-                                  ? "bg-emerald-500/10 border-emerald-500/30"
-                                  : "bg-emerald-50 border-emerald-500/30"
-                                : isDarkTheme
-                                ? "bg-black/20 border-white/10 hover:border-white/20"
-                                : "bg-gray-50 border-gray-200 hover:border-gray-300"
-                            )}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={state.skipSerpVerification}
-                              onChange={(e) =>
+                        {/* Deep Dive Workflow */}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* STEP 2: MINING */}
+                  {state.step === "mining" && (
+                    <div className="flex-1 flex flex-col h-[calc(100vh-140px)] min-h-[600px] relative">
+                      {/* SUCCESS OVERLAY */}
+                      {state.miningSuccess && state.showSuccessPrompt && (
+                        <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm rounded-xl flex items-start justify-center p-4 pt-8 animate-fade-in overflow-y-auto">
+                          <div className="relative bg-black/80 backdrop-blur-sm rounded-xl shadow-2xl border border-emerald-500/30 p-8 max-w-md w-full text-center">
+                            {/* Close Button */}
+                            <button
+                              onClick={() =>
                                 setState((prev) => ({
                                   ...prev,
-                                  skipSerpVerification: e.target.checked,
+                                  showSuccessPrompt: false,
                                 }))
                               }
-                              className="w-4 h-4 text-emerald-500 bg-zinc-700 border-zinc-600 rounded focus:ring-emerald-500 focus:ring-2"
-                            />
-                            <div className="flex-1">
-                              <div
-                                className={cn(
-                                  "flex items-center gap-2 text-sm font-semibold",
-                                  state.skipSerpVerification
-                                    ? "text-emerald-500"
-                                    : isDarkTheme
-                                    ? "text-neutral-300"
-                                    : "text-gray-700"
-                                )}
-                              >
-                                <Zap
-                                  size={16}
-                                  className={cn(
-                                    state.skipSerpVerification
-                                      ? "text-emerald-500"
-                                      : isDarkTheme
-                                      ? "text-neutral-500"
-                                      : "text-gray-400"
-                                  )}
-                                />
-                                {state.uiLanguage === "zh"
-                                  ? "快速挖词（跳过SERP验证）"
-                                  : "Quick Mining (Skip SERP Verification)"}
-                              </div>
-                              <p
-                                className={cn(
-                                  "text-[10px] mt-1",
-                                  isDarkTheme
-                                    ? "text-neutral-600"
-                                    : "text-gray-500"
-                                )}
-                              >
-                                {state.uiLanguage === "zh"
-                                  ? "跳过竞对SERP分析，只生成关键词和获取基础数据。适合新种子词的快速探索。"
-                                  : "Skip competitor SERP analysis, only generate keywords and fetch basic data. Ideal for quick exploration of new seed keywords."}
-                              </p>
-                              {state.skipSerpVerification && (
-                                <div className="mt-2 text-[10px] text-emerald-400 flex items-center gap-1">
-                                  <Zap size={12} />
-                                  <span>
-                                    {state.uiLanguage === "zh"
-                                      ? "预计速度提升 3-5倍"
-                                      : "Expected 3-5x faster"}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </label>
-                        </div>
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Mining Archive List */}
-                  {state.archives.length > 0 && (
-                    <section className="space-y-4 mt-12">
-                      <div className="flex items-center space-x-2 px-2">
-                        <History
-                          size={14}
-                          className={cn(
-                            isDarkTheme
-                              ? "text-emerald-500"
-                              : "text-emerald-600"
-                          )}
-                        />
-                        <h3
-                          className={cn(
-                            "text-[10px] font-black uppercase tracking-[0.2em]",
-                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                          )}
-                        >
-                          {t.miningArchives}
-                        </h3>
-                      </div>
-                      <div className="space-y-2 pb-12">
-                        {state.archives.map((arch) => (
-                          <div
-                            key={arch.id}
-                            onClick={() => loadArchive(arch)}
-                            className={cn(
-                              "group flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer",
-                              isDarkTheme
-                                ? "bg-[#0a0a0a] border-white/5 hover:border-emerald-500/30"
-                                : "bg-white border-gray-200 hover:border-emerald-500/30"
-                            )}
-                          >
-                            <div className="flex items-center space-x-4">
-                              <div
-                                className={cn(
-                                  "w-10 h-10 rounded flex items-center justify-center transition-all group-hover:scale-105",
-                                  isDarkTheme
-                                    ? "bg-neutral-900 border border-white/10 text-emerald-500"
-                                    : "bg-gray-100 border border-gray-200 text-emerald-600"
-                                )}
-                              >
-                                {miningMode === "blue-ocean" ? (
-                                  <Search size={16} />
-                                ) : (
-                                  <Link2 size={16} />
-                                )}
-                              </div>
-                              <div>
-                                <div className="flex items-center space-x-2">
-                                  <span
-                                    className={cn(
-                                      "text-sm font-bold transition-colors",
-                                      isDarkTheme
-                                        ? "text-white group-hover:text-emerald-400"
-                                        : "text-gray-900 group-hover:text-emerald-600"
-                                    )}
-                                  >
-                                    {arch.taskName || arch.seedKeyword}
-                                  </span>
-                                  <span
-                                    className={cn(
-                                      "px-1.5 py-0.5 rounded-[2px] text-[8px] font-black uppercase",
-                                      isDarkTheme
-                                        ? "bg-emerald-500/10 text-emerald-500"
-                                        : "bg-emerald-50 text-emerald-600"
-                                    )}
-                                  >
-                                    {arch.targetLanguage.toUpperCase()}
-                                  </span>
-                                </div>
-                                <div className="flex items-center space-x-4 mt-1">
-                                  <span
-                                    className={cn(
-                                      "text-[10px] mono",
-                                      isDarkTheme
-                                        ? "text-neutral-600"
-                                        : "text-gray-500"
-                                    )}
-                                  >
-                                    {new Date(arch.timestamp).toLocaleString()}
-                                  </span>
-                                  <span
-                                    className={cn(
-                                      "text-[10px] font-bold uppercase tracking-widest",
-                                      isDarkTheme
-                                        ? "text-neutral-500"
-                                        : "text-gray-600"
-                                    )}
-                                  >
-                                    {arch.keywords.length}{" "}
-                                    {state.uiLanguage === "zh"
-                                      ? "个关键词"
-                                      : "keywords discovered"}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                            <button
-                              onClick={(e) => deleteArchive(arch.id, e)}
-                              className={cn(
-                                "p-2 transition-colors opacity-0 group-hover:opacity-100",
-                                isDarkTheme
-                                  ? "text-neutral-700 hover:text-red-400"
-                                  : "text-gray-400 hover:text-red-600"
-                              )}
+                              className="absolute top-3 right-3 text-zinc-400 hover:text-white transition-colors p-1 rounded hover:bg-zinc-700/50"
                             >
-                              <Trash2 size={16} />
+                              <X className="w-5 h-5" />
                             </button>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-                </div>
-              )}
-
-              {/* Batch Translation Tab Content */}
-              {activeTab === "batch" && (
-                <div className="max-w-3xl mx-auto">
-                  {/* Refine Industry Button */}
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <BrainCircuit className="w-5 h-5 text-emerald-400" />
-                      <span
-                        className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
-                          }`}
-                      >
-                        {state.uiLanguage === "zh"
-                          ? miningMode === "existing-website-audit"
-                            ? "网站现有关键词的跨市场分析"
-                            : "将翻译keyword到目标语言并分析蓝海机会"
-                          : miningMode === "existing-website-audit"
-                            ? "Cross-market analysis of existing website keywords"
-                            : "Will translate keywords to target language and analyze blue ocean opportunities"}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setShowMiningGuide(true)}
-                      className="px-3 py-1.5 bg-gradient-to-r from-emerald-500/20 to-emerald-500/20 border border-emerald-500/30 hover:from-emerald-500/30 hover:to-emerald-500/30 rounded-lg text-emerald-400 text-xs font-medium transition-all duration-200 flex items-center gap-2"
-                    >
-                      <Lightbulb className="w-3.5 h-3.5" />
-                      {state.uiLanguage === "zh"
-                        ? "精确行业"
-                        : "Refine Industry"}
-                    </button>
-                  </div>
-
-                  {/* Display Saved Mining Configuration */}
-                  {state.miningConfig && (
-                    <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg mb-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Lightbulb className="w-4 h-4 text-emerald-400" />
-                        <span className="text-sm font-semibold text-emerald-400">
-                          {state.uiLanguage === "zh"
-                            ? "已保存的配置"
-                            : "Saved Configuration"}
-                        </span>
-                      </div>
-                      <div className="space-y-1 text-sm">
-                        <p
-                          className={
-                            isDarkTheme ? "text-white" : "text-gray-700"
-                          }
-                        >
-                          <span className="text-emerald-400 font-medium">
-                            {state.uiLanguage === "zh" ? "行业:" : "Industry:"}
-                          </span>{" "}
-                          {state.miningConfig.industry}
-                        </p>
-                        {state.miningConfig.additionalSuggestions && (
-                          <p
-                            className={
-                              isDarkTheme ? "text-white" : "text-gray-700"
-                            }
-                          >
-                            <span className="text-emerald-400 font-medium">
-                              {state.uiLanguage === "zh"
-                                ? "建议:"
-                                : "Suggestions:"}
-                            </span>{" "}
-                            {state.miningConfig.additionalSuggestions}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Redesigned Input Design - Similar to Blue Ocean Mode */}
-                  <div
-                    className={cn(
-                      "flex flex-col md:flex-row gap-2 p-1.5 rounded-xl shadow-2xl border",
-                      isDarkTheme
-                        ? "bg-[#0f0f0f] border-white/10"
-                        : "bg-gray-50 border-gray-200"
-                    )}
-                  >
-                    {/* Target Language Selector */}
-                    <Select
-                      value={state.targetLanguage}
-                      onValueChange={(value) =>
-                        setState((prev) => ({
-                          ...prev,
-                          targetLanguage: value as TargetLanguage,
-                        }))
-                      }
-                    >
-                      <SelectTrigger
-                        hideIcon
-                        className={cn(
-                          "md:w-48 h-14 rounded-lg px-4 flex items-center justify-between cursor-pointer transition-all border",
-                          isDarkTheme
-                            ? "bg-white/5 border-transparent hover:bg-white/10 hover:border-white/5 text-white"
-                            : "bg-white border-gray-200 hover:border-gray-300 text-gray-900"
-                        )}
-                      >
-                        <div className="flex items-center space-x-3 overflow-hidden">
-                          <Globe
-                            size={14}
-                            className={cn(
-                              "shrink-0",
-                              isDarkTheme
-                                ? "text-emerald-500"
-                                : "text-emerald-600"
-                            )}
-                          />
-                          <span className="text-[11px] font-bold truncate">
-                            <SelectValue />
-                          </span>
-                        </div>
-                        <ChevronRight
-                          size={14}
-                          className={cn(
-                            "shrink-0",
-                            isDarkTheme ? "text-neutral-700" : "text-gray-500"
-                          )}
-                        />
-                      </SelectTrigger>
-                      <SelectContent
-                        className={cn(
-                          isDarkTheme
-                            ? "bg-black/90 border-emerald-500/30"
-                            : "bg-white border-emerald-500/30"
-                        )}
-                      >
-                        {LANGUAGES.map((l) => (
-                          <SelectItem
-                            key={l.code}
-                            value={l.code}
-                            className={cn(
-                              isDarkTheme
-                                ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                            )}
-                          >
-                            {l.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    {/* Website Input Field with Dropdown - Only show for existing-website-audit mode */}
-                    {miningMode === "existing-website-audit" && (
-                      <div className="flex-1 min-w-0 relative batch-website-dropdown-container">
-                        <div
-                          className={cn(
-                            "flex items-center rounded-lg px-4 h-14 transition-all border relative",
-                            isDarkTheme
-                              ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
-                              : "bg-white border-gray-200 focus-within:border-emerald-500/50"
-                          )}
-                        >
-                          <Globe
-                            className={cn(
-                              "w-4 h-4 mr-3 shrink-0",
-                              isDarkTheme ? "text-neutral-600" : "text-gray-400"
-                            )}
-                          />
-                          <input
-                            type="text"
-                            value={
-                              batchManualWebsiteUrl.trim()
-                                ? batchManualWebsiteUrl
-                                : batchSelectedWebsite?.url || ""
-                            }
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              setBatchManualWebsiteUrl(value);
-                              setShowBatchWebsiteDropdown(false); // Close dropdown when typing
-                              // Clear selected website from dropdown when typing manually
-                              if (value.trim()) {
-                                setBatchSelectedWebsite(null);
-                              }
-                            }}
-                            placeholder={
-                              state.uiLanguage === "zh"
-                                ? "例如: example.com 或 https://example.com"
-                                : "e.g., example.com or https://example.com"
-                            }
-                            className={cn(
-                              "bg-transparent border-none outline-none w-full text-sm font-medium flex-1",
-                              isDarkTheme
-                                ? "text-white placeholder:text-neutral-700"
-                                : "text-gray-900 placeholder:text-gray-500"
-                            )}
-                            onFocus={() => {
-                              // Load websites when input is focused
-                              if (!websiteListData) {
-                                loadWebsiteList("batch");
-                              }
-                              setShowBatchWebsiteDropdown(true); // Show dropdown when focused
-                            }}
-                          />
-                          {/* Dropdown Arrow */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!websiteListData) {
-                                loadWebsiteList("batch");
-                              }
-                              setShowBatchWebsiteDropdown(
-                                !showBatchWebsiteDropdown
-                              );
-                            }}
-                            className={cn(
-                              "ml-2 p-1 shrink-0 transition-colors",
-                              isDarkTheme
-                                ? "text-neutral-600 hover:text-white"
-                                : "text-gray-400 hover:text-gray-600"
-                            )}
-                          >
-                            <ChevronDown
-                              size={16}
-                              className={cn(
-                                "transition-transform",
-                                showBatchWebsiteDropdown && "rotate-180"
-                              )}
-                            />
-                          </button>
-                          {/* Validation Status Icon */}
-                          {batchManualWebsiteUrl.trim() && (
-                            <div className="absolute right-10 top-1/2 -translate-y-1/2">
-                              {batchUrlValidationStatus === "validating" && (
-                                <Loader2 className="w-4 h-4 animate-spin text-yellow-500" />
-                              )}
-                              {batchUrlValidationStatus === "valid" && (
-                                <CheckCircle className="w-4 h-4 text-emerald-500" />
-                              )}
-                              {batchUrlValidationStatus === "invalid" && (
-                                <AlertCircle className="w-4 h-4 text-red-500" />
-                              )}
+                            <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <CheckCircle className="w-8 h-8 text-emerald-400" />
                             </div>
-                          )}
-                        </div>
-                        {/* Website Dropdown */}
-                        {showBatchWebsiteDropdown && websiteListData && (
-                          <div
-                            className={cn(
-                              "absolute z-50 w-full mt-1 rounded-lg border shadow-lg max-h-60 overflow-y-auto",
-                              isDarkTheme
-                                ? "bg-black/90 border-emerald-500/30"
-                                : "bg-white border-emerald-500/30"
-                            )}
-                          >
-                            {websiteListData.websites.length === 0 ? (
-                              <div
-                                className={cn(
-                                  "p-4 text-center text-sm",
-                                  isDarkTheme
-                                    ? "text-zinc-400"
-                                    : "text-gray-500"
-                                )}
-                              >
-                                {state.uiLanguage === "zh"
-                                  ? "还没有绑定网站"
-                                  : "No websites bound yet"}
+                            <h3 className="text-2xl font-bold text-white mb-2">
+                              {t.miningSuccessTitle}
+                            </h3>
+                            <p className="text-slate-400 mb-6">{t.miningSuccessDesc}</p>
+
+                            <div className="bg-black/60 rounded-lg p-4 mb-6 border border-emerald-500/20">
+                              <div className="text-3xl font-bold text-white">
+                                {
+                                  state.keywords.filter(
+                                    (k) => k.probability === ProbabilityLevel.HIGH
+                                  ).length
+                                }
                               </div>
-                            ) : (
-                              websiteListData.websites.map((website) => (
-                                <button
-                                  key={website.id}
-                                  type="button"
-                                  onClick={() => {
-                                    setBatchSelectedWebsite(website);
-                                    setBatchManualWebsiteUrl("");
-                                    setBatchUrlValidationStatus("idle");
-                                    setShowBatchWebsiteDropdown(false);
-                                  }}
-                                  className={cn(
-                                    "w-full px-4 py-3 text-left hover:bg-emerald-500/10 transition-colors flex items-center justify-between",
-                                    batchSelectedWebsite?.id === website.id &&
-                                    "bg-emerald-500/20",
-                                    isDarkTheme ? "text-white" : "text-gray-900"
-                                  )}
-                                >
-                                  <span className="truncate">
-                                    {website.url}
-                                  </span>
-                                  {website.isDefault && (
-                                    <Badge
-                                      variant="secondary"
-                                      className="flex-shrink-0 text-xs ml-2"
-                                    >
-                                      <CheckCircle className="w-2.5 h-2.5 mr-0.5" />
-                                      {state.uiLanguage === "zh"
-                                        ? "默认"
-                                        : "Default"}
-                                    </Badge>
-                                  )}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
-                        {/* Validation Status Message */}
-                        {batchManualWebsiteUrl.trim() &&
-                          batchUrlValidationStatus !== "idle" && (
-                            <div
-                              className={cn(
-                                "text-xs flex items-center gap-1 mt-1",
-                                batchUrlValidationStatus === "valid" &&
-                                "text-emerald-500",
-                                batchUrlValidationStatus === "invalid" &&
-                                "text-red-500",
-                                batchUrlValidationStatus === "validating" &&
-                                "text-yellow-500"
-                              )}
-                            >
-                              {batchUrlValidationStatus === "validating" && (
-                                <>
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                  <span>
-                                    {state.uiLanguage === "zh"
-                                      ? "正在验证..."
-                                      : "Validating..."}
-                                  </span>
-                                </>
-                              )}
-                              {batchUrlValidationStatus === "valid" && (
-                                <>
-                                  <CheckCircle className="w-3 h-3" />
-                                  <span>
-                                    {state.uiLanguage === "zh"
-                                      ? "网址有效，将用于跨市场分析"
-                                      : "URL valid, will be used for cross-market analysis"}
-                                  </span>
-                                </>
-                              )}
-                              {batchUrlValidationStatus === "invalid" && (
-                                <>
-                                  <AlertCircle className="w-3 h-3" />
-                                  <span>
-                                    {state.uiLanguage === "zh"
-                                      ? "请输入有效的网址"
-                                      : "Please enter a valid URL"}
-                                  </span>
-                                </>
-                              )}
+                              <div className="text-xs text-slate-400 uppercase font-semibold">
+                                {t.foundCount}
+                              </div>
                             </div>
-                          )}
-                      </div>
-                    )}
 
-                    {/* Keyword Input Field - Only show for blue-ocean mode */}
-                    {miningMode === "blue-ocean" && (
-                      <div
-                        className={cn(
-                          "flex-1 min-w-0 rounded-lg flex items-center px-4 h-14 transition-all border",
-                          isDarkTheme
-                            ? "bg-white/5 border-transparent focus-within:bg-black focus-within:border-emerald-500/30"
-                            : "bg-white border-gray-200 focus-within:border-emerald-500/50"
-                        )}
-                      >
-                        <Search
-                          className={cn(
-                            isDarkTheme ? "text-neutral-600" : "text-gray-400"
-                          )}
-                          size={18}
-                        />
-                        <input
-                          type="text"
-                          placeholder={t.batchInputPlaceholder}
-                          className={cn(
-                            "bg-transparent border-none outline-none w-full text-sm font-medium px-4 h-14",
-                            isDarkTheme
-                              ? "text-white placeholder:text-neutral-700"
-                              : "text-gray-900 placeholder:text-gray-500"
-                          )}
-                          value={batchInput}
-                          onChange={(e) => setBatchInput(e.target.value)}
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && handleBatchAnalyze()
-                          }
-                        />
-                      </div>
-                    )}
-                    <button
-                      onClick={handleBatchAnalyze}
-                      disabled={
-                        miningMode === "blue-ocean"
-                          ? !batchInput.trim()
-                          : miningMode === "existing-website-audit"
-                            ? !batchSelectedWebsite
-                            : !batchInput.trim()
-                      }
-                      className={cn(
-                        "bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black px-10 rounded-lg transition-all uppercase tracking-widest shadow-lg shadow-emerald-900/10 active:scale-[0.98] h-14 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap",
-                        isDarkTheme && "shadow-emerald-900/20"
+                            <div className="flex flex-col gap-3">
+                              <button
+                                onClick={goToResults}
+                                className="w-full py-3 bg-emerald-500 text-black rounded-lg hover:bg-emerald-600 transition-colors font-bold shadow-lg shadow-emerald-500/20"
+                              >
+                                {t.viewResults}
+                              </button>
+                              <button
+                                onClick={continueMining}
+                                className="w-full py-3 bg-black/60 text-white border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors font-medium"
+                              >
+                                {t.btnExpand}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       )}
-                    >
-                      <Search className="w-4 h-4 inline-block mr-2" />
-                      {t.btnBatchAnalyze}
-                    </button>
-                  </div>
 
-                  {/* Mining Settings Panel - Same as blue-ocean mode */}
-                  <section className="space-y-4 mt-8">
-                    <div className="flex items-center space-x-2 px-2">
-                      <Settings
-                        size={14}
-                        className={cn(
-                          isDarkTheme ? "text-emerald-500" : "text-emerald-600"
-                        )}
-                      />
-                      <h3
-                        className={cn(
-                          "text-[10px] font-black uppercase tracking-[0.2em]",
-                          isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                        )}
-                      >
-                        {state.uiLanguage === "zh"
-                          ? "挖词设置"
-                          : "Mining Settings"}
-                      </h3>
-                    </div>
-                    <div
-                      className={cn(
-                        "grid grid-cols-1 md:grid-cols-2 gap-4 p-6 rounded-lg border",
-                        isDarkTheme
-                          ? "bg-black/40 border-emerald-500/20"
-                          : "bg-white border-emerald-500/30"
-                      )}
-                    >
-                      {/* Words Per Round */}
-                      <div className="space-y-2">
-                        <label
-                          className={cn(
-                            "flex items-center gap-2 text-xs font-semibold",
-                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                          )}
-                        >
-                          <Cpu
-                            size={14}
-                            className={cn(
-                              isDarkTheme
-                                ? "text-emerald-500"
-                                : "text-emerald-600"
-                            )}
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-3">
+                          <Loader2
+                            className={`w-5 h-5 text-emerald-400 ${!state.miningSuccess && "animate-spin"
+                              }`}
                           />
-                          {state.uiLanguage === "zh"
-                            ? "每轮词语数"
-                            : "Words Per Round"}
-                        </label>
-                        <Input
-                          type="number"
-                          min="5"
-                          max="20"
-                          value={state.wordsPerRound}
-                          onChange={(e) =>
-                            setState((prev) => ({
-                              ...prev,
-                              wordsPerRound: Math.max(
-                                5,
-                                Math.min(20, parseInt(e.target.value) || 10)
-                              ),
-                            }))
-                          }
-                          className={cn(
-                            "text-sm font-medium h-10",
-                            isDarkTheme
-                              ? "border-white/10 bg-white/5 text-white"
-                              : "border-gray-200 bg-white text-gray-900"
-                          )}
-                        />
-                        <p
-                          className={cn(
-                            "text-[10px]",
-                            isDarkTheme ? "text-neutral-600" : "text-gray-500"
-                          )}
-                        >
-                          {state.uiLanguage === "zh"
-                            ? "范围: 5-20"
-                            : "Range: 5-20"}
-                        </p>
+                          <div>
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                              {t.generating}
+                              <span className="text-[10px] font-normal bg-emerald-500/20 px-1.5 py-0.5 rounded-full text-emerald-400">
+                                Round {state.miningRound}
+                              </span>
+                            </h3>
+                            <p className="text-xs text-slate-400">{t.analyzing}</p>
+                          </div>
+                        </div>
+                        {state.miningSuccess && !state.showSuccessPrompt && (
+                          <button
+                            onClick={() =>
+                              setState((prev) => ({ ...prev, showSuccessPrompt: true }))
+                            }
+                            className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${isDarkTheme
+                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30"
+                              : "bg-emerald-100 border-emerald-300 text-emerald-700 hover:bg-emerald-200"
+                              }`}
+                          >
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            {state.uiLanguage === "zh" ? "完成查看" : "Complete"}
+                          </button>
+                        )}
+                        {!state.miningSuccess && (
+                          <button
+                            onClick={handleStop}
+                            className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${isDarkTheme
+                              ? "bg-black/60 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                              : "bg-white border-red-300 text-red-600 hover:bg-red-50"
+                              }`}
+                          >
+                            <Square className="w-3.5 h-3.5 fill-current" />
+                            {t.btnStop}
+                          </button>
+                        )}
                       </div>
 
-                      {/* Mining Strategy */}
-                      <div className="space-y-2">
-                        <label
-                          className={cn(
-                            "flex items-center gap-2 text-xs font-semibold",
-                            isDarkTheme ? "text-neutral-400" : "text-gray-600"
-                          )}
+                      {/* Mining Control Panel */}
+                      {!state.miningSuccess && (
+                        <div
+                          className={`mb-3 backdrop-blur-sm rounded-xl shadow-sm border px-4 py-2 ${isDarkTheme
+                            ? "bg-black/40 border-emerald-500/20"
+                            : "bg-white border-emerald-200"
+                            }`}
                         >
-                          <LayoutGrid
-                            size={14}
-                            className={cn(
-                              isDarkTheme
-                                ? "text-emerald-500"
-                                : "text-emerald-600"
-                            )}
+                          <div className="flex flex-col md:flex-row md:items-center gap-4">
+                            <div className="flex items-center gap-2 min-w-fit">
+                              <Settings className="w-3.5 h-3.5 text-emerald-400" />
+                              <h4
+                                className={`text-xs font-bold uppercase tracking-wider ${isDarkTheme ? "text-slate-300" : "text-gray-900"
+                                  }`}
+                              >
+                                {t.miningSettings}
+                              </h4>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                              {/* Words Per Round */}
+                              <div className="flex items-center gap-2">
+                                <label
+                                  className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                                    }`}
+                                >
+                                  {t.wordsPerRound}
+                                </label>
+                                <input
+                                  type="number"
+                                  min="5"
+                                  max="20"
+                                  value={state.wordsPerRound}
+                                  onChange={(e) =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      wordsPerRound: Math.max(
+                                        5,
+                                        Math.min(20, parseInt(e.target.value) || 10)
+                                      ),
+                                    }))
+                                  }
+                                  className={`flex-1 max-w-[60px] px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
+                                    ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
+                                    : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
+                                    }`}
+                                />
+                                <span className="text-[10px] text-slate-500 shrink-0 hidden md:block">
+                                  {t.applyNextRound}
+                                </span>
+                              </div>
+
+                              {/* Mining Strategy */}
+                              <div className="flex items-center gap-2">
+                                <label
+                                  className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                                    }`}
+                                >
+                                  {t.miningStrategy}
+                                </label>
+                                <select
+                                  value={state.miningStrategy}
+                                  onChange={(e) =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      miningStrategy: e.target.value as
+                                        | "horizontal"
+                                        | "vertical",
+                                    }))
+                                  }
+                                  className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
+                                    ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
+                                    : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
+                                    }`}
+                                >
+                                  <option
+                                    value="horizontal"
+                                    className={isDarkTheme ? "bg-black" : "bg-white"}
+                                  >
+                                    {t.horizontal}
+                                  </option>
+                                  <option
+                                    value="vertical"
+                                    className={isDarkTheme ? "bg-black" : "bg-white"}
+                                  >
+                                    {t.vertical}
+                                  </option>
+                                </select>
+                              </div>
+
+                              {/* User Suggestion */}
+                              <div className="flex items-center gap-2">
+                                <label
+                                  className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                                    }`}
+                                >
+                                  {t.userSuggestion}
+                                </label>
+                                <input
+                                  type="text"
+                                  value={state.userSuggestion}
+                                  onChange={(e) =>
+                                    setState((prev) => ({
+                                      ...prev,
+                                      userSuggestion: e.target.value,
+                                    }))
+                                  }
+                                  placeholder={t.suggestionPlaceholder}
+                                  className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
+                                    ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
+                                    : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
+                                    }`}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
+                        <div className="w-full md:w-[30%] h-full">
+                          <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
+                        </div>
+                        <div className="w-full md:w-[70%] h-full">
+                          <AgentStream
+                            thoughts={state.agentThoughts}
+                            t={t}
+                            isDarkTheme={isDarkTheme}
+                            uiLanguage={state.uiLanguage}
+                            thinkingStatus={state.thinkingStatus}
                           />
-                          {state.uiLanguage === "zh"
-                            ? "挖掘策略"
-                            : "Mining Strategy"}
-                        </label>
-                        <Select
-                          value={state.miningStrategy}
-                          onValueChange={(value) =>
-                            setState((prev) => ({
-                              ...prev,
-                              miningStrategy: value as
-                                | "horizontal"
-                                | "vertical",
-                            }))
-                          }
-                        >
-                          <SelectTrigger
-                            className={cn(
-                              "text-sm font-medium h-10",
-                              isDarkTheme
-                                ? "border-white/10 bg-white/5 text-white"
-                                : "border-gray-200 bg-white text-gray-900"
-                            )}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent
-                            className={cn(
-                              isDarkTheme
-                                ? "bg-black/90 border-emerald-500/30"
-                                : "bg-white border-emerald-500/30"
-                            )}
-                          >
-                            <SelectItem
-                              value="horizontal"
-                              className={cn(
-                                isDarkTheme
-                                  ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                  : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                              )}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "横向挖掘(广泛主题)"
-                                : "Horizontal Mining (Broad Topics)"}
-                            </SelectItem>
-                            <SelectItem
-                              value="vertical"
-                              className={cn(
-                                isDarkTheme
-                                  ? "text-white focus:bg-emerald-500/20 focus:text-emerald-400"
-                                  : "text-gray-900 focus:bg-emerald-500/10 focus:text-emerald-600"
-                              )}
-                            >
-                              {state.uiLanguage === "zh"
-                                ? "纵向挖掘(深度挖掘)"
-                                : "Vertical Mining (Deep Dive)"}
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p
-                          className={cn(
-                            "text-[10px]",
-                            isDarkTheme ? "text-neutral-600" : "text-gray-500"
-                          )}
-                        >
-                          {state.uiLanguage === "zh"
-                            ? "探索不同的平行主题"
-                            : "Explore different parallel topics"}
-                        </p>
+                        </div>
                       </div>
                     </div>
-                  </section>
+                  )}
 
-                  {/* Batch Archive List */}
-                  {state.batchArchives.length > 0 && (
-                    <div className="mt-12">
-                      <h3
-                        className={`text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                          }`}
-                      >
-                        <History className="w-4 h-4" /> {t.batchArchives}
-                      </h3>
+                  {/* BATCH ANALYZING PAGE */}
+                  {state.step === "batch-analyzing" && (
+                    <div className="flex-1 flex flex-col h-[calc(100vh-140px)] min-h-[600px] relative">
+                      <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-3">
+                          <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
+                          <div>
+                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                              {t.batchAnalyzing}
+                              <span className="text-[10px] font-normal bg-emerald-500/20 px-1.5 py-0.5 rounded-full text-emerald-400">
+                                {state.batchCurrentIndex} / {state.batchTotalCount}
+                              </span>
+                            </h3>
+                            <p className="text-xs text-slate-400">
+                              Translating and analyzing keywords...
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={stopBatchAnalysis}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-xs font-medium shadow-sm"
+                        >
+                          <Square className="w-3.5 h-3.5 fill-current" />
+                          {t.btnStop}
+                        </button>
+                      </div>
+
+                      <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
+                        <div className="w-full md:w-[30%] h-full">
+                          <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
+                        </div>
+                        <div className="w-full md:w-[70%] h-full">
+                          <BatchAnalysisStream
+                            thoughts={state.batchThoughts}
+                            t={t}
+                            isDarkTheme={isDarkTheme}
+                            uiLanguage={state.uiLanguage}
+                            thinkingStatus={state.thinkingStatus}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BATCH RESULTS PAGE */}
+                  {state.step === "batch-results" && (
+                    <div className="animate-fade-in flex-1">
+                      <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
+                        <div>
+                          <h2
+                            className={`text-2xl font-bold flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+                              }`}
+                          >
+                            <Languages className="w-6 h-6 text-emerald-400" />
+                            {t.batchResultsTitle}
+                          </h2>
+                          <p
+                            className={`mt-1 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                              }`}
+                          >
+                            {t.foundOpp} {state.batchKeywords.length} {t.opps}.
+                          </p>
+                        </div>
+                        <div className="flex gap-3">
+                          <button
+                            onClick={downloadBatchCSV}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded-md hover:bg-emerald-600 transition-colors text-sm font-medium"
+                          >
+                            <Download className="w-4 h-4" />
+                            {t.downloadCSV}
+                          </button>
+                          <button
+                            onClick={reset}
+                            className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${isDarkTheme
+                              ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
+                              : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
+                              }`}
+                          >
+                            {t.newAnalysis}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Batch Results Table */}
                       <div
-                        className={`backdrop-blur-sm rounded-xl border shadow-sm overflow-hidden ${isDarkTheme
+                        className={`backdrop-blur-sm rounded-xl shadow-sm border overflow-hidden min-h-[400px] ${isDarkTheme
                           ? "bg-black/40 border-emerald-500/20"
                           : "bg-white border-emerald-200"
                           }`}
                       >
-                        <div
-                          className={`divide-y max-h-96 overflow-y-auto custom-scrollbar ${isDarkTheme
-                            ? "divide-emerald-500/10"
-                            : "divide-gray-200"
-                            }`}
-                        >
-                          {state.batchArchives.map((arch) => (
-                            <div
-                              key={arch.id}
-                              onClick={() => loadBatchArchive(arch)}
-                              className={`p-4 flex items-center justify-between cursor-pointer group transition-colors ${isDarkTheme
-                                ? "hover:bg-emerald-500/10"
-                                : "hover:bg-emerald-50"
-                                }`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={`p-2 rounded text-emerald-400 transition-colors ${isDarkTheme
-                                    ? "bg-emerald-500/20 group-hover:bg-emerald-500/30"
-                                    : "bg-emerald-100 group-hover:bg-emerald-200"
-                                    }`}
-                                >
-                                  <Languages className="w-4 h-4" />
-                                </div>
-                                <div>
-                                  <div
-                                    className={`font-medium flex items-center gap-2 ${isDarkTheme
-                                      ? "text-white"
-                                      : "text-gray-900"
-                                      }`}
-                                  >
-                                    {arch.inputKeywords
-                                      .split(/[,，]/)
-                                      .slice(0, 3)
-                                      .join(", ")}
-                                    {arch.inputKeywords.split(/[,，]/).length >
-                                      3 && "..."}
-                                    <span
-                                      className={`text-[10px] px-1.5 py-0.5 rounded border uppercase font-bold ${isDarkTheme
-                                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                                        : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                                        }`}
-                                    >
-                                      {arch.targetLanguage}
-                                    </span>
-                                  </div>
-                                  <div
-                                    className={`text-xs ${isDarkTheme
-                                      ? "text-slate-500"
-                                      : "text-gray-500"
-                                      }`}
-                                  >
-                                    {new Date(arch.timestamp).toLocaleString()}{" "}
-                                    • {arch.totalCount} keywords
-                                  </div>
-                                </div>
-                              </div>
-                              <button
-                                onClick={(e) => deleteBatchArchive(arch.id, e)}
-                                className={`p-2 transition-colors ${isDarkTheme
-                                  ? "text-slate-600 hover:text-red-400"
-                                  : "text-gray-500 hover:text-red-600"
-                                  }`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Prompt Config (Collapsible) */}
-              <div
-                className={`mt-12 border rounded-xl backdrop-blur-sm shadow-sm overflow-hidden max-w-2xl mx-auto ${isDarkTheme
-                  ? "border-emerald-500/20 bg-black/40"
-                  : "border-emerald-200 bg-white"
-                  }`}
-              >
-                <button
-                  onClick={() =>
-                    setState((prev) => ({
-                      ...prev,
-                      showPrompts: !prev.showPrompts,
-                    }))
-                  }
-                  className={`w-full flex items-center justify-between p-4 transition-colors font-medium ${isDarkTheme
-                    ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-white"
-                    : "bg-emerald-50 hover:bg-emerald-100 text-gray-900"
-                    }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <Settings className="w-4 h-4 text-emerald-400" />
-                    {t.configPrompts}
-                  </div>
-                  <div
-                    className={`transform transition-transform ${state.showPrompts ? "rotate-180" : ""
-                      }`}
-                  >
-                    <ChevronDown className="w-4 h-4 text-emerald-400" />
-                  </div>
-                </button>
-
-                {state.showPrompts && (
-                  <div className="p-6 space-y-6">
-                    {/* Translation Toggle */}
-                    <div className="flex items-center justify-end">
-                      <button
-                        onClick={togglePromptTranslation}
-                        className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-full border transition-all ${state.showPromptTranslation
-                          ? isDarkTheme
-                            ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                            : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                          : isDarkTheme
-                            ? "bg-black/60 text-slate-400 border-emerald-500/20"
-                            : "bg-gray-100 text-gray-600 border-emerald-200"
-                          }`}
-                      >
-                        <Languages className="w-3 h-3" />
-                        {t.showTransRef}
-                      </button>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <label
-                          className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
-                            }`}
-                        >
-                          {t.promptGenLabel}
-                        </label>
-                        <button
-                          onClick={() => handleTranslatePrompt("gen")}
-                          className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline"
-                        >
-                          <RefreshCw className="w-3 h-3" />{" "}
-                          {t.btnTranslatePrompt}
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-4">
-                        <textarea
-                          className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${isDarkTheme
-                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                            }`}
-                          value={state.genPrompt}
-                          onChange={(e) =>
-                            setState((prev) => ({
-                              ...prev,
-                              genPrompt: e.target.value,
-                            }))
-                          }
-                        />
-                        {state.showPromptTranslation && (
-                          <div
-                            className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${isDarkTheme
-                              ? "bg-black/60 border-emerald-500/30 text-slate-300"
-                              : "bg-gray-50 border-emerald-200 text-gray-700"
-                              }`}
-                          >
-                            <div
-                              className={`text-[10px] uppercase font-bold mb-1 ${isDarkTheme
-                                ? "text-emerald-400"
-                                : "text-emerald-600"
-                                }`}
-                            >
-                              {t.transRefLabel}
-                            </div>
-                            {state.translatedGenPrompt ? (
-                              state.translatedGenPrompt
-                            ) : (
-                              <div
-                                className={`animate-pulse ${isDarkTheme
-                                  ? "text-slate-500"
-                                  : "text-gray-500"
-                                  }`}
-                              >
-                                Translating...
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <label
-                          className={`text-sm font-semibold ${isDarkTheme ? "text-white" : "text-gray-900"
-                            }`}
-                        >
-                          {t.promptAnlzLabel}
-                        </label>
-                        <button
-                          onClick={() => handleTranslatePrompt("analyze")}
-                          className="text-xs flex items-center gap-1 text-emerald-400 hover:text-emerald-300 hover:underline"
-                        >
-                          <RefreshCw className="w-3 h-3" />{" "}
-                          {t.btnTranslatePrompt}
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-1 gap-4">
-                        <textarea
-                          className={`w-full h-32 p-3 border rounded-md text-sm font-mono focus:ring-2 outline-none ${isDarkTheme
-                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                            }`}
-                          value={state.analyzePrompt}
-                          onChange={(e) =>
-                            setState((prev) => ({
-                              ...prev,
-                              analyzePrompt: e.target.value,
-                            }))
-                          }
-                        />
-                        {state.showPromptTranslation && (
-                          <div
-                            className={`w-full h-32 p-3 border rounded-md text-sm overflow-y-auto ${isDarkTheme
-                              ? "bg-black/60 border-emerald-500/30 text-slate-300"
-                              : "bg-gray-50 border-emerald-200 text-gray-700"
-                              }`}
-                          >
-                            <div
-                              className={`text-[10px] uppercase font-bold mb-1 ${isDarkTheme
-                                ? "text-emerald-400"
-                                : "text-emerald-600"
-                                }`}
-                            >
-                              {t.transRefLabel}
-                            </div>
-                            {state.translatedAnalyzePrompt ? (
-                              state.translatedAnalyzePrompt
-                            ) : (
-                              <div
-                                className={`animate-pulse ${isDarkTheme
-                                  ? "text-slate-500"
-                                  : "text-gray-500"
-                                  }`}
-                              >
-                                Translating...
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Agent Config Archive Section */}
-                    <div className="border-t border-slate-200 pt-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                          <FolderOpen className="w-4 h-4 text-emerald-500" />
-                          {t.agentConfigs}
-                        </h4>
-                        <button
-                          onClick={() =>
-                            switchStepWithTaskPreservation("workflow-config")
-                          }
-                          className="text-xs text-emerald-600 hover:text-emerald-700 flex items-center gap-1 font-medium"
-                        >
-                          <Settings className="w-3 h-3" />
-                          {state.uiLanguage === "zh" ? "高级配置" : "Advanced"}
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-500 mb-4 bg-emerald-50 border border-emerald-100 rounded p-2">
-                        {state.uiLanguage === "zh"
-                          ? "💡 这些配置同时保存在 Workflow 配置页面中，两者共通。"
-                          : "💡 These configs are shared with the Workflow Configuration page."}
-                      </p>
-
-                      {/* Save New Config */}
-                      <div className="flex gap-2 mb-4">
-                        <input
-                          type="text"
-                          id="configNameInput"
-                          placeholder={t.enterConfigName}
-                          className="flex-1 px-3 py-2 border border-slate-300 rounded-md text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              const input = e.target as HTMLInputElement;
-                              saveAgentConfig(input.value);
-                              input.value = "";
-                            }
-                          }}
-                        />
-                        <button
-                          onClick={() => {
-                            const input = document.getElementById(
-                              "configNameInput"
-                            ) as HTMLInputElement;
-                            saveAgentConfig(input?.value || "");
-                            if (input) input.value = "";
-                          }}
-                          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium"
-                        >
-                          <Save className="w-4 h-4" />
-                          {t.saveConfig}
-                        </button>
-                      </div>
-
-                      {/* Config List */}
-                      {state.workflowConfigs.filter(
-                        (c) => c.workflowId === "mining"
-                      ).length > 0 ? (
-                        <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                          {state.workflowConfigs
-                            .filter((c) => c.workflowId === "mining")
-                            .map((cfg) => (
-                              <div
-                                key={cfg.id}
-                                className={`p-3 rounded-lg border flex items-center justify-between group transition-colors ${state.currentConfigId === cfg.id
-                                  ? "bg-emerald-50 border-emerald-200"
-                                  : "bg-slate-50 border-slate-200 hover:bg-slate-100"
-                                  }`}
-                              >
-                                <div className="flex-1">
-                                  <div className="font-medium text-slate-800 text-sm flex items-center gap-2">
-                                    {cfg.name}
-                                    <span className="text-[10px] bg-white text-slate-500 px-1.5 py-0.5 rounded border border-slate-200 uppercase">
-                                      MINING
-                                    </span>
-                                    {state.currentConfigId === cfg.id && (
-                                      <span className="text-[10px] bg-emerald-100 text-emerald-600 px-1.5 py-0.5 rounded font-bold">
-                                        ACTIVE
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="text-xs text-slate-400">
-                                    {new Date(cfg.updatedAt).toLocaleString()}
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {state.currentConfigId === cfg.id ? (
-                                    <button
-                                      onClick={() => updateAgentConfig(cfg.id)}
-                                      className="px-2 py-1 text-xs bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 transition-colors font-medium"
-                                    >
-                                      {t.updateConfig}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => loadAgentConfig(cfg)}
-                                      className="px-2 py-1 text-xs bg-slate-200 text-slate-700 rounded hover:bg-slate-300 transition-colors font-medium"
-                                    >
-                                      {t.loadConfig}
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={(e) =>
-                                      deleteAgentConfig(cfg.id, e)
-                                    }
-                                    className="p-1 text-slate-300 hover:text-red-500 transition-colors"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-                      ) : (
-                        <div
-                          className={`text-sm text-center py-4 rounded-lg border border-dashed ${isDarkTheme
-                            ? "text-slate-400 bg-slate-50 border-slate-200"
-                            : "text-gray-600 bg-gray-50 border-gray-200"
-                            }`}
-                        >
-                          {t.noConfigs}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* WORKFLOW CONFIGURATION PAGE */}
-          {state.step === "workflow-config" && (
-            <div className="max-w-7xl mx-auto mt-8 flex-1 w-full">
-              <div className="text-center mb-8">
-                <div className="flex items-center justify-center gap-3 mb-4">
-                  <div className="bg-emerald-500 p-3 rounded-lg">
-                    <BrainCircuit className="w-8 h-8 text-black" />
-                  </div>
-                  <h2
-                    className={`text-3xl font-bold ${isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
-                  >
-                    {t.workflowConfig}
-                  </h2>
-                </div>
-                <p
-                  className={`mb-4 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                    }`}
-                >
-                  {t.workflowConfigDesc}
-                </p>
-                <button
-                  onClick={() => switchStepWithTaskPreservation("input")}
-                  className={`inline-flex items-center gap-2 px-4 py-2 text-sm transition-colors ${isDarkTheme
-                    ? "text-slate-400 hover:text-emerald-400"
-                    : "text-gray-600 hover:text-emerald-600"
-                    }`}
-                >
-                  <ArrowRight className="w-4 h-4 rotate-180" />
-                  {state.uiLanguage === "en" ? "Back to Home" : "返回首页"}
-                </button>
-              </div>
-
-              <div className="space-y-8">
-                {/* Mining Workflow */}
-                <div
-                  className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${isDarkTheme
-                    ? "bg-black/40 border-emerald-500/20"
-                    : "bg-white border-emerald-200"
-                    }`}
-                >
-                  <h3
-                    className={`text-xl font-bold mb-2 flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
-                  >
-                    <Search className="w-5 h-5 text-emerald-400" />
-                    {t.miningWorkflow}
-                  </h3>
-                  <p
-                    className={`text-sm mb-6 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                      }`}
-                  >
-                    {MINING_WORKFLOW.description}
-                  </p>
-                  <WorkflowConfigPanel
-                    workflowDef={MINING_WORKFLOW}
-                    currentConfig={getCurrentWorkflowConfig("mining")}
-                    allConfigs={state.workflowConfigs}
-                    onSave={saveWorkflowConfig}
-                    onLoad={(configId) =>
-                      loadWorkflowConfig("mining", configId)
-                    }
-                    onReset={() => resetWorkflowToDefault("mining")}
-                    onDelete={deleteWorkflowConfig}
-                    t={t}
-                    isDarkTheme={isDarkTheme}
-                  />
-                </div>
-
-                {/* Batch Workflow */}
-                <div
-                  className={`backdrop-blur-sm rounded-xl shadow-sm border p-6 ${isDarkTheme
-                    ? "bg-black/40 border-emerald-500/20"
-                    : "bg-white border-emerald-200"
-                    }`}
-                >
-                  <h3
-                    className={`text-xl font-bold mb-2 flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
-                  >
-                    <Languages className="w-5 h-5 text-emerald-400" />
-                    {t.batchWorkflow}
-                  </h3>
-                  <p
-                    className={`text-sm mb-6 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                      }`}
-                  >
-                    {BATCH_WORKFLOW.description}
-                  </p>
-                  <WorkflowConfigPanel
-                    workflowDef={BATCH_WORKFLOW}
-                    currentConfig={getCurrentWorkflowConfig("batch")}
-                    allConfigs={state.workflowConfigs}
-                    onSave={saveWorkflowConfig}
-                    onLoad={(configId) => loadWorkflowConfig("batch", configId)}
-                    onReset={() => resetWorkflowToDefault("batch")}
-                    onDelete={deleteWorkflowConfig}
-                    t={t}
-                    isDarkTheme={isDarkTheme}
-                  />
-                </div>
-
-                {/* Deep Dive Workflow */}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: MINING */}
-          {state.step === "mining" && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-140px)] min-h-[600px] relative">
-              {/* SUCCESS OVERLAY */}
-              {state.miningSuccess && state.showSuccessPrompt && (
-                <div className="absolute inset-0 z-10 bg-black/90 backdrop-blur-sm rounded-xl flex items-start justify-center p-4 pt-8 animate-fade-in overflow-y-auto">
-                  <div className="relative bg-black/80 backdrop-blur-sm rounded-xl shadow-2xl border border-emerald-500/30 p-8 max-w-md w-full text-center">
-                    {/* Close Button */}
-                    <button
-                      onClick={() =>
-                        setState((prev) => ({
-                          ...prev,
-                          showSuccessPrompt: false,
-                        }))
-                      }
-                      className="absolute top-3 right-3 text-zinc-400 hover:text-white transition-colors p-1 rounded hover:bg-zinc-700/50"
-                    >
-                      <X className="w-5 h-5" />
-                    </button>
-                    <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <CheckCircle className="w-8 h-8 text-emerald-400" />
-                    </div>
-                    <h3 className="text-2xl font-bold text-white mb-2">
-                      {t.miningSuccessTitle}
-                    </h3>
-                    <p className="text-slate-400 mb-6">{t.miningSuccessDesc}</p>
-
-                    <div className="bg-black/60 rounded-lg p-4 mb-6 border border-emerald-500/20">
-                      <div className="text-3xl font-bold text-white">
-                        {
-                          state.keywords.filter(
-                            (k) => k.probability === ProbabilityLevel.HIGH
-                          ).length
-                        }
-                      </div>
-                      <div className="text-xs text-slate-400 uppercase font-semibold">
-                        {t.foundCount}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3">
-                      <button
-                        onClick={goToResults}
-                        className="w-full py-3 bg-emerald-500 text-black rounded-lg hover:bg-emerald-600 transition-colors font-bold shadow-lg shadow-emerald-500/20"
-                      >
-                        {t.viewResults}
-                      </button>
-                      <button
-                        onClick={continueMining}
-                        className="w-full py-3 bg-black/60 text-white border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors font-medium"
-                      >
-                        {t.btnExpand}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-3">
-                  <Loader2
-                    className={`w-5 h-5 text-emerald-400 ${!state.miningSuccess && "animate-spin"
-                      }`}
-                  />
-                  <div>
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      {t.generating}
-                      <span className="text-[10px] font-normal bg-emerald-500/20 px-1.5 py-0.5 rounded-full text-emerald-400">
-                        Round {state.miningRound}
-                      </span>
-                    </h3>
-                    <p className="text-xs text-slate-400">{t.analyzing}</p>
-                  </div>
-                </div>
-                {state.miningSuccess && !state.showSuccessPrompt && (
-                  <button
-                    onClick={() =>
-                      setState((prev) => ({ ...prev, showSuccessPrompt: true }))
-                    }
-                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${isDarkTheme
-                      ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/30"
-                      : "bg-emerald-100 border-emerald-300 text-emerald-700 hover:bg-emerald-200"
-                      }`}
-                  >
-                    <CheckCircle className="w-3.5 h-3.5" />
-                    {state.uiLanguage === "zh" ? "完成查看" : "Complete"}
-                  </button>
-                )}
-                {!state.miningSuccess && (
-                  <button
-                    onClick={handleStop}
-                    className={`flex items-center gap-2 px-3 py-1.5 border rounded-md transition-colors text-xs font-medium shadow-sm ${isDarkTheme
-                      ? "bg-black/60 border-red-500/30 text-red-400 hover:bg-red-500/10"
-                      : "bg-white border-red-300 text-red-600 hover:bg-red-50"
-                      }`}
-                  >
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                    {t.btnStop}
-                  </button>
-                )}
-              </div>
-
-              {/* Mining Control Panel */}
-              {!state.miningSuccess && (
-                <div
-                  className={`mb-3 backdrop-blur-sm rounded-xl shadow-sm border px-4 py-2 ${isDarkTheme
-                    ? "bg-black/40 border-emerald-500/20"
-                    : "bg-white border-emerald-200"
-                    }`}
-                >
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <div className="flex items-center gap-2 min-w-fit">
-                      <Settings className="w-3.5 h-3.5 text-emerald-400" />
-                      <h4
-                        className={`text-xs font-bold uppercase tracking-wider ${isDarkTheme ? "text-slate-300" : "text-gray-900"
-                          }`}
-                      >
-                        {t.miningSettings}
-                      </h4>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
-                      {/* Words Per Round */}
-                      <div className="flex items-center gap-2">
-                        <label
-                          className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                            }`}
-                        >
-                          {t.wordsPerRound}
-                        </label>
-                        <input
-                          type="number"
-                          min="5"
-                          max="20"
-                          value={state.wordsPerRound}
-                          onChange={(e) =>
-                            setState((prev) => ({
-                              ...prev,
-                              wordsPerRound: Math.max(
-                                5,
-                                Math.min(20, parseInt(e.target.value) || 10)
-                              ),
-                            }))
-                          }
-                          className={`flex-1 max-w-[60px] px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
-                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
-                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
-                            }`}
-                        />
-                        <span className="text-[10px] text-slate-500 shrink-0 hidden md:block">
-                          {t.applyNextRound}
-                        </span>
-                      </div>
-
-                      {/* Mining Strategy */}
-                      <div className="flex items-center gap-2">
-                        <label
-                          className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                            }`}
-                        >
-                          {t.miningStrategy}
-                        </label>
-                        <select
-                          value={state.miningStrategy}
-                          onChange={(e) =>
-                            setState((prev) => ({
-                              ...prev,
-                              miningStrategy: e.target.value as
-                                | "horizontal"
-                                | "vertical",
-                            }))
-                          }
-                          className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
-                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white"
-                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900"
-                            }`}
-                        >
-                          <option
-                            value="horizontal"
-                            className={isDarkTheme ? "bg-black" : "bg-white"}
-                          >
-                            {t.horizontal}
-                          </option>
-                          <option
-                            value="vertical"
-                            className={isDarkTheme ? "bg-black" : "bg-white"}
-                          >
-                            {t.vertical}
-                          </option>
-                        </select>
-                      </div>
-
-                      {/* User Suggestion */}
-                      <div className="flex items-center gap-2">
-                        <label
-                          className={`shrink-0 text-[11px] font-medium ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                            }`}
-                        >
-                          {t.userSuggestion}
-                        </label>
-                        <input
-                          type="text"
-                          value={state.userSuggestion}
-                          onChange={(e) =>
-                            setState((prev) => ({
-                              ...prev,
-                              userSuggestion: e.target.value,
-                            }))
-                          }
-                          placeholder={t.suggestionPlaceholder}
-                          className={`flex-1 px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-2 ${isDarkTheme
-                            ? "border-emerald-500/30 bg-black/60 focus:ring-emerald-500/50 text-white placeholder:text-slate-500"
-                            : "border-emerald-300 bg-white focus:ring-emerald-500 text-gray-900 placeholder:text-gray-400"
-                            }`}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-                <div className="w-full md:w-[30%] h-full">
-                  <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
-                </div>
-                <div className="w-full md:w-[70%] h-full">
-                  <AgentStream
-                    thoughts={state.agentThoughts}
-                    t={t}
-                    isDarkTheme={isDarkTheme}
-                    uiLanguage={state.uiLanguage}
-                    thinkingStatus={state.thinkingStatus}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* BATCH ANALYZING PAGE */}
-          {state.step === "batch-analyzing" && (
-            <div className="flex-1 flex flex-col h-[calc(100vh-140px)] min-h-[600px] relative">
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-3">
-                  <Loader2 className="w-5 h-5 text-emerald-400 animate-spin" />
-                  <div>
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                      {t.batchAnalyzing}
-                      <span className="text-[10px] font-normal bg-emerald-500/20 px-1.5 py-0.5 rounded-full text-emerald-400">
-                        {state.batchCurrentIndex} / {state.batchTotalCount}
-                      </span>
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      Translating and analyzing keywords...
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={stopBatchAnalysis}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-black/60 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-md transition-colors text-xs font-medium shadow-sm"
-                >
-                  <Square className="w-3.5 h-3.5 fill-current" />
-                  {t.btnStop}
-                </button>
-              </div>
-
-              <div className="flex flex-col md:flex-row gap-6 flex-1 overflow-hidden">
-                <div className="w-full md:w-[30%] h-full">
-                  <TerminalLog logs={state.logs} isDarkTheme={isDarkTheme} />
-                </div>
-                <div className="w-full md:w-[70%] h-full">
-                  <BatchAnalysisStream
-                    thoughts={state.batchThoughts}
-                    t={t}
-                    isDarkTheme={isDarkTheme}
-                    uiLanguage={state.uiLanguage}
-                    thinkingStatus={state.thinkingStatus}
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* BATCH RESULTS PAGE */}
-          {state.step === "batch-results" && (
-            <div className="animate-fade-in flex-1">
-              <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
-                <div>
-                  <h2
-                    className={`text-2xl font-bold flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
-                  >
-                    <Languages className="w-6 h-6 text-emerald-400" />
-                    {t.batchResultsTitle}
-                  </h2>
-                  <p
-                    className={`mt-1 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                      }`}
-                  >
-                    {t.foundOpp} {state.batchKeywords.length} {t.opps}.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={downloadBatchCSV}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black rounded-md hover:bg-emerald-600 transition-colors text-sm font-medium"
-                  >
-                    <Download className="w-4 h-4" />
-                    {t.downloadCSV}
-                  </button>
-                  <button
-                    onClick={reset}
-                    className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${isDarkTheme
-                      ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
-                      : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
-                      }`}
-                  >
-                    {t.newAnalysis}
-                  </button>
-                </div>
-              </div>
-
-              {/* Batch Results Table */}
-              <div
-                className={`backdrop-blur-sm rounded-xl shadow-sm border overflow-hidden min-h-[400px] ${isDarkTheme
-                  ? "bg-black/40 border-emerald-500/20"
-                  : "bg-white border-emerald-200"
-                  }`}
-              >
-                <div className="overflow-x-auto custom-scrollbar">
-                  {(() => {
-                    // DR对比功能已移除
-                    const showDRComparison = false;
-
-                    return (
-                      <table
-                        className={`w-full text-left text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
-                          }`}
-                      >
-                        <thead
-                          className={`text-xs uppercase font-semibold border-b ${isDarkTheme
-                            ? "bg-black/60 text-slate-400 border-emerald-500/20"
-                            : "bg-gray-100 text-gray-700 border-gray-200"
-                            }`}
-                        >
-                          <tr>
-                            <th className="px-4 py-4 w-10"></th>
-                            <th className="px-4 py-4">{t.originalKeyword}</th>
-                            <th className="px-4 py-4">{t.translatedKeyword}</th>
-                            {showDRComparison && (
-                              <th className="px-4 py-4">{t.drComparison}</th>
-                            )}
-                            <th className="px-4 py-4">{t.colType}</th>
-                            <th className="px-4 py-4 text-center">
-                              {t.colProb}
-                            </th>
-                            <th className="px-4 py-4 text-right">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-emerald-500/10">
-                          {state.batchKeywords.map((item) => {
-                            const isExpanded = state.expandedRowId === item.id;
+                        <div className="overflow-x-auto custom-scrollbar">
+                          {(() => {
+                            // DR对比功能已移除
+                            const showDRComparison = false;
 
                             return (
-                              <React.Fragment key={item.id}>
-                                <tr
-                                  className={`transition-colors ${isExpanded
-                                    ? "bg-emerald-500/10"
-                                    : "hover:bg-emerald-500/5"
+                              <table
+                                className={`w-full text-left text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
+                                  }`}
+                              >
+                                <thead
+                                  className={`text-xs uppercase font-semibold border-b ${isDarkTheme
+                                    ? "bg-black/60 text-slate-400 border-emerald-500/20"
+                                    : "bg-gray-100 text-gray-700 border-gray-200"
                                     }`}
                                 >
-                                  <td
-                                    className="px-4 py-4 text-center cursor-pointer"
-                                    onClick={() =>
-                                      setState((prev) => ({
-                                        ...prev,
-                                        expandedRowId: isExpanded
-                                          ? null
-                                          : item.id,
-                                      }))
-                                    }
-                                  >
-                                    {isExpanded ? (
-                                      <ChevronUp className="w-4 h-4 text-emerald-400" />
-                                    ) : (
-                                      <ChevronDown className="w-4 h-4 text-emerald-400" />
+                                  <tr>
+                                    <th className="px-4 py-4 w-10"></th>
+                                    <th className="px-4 py-4">{t.originalKeyword}</th>
+                                    <th className="px-4 py-4">{t.translatedKeyword}</th>
+                                    {showDRComparison && (
+                                      <th className="px-4 py-4">{t.drComparison}</th>
                                     )}
-                                  </td>
-                                  <td
-                                    className={`px-4 py-4 cursor-pointer ${isDarkTheme
-                                      ? "text-white/80"
-                                      : "text-gray-700"
-                                      }`}
-                                    onClick={() =>
-                                      setState((prev) => ({
-                                        ...prev,
-                                        expandedRowId: isExpanded
-                                          ? null
-                                          : item.id,
-                                      }))
-                                    }
-                                  >
-                                    {item.translation}
-                                  </td>
-                                  <td
-                                    className={`px-4 py-4 font-medium cursor-pointer ${isDarkTheme
-                                      ? "text-white"
-                                      : "text-gray-900"
-                                      }`}
-                                    onClick={() =>
-                                      setState((prev) => ({
-                                        ...prev,
-                                        expandedRowId: isExpanded
-                                          ? null
-                                          : item.id,
-                                      }))
-                                    }
-                                  >
-                                    {item.keyword}
-                                  </td>
-                                  {showDRComparison && (
-                                    <td
-                                      className={`px-4 py-4 cursor-pointer ${isDarkTheme
-                                        ? "text-white/80"
-                                        : "text-gray-700"
-                                        }`}
-                                      onClick={() =>
-                                        setState((prev) => ({
-                                          ...prev,
-                                          expandedRowId: isExpanded
-                                            ? null
-                                            : item.id,
-                                        }))
-                                      }
-                                    >
-                                      <div className="flex items-center gap-1">
-                                        <span className="font-bold">
-                                          {item.websiteDR !== undefined
-                                            ? Math.round(item.websiteDR)
-                                            : "-"}
-                                        </span>
-                                        <span className="text-[10px] text-slate-500">
-                                          vs
-                                        </span>
-                                        <span className="font-medium text-amber-400/80">
-                                          {item.competitorDRs &&
-                                            item.competitorDRs.length > 0
-                                            ? Math.round(
-                                              item.competitorDRs.reduce(
-                                                (a: number, b: number) =>
-                                                  a + b,
-                                                0
-                                              ) / item.competitorDRs.length
-                                            )
-                                            : "-"}
-                                        </span>
-                                      </div>
-                                    </td>
-                                  )}
-                                  <td className="px-4 py-4">
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                                      {item.topDomainType || "-"}
-                                    </span>
-                                  </td>
-                                  <td className="px-4 py-4 text-center">
-                                    {(() => {
-                                      // Normalize probability value for comparison
-                                      const normalizedProb = item.probability
-                                        ? String(item.probability).toLowerCase()
-                                        : "low";
-                                      const isHigh =
-                                        normalizedProb === "high" ||
-                                        normalizedProb ===
-                                        ProbabilityLevel.HIGH.toLowerCase();
-                                      const isMedium =
-                                        normalizedProb === "medium" ||
-                                        normalizedProb ===
-                                        ProbabilityLevel.MEDIUM.toLowerCase();
-                                      const displayProb = isHigh
-                                        ? ProbabilityLevel.HIGH
-                                        : isMedium
-                                          ? ProbabilityLevel.MEDIUM
-                                          : ProbabilityLevel.LOW;
-                                      return (
-                                        <span
-                                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${isHigh
-                                            ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
-                                            : isMedium
-                                              ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
-                                              : "bg-red-500/30 text-red-400 border-red-500/50"
+                                    <th className="px-4 py-4">{t.colType}</th>
+                                    <th className="px-4 py-4 text-center">
+                                      {t.colProb}
+                                    </th>
+                                    <th className="px-4 py-4 text-right">Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-emerald-500/10">
+                                  {state.batchKeywords.map((item) => {
+                                    const isExpanded = state.expandedRowId === item.id;
+
+                                    return (
+                                      <React.Fragment key={item.id}>
+                                        <tr
+                                          className={`transition-colors ${isExpanded
+                                            ? "bg-emerald-500/10"
+                                            : "hover:bg-emerald-500/5"
                                             }`}
                                         >
-                                          {displayProb}
-                                        </span>
-                                      );
-                                    })()}
-                                  </td>
-                                  <td className="px-4 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-3">
-                                      <a
-                                        href={`https://www.google.com/search?q=${encodeURIComponent(
-                                          item.keyword
-                                        )}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium border border-emerald-500/30"
-                                        title={t.verifyBtn}
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <ExternalLink className="w-3 h-3" />
-                                        {t.verifyBtn}
-                                      </a>
-
-                                      <button
-                                        className={`text-xs flex items-center gap-1 transition-colors ${isDarkTheme
-                                          ? "text-white/70 hover:text-emerald-400"
-                                          : "text-gray-600 hover:text-emerald-600"
-                                          }`}
-                                        onClick={() =>
-                                          setState((prev) => ({
-                                            ...prev,
-                                            expandedRowId: isExpanded
-                                              ? null
-                                              : item.id,
-                                          }))
-                                        }
-                                      >
-                                        Details
-                                      </button>
-
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleDeepDive(item);
-                                        }}
-                                        className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium"
-                                        title={
-                                          t.btnGenerateArticle || t.deepDive
-                                        }
-                                      >
-                                        <FileText className="w-3 h-3" />
-                                        {t.btnGenerateArticle || t.deepDive}
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-
-                                {/* Expanded Detail View */}
-                                {isExpanded && (
-                                  <tr
-                                    className={`animate-fade-in border-b ${isDarkTheme
-                                      ? "bg-black border-emerald-500/20"
-                                      : "bg-gray-50 border-gray-200"
-                                      }`}
-                                  >
-                                    <td
-                                      colSpan={showDRComparison ? 7 : 6}
-                                      className="px-4 py-6"
-                                    >
-                                      <div className="flex flex-col md:flex-row gap-6">
-                                        <div className="flex-1 space-y-4">
-                                          {/* SE Ranking Data Section */}
-                                          {item.serankingData &&
-                                            item.serankingData
-                                              .is_data_found && (
-                                              <Card
-                                                className={cn(
-                                                  isDarkTheme
-                                                    ? "bg-black border-emerald-500/20"
-                                                    : "bg-white border-emerald-200"
-                                                )}
+                                          <td
+                                            className="px-4 py-4 text-center cursor-pointer"
+                                            onClick={() =>
+                                              setState((prev) => ({
+                                                ...prev,
+                                                expandedRowId: isExpanded
+                                                  ? null
+                                                  : item.id,
+                                              }))
+                                            }
+                                          >
+                                            {isExpanded ? (
+                                              <ChevronUp className="w-4 h-4 text-emerald-400" />
+                                            ) : (
+                                              <ChevronDown className="w-4 h-4 text-emerald-400" />
+                                            )}
+                                          </td>
+                                          <td
+                                            className={`px-4 py-4 cursor-pointer ${isDarkTheme
+                                              ? "text-white/80"
+                                              : "text-gray-700"
+                                              }`}
+                                            onClick={() =>
+                                              setState((prev) => ({
+                                                ...prev,
+                                                expandedRowId: isExpanded
+                                                  ? null
+                                                  : item.id,
+                                              }))
+                                            }
+                                          >
+                                            {item.translation}
+                                          </td>
+                                          <td
+                                            className={`px-4 py-4 font-medium cursor-pointer ${isDarkTheme
+                                              ? "text-white"
+                                              : "text-gray-900"
+                                              }`}
+                                            onClick={() =>
+                                              setState((prev) => ({
+                                                ...prev,
+                                                expandedRowId: isExpanded
+                                                  ? null
+                                                  : item.id,
+                                              }))
+                                            }
+                                          >
+                                            {item.keyword}
+                                          </td>
+                                          {showDRComparison && (
+                                            <td
+                                              className={`px-4 py-4 cursor-pointer ${isDarkTheme
+                                                ? "text-white/80"
+                                                : "text-gray-700"
+                                                }`}
+                                              onClick={() =>
+                                                setState((prev) => ({
+                                                  ...prev,
+                                                  expandedRowId: isExpanded
+                                                    ? null
+                                                    : item.id,
+                                                }))
+                                              }
+                                            >
+                                              <div className="flex items-center gap-1">
+                                                <span className="font-bold">
+                                                  {item.websiteDR !== undefined
+                                                    ? Math.round(item.websiteDR)
+                                                    : "-"}
+                                                </span>
+                                                <span className="text-[10px] text-slate-500">
+                                                  vs
+                                                </span>
+                                                <span className="font-medium text-amber-400/80">
+                                                  {item.competitorDRs &&
+                                                    item.competitorDRs.length > 0
+                                                    ? Math.round(
+                                                      item.competitorDRs.reduce(
+                                                        (a: number, b: number) =>
+                                                          a + b,
+                                                        0
+                                                      ) / item.competitorDRs.length
+                                                    )
+                                                    : "-"}
+                                                </span>
+                                              </div>
+                                            </td>
+                                          )}
+                                          <td className="px-4 py-4">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                              {item.topDomainType || "-"}
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-4 text-center">
+                                            {(() => {
+                                              // Normalize probability value for comparison
+                                              const normalizedProb = item.probability
+                                                ? String(item.probability).toLowerCase()
+                                                : "low";
+                                              const isHigh =
+                                                normalizedProb === "high" ||
+                                                normalizedProb ===
+                                                ProbabilityLevel.HIGH.toLowerCase();
+                                              const isMedium =
+                                                normalizedProb === "medium" ||
+                                                normalizedProb ===
+                                                ProbabilityLevel.MEDIUM.toLowerCase();
+                                              const displayProb = isHigh
+                                                ? ProbabilityLevel.HIGH
+                                                : isMedium
+                                                  ? ProbabilityLevel.MEDIUM
+                                                  : ProbabilityLevel.LOW;
+                                              return (
+                                                <span
+                                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${isHigh
+                                                    ? "bg-emerald-500/30 text-emerald-400 border-emerald-500/50"
+                                                    : isMedium
+                                                      ? "bg-yellow-500/30 text-yellow-400 border-yellow-500/50"
+                                                      : "bg-red-500/30 text-red-400 border-red-500/50"
+                                                    }`}
+                                                >
+                                                  {displayProb}
+                                                </span>
+                                              );
+                                            })()}
+                                          </td>
+                                          <td className="px-4 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-3">
+                                              <a
+                                                href={`https://www.google.com/search?q=${encodeURIComponent(
+                                                  item.keyword
+                                                )}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium border border-emerald-500/30"
+                                                title={t.verifyBtn}
+                                                onClick={(e) => e.stopPropagation()}
                                               >
-                                                <CardHeader className="pb-3">
-                                                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                                    <TrendingUp
-                                                      className={cn(
-                                                        "w-4 h-4",
-                                                        isDarkTheme
-                                                          ? "text-emerald-400"
-                                                          : "text-emerald-600"
-                                                      )}
-                                                    />
-                                                    <span
-                                                      className={cn(
-                                                        isDarkTheme
-                                                          ? "text-white"
-                                                          : "text-slate-900"
-                                                      )}
-                                                    >
-                                                      SEO词研究工具 (SE Ranking
-                                                      Data)
-                                                    </span>
-                                                  </CardTitle>
-                                                </CardHeader>
-                                                <CardContent className="space-y-4">
-                                                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                                    {/* Search Volume */}
-                                                    <Card
-                                                      className={cn(
-                                                        isDarkTheme
-                                                          ? "bg-black border-emerald-500/20"
-                                                          : "bg-emerald-50 border-emerald-200"
-                                                      )}
-                                                    >
-                                                      <CardContent className="p-4">
-                                                        <div
-                                                          className={cn(
-                                                            "text-xs font-medium mb-1.5",
-                                                            isDarkTheme
-                                                              ? "text-white/70"
-                                                              : "text-emerald-700"
-                                                          )}
-                                                        >
-                                                          SEARCH VOLUME
-                                                        </div>
-                                                        <div
-                                                          className={cn(
-                                                            "text-xl font-bold",
-                                                            isDarkTheme
-                                                              ? "text-emerald-400"
-                                                              : "text-emerald-600"
-                                                          )}
-                                                        >
-                                                          {item.serankingData.volume?.toLocaleString() ||
-                                                            "N/A"}
-                                                        </div>
-                                                        <div
-                                                          className={cn(
-                                                            "text-xs mt-1",
-                                                            isDarkTheme
-                                                              ? "text-white/60"
-                                                              : "text-emerald-600/70"
-                                                          )}
-                                                        >
-                                                          monthly searches
-                                                        </div>
-                                                      </CardContent>
-                                                    </Card>
+                                                <ExternalLink className="w-3 h-3" />
+                                                {t.verifyBtn}
+                                              </a>
 
-                                                    {/* Competition */}
-                                                    <Card
-                                                      className={cn(
-                                                        isDarkTheme
-                                                          ? "bg-black border-emerald-500/20"
-                                                          : "bg-emerald-50 border-emerald-200"
-                                                      )}
-                                                    >
-                                                      <CardContent className="p-4">
-                                                        <div
-                                                          className={cn(
-                                                            "text-xs font-medium mb-1.5",
-                                                            isDarkTheme
-                                                              ? "text-white/70"
-                                                              : "text-emerald-700"
-                                                          )}
-                                                        >
-                                                          COMPETITION
-                                                        </div>
-                                                        <div
-                                                          className={cn(
-                                                            "text-xl font-bold",
-                                                            isDarkTheme
-                                                              ? "text-emerald-400"
-                                                              : "text-emerald-600"
-                                                          )}
-                                                        >
-                                                          {item.serankingData
-                                                            .competition
-                                                            ? typeof item
-                                                              .serankingData
-                                                              .competition ===
-                                                              "number"
-                                                              ? (
-                                                                item
-                                                                  .serankingData
-                                                                  .competition *
-                                                                100
-                                                              ).toFixed(1) +
-                                                              "%"
-                                                              : item
-                                                                .serankingData
-                                                                .competition
-                                                            : "N/A"}
-                                                        </div>
-                                                        <div
-                                                          className={cn(
-                                                            "text-xs mt-1",
-                                                            isDarkTheme
-                                                              ? "text-white/60"
-                                                              : "text-emerald-600/70"
-                                                          )}
-                                                        >
-                                                          advertiser competition
-                                                        </div>
-                                                      </CardContent>
-                                                    </Card>
-                                                  </div>
+                                              <button
+                                                className={`text-xs flex items-center gap-1 transition-colors ${isDarkTheme
+                                                  ? "text-white/70 hover:text-emerald-400"
+                                                  : "text-gray-600 hover:text-emerald-600"
+                                                  }`}
+                                                onClick={() =>
+                                                  setState((prev) => ({
+                                                    ...prev,
+                                                    expandedRowId: isExpanded
+                                                      ? null
+                                                      : item.id,
+                                                  }))
+                                                }
+                                              >
+                                                Details
+                                              </button>
 
-                                                  {/* History Trend - Full Width Below */}
-                                                  {item.serankingData
-                                                    .history_trend &&
-                                                    Object.keys(
-                                                      item.serankingData
-                                                        .history_trend
-                                                    ).length > 0 && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeepDive(item);
+                                                }}
+                                                className="flex items-center gap-1 px-2 py-1.5 bg-emerald-500/20 text-emerald-400 rounded hover:bg-emerald-500/30 transition-colors text-xs font-medium"
+                                                title={
+                                                  t.btnGenerateArticle || t.deepDive
+                                                }
+                                              >
+                                                <FileText className="w-3 h-3" />
+                                                {t.btnGenerateArticle || t.deepDive}
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+
+                                        {/* Expanded Detail View */}
+                                        {isExpanded && (
+                                          <tr
+                                            className={`animate-fade-in border-b ${isDarkTheme
+                                              ? "bg-black border-emerald-500/20"
+                                              : "bg-gray-50 border-gray-200"
+                                              }`}
+                                          >
+                                            <td
+                                              colSpan={showDRComparison ? 7 : 6}
+                                              className="px-4 py-6"
+                                            >
+                                              <div className="flex flex-col md:flex-row gap-6">
+                                                <div className="flex-1 space-y-4">
+                                                  {/* SE Ranking Data Section */}
+                                                  {item.serankingData &&
+                                                    item.serankingData
+                                                      .is_data_found && (
                                                       <Card
                                                         className={cn(
                                                           isDarkTheme
-                                                            ? "bg-emerald-500/10 border-emerald-500/30"
-                                                            : "bg-emerald-50 border-emerald-200"
+                                                            ? "bg-black border-emerald-500/20"
+                                                            : "bg-white border-emerald-200"
                                                         )}
                                                       >
-                                                        <CardContent className="p-4">
-                                                          <div
-                                                            className={cn(
-                                                              "text-xs font-semibold mb-3 flex items-center gap-2",
-                                                              isDarkTheme
-                                                                ? "text-emerald-300"
-                                                                : "text-emerald-700"
-                                                            )}
-                                                          >
+                                                        <CardHeader className="pb-3">
+                                                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
                                                             <TrendingUp
                                                               className={cn(
                                                                 "w-4 h-4",
@@ -12596,922 +12479,813 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                                                   : "text-emerald-600"
                                                               )}
                                                             />
-                                                            SEARCH VOLUME TREND
-                                                            (Last 12 Months)
+                                                            <span
+                                                              className={cn(
+                                                                isDarkTheme
+                                                                  ? "text-white"
+                                                                  : "text-slate-900"
+                                                              )}
+                                                            >
+                                                              SEO词研究工具 (SE Ranking
+                                                              Data)
+                                                            </span>
+                                                          </CardTitle>
+                                                        </CardHeader>
+                                                        <CardContent className="space-y-4">
+                                                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                            {/* Search Volume */}
+                                                            <Card
+                                                              className={cn(
+                                                                isDarkTheme
+                                                                  ? "bg-black border-emerald-500/20"
+                                                                  : "bg-emerald-50 border-emerald-200"
+                                                              )}
+                                                            >
+                                                              <CardContent className="p-4">
+                                                                <div
+                                                                  className={cn(
+                                                                    "text-xs font-medium mb-1.5",
+                                                                    isDarkTheme
+                                                                      ? "text-white/70"
+                                                                      : "text-emerald-700"
+                                                                  )}
+                                                                >
+                                                                  SEARCH VOLUME
+                                                                </div>
+                                                                <div
+                                                                  className={cn(
+                                                                    "text-xl font-bold",
+                                                                    isDarkTheme
+                                                                      ? "text-emerald-400"
+                                                                      : "text-emerald-600"
+                                                                  )}
+                                                                >
+                                                                  {item.serankingData.volume?.toLocaleString() ||
+                                                                    "N/A"}
+                                                                </div>
+                                                                <div
+                                                                  className={cn(
+                                                                    "text-xs mt-1",
+                                                                    isDarkTheme
+                                                                      ? "text-white/60"
+                                                                      : "text-emerald-600/70"
+                                                                  )}
+                                                                >
+                                                                  monthly searches
+                                                                </div>
+                                                              </CardContent>
+                                                            </Card>
+
+                                                            {/* Competition */}
+                                                            <Card
+                                                              className={cn(
+                                                                isDarkTheme
+                                                                  ? "bg-black border-emerald-500/20"
+                                                                  : "bg-emerald-50 border-emerald-200"
+                                                              )}
+                                                            >
+                                                              <CardContent className="p-4">
+                                                                <div
+                                                                  className={cn(
+                                                                    "text-xs font-medium mb-1.5",
+                                                                    isDarkTheme
+                                                                      ? "text-white/70"
+                                                                      : "text-emerald-700"
+                                                                  )}
+                                                                >
+                                                                  COMPETITION
+                                                                </div>
+                                                                <div
+                                                                  className={cn(
+                                                                    "text-xl font-bold",
+                                                                    isDarkTheme
+                                                                      ? "text-emerald-400"
+                                                                      : "text-emerald-600"
+                                                                  )}
+                                                                >
+                                                                  {item.serankingData
+                                                                    .competition
+                                                                    ? typeof item
+                                                                      .serankingData
+                                                                      .competition ===
+                                                                      "number"
+                                                                      ? (
+                                                                        item
+                                                                          .serankingData
+                                                                          .competition *
+                                                                        100
+                                                                      ).toFixed(1) +
+                                                                      "%"
+                                                                      : item
+                                                                        .serankingData
+                                                                        .competition
+                                                                    : "N/A"}
+                                                                </div>
+                                                                <div
+                                                                  className={cn(
+                                                                    "text-xs mt-1",
+                                                                    isDarkTheme
+                                                                      ? "text-white/60"
+                                                                      : "text-emerald-600/70"
+                                                                  )}
+                                                                >
+                                                                  advertiser competition
+                                                                </div>
+                                                              </CardContent>
+                                                            </Card>
                                                           </div>
-                                                          <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                                                            {Object.entries(
+
+                                                          {/* History Trend - Full Width Below */}
+                                                          {item.serankingData
+                                                            .history_trend &&
+                                                            Object.keys(
                                                               item.serankingData
                                                                 .history_trend
-                                                            )
-                                                              .sort(
-                                                                (
-                                                                  [dateA],
-                                                                  [dateB]
-                                                                ) =>
-                                                                  dateA.localeCompare(
-                                                                    dateB
-                                                                  )
-                                                              )
-                                                              .map(
-                                                                ([
-                                                                  date,
-                                                                  volume,
-                                                                ]) => {
-                                                                  const monthYear =
-                                                                    new Date(
-                                                                      date
-                                                                    ).toLocaleDateString(
-                                                                      "en-US",
-                                                                      {
-                                                                        month:
-                                                                          "short",
-                                                                        year: "2-digit",
-                                                                      }
-                                                                    );
-                                                                  return (
-                                                                    <Card
-                                                                      key={date}
+                                                            ).length > 0 && (
+                                                              <Card
+                                                                className={cn(
+                                                                  isDarkTheme
+                                                                    ? "bg-emerald-500/10 border-emerald-500/30"
+                                                                    : "bg-emerald-50 border-emerald-200"
+                                                                )}
+                                                              >
+                                                                <CardContent className="p-4">
+                                                                  <div
+                                                                    className={cn(
+                                                                      "text-xs font-semibold mb-3 flex items-center gap-2",
+                                                                      isDarkTheme
+                                                                        ? "text-emerald-300"
+                                                                        : "text-emerald-700"
+                                                                    )}
+                                                                  >
+                                                                    <TrendingUp
                                                                       className={cn(
-                                                                        "text-center",
+                                                                        "w-4 h-4",
                                                                         isDarkTheme
-                                                                          ? "bg-black border-emerald-500/20"
-                                                                          : "bg-white border-emerald-200"
+                                                                          ? "text-emerald-400"
+                                                                          : "text-emerald-600"
                                                                       )}
-                                                                    >
-                                                                      <CardContent className="p-2">
-                                                                        <div
-                                                                          className={cn(
-                                                                            "text-xs font-medium mb-1",
-                                                                            isDarkTheme
-                                                                              ? "text-emerald-300/80"
-                                                                              : "text-emerald-600/80"
-                                                                          )}
-                                                                        >
-                                                                          {
-                                                                            monthYear
-                                                                          }
-                                                                        </div>
-                                                                        <div
-                                                                          className={cn(
-                                                                            "text-sm font-bold",
-                                                                            isDarkTheme
-                                                                              ? "text-emerald-400"
-                                                                              : "text-emerald-600"
-                                                                          )}
-                                                                        >
-                                                                          {typeof volume ===
-                                                                            "number"
-                                                                            ? volume.toLocaleString()
-                                                                            : volume}
-                                                                        </div>
-                                                                      </CardContent>
-                                                                    </Card>
-                                                                  );
-                                                                }
-                                                              )}
-                                                          </div>
+                                                                    />
+                                                                    SEARCH VOLUME TREND
+                                                                    (Last 12 Months)
+                                                                  </div>
+                                                                  <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                                                                    {Object.entries(
+                                                                      item.serankingData
+                                                                        .history_trend
+                                                                    )
+                                                                      .sort(
+                                                                        (
+                                                                          [dateA],
+                                                                          [dateB]
+                                                                        ) =>
+                                                                          dateA.localeCompare(
+                                                                            dateB
+                                                                          )
+                                                                      )
+                                                                      .map(
+                                                                        ([
+                                                                          date,
+                                                                          volume,
+                                                                        ]) => {
+                                                                          const monthYear =
+                                                                            new Date(
+                                                                              date
+                                                                            ).toLocaleDateString(
+                                                                              "en-US",
+                                                                              {
+                                                                                month:
+                                                                                  "short",
+                                                                                year: "2-digit",
+                                                                              }
+                                                                            );
+                                                                          return (
+                                                                            <Card
+                                                                              key={date}
+                                                                              className={cn(
+                                                                                "text-center",
+                                                                                isDarkTheme
+                                                                                  ? "bg-black border-emerald-500/20"
+                                                                                  : "bg-white border-emerald-200"
+                                                                              )}
+                                                                            >
+                                                                              <CardContent className="p-2">
+                                                                                <div
+                                                                                  className={cn(
+                                                                                    "text-xs font-medium mb-1",
+                                                                                    isDarkTheme
+                                                                                      ? "text-emerald-300/80"
+                                                                                      : "text-emerald-600/80"
+                                                                                  )}
+                                                                                >
+                                                                                  {
+                                                                                    monthYear
+                                                                                  }
+                                                                                </div>
+                                                                                <div
+                                                                                  className={cn(
+                                                                                    "text-sm font-bold",
+                                                                                    isDarkTheme
+                                                                                      ? "text-emerald-400"
+                                                                                      : "text-emerald-600"
+                                                                                  )}
+                                                                                >
+                                                                                  {typeof volume ===
+                                                                                    "number"
+                                                                                    ? volume.toLocaleString()
+                                                                                    : volume}
+                                                                                </div>
+                                                                              </CardContent>
+                                                                            </Card>
+                                                                          );
+                                                                        }
+                                                                      )}
+                                                                  </div>
+                                                                </CardContent>
+                                                              </Card>
+                                                            )}
                                                         </CardContent>
                                                       </Card>
                                                     )}
-                                                </CardContent>
-                                              </Card>
-                                            )}
 
-                                          {/* Search Intent Section */}
-                                          {(item.searchIntent ||
-                                            item.intentAnalysis) && (
-                                              <Card
-                                                className={cn(
-                                                  isDarkTheme
-                                                    ? "bg-black border-emerald-500/30"
-                                                    : "bg-white border-emerald-200"
-                                                )}
-                                              >
-                                                <CardHeader className="pb-3">
-                                                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                                    <BrainCircuit
-                                                      className={cn(
-                                                        "w-4 h-4",
-                                                        isDarkTheme
-                                                          ? "text-emerald-400"
-                                                          : "text-emerald-600"
-                                                      )}
-                                                    />
-                                                    <span
-                                                      className={cn(
-                                                        isDarkTheme
-                                                          ? "text-white"
-                                                          : "text-slate-900"
-                                                      )}
-                                                    >
-                                                      Search Intent Analysis
-                                                    </span>
-                                                  </CardTitle>
-                                                </CardHeader>
-                                                <CardContent className="space-y-3">
-                                                  {item.searchIntent && (
-                                                    <Card
-                                                      className={cn(
-                                                        isDarkTheme
-                                                          ? "bg-black border-emerald-500/30"
-                                                          : "bg-emerald-50 border-emerald-200"
-                                                      )}
-                                                    >
-                                                      <CardContent className="p-4">
-                                                        <div
-                                                          className={cn(
-                                                            "text-xs font-semibold mb-2",
-                                                            isDarkTheme
-                                                              ? "text-emerald-400"
-                                                              : "text-emerald-700"
-                                                          )}
-                                                        >
-                                                          USER INTENT
-                                                        </div>
-                                                        <p
-                                                          className={cn(
-                                                            "text-sm leading-relaxed",
-                                                            isDarkTheme
-                                                              ? "text-white"
-                                                              : "text-slate-700"
-                                                          )}
-                                                        >
-                                                          {item.searchIntent}
-                                                        </p>
-                                                      </CardContent>
-                                                    </Card>
-                                                  )}
-                                                  {item.intentAnalysis && (
-                                                    <Card
-                                                      className={cn(
-                                                        isDarkTheme
-                                                          ? "bg-black border-emerald-500/30"
-                                                          : "bg-emerald-50 border-emerald-200"
-                                                      )}
-                                                    >
-                                                      <CardContent className="p-4">
-                                                        <div
-                                                          className={cn(
-                                                            "text-xs font-semibold mb-2",
-                                                            isDarkTheme
-                                                              ? "text-emerald-400"
-                                                              : "text-emerald-700"
-                                                          )}
-                                                        >
-                                                          INTENT vs SERP MATCH
-                                                        </div>
-                                                        <p
-                                                          className={cn(
-                                                            "text-sm leading-relaxed",
-                                                            isDarkTheme
-                                                              ? "text-white"
-                                                              : "text-slate-700"
-                                                          )}
-                                                        >
-                                                          {item.intentAnalysis}
-                                                        </p>
-                                                      </CardContent>
-                                                    </Card>
-                                                  )}
-                                                </CardContent>
-                                              </Card>
-                                            )}
-
-                                          {/* Analysis Reasoning */}
-                                          <Card
-                                            className={cn(
-                                              isDarkTheme
-                                                ? "bg-black border-emerald-500/20"
-                                                : "bg-white border-emerald-200"
-                                            )}
-                                          >
-                                            <CardHeader className="pb-3">
-                                              <CardTitle
-                                                className={cn(
-                                                  "text-sm font-semibold",
-                                                  isDarkTheme
-                                                    ? "text-white"
-                                                    : "text-slate-900"
-                                                )}
-                                              >
-                                                {t.analysisReasoning ||
-                                                  "Analysis Reasoning"}
-                                              </CardTitle>
-                                            </CardHeader>
-                                            <CardContent>
-                                              <div
-                                                className={cn(
-                                                  "prose prose-sm max-w-none",
-                                                  isDarkTheme
-                                                    ? "prose-invert prose-emerald prose-headings:text-white prose-p:text-white prose-strong:text-white prose-li:text-white"
-                                                    : "prose-slate"
-                                                )}
-                                              >
-                                                <MarkdownContent
-                                                  content={
-                                                    item.reasoning ||
-                                                    "No reasoning provided"
-                                                  }
-                                                  isDarkTheme={isDarkTheme}
-                                                />
-                                              </div>
-                                            </CardContent>
-                                          </Card>
-
-                                          {/* Summary Stats */}
-                                          <Card
-                                            className={cn(
-                                              isDarkTheme
-                                                ? "bg-black border-emerald-500/20"
-                                                : "bg-white border-emerald-200"
-                                            )}
-                                          >
-                                            <CardContent className="p-4">
-                                              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                                {/* SE Ranking Volume (replaces SERP estimate) */}
-                                                {item.serankingData &&
-                                                  item.serankingData
-                                                    .is_data_found ? (
-                                                  <div>
-                                                    <span
-                                                      className={cn(
-                                                        "text-xs block mb-1",
-                                                        isDarkTheme
-                                                          ? "text-emerald-300/80"
-                                                          : "text-emerald-700"
-                                                      )}
-                                                    >
-                                                      Search Volume (SE Ranking)
-                                                    </span>
-                                                    <span
-                                                      className={cn(
-                                                        "text-sm font-semibold",
-                                                        isDarkTheme
-                                                          ? "text-emerald-400"
-                                                          : "text-emerald-600"
-                                                      )}
-                                                    >
-                                                      {item.serankingData.volume?.toLocaleString() ||
-                                                        "N/A"}
-                                                    </span>
-                                                  </div>
-                                                ) : (
-                                                  <div>
-                                                    <span
-                                                      className={cn(
-                                                        "text-xs block mb-1",
-                                                        isDarkTheme
-                                                          ? "text-emerald-300/80"
-                                                          : "text-emerald-700"
-                                                      )}
-                                                    >
-                                                      Reference SERP Count
-                                                    </span>
-                                                    <span
-                                                      className={cn(
-                                                        "text-sm font-semibold",
-                                                        isDarkTheme
-                                                          ? "text-emerald-100"
-                                                          : "text-slate-900"
-                                                      )}
-                                                    >
-                                                      {item.serpResultCount ===
-                                                        -1
-                                                        ? "Unknown (Many)"
-                                                        : item.serpResultCount ??
-                                                        "Unknown"}
-                                                    </span>
-                                                  </div>
-                                                )}
-
-                                                {/* Keyword Difficulty (if SE Ranking data available) */}
-                                                {item.serankingData &&
-                                                  item.serankingData
-                                                    .is_data_found && (
-                                                    <div>
-                                                      <span
+                                                  {/* Search Intent Section */}
+                                                  {(item.searchIntent ||
+                                                    item.intentAnalysis) && (
+                                                      <Card
                                                         className={cn(
-                                                          "text-xs block mb-1",
                                                           isDarkTheme
-                                                            ? "text-emerald-300/80"
-                                                            : "text-emerald-700"
+                                                            ? "bg-black border-emerald-500/30"
+                                                            : "bg-white border-emerald-200"
                                                         )}
                                                       >
-                                                        Keyword Difficulty
-                                                      </span>
-                                                      <span
+                                                        <CardHeader className="pb-3">
+                                                          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                                            <BrainCircuit
+                                                              className={cn(
+                                                                "w-4 h-4",
+                                                                isDarkTheme
+                                                                  ? "text-emerald-400"
+                                                                  : "text-emerald-600"
+                                                              )}
+                                                            />
+                                                            <span
+                                                              className={cn(
+                                                                isDarkTheme
+                                                                  ? "text-white"
+                                                                  : "text-slate-900"
+                                                              )}
+                                                            >
+                                                              Search Intent Analysis
+                                                            </span>
+                                                          </CardTitle>
+                                                        </CardHeader>
+                                                        <CardContent className="space-y-3">
+                                                          {item.searchIntent && (
+                                                            <Card
+                                                              className={cn(
+                                                                isDarkTheme
+                                                                  ? "bg-black border-emerald-500/30"
+                                                                  : "bg-emerald-50 border-emerald-200"
+                                                              )}
+                                                            >
+                                                              <CardContent className="p-4">
+                                                                <div
+                                                                  className={cn(
+                                                                    "text-xs font-semibold mb-2",
+                                                                    isDarkTheme
+                                                                      ? "text-emerald-400"
+                                                                      : "text-emerald-700"
+                                                                  )}
+                                                                >
+                                                                  USER INTENT
+                                                                </div>
+                                                                <p
+                                                                  className={cn(
+                                                                    "text-sm leading-relaxed",
+                                                                    isDarkTheme
+                                                                      ? "text-white"
+                                                                      : "text-slate-700"
+                                                                  )}
+                                                                >
+                                                                  {item.searchIntent}
+                                                                </p>
+                                                              </CardContent>
+                                                            </Card>
+                                                          )}
+                                                          {item.intentAnalysis && (
+                                                            <Card
+                                                              className={cn(
+                                                                isDarkTheme
+                                                                  ? "bg-black border-emerald-500/30"
+                                                                  : "bg-emerald-50 border-emerald-200"
+                                                              )}
+                                                            >
+                                                              <CardContent className="p-4">
+                                                                <div
+                                                                  className={cn(
+                                                                    "text-xs font-semibold mb-2",
+                                                                    isDarkTheme
+                                                                      ? "text-emerald-400"
+                                                                      : "text-emerald-700"
+                                                                  )}
+                                                                >
+                                                                  INTENT vs SERP MATCH
+                                                                </div>
+                                                                <p
+                                                                  className={cn(
+                                                                    "text-sm leading-relaxed",
+                                                                    isDarkTheme
+                                                                      ? "text-white"
+                                                                      : "text-slate-700"
+                                                                  )}
+                                                                >
+                                                                  {item.intentAnalysis}
+                                                                </p>
+                                                              </CardContent>
+                                                            </Card>
+                                                          )}
+                                                        </CardContent>
+                                                      </Card>
+                                                    )}
+
+                                                  {/* Analysis Reasoning */}
+                                                  <Card
+                                                    className={cn(
+                                                      isDarkTheme
+                                                        ? "bg-black border-emerald-500/20"
+                                                        : "bg-white border-emerald-200"
+                                                    )}
+                                                  >
+                                                    <CardHeader className="pb-3">
+                                                      <CardTitle
                                                         className={cn(
                                                           "text-sm font-semibold",
-                                                          (item.serankingData
-                                                            .difficulty || 0) <=
-                                                            40
-                                                            ? isDarkTheme
-                                                              ? "text-emerald-400"
-                                                              : "text-emerald-600"
-                                                            : (item
-                                                              .serankingData
-                                                              .difficulty ||
-                                                              0) <= 60
-                                                              ? isDarkTheme
-                                                                ? "text-yellow-400"
-                                                                : "text-yellow-600"
-                                                              : isDarkTheme
-                                                                ? "text-red-400"
-                                                                : "text-red-600"
+                                                          isDarkTheme
+                                                            ? "text-white"
+                                                            : "text-slate-900"
                                                         )}
                                                       >
-                                                        {item.serankingData
-                                                          .difficulty || "N/A"}
-                                                      </span>
-                                                    </div>
-                                                  )}
+                                                        {t.analysisReasoning ||
+                                                          "Analysis Reasoning"}
+                                                      </CardTitle>
+                                                    </CardHeader>
+                                                    <CardContent>
+                                                      <div
+                                                        className={cn(
+                                                          "prose prose-sm max-w-none",
+                                                          isDarkTheme
+                                                            ? "prose-invert prose-emerald prose-headings:text-white prose-p:text-white prose-strong:text-white prose-li:text-white"
+                                                            : "prose-slate"
+                                                        )}
+                                                      >
+                                                        <MarkdownContent
+                                                          content={
+                                                            item.reasoning ||
+                                                            "No reasoning provided"
+                                                          }
+                                                          isDarkTheme={isDarkTheme}
+                                                        />
+                                                      </div>
+                                                    </CardContent>
+                                                  </Card>
 
-                                                <div>
-                                                  <span
+                                                  {/* Summary Stats */}
+                                                  <Card
                                                     className={cn(
-                                                      "text-xs block mb-1",
                                                       isDarkTheme
-                                                        ? "text-emerald-300/80"
-                                                        : "text-emerald-700"
+                                                        ? "bg-black border-emerald-500/20"
+                                                        : "bg-white border-emerald-200"
                                                     )}
                                                   >
-                                                    Top Competitor Type
-                                                  </span>
-                                                  <Badge
-                                                    variant="outline"
-                                                    className={cn(
-                                                      "text-xs",
-                                                      isDarkTheme
-                                                        ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/10"
-                                                        : "border-emerald-300 text-emerald-700 bg-emerald-50"
-                                                    )}
-                                                  >
-                                                    {item.topDomainType ?? "-"}
-                                                  </Badge>
-                                                </div>
-                                              </div>
-                                            </CardContent>
-                                          </Card>
-
-                                          {/* SERP EVIDENCE IN DETAILS */}
-                                          {item.serpResultCount === 0 ? (
-                                            <Card
-                                              className={cn(
-                                                isDarkTheme
-                                                  ? "bg-emerald-500/10 border-emerald-500/30"
-                                                  : "bg-emerald-50 border-emerald-200"
-                                              )}
-                                            >
-                                              <CardContent className="p-4">
-                                                <div
-                                                  className={cn(
-                                                    "flex items-center gap-2 text-sm font-medium",
-                                                    isDarkTheme
-                                                      ? "text-emerald-300"
-                                                      : "text-emerald-700"
-                                                  )}
-                                                >
-                                                  <Lightbulb
-                                                    className={cn(
-                                                      "w-4 h-4",
-                                                      isDarkTheme
-                                                        ? "text-emerald-400"
-                                                        : "text-emerald-600"
-                                                    )}
-                                                  />
-                                                  No direct competitors found in
-                                                  search.
-                                                </div>
-                                              </CardContent>
-                                            </Card>
-                                          ) : (
-                                            item.topSerpSnippets &&
-                                            item.topSerpSnippets.length > 0 && (
-                                              <Card
-                                                className={cn(
-                                                  isDarkTheme
-                                                    ? "bg-black/40 border-emerald-500/20"
-                                                    : "bg-white border-emerald-200"
-                                                )}
-                                              >
-                                                <CardHeader className="pb-3">
-                                                  <div className="flex justify-between items-center">
-                                                    <CardTitle
-                                                      className={cn(
-                                                        "text-sm font-semibold",
-                                                        isDarkTheme
-                                                          ? "text-emerald-100"
-                                                          : "text-slate-900"
-                                                      )}
-                                                    >
-                                                      {t.serpEvidence}
-                                                    </CardTitle>
-                                                    <Badge
-                                                      variant="outline"
-                                                      className={cn(
-                                                        "text-[10px]",
-                                                        isDarkTheme
-                                                          ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/10"
-                                                          : "border-emerald-200 text-emerald-700 bg-emerald-50"
-                                                      )}
-                                                    >
-                                                      {t.serpEvidenceDisclaimer}
-                                                    </Badge>
-                                                  </div>
-                                                </CardHeader>
-                                                <CardContent>
-                                                  <div className="space-y-3">
-                                                    {item.topSerpSnippets
-                                                      .slice(0, 3)
-                                                      .map((snip, i) => (
-                                                        <Card
-                                                          key={i}
-                                                          className={cn(
-                                                            isDarkTheme
-                                                              ? "bg-emerald-500/10 border-emerald-500/30"
-                                                              : "bg-emerald-50 border-emerald-200"
-                                                          )}
-                                                        >
-                                                          <CardContent className="p-3">
-                                                            <div
+                                                    <CardContent className="p-4">
+                                                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                                        {/* SE Ranking Volume (replaces SERP estimate) */}
+                                                        {item.serankingData &&
+                                                          item.serankingData
+                                                            .is_data_found ? (
+                                                          <div>
+                                                            <span
                                                               className={cn(
-                                                                "text-sm font-semibold mb-1 truncate",
+                                                                "text-xs block mb-1",
                                                                 isDarkTheme
-                                                                  ? "text-emerald-300"
+                                                                  ? "text-emerald-300/80"
                                                                   : "text-emerald-700"
                                                               )}
                                                             >
-                                                              {snip.title}
-                                                            </div>
-                                                            <div
+                                                              Search Volume (SE Ranking)
+                                                            </span>
+                                                            <span
                                                               className={cn(
-                                                                "text-xs mb-2 truncate",
+                                                                "text-sm font-semibold",
                                                                 isDarkTheme
                                                                   ? "text-emerald-400"
                                                                   : "text-emerald-600"
                                                               )}
                                                             >
-                                                              {snip.url}
-                                                            </div>
-                                                            <div
+                                                              {item.serankingData.volume?.toLocaleString() ||
+                                                                "N/A"}
+                                                            </span>
+                                                          </div>
+                                                        ) : (
+                                                          <div>
+                                                            <span
                                                               className={cn(
-                                                                "text-xs line-clamp-2 leading-relaxed",
+                                                                "text-xs block mb-1",
                                                                 isDarkTheme
-                                                                  ? "text-emerald-100/80"
-                                                                  : "text-slate-600"
+                                                                  ? "text-emerald-300/80"
+                                                                  : "text-emerald-700"
                                                               )}
                                                             >
-                                                              {snip.snippet}
+                                                              Reference SERP Count
+                                                            </span>
+                                                            <span
+                                                              className={cn(
+                                                                "text-sm font-semibold",
+                                                                isDarkTheme
+                                                                  ? "text-emerald-100"
+                                                                  : "text-slate-900"
+                                                              )}
+                                                            >
+                                                              {item.serpResultCount ===
+                                                                -1
+                                                                ? "Unknown (Many)"
+                                                                : item.serpResultCount ??
+                                                                "Unknown"}
+                                                            </span>
+                                                          </div>
+                                                        )}
+
+                                                        {/* Keyword Difficulty (if SE Ranking data available) */}
+                                                        {item.serankingData &&
+                                                          item.serankingData
+                                                            .is_data_found && (
+                                                            <div>
+                                                              <span
+                                                                className={cn(
+                                                                  "text-xs block mb-1",
+                                                                  isDarkTheme
+                                                                    ? "text-emerald-300/80"
+                                                                    : "text-emerald-700"
+                                                                )}
+                                                              >
+                                                                Keyword Difficulty
+                                                              </span>
+                                                              <span
+                                                                className={cn(
+                                                                  "text-sm font-semibold",
+                                                                  (item.serankingData
+                                                                    .difficulty || 0) <=
+                                                                    40
+                                                                    ? isDarkTheme
+                                                                      ? "text-emerald-400"
+                                                                      : "text-emerald-600"
+                                                                    : (item
+                                                                      .serankingData
+                                                                      .difficulty ||
+                                                                      0) <= 60
+                                                                      ? isDarkTheme
+                                                                        ? "text-yellow-400"
+                                                                        : "text-yellow-600"
+                                                                      : isDarkTheme
+                                                                        ? "text-red-400"
+                                                                        : "text-red-600"
+                                                                )}
+                                                              >
+                                                                {item.serankingData
+                                                                  .difficulty || "N/A"}
+                                                              </span>
                                                             </div>
-                                                          </CardContent>
-                                                        </Card>
-                                                      ))}
-                                                  </div>
-                                                </CardContent>
-                                              </Card>
-                                            )
-                                          )}
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </React.Fragment>
+                                                          )}
+
+                                                        <div>
+                                                          <span
+                                                            className={cn(
+                                                              "text-xs block mb-1",
+                                                              isDarkTheme
+                                                                ? "text-emerald-300/80"
+                                                                : "text-emerald-700"
+                                                            )}
+                                                          >
+                                                            Top Competitor Type
+                                                          </span>
+                                                          <Badge
+                                                            variant="outline"
+                                                            className={cn(
+                                                              "text-xs",
+                                                              isDarkTheme
+                                                                ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/10"
+                                                                : "border-emerald-300 text-emerald-700 bg-emerald-50"
+                                                            )}
+                                                          >
+                                                            {item.topDomainType ?? "-"}
+                                                          </Badge>
+                                                        </div>
+                                                      </div>
+                                                    </CardContent>
+                                                  </Card>
+
+                                                  {/* SERP EVIDENCE IN DETAILS */}
+                                                  {item.serpResultCount === 0 ? (
+                                                    <Card
+                                                      className={cn(
+                                                        isDarkTheme
+                                                          ? "bg-emerald-500/10 border-emerald-500/30"
+                                                          : "bg-emerald-50 border-emerald-200"
+                                                      )}
+                                                    >
+                                                      <CardContent className="p-4">
+                                                        <div
+                                                          className={cn(
+                                                            "flex items-center gap-2 text-sm font-medium",
+                                                            isDarkTheme
+                                                              ? "text-emerald-300"
+                                                              : "text-emerald-700"
+                                                          )}
+                                                        >
+                                                          <Lightbulb
+                                                            className={cn(
+                                                              "w-4 h-4",
+                                                              isDarkTheme
+                                                                ? "text-emerald-400"
+                                                                : "text-emerald-600"
+                                                            )}
+                                                          />
+                                                          No direct competitors found in
+                                                          search.
+                                                        </div>
+                                                      </CardContent>
+                                                    </Card>
+                                                  ) : (
+                                                    item.topSerpSnippets &&
+                                                    item.topSerpSnippets.length > 0 && (
+                                                      <Card
+                                                        className={cn(
+                                                          isDarkTheme
+                                                            ? "bg-black/40 border-emerald-500/20"
+                                                            : "bg-white border-emerald-200"
+                                                        )}
+                                                      >
+                                                        <CardHeader className="pb-3">
+                                                          <div className="flex justify-between items-center">
+                                                            <CardTitle
+                                                              className={cn(
+                                                                "text-sm font-semibold",
+                                                                isDarkTheme
+                                                                  ? "text-emerald-100"
+                                                                  : "text-slate-900"
+                                                              )}
+                                                            >
+                                                              {t.serpEvidence}
+                                                            </CardTitle>
+                                                            <Badge
+                                                              variant="outline"
+                                                              className={cn(
+                                                                "text-[10px]",
+                                                                isDarkTheme
+                                                                  ? "border-emerald-500/30 text-emerald-300 bg-emerald-500/10"
+                                                                  : "border-emerald-200 text-emerald-700 bg-emerald-50"
+                                                              )}
+                                                            >
+                                                              {t.serpEvidenceDisclaimer}
+                                                            </Badge>
+                                                          </div>
+                                                        </CardHeader>
+                                                        <CardContent>
+                                                          <div className="space-y-3">
+                                                            {item.topSerpSnippets
+                                                              .slice(0, 3)
+                                                              .map((snip, i) => (
+                                                                <Card
+                                                                  key={i}
+                                                                  className={cn(
+                                                                    isDarkTheme
+                                                                      ? "bg-emerald-500/10 border-emerald-500/30"
+                                                                      : "bg-emerald-50 border-emerald-200"
+                                                                  )}
+                                                                >
+                                                                  <CardContent className="p-3">
+                                                                    <div
+                                                                      className={cn(
+                                                                        "text-sm font-semibold mb-1 truncate",
+                                                                        isDarkTheme
+                                                                          ? "text-emerald-300"
+                                                                          : "text-emerald-700"
+                                                                      )}
+                                                                    >
+                                                                      {snip.title}
+                                                                    </div>
+                                                                    <div
+                                                                      className={cn(
+                                                                        "text-xs mb-2 truncate",
+                                                                        isDarkTheme
+                                                                          ? "text-emerald-400"
+                                                                          : "text-emerald-600"
+                                                                      )}
+                                                                    >
+                                                                      {snip.url}
+                                                                    </div>
+                                                                    <div
+                                                                      className={cn(
+                                                                        "text-xs line-clamp-2 leading-relaxed",
+                                                                        isDarkTheme
+                                                                          ? "text-emerald-100/80"
+                                                                          : "text-slate-600"
+                                                                      )}
+                                                                    >
+                                                                      {snip.snippet}
+                                                                    </div>
+                                                                  </CardContent>
+                                                                </Card>
+                                                              ))}
+                                                          </div>
+                                                        </CardContent>
+                                                      </Card>
+                                                    )
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
+
+                                  {state.batchKeywords.length === 0 && (
+                                    <tr>
+                                      <td
+                                        colSpan={showDRComparison ? 7 : 6}
+                                        className="text-center py-12 text-slate-400"
+                                      >
+                                        No results yet.
+                                      </td>
+                                    </tr>
+                                  )}
+                                </tbody>
+                              </table>
                             );
-                          })}
-
-                          {state.batchKeywords.length === 0 && (
-                            <tr>
-                              <td
-                                colSpan={showDRComparison ? 7 : 6}
-                                className="text-center py-12 text-slate-400"
-                              >
-                                No results yet.
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* DEEP DIVE RESULTS PAGE */}
-          {state.step === "deep-dive-results" &&
-            state.currentStrategyReport && (
-              <div className="animate-fade-in flex-1">
-                <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
-                  <div>
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                      <FileText className="w-6 h-6 text-emerald-400" />
-                      {t.deepDiveResults || "Deep Dive Results"}
-                    </h2>
-                    <p className="text-slate-400 mt-1">
-                      {state.currentStrategyReport.targetKeyword}
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      disabled={true}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-400 text-white rounded-md text-sm font-medium cursor-not-allowed opacity-50"
-                      title="网站生成功能正在维护中，暂时不可用"
-                    >
-                      <Globe className="w-4 h-4" />
-                      生成网站 (维护中)
-                    </button>
-                    <button
-                      onClick={() => {
-                        const report = state.currentStrategyReport;
-                        if (report?.htmlContent) {
-                          const blob = new Blob([report.htmlContent], {
-                            type: "text/html;charset=utf-8;",
-                          });
-                          const url = URL.createObjectURL(blob);
-                          const link = document.createElement("a");
-                          link.href = url;
-                          link.setAttribute(
-                            "download",
-                            `${report.urlSlug || "seo-content"}.html`
-                          );
-                          document.body.appendChild(link);
-                          link.click();
-                          document.body.removeChild(link);
-                          URL.revokeObjectURL(url);
-                        }
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium"
-                    >
-                      <Download className="w-4 h-4" />
-                      {t.exportHTML || "Export HTML"}
-                    </button>
-                    <button
-                      onClick={() =>
-                        setState((prev) => ({ ...prev, step: "results" }))
-                      }
-                      className="px-4 py-2 text-sm text-slate-500 hover:text-emerald-600 font-medium transition-colors border border-slate-200 rounded-md bg-white hover:bg-slate-50"
-                    >
-                      {t.backToResults || "Back to Results"}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Left: Content Strategy (Target Language) */}
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                    <div className="p-4 border-b border-slate-200 bg-slate-50">
-                      <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-blue-600" />
-                        {t.contentStrategy || "Content Strategy"} (
-                        {state.targetLanguage.toUpperCase()})
-                      </h3>
+                          })()}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1 overflow-auto custom-scrollbar p-6 space-y-4">
-                      {/* Page Title */}
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                          Page Title (H1)
-                        </div>
-                        <div className="text-lg font-bold text-slate-900">
-                          {state.currentStrategyReport.pageTitleH1}
-                        </div>
-                      </div>
+                  )}
 
-                      {/* Meta Description */}
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                          Meta Description
-                        </div>
-                        <div className="text-sm text-slate-700">
-                          {state.currentStrategyReport.metaDescription}
-                        </div>
-                      </div>
-
-                      {/* URL Slug */}
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                          URL Slug
-                        </div>
-                        <div className="font-mono text-sm text-blue-600">
-                          {state.currentStrategyReport.urlSlug}
-                        </div>
-                      </div>
-
-                      {/* Content Structure */}
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-3">
-                          Content Structure
-                        </div>
-                        <div className="space-y-3">
-                          {state.currentStrategyReport.contentStructure.map(
-                            (section, idx) => (
-                              <div
-                                key={idx}
-                                className="p-3 bg-white rounded border border-slate-100"
-                              >
-                                <div className="font-bold text-sm text-slate-900 mb-1">
-                                  {section.header}
-                                </div>
-                                <div className="text-xs text-slate-600">
-                                  {section.description}
-                                </div>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Long-tail Keywords with Analysis Button */}
-                      {state.currentStrategyReport.longTailKeywords &&
-                        state.currentStrategyReport.longTailKeywords.length >
-                        0 && (
-                          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="text-xs text-slate-500 uppercase font-bold">
-                                Long-tail Keywords
-                              </div>
-                              <button
-                                onClick={() =>
-                                  setState((prev) => ({
-                                    ...prev,
-                                    // 只有在有 currentStrategyReport 时才显示模态框
-                                    showDetailedAnalysisModal:
-                                      !!prev.currentStrategyReport,
-                                  }))
+                  {/* DEEP DIVE RESULTS PAGE */}
+                  {state.step === "deep-dive-results" &&
+                    state.currentStrategyReport && (
+                      <div className="animate-fade-in flex-1">
+                        <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
+                          <div>
+                            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                              <FileText className="w-6 h-6 text-emerald-400" />
+                              {t.deepDiveResults || "Deep Dive Results"}
+                            </h2>
+                            <p className="text-slate-400 mt-1">
+                              {state.currentStrategyReport.targetKeyword}
+                            </p>
+                          </div>
+                          <div className="flex gap-3">
+                            <button
+                              disabled={true}
+                              className="flex items-center gap-2 px-4 py-2 bg-gray-400 text-white rounded-md text-sm font-medium cursor-not-allowed opacity-50"
+                              title="网站生成功能正在维护中，暂时不可用"
+                            >
+                              <Globe className="w-4 h-4" />
+                              生成网站 (维护中)
+                            </button>
+                            <button
+                              onClick={() => {
+                                const report = state.currentStrategyReport;
+                                if (report?.htmlContent) {
+                                  const blob = new Blob([report.htmlContent], {
+                                    type: "text/html;charset=utf-8;",
+                                  });
+                                  const url = URL.createObjectURL(blob);
+                                  const link = document.createElement("a");
+                                  link.href = url;
+                                  link.setAttribute(
+                                    "download",
+                                    `${report.urlSlug || "seo-content"}.html`
+                                  );
+                                  document.body.appendChild(link);
+                                  link.click();
+                                  document.body.removeChild(link);
+                                  URL.revokeObjectURL(url);
                                 }
-                                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all text-xs font-medium shadow-sm hover:shadow-md"
-                              >
-                                <Search className="w-3.5 h-3.5" />
-                                {state.uiLanguage === "zh"
-                                  ? "详细分析"
-                                  : "Detailed Analysis"}
-                              </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {state.currentStrategyReport.longTailKeywords.map(
-                                (kw, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-3 py-1 bg-white text-blue-700 rounded-md text-xs font-medium border border-blue-200"
-                                  >
-                                    {kw}
-                                  </span>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                      {/* User Intent Summary */}
-                      {state.currentStrategyReport.userIntentSummary && (
-                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                            User Intent Summary
-                          </div>
-                          <div className="text-sm text-slate-700">
-                            {state.currentStrategyReport.userIntentSummary}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Recommended Word Count */}
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                          Recommended Word Count
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900">
-                          {state.currentStrategyReport.recommendedWordCount}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right: Translation Reference (UI Language) */}
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                    <div className="p-4 border-b border-slate-200 bg-slate-50">
-                      <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <Languages className="w-5 h-5 text-purple-600" />
-                        {t.translationReference || "Translation Reference"} (
-                        {state.uiLanguage.toUpperCase()})
-                      </h3>
-                    </div>
-                    <div className="flex-1 overflow-auto custom-scrollbar p-6 space-y-4">
-                      {/* Page Title Translation */}
-                      {state.currentStrategyReport.pageTitleH1_trans && (
-                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                            {t.pageTitleTranslation || "Page Title Translation"}
-                          </div>
-                          <div className="text-lg font-bold text-slate-900">
-                            {state.currentStrategyReport.pageTitleH1_trans}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Meta Description Translation */}
-                      {state.currentStrategyReport.metaDescription_trans && (
-                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                            {t.metaDescriptionTranslation ||
-                              "Meta Description Translation"}
-                          </div>
-                          <div className="text-sm text-slate-700">
-                            {state.currentStrategyReport.metaDescription_trans}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* URL Slug (Same) */}
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                          URL Slug
-                        </div>
-                        <div className="font-mono text-sm text-purple-600">
-                          {state.currentStrategyReport.urlSlug}
-                        </div>
-                      </div>
-
-                      {/* Content Structure Translations */}
-                      {state.currentStrategyReport.contentStructure.some(
-                        (s) => s.header_trans || s.description_trans
-                      ) && (
-                          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                            <div className="text-xs text-slate-500 uppercase font-bold mb-3">
-                              {t.contentStructureTranslation ||
-                                "Content Structure Translation"}
-                            </div>
-                            <div className="space-y-3">
-                              {state.currentStrategyReport.contentStructure.map(
-                                (section, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="p-3 bg-white rounded border border-slate-100"
-                                  >
-                                    {section.header_trans && (
-                                      <div className="font-bold text-sm text-slate-900 mb-1">
-                                        {section.header_trans}
-                                      </div>
-                                    )}
-                                    {section.description_trans && (
-                                      <div className="text-xs text-slate-600">
-                                        {section.description_trans}
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                      {/* Long-tail Keywords Translation */}
-                      {state.currentStrategyReport.longTailKeywords_trans &&
-                        state.currentStrategyReport.longTailKeywords_trans
-                          .length > 0 && (
-                          <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                            <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                              {t.longTailKeywordsTranslation ||
-                                "Long-tail Keywords Translation"}
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {state.currentStrategyReport.longTailKeywords_trans.map(
-                                (kw, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="px-3 py-1 bg-white text-purple-700 rounded-md text-xs font-medium border border-purple-200"
-                                  >
-                                    {kw}
-                                  </span>
-                                )
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                      {/* User Intent Summary (Same if no translation) */}
-                      {state.currentStrategyReport.userIntentSummary && (
-                        <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                            {t.userIntentSummary || "User Intent Summary"}
-                          </div>
-                          <div className="text-sm text-slate-700">
-                            {state.currentStrategyReport.userIntentSummary}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Recommended Word Count (Same) */}
-                      <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                          {state.uiLanguage === "zh"
-                            ? "建议字数"
-                            : "Recommended Word Count"}
-                        </div>
-                        <div className="text-2xl font-bold text-slate-900">
-                          {state.currentStrategyReport.recommendedWordCount}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Detailed Analysis Modal */}
-                {state.showDetailedAnalysisModal &&
-                  state.currentStrategyReport && (
-                    <div
-                      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
-                      onClick={() =>
-                        setState((prev) => ({
-                          ...prev,
-                          showDetailedAnalysisModal: false,
-                        }))
-                      }
-                    >
-                      <div
-                        className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {/* Modal Header */}
-                        <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="bg-white/20 p-2 rounded-lg">
-                                <Search className="w-6 h-6" />
-                              </div>
-                              <div>
-                                <h3 className="text-xl font-bold">
-                                  {state.uiLanguage === "zh"
-                                    ? "上首页概率验证结果"
-                                    : "Ranking Probability Analysis"}
-                                </h3>
-                                <p className="text-sm text-white/80 mt-1">
-                                  {state.currentStrategyReport?.targetKeyword}
-                                </p>
-                              </div>
-                            </div>
+                              }}
+                              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors text-sm font-medium"
+                            >
+                              <Download className="w-4 h-4" />
+                              {t.exportHTML || "Export HTML"}
+                            </button>
                             <button
                               onClick={() =>
-                                setState((prev) => ({
-                                  ...prev,
-                                  showDetailedAnalysisModal: false,
-                                }))
+                                setState((prev) => ({ ...prev, step: "results" }))
                               }
-                              className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                              className="px-4 py-2 text-sm text-slate-500 hover:text-emerald-600 font-medium transition-colors border border-slate-200 rounded-md bg-white hover:bg-slate-50"
                             >
-                              <X className="w-5 h-5" />
+                              {t.backToResults || "Back to Results"}
                             </button>
                           </div>
                         </div>
 
-                        {/* Modal Body */}
-                        <div className="flex-1 overflow-auto p-6 space-y-6">
-                          {/* Ranking Probability Badge */}
-                          {state.currentStrategyReport?.rankingProbability && (
-                            <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
-                              <div className="text-sm text-slate-500 uppercase font-bold mb-3">
-                                {state.uiLanguage === "zh"
-                                  ? "上首页概率"
-                                  : "Ranking Probability"}
-                              </div>
-                              <div className="flex items-center gap-4 mb-4">
-                                <span
-                                  className={`px-6 py-3 rounded-xl text-xl font-bold shadow-lg ${state.currentStrategyReport
-                                    .rankingProbability ===
-                                    ProbabilityLevel.HIGH
-                                    ? "bg-emerald-100 text-emerald-800 border-2 border-emerald-300"
-                                    : state.currentStrategyReport
-                                      .rankingProbability ===
-                                      ProbabilityLevel.MEDIUM
-                                      ? "bg-yellow-100 text-yellow-800 border-2 border-yellow-300"
-                                      : "bg-red-100 text-red-800 border-2 border-red-300"
-                                    }`}
-                                >
-                                  {
-                                    state.currentStrategyReport
-                                      .rankingProbability
-                                  }
-                                </span>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                          {/* Left: Content Strategy (Target Language) */}
+                          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                            <div className="p-4 border-b border-slate-200 bg-slate-50">
+                              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <FileText className="w-5 h-5 text-blue-600" />
+                                {t.contentStrategy || "Content Strategy"} (
+                                {state.targetLanguage.toUpperCase()})
+                              </h3>
+                            </div>
+                            <div className="flex-1 overflow-auto custom-scrollbar p-6 space-y-4">
+                              {/* Page Title */}
+                              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                  Page Title (H1)
+                                </div>
+                                <div className="text-lg font-bold text-slate-900">
+                                  {state.currentStrategyReport.pageTitleH1}
+                                </div>
                               </div>
 
-                              {/* Core Keywords */}
-                              {state.currentStrategyReport.coreKeywords &&
-                                state.currentStrategyReport.coreKeywords
-                                  .length > 0 && (
-                                  <div className="mb-4 p-4 bg-white rounded-lg border border-slate-200">
-                                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
-                                      {state.uiLanguage === "zh"
-                                        ? "核心关键词"
-                                        : "Core Keywords"}
+                              {/* Meta Description */}
+                              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                  Meta Description
+                                </div>
+                                <div className="text-sm text-slate-700">
+                                  {state.currentStrategyReport.metaDescription}
+                                </div>
+                              </div>
+
+                              {/* URL Slug */}
+                              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                  URL Slug
+                                </div>
+                                <div className="font-mono text-sm text-blue-600">
+                                  {state.currentStrategyReport.urlSlug}
+                                </div>
+                              </div>
+
+                              {/* Content Structure */}
+                              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="text-xs text-slate-500 uppercase font-bold mb-3">
+                                  Content Structure
+                                </div>
+                                <div className="space-y-3">
+                                  {state.currentStrategyReport.contentStructure.map(
+                                    (section, idx) => (
+                                      <div
+                                        key={idx}
+                                        className="p-3 bg-white rounded border border-slate-100"
+                                      >
+                                        <div className="font-bold text-sm text-slate-900 mb-1">
+                                          {section.header}
+                                        </div>
+                                        <div className="text-xs text-slate-600">
+                                          {section.description}
+                                        </div>
+                                      </div>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Long-tail Keywords with Analysis Button */}
+                              {state.currentStrategyReport.longTailKeywords &&
+                                state.currentStrategyReport.longTailKeywords.length >
+                                0 && (
+                                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div className="flex items-center justify-between mb-3">
+                                      <div className="text-xs text-slate-500 uppercase font-bold">
+                                        Long-tail Keywords
+                                      </div>
+                                      <button
+                                        onClick={() =>
+                                          setState((prev) => ({
+                                            ...prev,
+                                            // 只有在有 currentStrategyReport 时才显示模态框
+                                            showDetailedAnalysisModal:
+                                              !!prev.currentStrategyReport,
+                                          }))
+                                        }
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-md hover:from-blue-700 hover:to-indigo-700 transition-all text-xs font-medium shadow-sm hover:shadow-md"
+                                      >
+                                        <Search className="w-3.5 h-3.5" />
+                                        {state.uiLanguage === "zh"
+                                          ? "详细分析"
+                                          : "Detailed Analysis"}
+                                      </button>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                      {state.currentStrategyReport.coreKeywords.map(
+                                      {state.currentStrategyReport.longTailKeywords.map(
                                         (kw, idx) => (
                                           <span
                                             key={idx}
-                                            className="px-3 py-1 bg-purple-50 text-purple-700 rounded-md text-sm font-medium border border-purple-200"
+                                            className="px-3 py-1 bg-white text-blue-700 rounded-md text-xs font-medium border border-blue-200"
                                           >
                                             {kw}
                                           </span>
@@ -13521,813 +13295,1069 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                                   </div>
                                 )}
 
-                              {/* Search Intent */}
-                              {state.currentStrategyReport.searchIntent && (
-                                <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                                  <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-2">
-                                    <Lightbulb className="w-4 h-4" />
-                                    {state.uiLanguage === "zh"
-                                      ? "搜索意图"
-                                      : "Search Intent"}
+                              {/* User Intent Summary */}
+                              {state.currentStrategyReport.userIntentSummary && (
+                                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                  <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                    User Intent Summary
                                   </div>
-                                  <MarkdownContent
-                                    content={
-                                      state.currentStrategyReport.searchIntent
-                                    }
-                                  />
+                                  <div className="text-sm text-slate-700">
+                                    {state.currentStrategyReport.userIntentSummary}
+                                  </div>
                                 </div>
                               )}
 
-                              {/* Intent Match */}
-                              {state.currentStrategyReport.intentMatch && (
-                                <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-                                  <div className="text-xs text-purple-600 uppercase font-bold mb-2 flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4" />
-                                    {state.uiLanguage === "zh"
-                                      ? "内容匹配度"
-                                      : "Content-Intent Match"}
-                                  </div>
-                                  <MarkdownContent
-                                    content={
-                                      state.currentStrategyReport.intentMatch
-                                    }
-                                  />
+                              {/* Recommended Word Count */}
+                              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                  Recommended Word Count
                                 </div>
-                              )}
-
-                              {/* Ranking Analysis */}
-                              {state.currentStrategyReport.rankingAnalysis && (
-                                <div className="p-4 bg-white rounded-lg border border-slate-200">
-                                  <div className="text-xs text-slate-600 uppercase font-bold mb-2">
-                                    {state.uiLanguage === "zh"
-                                      ? "详细分析"
-                                      : "Detailed Analysis"}
-                                  </div>
-                                  <MarkdownContent
-                                    content={
-                                      state.currentStrategyReport
-                                        .rankingAnalysis
-                                    }
-                                  />
+                                <div className="text-2xl font-bold text-slate-900">
+                                  {state.currentStrategyReport.recommendedWordCount}
                                 </div>
-                              )}
+                              </div>
                             </div>
-                          )}
+                          </div>
 
-                          {/* SERP Competition Data */}
-                          {state.currentStrategyReport?.serpCompetitionData &&
-                            state.currentStrategyReport.serpCompetitionData
-                              .length > 0 && (
-                              <div>
-                                <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                  <Search className="w-5 h-5 text-indigo-600" />
-                                  {state.uiLanguage === "zh"
-                                    ? "SERP竞争分析"
-                                    : "SERP Competition Analysis"}
-                                </h4>
-                                <div className="space-y-4">
-                                  {state.currentStrategyReport.serpCompetitionData.map(
-                                    (data, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="p-4 bg-slate-50 rounded-lg border border-slate-200"
-                                      >
-                                        <div className="font-bold text-sm text-slate-900 mb-2 flex items-center gap-2">
-                                          <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
-                                            #{idx + 1}
+                          {/* Right: Translation Reference (UI Language) */}
+                          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                            <div className="p-4 border-b border-slate-200 bg-slate-50">
+                              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <Languages className="w-5 h-5 text-purple-600" />
+                                {t.translationReference || "Translation Reference"} (
+                                {state.uiLanguage.toUpperCase()})
+                              </h3>
+                            </div>
+                            <div className="flex-1 overflow-auto custom-scrollbar p-6 space-y-4">
+                              {/* Page Title Translation */}
+                              {state.currentStrategyReport.pageTitleH1_trans && (
+                                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                  <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                    {t.pageTitleTranslation || "Page Title Translation"}
+                                  </div>
+                                  <div className="text-lg font-bold text-slate-900">
+                                    {state.currentStrategyReport.pageTitleH1_trans}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Meta Description Translation */}
+                              {state.currentStrategyReport.metaDescription_trans && (
+                                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                  <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                    {t.metaDescriptionTranslation ||
+                                      "Meta Description Translation"}
+                                  </div>
+                                  <div className="text-sm text-slate-700">
+                                    {state.currentStrategyReport.metaDescription_trans}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* URL Slug (Same) */}
+                              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                  URL Slug
+                                </div>
+                                <div className="font-mono text-sm text-purple-600">
+                                  {state.currentStrategyReport.urlSlug}
+                                </div>
+                              </div>
+
+                              {/* Content Structure Translations */}
+                              {state.currentStrategyReport.contentStructure.some(
+                                (s) => s.header_trans || s.description_trans
+                              ) && (
+                                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div className="text-xs text-slate-500 uppercase font-bold mb-3">
+                                      {t.contentStructureTranslation ||
+                                        "Content Structure Translation"}
+                                    </div>
+                                    <div className="space-y-3">
+                                      {state.currentStrategyReport.contentStructure.map(
+                                        (section, idx) => (
+                                          <div
+                                            key={idx}
+                                            className="p-3 bg-white rounded border border-slate-100"
+                                          >
+                                            {section.header_trans && (
+                                              <div className="font-bold text-sm text-slate-900 mb-1">
+                                                {section.header_trans}
+                                              </div>
+                                            )}
+                                            {section.description_trans && (
+                                              <div className="text-xs text-slate-600">
+                                                {section.description_trans}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+
+                              {/* Long-tail Keywords Translation */}
+                              {state.currentStrategyReport.longTailKeywords_trans &&
+                                state.currentStrategyReport.longTailKeywords_trans
+                                  .length > 0 && (
+                                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                      {t.longTailKeywordsTranslation ||
+                                        "Long-tail Keywords Translation"}
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {state.currentStrategyReport.longTailKeywords_trans.map(
+                                        (kw, idx) => (
+                                          <span
+                                            key={idx}
+                                            className="px-3 py-1 bg-white text-purple-700 rounded-md text-xs font-medium border border-purple-200"
+                                          >
+                                            {kw}
                                           </span>
-                                          {data.keyword}
-                                        </div>
-                                        <div className="mb-3">
-                                          <MarkdownContent
-                                            content={data.analysis}
-                                          />
-                                        </div>
+                                        )
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
 
-                                        {/* SE Ranking Data for this keyword */}
-                                        {data.serankingData && (
-                                          <div className="mb-3 p-3 bg-white rounded border border-blue-200">
-                                            <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-1">
-                                              <TrendingUp className="w-3 h-3" />
-                                              SEO词研究工具 (SE Ranking Data)
+                              {/* User Intent Summary (Same if no translation) */}
+                              {state.currentStrategyReport.userIntentSummary && (
+                                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                  <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                    {t.userIntentSummary || "User Intent Summary"}
+                                  </div>
+                                  <div className="text-sm text-slate-700">
+                                    {state.currentStrategyReport.userIntentSummary}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Recommended Word Count (Same) */}
+                              <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                  {state.uiLanguage === "zh"
+                                    ? "建议字数"
+                                    : "Recommended Word Count"}
+                                </div>
+                                <div className="text-2xl font-bold text-slate-900">
+                                  {state.currentStrategyReport.recommendedWordCount}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Detailed Analysis Modal */}
+                        {state.showDetailedAnalysisModal &&
+                          state.currentStrategyReport && (
+                            <div
+                              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+                              onClick={() =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  showDetailedAnalysisModal: false,
+                                }))
+                              }
+                            >
+                              <div
+                                className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {/* Modal Header */}
+                                <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="bg-white/20 p-2 rounded-lg">
+                                        <Search className="w-6 h-6" />
+                                      </div>
+                                      <div>
+                                        <h3 className="text-xl font-bold">
+                                          {state.uiLanguage === "zh"
+                                            ? "上首页概率验证结果"
+                                            : "Ranking Probability Analysis"}
+                                        </h3>
+                                        <p className="text-sm text-white/80 mt-1">
+                                          {state.currentStrategyReport?.targetKeyword}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() =>
+                                        setState((prev) => ({
+                                          ...prev,
+                                          showDetailedAnalysisModal: false,
+                                        }))
+                                      }
+                                      className="p-2 hover:bg-white/20 rounded-lg transition-colors"
+                                    >
+                                      <X className="w-5 h-5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Modal Body */}
+                                <div className="flex-1 overflow-auto p-6 space-y-6">
+                                  {/* Ranking Probability Badge */}
+                                  {state.currentStrategyReport?.rankingProbability && (
+                                    <div className="p-6 bg-slate-50 rounded-xl border border-slate-200">
+                                      <div className="text-sm text-slate-500 uppercase font-bold mb-3">
+                                        {state.uiLanguage === "zh"
+                                          ? "上首页概率"
+                                          : "Ranking Probability"}
+                                      </div>
+                                      <div className="flex items-center gap-4 mb-4">
+                                        <span
+                                          className={`px-6 py-3 rounded-xl text-xl font-bold shadow-lg ${state.currentStrategyReport
+                                            .rankingProbability ===
+                                            ProbabilityLevel.HIGH
+                                            ? "bg-emerald-100 text-emerald-800 border-2 border-emerald-300"
+                                            : state.currentStrategyReport
+                                              .rankingProbability ===
+                                              ProbabilityLevel.MEDIUM
+                                              ? "bg-yellow-100 text-yellow-800 border-2 border-yellow-300"
+                                              : "bg-red-100 text-red-800 border-2 border-red-300"
+                                            }`}
+                                        >
+                                          {
+                                            state.currentStrategyReport
+                                              .rankingProbability
+                                          }
+                                        </span>
+                                      </div>
+
+                                      {/* Core Keywords */}
+                                      {state.currentStrategyReport.coreKeywords &&
+                                        state.currentStrategyReport.coreKeywords
+                                          .length > 0 && (
+                                          <div className="mb-4 p-4 bg-white rounded-lg border border-slate-200">
+                                            <div className="text-xs text-slate-500 uppercase font-bold mb-2">
+                                              {state.uiLanguage === "zh"
+                                                ? "核心关键词"
+                                                : "Core Keywords"}
                                             </div>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                              <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                                                <div className="text-[9px] text-slate-500 font-bold mb-1">
-                                                  VOLUME
-                                                </div>
-                                                <div className="text-sm font-bold text-blue-600">
-                                                  {data.serankingData.volume?.toLocaleString() ||
-                                                    "N/A"}
-                                                </div>
-                                              </div>
-                                              <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                                                <div className="text-[9px] text-slate-500 font-bold mb-1">
-                                                  KD
-                                                </div>
-                                                <div
-                                                  className={`text-sm font-bold ${(data.serankingData
-                                                    .difficulty || 0) <= 40
-                                                    ? "text-emerald-600"
-                                                    : (data.serankingData
-                                                      .difficulty || 0) <=
-                                                      60
-                                                      ? "text-yellow-600"
-                                                      : "text-red-600"
-                                                    }`}
-                                                >
-                                                  {data.serankingData
-                                                    .difficulty || "N/A"}
-                                                </div>
-                                              </div>
-                                              <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                                                <div className="text-[9px] text-slate-500 font-bold mb-1">
-                                                  CPC
-                                                </div>
-                                                <div className="text-sm font-bold text-emerald-600">
-                                                  $
-                                                  {data.serankingData.cpc !==
-                                                    undefined
-                                                    ? Number(
-                                                      data.serankingData.cpc
-                                                    ).toFixed(2)
-                                                    : "N/A"}
-                                                </div>
-                                              </div>
-                                              <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                                                <div className="text-[9px] text-slate-500 font-bold mb-1">
-                                                  COMP
-                                                </div>
-                                                <div className="text-sm font-bold text-purple-600">
-                                                  {data.serankingData
-                                                    .competition
-                                                    ? typeof data.serankingData
-                                                      .competition ===
-                                                      "number"
-                                                      ? (
-                                                        data.serankingData
-                                                          .competition * 100
-                                                      ).toFixed(1) + "%"
-                                                      : data.serankingData
-                                                        .competition
-                                                    : "N/A"}
-                                                </div>
-                                              </div>
+                                            <div className="flex flex-wrap gap-2">
+                                              {state.currentStrategyReport.coreKeywords.map(
+                                                (kw, idx) => (
+                                                  <span
+                                                    key={idx}
+                                                    className="px-3 py-1 bg-purple-50 text-purple-700 rounded-md text-sm font-medium border border-purple-200"
+                                                  >
+                                                    {kw}
+                                                  </span>
+                                                )
+                                              )}
                                             </div>
                                           </div>
                                         )}
 
-                                        {data.serpResults &&
-                                          data.serpResults.length > 0 && (
-                                            <div className="space-y-2">
-                                              <div className="text-xs text-slate-500 uppercase font-bold">
-                                                {state.uiLanguage === "zh"
-                                                  ? "前三名SERP结果"
-                                                  : "Top 3 SERP Results"}
-                                              </div>
-                                              {data.serpResults
-                                                .slice(0, 3)
-                                                .map((result, ridx) => (
-                                                  <div
-                                                    key={ridx}
-                                                    className="bg-white p-3 rounded border border-slate-200 text-xs hover:border-blue-300 transition-colors"
-                                                  >
-                                                    <div className="text-blue-700 font-medium truncate">
-                                                      {result.title}
+                                      {/* Search Intent */}
+                                      {state.currentStrategyReport.searchIntent && (
+                                        <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                          <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-2">
+                                            <Lightbulb className="w-4 h-4" />
+                                            {state.uiLanguage === "zh"
+                                              ? "搜索意图"
+                                              : "Search Intent"}
+                                          </div>
+                                          <MarkdownContent
+                                            content={
+                                              state.currentStrategyReport.searchIntent
+                                            }
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* Intent Match */}
+                                      {state.currentStrategyReport.intentMatch && (
+                                        <div className="mb-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                                          <div className="text-xs text-purple-600 uppercase font-bold mb-2 flex items-center gap-2">
+                                            <CheckCircle className="w-4 h-4" />
+                                            {state.uiLanguage === "zh"
+                                              ? "内容匹配度"
+                                              : "Content-Intent Match"}
+                                          </div>
+                                          <MarkdownContent
+                                            content={
+                                              state.currentStrategyReport.intentMatch
+                                            }
+                                          />
+                                        </div>
+                                      )}
+
+                                      {/* Ranking Analysis */}
+                                      {state.currentStrategyReport.rankingAnalysis && (
+                                        <div className="p-4 bg-white rounded-lg border border-slate-200">
+                                          <div className="text-xs text-slate-600 uppercase font-bold mb-2">
+                                            {state.uiLanguage === "zh"
+                                              ? "详细分析"
+                                              : "Detailed Analysis"}
+                                          </div>
+                                          <MarkdownContent
+                                            content={
+                                              state.currentStrategyReport
+                                                .rankingAnalysis
+                                            }
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* SERP Competition Data */}
+                                  {state.currentStrategyReport?.serpCompetitionData &&
+                                    state.currentStrategyReport.serpCompetitionData
+                                      .length > 0 && (
+                                      <div>
+                                        <h4 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                          <Search className="w-5 h-5 text-indigo-600" />
+                                          {state.uiLanguage === "zh"
+                                            ? "SERP竞争分析"
+                                            : "SERP Competition Analysis"}
+                                        </h4>
+                                        <div className="space-y-4">
+                                          {state.currentStrategyReport.serpCompetitionData.map(
+                                            (data, idx) => (
+                                              <div
+                                                key={idx}
+                                                className="p-4 bg-slate-50 rounded-lg border border-slate-200"
+                                              >
+                                                <div className="font-bold text-sm text-slate-900 mb-2 flex items-center gap-2">
+                                                  <span className="px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded text-xs font-medium">
+                                                    #{idx + 1}
+                                                  </span>
+                                                  {data.keyword}
+                                                </div>
+                                                <div className="mb-3">
+                                                  <MarkdownContent
+                                                    content={data.analysis}
+                                                  />
+                                                </div>
+
+                                                {/* SE Ranking Data for this keyword */}
+                                                {data.serankingData && (
+                                                  <div className="mb-3 p-3 bg-white rounded border border-blue-200">
+                                                    <div className="text-xs text-blue-600 uppercase font-bold mb-2 flex items-center gap-1">
+                                                      <TrendingUp className="w-3 h-3" />
+                                                      SEO词研究工具 (SE Ranking Data)
                                                     </div>
-                                                    <div className="text-emerald-700 text-[10px] truncate mt-1">
-                                                      {result.url}
-                                                    </div>
-                                                    <div className="text-slate-500 mt-2 line-clamp-2">
-                                                      {result.snippet}
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                      <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                                        <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                                          VOLUME
+                                                        </div>
+                                                        <div className="text-sm font-bold text-blue-600">
+                                                          {data.serankingData.volume?.toLocaleString() ||
+                                                            "N/A"}
+                                                        </div>
+                                                      </div>
+                                                      <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                                        <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                                          KD
+                                                        </div>
+                                                        <div
+                                                          className={`text-sm font-bold ${(data.serankingData
+                                                            .difficulty || 0) <= 40
+                                                            ? "text-emerald-600"
+                                                            : (data.serankingData
+                                                              .difficulty || 0) <=
+                                                              60
+                                                              ? "text-yellow-600"
+                                                              : "text-red-600"
+                                                            }`}
+                                                        >
+                                                          {data.serankingData
+                                                            .difficulty || "N/A"}
+                                                        </div>
+                                                      </div>
+                                                      <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                                        <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                                          CPC
+                                                        </div>
+                                                        <div className="text-sm font-bold text-emerald-600">
+                                                          $
+                                                          {data.serankingData.cpc !==
+                                                            undefined
+                                                            ? Number(
+                                                              data.serankingData.cpc
+                                                            ).toFixed(2)
+                                                            : "N/A"}
+                                                        </div>
+                                                      </div>
+                                                      <div className="p-2 bg-slate-50 rounded border border-slate-100">
+                                                        <div className="text-[9px] text-slate-500 font-bold mb-1">
+                                                          COMP
+                                                        </div>
+                                                        <div className="text-sm font-bold text-purple-600">
+                                                          {data.serankingData
+                                                            .competition
+                                                            ? typeof data.serankingData
+                                                              .competition ===
+                                                              "number"
+                                                              ? (
+                                                                data.serankingData
+                                                                  .competition * 100
+                                                              ).toFixed(1) + "%"
+                                                              : data.serankingData
+                                                                .competition
+                                                            : "N/A"}
+                                                        </div>
+                                                      </div>
                                                     </div>
                                                   </div>
-                                                ))}
-                                            </div>
+                                                )}
+
+                                                {data.serpResults &&
+                                                  data.serpResults.length > 0 && (
+                                                    <div className="space-y-2">
+                                                      <div className="text-xs text-slate-500 uppercase font-bold">
+                                                        {state.uiLanguage === "zh"
+                                                          ? "前三名SERP结果"
+                                                          : "Top 3 SERP Results"}
+                                                      </div>
+                                                      {data.serpResults
+                                                        .slice(0, 3)
+                                                        .map((result, ridx) => (
+                                                          <div
+                                                            key={ridx}
+                                                            className="bg-white p-3 rounded border border-slate-200 text-xs hover:border-blue-300 transition-colors"
+                                                          >
+                                                            <div className="text-blue-700 font-medium truncate">
+                                                              {result.title}
+                                                            </div>
+                                                            <div className="text-emerald-700 text-[10px] truncate mt-1">
+                                                              {result.url}
+                                                            </div>
+                                                            <div className="text-slate-500 mt-2 line-clamp-2">
+                                                              {result.snippet}
+                                                            </div>
+                                                          </div>
+                                                        ))}
+                                                    </div>
+                                                  )}
+                                              </div>
+                                            )
                                           )}
+                                        </div>
                                       </div>
-                                    )
-                                  )}
+                                    )}
+                                </div>
+
+                                {/* Modal Footer */}
+                                <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+                                  <button
+                                    onClick={() =>
+                                      setState((prev) => ({
+                                        ...prev,
+                                        showDetailedAnalysisModal: false,
+                                      }))
+                                    }
+                                    className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium"
+                                  >
+                                    {state.uiLanguage === "zh" ? "关闭" : "Close"}
+                                  </button>
                                 </div>
                               </div>
-                            )}
-                        </div>
+                            </div>
+                          )}
+                      </div>
+                    )}
 
-                        {/* Modal Footer */}
-                        <div className="p-4 border-t border-slate-200 bg-slate-50 flex justify-end">
+                  {/* STEP 3: RESULTS */}
+                  {state.step === "results" && (
+                    <div className="animate-fade-in flex-1">
+                      <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
+                        <div>
+                          <h2
+                            className={`text-2xl font-bold flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
+                              }`}
+                          >
+                            <span
+                              className={`px-2 py-1 rounded text-base border ${isDarkTheme
+                                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                : "bg-emerald-100 text-emerald-700 border-emerald-300"
+                                }`}
+                            >
+                              {state.seedKeyword}
+                            </span>
+                            {t.resultsTitle}
+                          </h2>
+                          <p
+                            className={`mt-1 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
+                              }`}
+                          >
+                            {t.foundOpp} {state.keywords.length} {t.opps}.
+                          </p>
+                        </div>
+                        <div className="flex gap-3">
                           <button
-                            onClick={() =>
+                            onClick={() => {
                               setState((prev) => ({
                                 ...prev,
-                                showDetailedAnalysisModal: false,
-                              }))
-                            }
-                            className="px-6 py-2 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium"
+                                step: "content-generation",
+                                contentGeneration: {
+                                  ...prev.contentGeneration,
+                                  activeTab: "projects",
+                                },
+                              }));
+                            }}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 text-sm font-bold active:scale-95"
                           >
-                            {state.uiLanguage === "zh" ? "关闭" : "Close"}
+                            <TrendingUp className="w-4 h-4" />
+                            {state.uiLanguage === "zh"
+                              ? "前往项目看板"
+                              : "Go to Kanban"}
+                          </button>
+                          <button
+                            onClick={() => startMining(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white border border-white/10 rounded-md hover:bg-white/20 transition-colors text-sm font-medium"
+                          >
+                            <Plus className="w-4 h-4" />
+                            {t.btnExpand}
+                          </button>
+                          <button
+                            onClick={reset}
+                            className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${isDarkTheme
+                              ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
+                              : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
+                              }`}
+                          >
+                            {t.newAnalysis}
                           </button>
                         </div>
                       </div>
-                    </div>
-                  )}
-              </div>
-            )}
 
-          {/* STEP 3: RESULTS */}
-          {state.step === "results" && (
-            <div className="animate-fade-in flex-1">
-              <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
-                <div>
-                  <h2
-                    className={`text-2xl font-bold flex items-center gap-2 ${isDarkTheme ? "text-white" : "text-gray-900"
-                      }`}
-                  >
-                    <span
-                      className={`px-2 py-1 rounded text-base border ${isDarkTheme
-                        ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                        : "bg-emerald-100 text-emerald-700 border-emerald-300"
-                        }`}
-                    >
-                      {state.seedKeyword}
-                    </span>
-                    {t.resultsTitle}
-                  </h2>
-                  <p
-                    className={`mt-1 ${isDarkTheme ? "text-slate-400" : "text-gray-600"
-                      }`}
-                  >
-                    {t.foundOpp} {state.keywords.length} {t.opps}.
-                  </p>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => {
-                      setState((prev) => ({
-                        ...prev,
-                        step: "content-generation",
-                        contentGeneration: {
-                          ...prev.contentGeneration,
-                          activeTab: "projects",
-                        },
-                      }));
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20 text-sm font-bold active:scale-95"
-                  >
-                    <TrendingUp className="w-4 h-4" />
-                    {state.uiLanguage === "zh"
-                      ? "前往项目看板"
-                      : "Go to Kanban"}
-                  </button>
-                  <button
-                    onClick={() => startMining(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/10 text-white border border-white/10 rounded-md hover:bg-white/20 transition-colors text-sm font-medium"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {t.btnExpand}
-                  </button>
-                  <button
-                    onClick={reset}
-                    className={`px-4 py-2 text-sm font-medium transition-colors border rounded-md ${isDarkTheme
-                      ? "text-slate-400 hover:text-emerald-400 border-emerald-500/30 bg-black/60 hover:bg-emerald-500/10"
-                      : "text-gray-700 hover:text-emerald-600 border-emerald-300 bg-white hover:bg-emerald-50"
-                      }`}
-                  >
-                    {t.newAnalysis}
-                  </button>
-                </div>
-              </div>
-
-              {/* Toolbar */}
-              <div
-                className={`backdrop-blur-sm p-3 rounded-t-xl border border-b-0 flex flex-wrap gap-4 items-center justify-between ${isDarkTheme
-                  ? "bg-black/40 border-emerald-500/20"
-                  : "bg-gray-100 border-emerald-200"
-                  }`}
-              >
-                <div className="flex items-center gap-4">
-                  {/* Filter */}
-                  <div
-                    className={`flex items-center gap-2 text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
-                      }`}
-                  >
-                    <Filter className="w-4 h-4" />
-                    <select
-                      value={state.filterLevel}
-                      onChange={(e) =>
-                        setState((prev) => ({
-                          ...prev,
-                          filterLevel: e.target.value as any,
-                        }))
-                      }
-                      className={`border rounded px-2 py-1 outline-none focus:ring-1 ${isDarkTheme
-                        ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
-                        : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
-                        }`}
-                    >
-                      <option
-                        value={ProbabilityLevel.HIGH}
-                        className={isDarkTheme ? "bg-black" : "bg-white"}
+                      {/* Toolbar */}
+                      <div
+                        className={`backdrop-blur-sm p-3 rounded-t-xl border border-b-0 flex flex-wrap gap-4 items-center justify-between ${isDarkTheme
+                          ? "bg-black/40 border-emerald-500/20"
+                          : "bg-gray-100 border-emerald-200"
+                          }`}
                       >
-                        {t.filterHigh}
-                      </option>
-                      <option
-                        value={ProbabilityLevel.MEDIUM}
-                        className={isDarkTheme ? "bg-black" : "bg-white"}
-                      >
-                        {state.uiLanguage === "zh"
-                          ? "仅看 中概率"
-                          : "Medium Only"}
-                      </option>
-                      <option
-                        value={ProbabilityLevel.LOW}
-                        className={isDarkTheme ? "bg-black" : "bg-white"}
-                      >
-                        {state.uiLanguage === "zh" ? "仅看 低概率" : "Low Only"}
-                      </option>
-                      <option
-                        value="ALL"
-                        className={isDarkTheme ? "bg-black" : "bg-white"}
-                      >
-                        {t.filterAll}
-                      </option>
-                    </select>
-                  </div>
-
-                  {/* Sort */}
-                  <div
-                    className={`flex items-center gap-2 text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
-                      }`}
-                  >
-                    <ArrowUpDown className="w-4 h-4" />
-                    <select
-                      value={state.sortBy}
-                      onChange={(e) =>
-                        setState((prev) => ({
-                          ...prev,
-                          sortBy: e.target.value as any,
-                        }))
-                      }
-                      className={`border rounded px-2 py-1 outline-none focus:ring-1 ${isDarkTheme
-                        ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
-                        : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
-                        }`}
-                    >
-                      <option
-                        value="probability"
-                        className={isDarkTheme ? "bg-black" : "bg-white"}
-                      >
-                        Sort: Probability
-                      </option>
-                      <option
-                        value="volume"
-                        className={isDarkTheme ? "bg-black" : "bg-white"}
-                      >
-                        Sort: Volume
-                      </option>
-                    </select>
-                  </div>
-                </div>
-
-                <button
-                  onClick={downloadCSV}
-                  className={`flex items-center gap-2 text-sm px-3 py-1 rounded transition-colors ${isDarkTheme
-                    ? "text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10"
-                    : "text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
-                    }`}
-                >
-                  <Download className="w-4 h-4" /> {t.downloadCSV}
-                </button>
-              </div>
-
-              {/* Table */}
-              <div
-                className={`backdrop-blur-sm rounded-b-xl shadow-sm border overflow-hidden min-h-[400px] ${isDarkTheme
-                  ? "bg-black/40 border-emerald-500/20"
-                  : "bg-white border-emerald-200"
-                  }`}
-              >
-                <KeywordTable
-                  keywords={getProcessedKeywords()}
-                  expandedRowId={state.expandedRowId}
-                  onToggleExpand={(id) =>
-                    setState((prev) => ({ ...prev, expandedRowId: id }))
-                  }
-                  onDeepDive={handleDeepDive}
-                  isDarkTheme={isDarkTheme}
-                  uiLanguage={state.uiLanguage}
-                  t={t}
-                  MarkdownContent={MarkdownContent}
-                  miningMode={
-                    state.taskManager.activeTaskId
-                      ? state.taskManager.tasks.find(
-                        (t) => t.id === state.taskManager.activeTaskId
-                      )?.miningState?.miningMode || "blue-ocean"
-                      : "blue-ocean"
-                  }
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Modal */}
-          {state.showDeepDiveModal &&
-            (state.isDeepDiving ? (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
-                <div className="bg-white p-8 rounded-xl shadow-xl flex flex-col items-center">
-                  <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
-                  <h3 className="text-lg font-bold text-slate-800">
-                    {t.generatingReport}
-                  </h3>
-                  <p className="text-slate-500 text-sm">
-                    Drafting H1, H2s, and Long-tail keywords...
-                  </p>
-                </div>
-              </div>
-            ) : (
-              state.currentStrategyReport && (
-                <StrategyModal
-                  report={state.currentStrategyReport}
-                  onClose={() =>
-                    setState((prev) => ({ ...prev, showDeepDiveModal: false }))
-                  }
-                  title={t.modalTitle}
-                  labels={{ close: t.close }}
-                />
-              )
-            ))}
-        </main>
-
-        {/* Task Menu Modal */}
-        <TaskMenuModal
-          show={showTaskMenu}
-          onClose={() => setShowTaskMenu(false)}
-          onCreate={(type) => addTask({ type })}
-          uiLanguage={state.uiLanguage}
-        />
-
-        {/* Mining Guide Modal */}
-        {showMiningGuide && (
-          <KeywordMiningGuide
-            uiLanguage={state.uiLanguage}
-            onStart={handleMiningGuideStart}
-            onCancel={() => setShowMiningGuide(false)}
-            isDarkTheme={isDarkTheme}
-          />
-        )}
-
-        {/* Payment Modal */}
-        {showPaymentModal && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/70 backdrop-blur-sm"
-            onClick={closePaymentModal}
-          >
-            <div
-              className="w-full max-w-5xl rounded-[32px] border border-white/10 bg-[#050505] shadow-[0_0_60px_rgba(0,0,0,0.7)] text-white overflow-hidden"
-              role="dialog"
-              aria-modal="true"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">
-                    {state.uiLanguage === "zh" ? "充值方案" : "Payment Plans"}
-                  </p>
-                  <h3 className="text-2xl font-black">
-                    {state.uiLanguage === "zh"
-                      ? "按定价购买点数"
-                      : "Unlock production power"}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={closePaymentModal}
-                  className="text-white/70 hover:text-white transition"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="px-6 py-6 space-y-6">
-                {paymentPlansLoading && (
-                  <div className="text-sm text-slate-400">
-                    {state.uiLanguage === "zh"
-                      ? "加载中..."
-                      : "Loading plans..."}
-                  </div>
-                )}
-                {paymentPlansError && (
-                  <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">
-                    {paymentPlansError}
-                  </div>
-                )}
-
-                <div className="grid gap-6 sm:grid-cols-2">
-                  {paymentPlans.filter((p) => p.price > 0).length === 0 &&
-                    !paymentPlansLoading ? (
-                    <div className="text-sm text-slate-400">
-                      {state.uiLanguage === "zh"
-                        ? "暂无可用套餐"
-                        : "No plans available right now."}
-                    </div>
-                  ) : (
-                    paymentPlans
-                      .filter((p) => p.price > 0)
-                      .map((plan) => {
-                        const theme =
-                          PAYMENT_PLAN_THEMES[plan.plan_id] ||
-                          PAYMENT_PLAN_THEMES["default"];
-                        const isSelected =
-                          selectedPaymentPlanId === plan.plan_id;
-                        const priceLabel = Number.isFinite(plan.price)
-                          ? `$${plan.price.toLocaleString(undefined, {
-                            minimumFractionDigits: 0,
-                            maximumFractionDigits: 2,
-                          })}`
-                          : "$-";
-
-                        return (
-                          <button
-                            key={plan.plan_id}
-                            type="button"
-                            onClick={() => {
-                              if (isSelected) {
-                                if (!creatingCheckout && authenticated) {
-                                  handleCreateCheckout();
-                                }
-                              } else {
-                                setSelectedPaymentPlanId(plan.plan_id);
-                              }
-                            }}
-                            className={`relative group flex flex-col rounded-[24px] border p-6 text-left transition-all duration-500 focus:outline-none ${isSelected
-                              ? `bg-gradient-to-br ${theme.gradient} ${theme.border} shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] scale-[1.02] z-10`
-                              : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10"
+                        <div className="flex items-center gap-4">
+                          {/* Filter */}
+                          <div
+                            className={`flex items-center gap-2 text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
                               }`}
                           >
-                            <div className="flex items-start justify-between mb-6">
-                              <div>
-                                <p
-                                  className={`text-[11px] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-white" : "text-slate-400"
-                                    }`}
-                                >
-                                  {state.uiLanguage === "zh"
-                                    ? theme.titleZh
-                                    : theme.titleEn}
-                                </p>
-                              </div>
-                              {isSelected && (
-                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-[10px] font-black uppercase tracking-wider text-white">
-                                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                                  {state.uiLanguage === "zh"
-                                    ? "当前选择"
-                                    : "Selected"}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="mb-6">
-                              <div className="flex items-baseline gap-1">
-                                <span className="text-4xl font-black tracking-tighter italic">
-                                  {priceLabel}
-                                </span>
-                                <span
-                                  className={`text-xs font-medium ${isSelected
-                                    ? "text-white/60"
-                                    : "text-slate-500"
-                                    }`}
-                                >
-                                  {state.uiLanguage === "zh"
-                                    ? "/ 一次性"
-                                    : "/ one-time"}
-                                </span>
-                              </div>
-                            </div>
-
-                            <div
-                              className={`inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-xl text-xs font-bold ${isSelected
-                                ? "bg-white/10 text-white"
-                                : "bg-white/5 text-slate-300"
+                            <Filter className="w-4 h-4" />
+                            <select
+                              value={state.filterLevel}
+                              onChange={(e) =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  filterLevel: e.target.value as any,
+                                }))
+                              }
+                              className={`border rounded px-2 py-1 outline-none focus:ring-1 ${isDarkTheme
+                                ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
+                                : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
                                 }`}
                             >
-                              <span className={theme.accentColor}>
-                                {plan.credits_monthly.toLocaleString()}
-                              </span>
-                              <span className="opacity-70">
+                              <option
+                                value={ProbabilityLevel.HIGH}
+                                className={isDarkTheme ? "bg-black" : "bg-white"}
+                              >
+                                {t.filterHigh}
+                              </option>
+                              <option
+                                value={ProbabilityLevel.MEDIUM}
+                                className={isDarkTheme ? "bg-black" : "bg-white"}
+                              >
                                 {state.uiLanguage === "zh"
-                                  ? "生产点数"
-                                  : "Credits"}
-                              </span>
-                            </div>
+                                  ? "仅看 中概率"
+                                  : "Medium Only"}
+                              </option>
+                              <option
+                                value={ProbabilityLevel.LOW}
+                                className={isDarkTheme ? "bg-black" : "bg-white"}
+                              >
+                                {state.uiLanguage === "zh" ? "仅看 低概率" : "Low Only"}
+                              </option>
+                              <option
+                                value="ALL"
+                                className={isDarkTheme ? "bg-black" : "bg-white"}
+                              >
+                                {t.filterAll}
+                              </option>
+                            </select>
+                          </div>
 
-                            <div className="flex-grow space-y-3 mb-8">
-                              {theme.bullets.map((bullet) => (
-                                <div
-                                  key={bullet}
-                                  className="flex items-start gap-2.5"
-                                >
-                                  <CheckCircle
-                                    className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isSelected
-                                      ? "text-white/70"
-                                      : "text-slate-500"
-                                      }`}
-                                  />
-                                  <span
-                                    className={`text-xs leading-relaxed ${isSelected
-                                      ? "text-white/90"
-                                      : "text-slate-400"
+                          {/* Sort */}
+                          <div
+                            className={`flex items-center gap-2 text-sm ${isDarkTheme ? "text-slate-300" : "text-gray-700"
+                              }`}
+                          >
+                            <ArrowUpDown className="w-4 h-4" />
+                            <select
+                              value={state.sortBy}
+                              onChange={(e) =>
+                                setState((prev) => ({
+                                  ...prev,
+                                  sortBy: e.target.value as any,
+                                }))
+                              }
+                              className={`border rounded px-2 py-1 outline-none focus:ring-1 ${isDarkTheme
+                                ? "bg-black/60 border-emerald-500/30 focus:ring-emerald-500/50 text-white"
+                                : "bg-white border-emerald-300 focus:ring-emerald-500 text-gray-900"
+                                }`}
+                            >
+                              <option
+                                value="probability"
+                                className={isDarkTheme ? "bg-black" : "bg-white"}
+                              >
+                                Sort: Probability
+                              </option>
+                              <option
+                                value="volume"
+                                className={isDarkTheme ? "bg-black" : "bg-white"}
+                              >
+                                Sort: Volume
+                              </option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={downloadCSV}
+                          className={`flex items-center gap-2 text-sm px-3 py-1 rounded transition-colors ${isDarkTheme
+                            ? "text-slate-300 hover:text-emerald-400 hover:bg-emerald-500/10"
+                            : "text-gray-700 hover:text-emerald-600 hover:bg-emerald-50"
+                            }`}
+                        >
+                          <Download className="w-4 h-4" /> {t.downloadCSV}
+                        </button>
+                      </div>
+
+                      {/* Table */}
+                      <div
+                        className={`backdrop-blur-sm rounded-b-xl shadow-sm border overflow-hidden min-h-[400px] ${isDarkTheme
+                          ? "bg-black/40 border-emerald-500/20"
+                          : "bg-white border-emerald-200"
+                          }`}
+                      >
+                        <KeywordTable
+                          keywords={getProcessedKeywords()}
+                          expandedRowId={state.expandedRowId}
+                          onToggleExpand={(id) =>
+                            setState((prev) => ({ ...prev, expandedRowId: id }))
+                          }
+                          onDeepDive={handleDeepDive}
+                          isDarkTheme={isDarkTheme}
+                          uiLanguage={state.uiLanguage}
+                          t={t}
+                          MarkdownContent={MarkdownContent}
+                          miningMode={
+                            state.taskManager.activeTaskId
+                              ? state.taskManager.tasks.find(
+                                (t) => t.id === state.taskManager.activeTaskId
+                              )?.miningState?.miningMode || "blue-ocean"
+                              : "blue-ocean"
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Modal */}
+                  {state.showDeepDiveModal &&
+                    (state.isDeepDiving ? (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm">
+                        <div className="bg-white p-8 rounded-xl shadow-xl flex flex-col items-center">
+                          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
+                          <h3 className="text-lg font-bold text-slate-800">
+                            {t.generatingReport}
+                          </h3>
+                          <p className="text-slate-500 text-sm">
+                            Drafting H1, H2s, and Long-tail keywords...
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      state.currentStrategyReport && (
+                        <StrategyModal
+                          report={state.currentStrategyReport}
+                          onClose={() =>
+                            setState((prev) => ({ ...prev, showDeepDiveModal: false }))
+                          }
+                          title={t.modalTitle}
+                          labels={{ close: t.close }}
+                        />
+                      )
+                    ))}
+                </main>
+
+                {/* Task Menu Modal */}
+                <TaskMenuModal
+                  show={showTaskMenu}
+                  onClose={() => setShowTaskMenu(false)}
+                  onCreate={(type) => addTask({ type })}
+                  uiLanguage={state.uiLanguage}
+                />
+
+                {/* Mining Guide Modal */}
+                {showMiningGuide && (
+                  <KeywordMiningGuide
+                    uiLanguage={state.uiLanguage}
+                    onStart={handleMiningGuideStart}
+                    onCancel={() => setShowMiningGuide(false)}
+                    isDarkTheme={isDarkTheme}
+                  />
+                )}
+
+                {/* Payment Modal */}
+                {showPaymentModal && (
+                  <div
+                    className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 bg-black/70 backdrop-blur-sm"
+                    onClick={closePaymentModal}
+                  >
+                    <div
+                      className="w-full max-w-5xl rounded-[32px] border border-white/10 bg-[#050505] shadow-[0_0_60px_rgba(0,0,0,0.7)] text-white overflow-hidden"
+                      role="dialog"
+                      aria-modal="true"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.3em] text-emerald-300">
+                            {state.uiLanguage === "zh" ? "充值方案" : "Payment Plans"}
+                          </p>
+                          <h3 className="text-2xl font-black">
+                            {state.uiLanguage === "zh"
+                              ? "按定价购买点数"
+                              : "Unlock production power"}
+                          </h3>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={closePaymentModal}
+                          className="text-white/70 hover:text-white transition"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+
+                      <div className="px-6 py-6 space-y-6">
+                        {paymentPlansLoading && (
+                          <div className="text-sm text-slate-400">
+                            {state.uiLanguage === "zh"
+                              ? "加载中..."
+                              : "Loading plans..."}
+                          </div>
+                        )}
+                        {paymentPlansError && (
+                          <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">
+                            {paymentPlansError}
+                          </div>
+                        )}
+
+                        <div className="grid gap-6 sm:grid-cols-2">
+                          {paymentPlans.filter((p) => p.price > 0).length === 0 &&
+                            !paymentPlansLoading ? (
+                            <div className="text-sm text-slate-400">
+                              {state.uiLanguage === "zh"
+                                ? "暂无可用套餐"
+                                : "No plans available right now."}
+                            </div>
+                          ) : (
+                            paymentPlans
+                              .filter((p) => p.price > 0)
+                              .map((plan) => {
+                                const theme =
+                                  PAYMENT_PLAN_THEMES[plan.plan_id] ||
+                                  PAYMENT_PLAN_THEMES["default"];
+                                const isSelected =
+                                  selectedPaymentPlanId === plan.plan_id;
+                                const priceLabel = Number.isFinite(plan.price)
+                                  ? `$${plan.price.toLocaleString(undefined, {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2,
+                                  })}`
+                                  : "$-";
+
+                                return (
+                                  <button
+                                    key={plan.plan_id}
+                                    type="button"
+                                    onClick={() => {
+                                      if (isSelected) {
+                                        if (!creatingCheckout && authenticated) {
+                                          handleCreateCheckout();
+                                        }
+                                      } else {
+                                        setSelectedPaymentPlanId(plan.plan_id);
+                                      }
+                                    }}
+                                    className={`relative group flex flex-col rounded-[24px] border p-6 text-left transition-all duration-500 focus:outline-none ${isSelected
+                                      ? `bg-gradient-to-br ${theme.gradient} ${theme.border} shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] scale-[1.02] z-10`
+                                      : "border-white/5 bg-white/[0.02] hover:bg-white/[0.05] hover:border-white/10"
                                       }`}
                                   >
-                                    {bullet}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
+                                    <div className="flex items-start justify-between mb-6">
+                                      <div>
+                                        <p
+                                          className={`text-[11px] font-bold uppercase tracking-[0.2em] ${isSelected ? "text-white" : "text-slate-400"
+                                            }`}
+                                        >
+                                          {state.uiLanguage === "zh"
+                                            ? theme.titleZh
+                                            : theme.titleEn}
+                                        </p>
+                                      </div>
+                                      {isSelected && (
+                                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-[10px] font-black uppercase tracking-wider text-white">
+                                          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                                          {state.uiLanguage === "zh"
+                                            ? "当前选择"
+                                            : "Selected"}
+                                        </div>
+                                      )}
+                                    </div>
 
-                            {plan.description && (
-                              <p
-                                className={`text-[10px] mb-4 italic ${isSelected
-                                  ? "text-white/60"
-                                  : "text-slate-500"
-                                  }`}
-                              >
-                                {plan.description}
-                              </p>
-                            )}
+                                    <div className="mb-6">
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="text-4xl font-black tracking-tighter italic">
+                                          {priceLabel}
+                                        </span>
+                                        <span
+                                          className={`text-xs font-medium ${isSelected
+                                            ? "text-white/60"
+                                            : "text-slate-500"
+                                            }`}
+                                        >
+                                          {state.uiLanguage === "zh"
+                                            ? "/ 一次性"
+                                            : "/ one-time"}
+                                        </span>
+                                      </div>
+                                    </div>
 
-                            <div
-                              className={`mt-auto w-full py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-center transition-all ${isSelected
-                                ? "bg-white text-black shadow-lg shadow-black/20"
-                                : "bg-white/5 text-white group-hover:bg-white/10"
-                                }`}
+                                    <div
+                                      className={`inline-flex items-center gap-2 mb-6 px-3 py-1.5 rounded-xl text-xs font-bold ${isSelected
+                                        ? "bg-white/10 text-white"
+                                        : "bg-white/5 text-slate-300"
+                                        }`}
+                                    >
+                                      <span className={theme.accentColor}>
+                                        {plan.credits_monthly.toLocaleString()}
+                                      </span>
+                                      <span className="opacity-70">
+                                        {state.uiLanguage === "zh"
+                                          ? "生产点数"
+                                          : "Credits"}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex-grow space-y-3 mb-8">
+                                      {theme.bullets.map((bullet) => (
+                                        <div
+                                          key={bullet}
+                                          className="flex items-start gap-2.5"
+                                        >
+                                          <CheckCircle
+                                            className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isSelected
+                                              ? "text-white/70"
+                                              : "text-slate-500"
+                                              }`}
+                                          />
+                                          <span
+                                            className={`text-xs leading-relaxed ${isSelected
+                                              ? "text-white/90"
+                                              : "text-slate-400"
+                                              }`}
+                                          >
+                                            {bullet}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {plan.description && (
+                                      <p
+                                        className={`text-[10px] mb-4 italic ${isSelected
+                                          ? "text-white/60"
+                                          : "text-slate-500"
+                                          }`}
+                                      >
+                                        {plan.description}
+                                      </p>
+                                    )}
+
+                                    <div
+                                      className={`mt-auto w-full py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-center transition-all ${isSelected
+                                        ? "bg-white text-black shadow-lg shadow-black/20"
+                                        : "bg-white/5 text-white group-hover:bg-white/10"
+                                        }`}
+                                    >
+                                      {theme.cta}
+                                    </div>
+                                  </button>
+                                );
+                              })
+                          )}
+                        </div>
+
+                        {paymentMessage && (
+                          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
+                            {paymentMessage}
+                          </div>
+                        )}
+
+                        {!authenticated && (
+                          <div className="flex flex-wrap items-center gap-2 text-sm text-yellow-300">
+                            <AlertCircle className="w-4 h-4 text-yellow-300" />
+                            <span>
+                              {state.uiLanguage === "zh"
+                                ? "请先登录主应用以完成支付，"
+                                : "Please log into the main app to proceed,"}
+                            </span>
+                            <a
+                              href={MAIN_APP_URL}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline"
                             >
-                              {theme.cta}
-                            </div>
-                          </button>
-                        );
-                      })
-                  )}
-                </div>
+                              {state.uiLanguage === "zh" ? "点击前往" : "go log in"}
+                            </a>
+                          </div>
+                        )}
 
-                {paymentMessage && (
-                  <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm text-amber-100">
-                    {paymentMessage}
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <p className="text-xs text-slate-400">
+                            {state.uiLanguage === "zh"
+                              ? "点击“前往支付”会在新标签页打开 支付 结账页面。"
+                              : "Clicking Proceed to Checkout opens the 支付 payment page in a new tab."}
+                          </p>
+                          <Button
+                            onClick={handleCreateCheckout}
+                            disabled={
+                              creatingCheckout ||
+                              paymentPlansLoading ||
+                              paymentPlans.length === 0 ||
+                              !authenticated
+                            }
+                            className="h-12 px-8 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100 flex items-center gap-2"
+                          >
+                            {creatingCheckout ? (
+                              <>
+                                <Loader2 className="w-5 h-5 animate-spin" />
+                                {state.uiLanguage === "zh"
+                                  ? "跳转中..."
+                                  : "Redirecting..."}
+                              </>
+                            ) : state.uiLanguage === "zh" ? (
+                              "立即前往支付"
+                            ) : (
+                              "Proceed to Checkout"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
-                {!authenticated && (
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-yellow-300">
-                    <AlertCircle className="w-4 h-4 text-yellow-300" />
-                    <span>
-                      {state.uiLanguage === "zh"
-                        ? "请先登录主应用以完成支付，"
-                        : "Please log into the main app to proceed,"}
-                    </span>
-                    <a
-                      href={MAIN_APP_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline"
-                    >
-                      {state.uiLanguage === "zh" ? "点击前往" : "go log in"}
-                    </a>
+                {/* Proxy & Model Switcher - 开发环境浮动组件 */}
+                {import.meta.env.DEV && (
+                  <div className="fixed bottom-4 right-4 z-50">
+                    <ProxySwitcher isDarkTheme={isDarkTheme} compact />
                   </div>
                 )}
-
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <p className="text-xs text-slate-400">
-                    {state.uiLanguage === "zh"
-                      ? "点击“前往支付”会在新标签页打开 支付 结账页面。"
-                      : "Clicking Proceed to Checkout opens the 支付 payment page in a new tab."}
-                  </p>
-                  <Button
-                    onClick={handleCreateCheckout}
-                    disabled={
-                      creatingCheckout ||
-                      paymentPlansLoading ||
-                      paymentPlans.length === 0 ||
-                      !authenticated
-                    }
-                    className="h-12 px-8 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-base shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:scale-100 flex items-center gap-2"
-                  >
-                    {creatingCheckout ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        {state.uiLanguage === "zh"
-                          ? "跳转中..."
-                          : "Redirecting..."}
-                      </>
-                    ) : state.uiLanguage === "zh" ? (
-                      "立即前往支付"
-                    ) : (
-                      "Proceed to Checkout"
-                    )}
-                  </Button>
-                </div>
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* Proxy & Model Switcher - 开发环境浮动组件 */}
-        {import.meta.env.DEV && (
-          <div className="fixed bottom-4 right-4 z-50">
-            <ProxySwitcher isDarkTheme={isDarkTheme} compact />
-          </div>
-        )}
-      </div>
+              {/* 移动端底部导航栏 */}
+              <MobileBottomNav
+                isDarkTheme={isDarkTheme}
+                activeTab={state.contentGeneration.activeTab}
+                onTabChange={(tab) => {
+                  setState((prev) => {
+                    const currentActiveTaskId = prev.taskManager.activeTaskId;
+                    let updatedTasks = prev.taskManager.tasks;
 
-      {/* 移动端底部导航栏 */}
-      <MobileBottomNav
-        isDarkTheme={isDarkTheme}
-        activeTab={state.contentGeneration.activeTab}
-        onTabChange={(tab) => {
-          setState((prev) => {
-            const currentActiveTaskId = prev.taskManager.activeTaskId;
-            let updatedTasks = prev.taskManager.tasks;
+                    if (currentActiveTaskId) {
+                      const currentTask = updatedTasks.find(
+                        (t) => t.id === currentActiveTaskId
+                      );
+                      if (currentTask) {
+                        updatedTasks = updatedTasks.map((task) => {
+                          if (task.id === currentActiveTaskId) {
+                            return {
+                              ...snapshotCurrentTask(prev, task),
+                              isActive: false,
+                            };
+                          }
+                          return {
+                            ...task,
+                            isActive: false,
+                          };
+                        });
+                      } else {
+                        updatedTasks = updatedTasks.map((task) => ({
+                          ...task,
+                          isActive: false,
+                        }));
+                      }
+                    } else {
+                      updatedTasks = updatedTasks.map((task) => ({
+                        ...task,
+                        isActive: false,
+                      }));
+                    }
 
-            if (currentActiveTaskId) {
-              const currentTask = updatedTasks.find(
-                (t) => t.id === currentActiveTaskId
-              );
-              if (currentTask) {
-                updatedTasks = updatedTasks.map((task) => {
-                  if (task.id === currentActiveTaskId) {
+                    try {
+                      localStorage.setItem(
+                        STORAGE_KEYS.TASKS,
+                        JSON.stringify(updatedTasks)
+                      );
+                    } catch (e) {
+                      console.error("Failed to save tasks", e);
+                    }
+
+                    if (currentActiveTaskId && authenticated) {
+                      const taskToSync = updatedTasks.find(
+                        (t) => t.id === currentActiveTaskId
+                      );
+                      if (taskToSync && !taskToSync.id.startsWith("task-")) {
+                        syncTaskToBackend(taskToSync);
+                      }
+                    }
+
+                    // 移动端切换标签时，自动收起侧边栏
+                    if (window.innerWidth < 768) {
+                      return {
+                        ...prev,
+                        step: "content-generation",
+                        isSidebarCollapsed: true,
+                        taskManager: {
+                          ...prev.taskManager,
+                          activeTaskId: null,
+                          tasks: updatedTasks,
+                        },
+                        contentGeneration: {
+                          ...prev.contentGeneration,
+                          activeTab: tab,
+                        },
+                      };
+                    }
+
                     return {
-                      ...snapshotCurrentTask(prev, task),
-                      isActive: false,
+                      ...prev,
+                      step: "content-generation",
+                      taskManager: {
+                        ...prev.taskManager,
+                        activeTaskId: null,
+                        tasks: updatedTasks,
+                      },
+                      contentGeneration: {
+                        ...prev.contentGeneration,
+                        activeTab: tab,
+                      },
                     };
-                  }
-                  return {
-                    ...task,
-                    isActive: false,
-                  };
-                });
-              } else {
-                updatedTasks = updatedTasks.map((task) => ({
-                  ...task,
-                  isActive: false,
-                }));
-              }
-            } else {
-              updatedTasks = updatedTasks.map((task) => ({
-                ...task,
-                isActive: false,
-              }));
-            }
-
-            try {
-              localStorage.setItem(
-                STORAGE_KEYS.TASKS,
-                JSON.stringify(updatedTasks)
-              );
-            } catch (e) {
-              console.error("Failed to save tasks", e);
-            }
-
-            if (currentActiveTaskId && authenticated) {
-              const taskToSync = updatedTasks.find(
-                (t) => t.id === currentActiveTaskId
-              );
-              if (taskToSync && !taskToSync.id.startsWith("task-")) {
-                syncTaskToBackend(taskToSync);
-              }
-            }
-
-            // 移动端切换标签时，自动收起侧边栏
-            if (window.innerWidth < 768) {
-              return {
-                ...prev,
-                step: "content-generation",
-                isSidebarCollapsed: true,
-                taskManager: {
-                  ...prev.taskManager,
-                  activeTaskId: null,
-                  tasks: updatedTasks,
-                },
-                contentGeneration: {
-                  ...prev.contentGeneration,
-                  activeTab: tab,
-                },
-              };
-            }
-
-            return {
-              ...prev,
-              step: "content-generation",
-              taskManager: {
-                ...prev.taskManager,
-                activeTaskId: null,
-                tasks: updatedTasks,
-              },
-              contentGeneration: {
-                ...prev.contentGeneration,
-                activeTab: tab,
-              },
-            };
-          });
-        }}
-        uiLanguage={state.uiLanguage}
-      />
-    </div>
+                  });
+                }}
+                uiLanguage={state.uiLanguage}
+              />
+            </div>
           </WebsiteProvider>
         </ThemeProvider>
       </TaskProvider>

@@ -450,12 +450,26 @@ export async function deployToNetlify(config: NetlifyDeployConfig): Promise<Netl
     console.log(`[Netlify] Site ID: ${siteData.id}`);
     console.log(`[Netlify] Site Name: ${siteData.name}`);
     console.log(`[Netlify] Site URL: ${siteData.ssl_url || siteData.url}`);
-    console.log(`[Netlify] ℹ️ GitHub repo info was included in site creation`);
-    console.log(`[Netlify] ℹ️ Actively waiting for Netlify to link the GitHub repo...`);
     console.log(`[Netlify] Repository: ${config.repoOwner}/${config.repoName}`);
     console.log(`[Netlify] Build command: mkdocs build → Publish directory: site`);
 
-    // 主动等待 GitHub repo 链接
+    // 🔧 修复：如果提供了 installation_id，跳过轮询，直接返回成功
+    // Netlify 会在后台自动链接 repo 并触发构建（通常 1-3 分钟）
+    if (config.installationId) {
+      console.log(`[Netlify] ℹ️ GitHub App installation_id provided: ${config.installationId}`);
+      console.log(`[Netlify] ℹ️ Netlify will auto-link the repo and start building in background (1-3 minutes)`);
+      console.log(`[Netlify] ✅ Deployment initiated successfully!`);
+
+      return {
+        success: true,
+        siteUrl: siteData.ssl_url || siteData.url,
+        projectId: siteData.id,
+        warning: 'Site created with GitHub App. Netlify will auto-link the repo and start building within 1-3 minutes.',
+      };
+    }
+
+    // 兼容旧方式：没有 installation_id 时才轮询等待
+    console.log(`[Netlify] ⚠️ No installation_id provided, using legacy polling method...`);
     const linkResult = await waitForRepoLinking({
       token: config.token,
       siteId: siteData.id,
