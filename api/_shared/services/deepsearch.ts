@@ -28,6 +28,9 @@ export async function indexArticleWithDeepSearch(
 ): Promise<DeepSearchResponse> {
   const apiKey = process.env.UNIFUNCS_API_KEY;
 
+  // Debug log to see what's available
+  console.log('[DeepSearch] DEBUG: Available env keys:', Object.keys(process.env).filter(key => key.includes('API') || key.includes('KEY')));
+
   if (!apiKey) {
     console.error('[DeepSearch] ❌ UNIFUNCS_API_KEY not found in environment variables');
     return {
