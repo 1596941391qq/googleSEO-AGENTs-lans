@@ -686,44 +686,39 @@ export const SEO_RESEARCHER_PROMPTS = {
 </output_requirement>
 
 <output_format>
-你必须返回一个有效的JSON对象，包含以下字段：
-
 {
-  "semantic_landscape": "描述该关键词在全网的语义分布特征 (80-120字)",
+  "semantic_landscape": "描述该关键词在全网的语义分布特征 (要求 80-120 字，简洁明确)...",
   "engine_strategies": {
     "google": {
-      "ranking_logic": "Google排名逻辑分析 (40-60字)",
-      "content_gap": "前十名缺失的内容 (40-60字)",
-      "action_item": "必须执行的优化动作 (30-40字)",
-      "geo_opportunities": ["具体的GEO优化机会1", "具体的GEO优化机会2"]
+      "ranking_logic": "Google 排名逻辑分析 (40-60 字，简洁明确)",
+      "content_gap": "目前前十名缺失了什么？ (40-60 字，具体指出)",
+      "action_item": "必须要做的动作 (30-40 字，可执行)",
+      "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     },
     "perplexity": {
-      "citation_logic": "被Perplexity引用的策略 (40-60字)",
-      "structure_hint": "推荐的结构化格式 (简洁描述)",
-      "geo_opportunities": ["具体的GEO优化机会1", "具体的GEO优化机会2"]
+      "citation_logic": "如何被其引用？ (40-60 字，具体策略)",
+      "structure_hint": "推荐使用的Schema或列表格式 (简洁)",
+      "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     },
     "generative_ai": {
-      "llm_preference": "大模型偏好的内容风格 (40-60字)",
-      "geo_opportunities": ["具体的GEO优化机会1", "具体的GEO优化机会2"]
+      "llm_preference": "AI更喜欢哪种叙述风格？ (40-60 字，具体描述)",
+      "geo_opportunities": ["GEO优化机会1", "GEO优化机会2"]
     }
   },
-  "geo_recommendations": "综合GEO优化建议，包含格式工程、实体工程、信息增益等具体建议 (150-200字，Markdown格式)",
-  "searchPreferences": {
-    "google": "Google搜索偏好总结",
-    "perplexity": "Perplexity偏好总结",
-    "generative_ai": "生成式AI偏好总结"
-  }
+  "geo_recommendations": "综合GEO优化建议（包含格式工程、实体工程、信息增益、结构优化等方面的具体建议，要求 150-200 字，简洁明确，Markdown格式）"
 }
 
-**输出要求**：
-1. 必须返回完整的JSON对象，包含所有必需字段
-2. 每个字段必须有实质性内容，不能为空
-3. 严格遵守字数限制
-4. 避免重复表述
-5. 不要使用通用套话，提供具体可执行的建议
-6. 总输出控制在1200-1500中文字符
+**重要约束**：
+1. 严格遵守字数限制，不要超出指定范围
+2. 避免重复相同或类似的表述
+3. 每个字段都要提供独特、有价值的信息
+4. 不要使用填充性文字或通用套话
+5. 总输出控制在 1200-1500 中文字符以内（约 1800-2250 tokens）
+6. 保持简洁，每个字段都要言简意赅
 
-**关键**：只返回JSON对象本身，不要包含任何Markdown代码块标记（如```json）、解释文字或其他内容。直接输出JSON对象。
+请以结构化的JSON格式提供搜索引擎偏好分析和优化建议，特别关注目标市场的本地化需求。
+
+CRITICAL: 必须返回有效的 JSON 对象，不要包含任何 Markdown 格式标记、解释性文字或 JSON 对象之外的文本。只返回 JSON 对象本身。
 </output_format>
 `,
     en: (keyword: string, targetLanguage: string, marketLabel: string) => `
@@ -759,44 +754,40 @@ Must provide a "core breakthrough point" for each engine from a data-driven pers
 </output_requirement>
 
 ## Output Format
-You must return a valid JSON object with the following fields:
-
+Return JSON:
 {
-  "semantic_landscape": "Describe semantic distribution characteristics of this keyword (80-120 words)",
+  "semantic_landscape": "Describe the semantic distribution characteristics of this keyword across the web (80-120 words, concise and clear)...",
   "engine_strategies": {
     "google": {
-      "ranking_logic": "Google ranking logic analysis (40-60 words)",
-      "content_gap": "What top 10 results are missing (40-60 words)",
-      "action_item": "Must-do optimization actions (30-40 words)",
-      "geo_opportunities": ["Specific GEO opportunity 1", "Specific GEO opportunity 2"]
+      "ranking_logic": "Google ranking logic analysis (40-60 words, concise and specific)",
+      "content_gap": "What are the top 10 currently missing? (40-60 words, specific gaps)",
+      "action_item": "Actions that must be taken (30-40 words, actionable)",
+      "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     },
     "perplexity": {
-      "citation_logic": "Strategy to be cited by Perplexity (40-60 words)",
-      "structure_hint": "Recommended structured formats (concise)",
-      "geo_opportunities": ["Specific GEO opportunity 1", "Specific GEO opportunity 2"]
+      "citation_logic": "How to be cited by it? (40-60 words, specific strategy)",
+      "structure_hint": "Recommended Schema or list formats (concise)",
+      "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     },
     "generative_ai": {
-      "llm_preference": "Content style preferred by LLMs (40-60 words)",
-      "geo_opportunities": ["Specific GEO opportunity 1", "Specific GEO opportunity 2"]
+      "llm_preference": "What narrative style does AI prefer? (40-60 words, specific description)",
+      "geo_opportunities": ["GEO optimization opportunity 1", "GEO optimization opportunity 2"]
     }
   },
-  "geo_recommendations": "Comprehensive GEO optimization recommendations including format engineering, entity engineering, information gain, etc. (150-200 words, Markdown format)",
-  "searchPreferences": {
-    "google": "Google search preference summary",
-    "perplexity": "Perplexity preference summary",
-    "generative_ai": "Generative AI preference summary"
-  }
+  "geo_recommendations": "Comprehensive GEO optimization recommendations (including format engineering, entity engineering, information gain, structure optimization, etc., 150-200 words, concise and clear, in Markdown format)"
 }
 
-**Output Requirements**:
-1. Must return complete JSON object with all required fields
-2. Each field must have substantive content, cannot be empty
-3. Strictly adhere to word limits
-4. Avoid repetitive statements
-5. Provide specific actionable recommendations, no generic advice
-6. Keep total output within 1200-1500 words
+**Important Constraints**:
+1. Strictly adhere to word limits, do not exceed specified ranges
+2. Avoid repeating similar or identical phrases
+3. Each field must provide unique, valuable information
+4. Do not use filler text or generic statements
+5. Keep total output within 1200-1500 words (approximately 1800-2250 tokens)
+6. Be concise and to the point in every field
 
-**CRITICAL**: Return ONLY the JSON object itself. Do NOT include any Markdown code block markers (like ```json), explanations, or other content. Output the JSON object directly.
+Please provide detailed search engine preference analysis and optimization recommendations in structured JSON format, with special attention to localization needs for the target market.
+
+CRITICAL: Return ONLY a valid JSON object. Do NOT include any Markdown formatting, explanations, or text outside the JSON object. Return ONLY the JSON object itself.
 `
   },
 
@@ -2141,27 +2132,27 @@ export const IMAGE_CREATIVE_PROMPTS = {
   extractThemes: {
     zh: `
 # 角色
-You are a Visual Creative Director with top-tier 4A advertising agency background, skilled at transforming complex SEO concepts into impactful visual metaphors.
+你是一位拥有顶级 4A 广告公司背景的视觉创意总监，擅长将复杂的 SEO 概念转化为极具冲击力的视觉隐喻。
 
 # 任务
-Extract 4-6 core visual themes from the provided article for generating images that enhance user engagement.
+从提供的文章中提取 4-6 个核心视觉主题，用于生成能够提升用户停留时间的配图。
 
 <creative_guidelines>
-1. **Visual Embodiment**：识别文章中的核心关键词，并将其转化为具体的视觉符号（例如：将“流量增长”转化为“光纤脉冲流”）。
-2. **Text Integration**: Leverage Nano Banana 2's powerful text rendering capability, suggest which key words should appear in the image.
-3. **SEO Friendliness**：描述中需包含有助于搜索引擎理解图片意图的“背景实体”。
+1. **视觉实体化**：识别文章中的核心关键词，并将其转化为具体的视觉符号（例如：将“流量增长”转化为“光纤脉冲流”）。
+2. **文本集成**：利用 Nano Banana 2 的强力文本渲染能力，建议在图中加入哪些关键单词。
+3. **SEO 友好度**：描述中需包含有助于搜索引擎理解图片意图的“背景实体”。
 </creative_guidelines>
 
 <output_format>
 {
-  "visual_strategy": "Overall visual style recommendation (e.g., minimalism, cyberpunk, business realism)...",
+  "visual_strategy": "整体视觉风格建议（如：极简主义、赛博朋克、商务写实）...",
   "themes": [
     {
       "id": "theme_1",
-      "visual_metaphor": "What specific visual should represent this section?",
-      "text_overlay": "Key words that should appear in the image (if any)",
-      "composition": "Composition suggestion (e.g., medium shot, aerial view, shallow depth of field)",
-      "color_palette": ["color1", "color2"]
+      "visual_metaphor": "用什么具体的画面来表达这个段落？",
+      "text_overlay": "图中应该出现的关键词（如果有）",
+      "composition": "构图建议（如：中景、俯瞰、浅景深）",
+      "color_palette": ["颜色1", "颜色2"]
     }
   ]
 }
