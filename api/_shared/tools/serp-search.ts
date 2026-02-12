@@ -158,6 +158,8 @@ async function fetchThorDataSerp(
         },
         body: formData,
         signal: controller.signal,
+        // @ts-ignore - Node.js specific option to bypass SSL certificate validation
+        rejectUnauthorized: false,
       });
       clearTimeout(timeoutId);
 

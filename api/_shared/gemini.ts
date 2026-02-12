@@ -1,57 +1,41 @@
-// Shared Gemini API service for Vercel serverless functions
+// Shared AI API service for Vercel serverless functions
+// 当前使用: 302.ai DeepSeek V3 API (OpenAI 兼容格式)
 import { TargetLanguage } from "./types.js";
 
 /**
- * Gemini 代理服务商配置
- * 支持的代理: 302 (302.ai), tuzi (tu-zi.com)
+ * AI 模型代理服务商配置
+ * 当前使用: 302.ai DeepSeek V3 API (OpenAI 兼容格式)
  * 
  * 环境变量:
- * - GEMINI_PROXY_PROVIDER: 选择代理商 ("302" | "tuzi")，默认 "302"
  * - GEMINI_API_KEY: 302.ai 的 API Key
- * - GEMINI_TUZI_API_KEY: tu-zi.com 的 API Key（如果不设置则使用 GEMINI_API_KEY）
- * - GEMINI_PROXY_URL: 自定义代理 URL（可选，会覆盖默认值）
+ * - GEMINI_MODEL: 模型名称，默认 "deepseek-chat"
  */
 
-// 代理商类型
+// 代理商类型（保留兼容性）
 type ProxyProvider = '302' | 'tuzi';
 
 // 代理商配置
 interface ProxyConfig {
   baseUrl: string;
-  // URL 路径模板，{model} 会被替换为模型名称
-  urlTemplate: string;
-  streamUrlTemplate: string;
   // 获取 API Key 的方式
   getApiKey: () => string;
 }
 
-// 当前请求的代理商覆盖（用于从前端动态切换）
-let requestProxyProviderOverride: ProxyProvider | null = null;
 // 当前请求的模型覆盖（用于从前端动态切换）
 let requestModelOverride: string | null = null;
 
 /**
- * 设置当前请求的代理商（由 request-handler 调用）
- * 这允许前端通过 X-Proxy-Provider header 来覆盖默认代理商
+ * 设置当前请求的代理商（保留兼容性，实际不再使用）
  */
 export function setRequestProxyProvider(provider: '302' | 'tuzi' | null): void {
-  if (provider === '302' || provider === 'tuzi') {
-    requestProxyProviderOverride = provider;
-  } else {
-    requestProxyProviderOverride = null;
-  }
+  // 保留接口兼容性，不做任何操作
 }
 
 /**
  * 设置当前请求的模型（由 request-handler 调用）
- * 这允许前端通过 X-Gemini-Model header 来覆盖默认模型
  */
 export function setRequestModel(model: string | null): void {
-  if (model && model.startsWith('gemini-')) {
-    requestModelOverride = model;
-  } else {
-    requestModelOverride = null;
-  }
+  requestModelOverride = model;
 }
 
 /**
@@ -62,10 +46,10 @@ export function getCurrentModel(): string {
 }
 
 /**
- * 清除当前请求的代理商覆盖
+ * 清除当前请求的代理商覆盖（保留兼容性）
  */
 export function clearRequestProxyProvider(): void {
-  requestProxyProviderOverride = null;
+  // 保留接口兼容性
 }
 
 /**
@@ -75,71 +59,12 @@ export function clearRequestModel(): void {
   requestModelOverride = null;
 }
 
-// 获取当前代理商
-const getProxyProvider = (): ProxyProvider => {
-  // 优先使用请求级别的覆盖
-  if (requestProxyProviderOverride) {
-    return requestProxyProviderOverride;
-  }
-  // 否则使用环境变量
-  const provider = (process.env.GEMINI_PROXY_PROVIDER || '302').toLowerCase();
-  if (provider === 'tuzi' || provider === 'tu-zi') {
-    return 'tuzi';
-  }
-  return '302';
-};
-
-// 获取代理配置（每次都从原始配置创建新对象，确保不会污染）
-const getProxyConfig = (): ProxyConfig & { provider: ProxyProvider } => {
-  const provider = getProxyProvider();
-
-  // 从原始配置获取（硬编码，确保不会出错）
-  let baseUrl: string;
-  let urlTemplate: string;
-  let streamUrlTemplate: string;
-  let getApiKey: () => string;
-
-  if (provider === 'tuzi') {
-    baseUrl = 'https://api.tu-zi.com';
-    urlTemplate = '/v1beta/models/{model}:generateContent';
-    streamUrlTemplate = '/v1beta/models/{model}:streamGenerateContent';
-    getApiKey = () => process.env.GEMINI_TUZI_API_KEY || process.env.GEMINI_API_KEY || '';
-  } else {
-    baseUrl = 'https://api.302.ai';
-    urlTemplate = '/v1/v1beta/models/{model}:generateContent';
-    streamUrlTemplate = '/v1/v1beta/models/{model}:streamGenerateContent';
-    getApiKey = () => process.env.GEMINI_API_KEY || '';
-  }
-
-  // 允许通过 GEMINI_PROXY_URL 覆盖默认 baseUrl（但只在没有自定义时才使用）
-  const customBaseUrl = process.env.GEMINI_PROXY_URL;
-  if (customBaseUrl) {
-    baseUrl = customBaseUrl;
-  }
-
-
-  const config: ProxyConfig = {
-    baseUrl,
-    urlTemplate,
-    streamUrlTemplate,
-    getApiKey,
+// 获取代理配置
+const getProxyConfig = (): ProxyConfig => {
+  return {
+    baseUrl: 'https://api.302.ai',
+    getApiKey: () => process.env.GEMINI_API_KEY || '',
   };
-
-  return { ...config, provider };
-};
-
-// 构建 API URL
-const buildApiUrl = (model: string): string => {
-  const config = getProxyConfig();
-  const url = config.baseUrl + config.urlTemplate.replace('{model}', model);
-  return url;
-};
-
-// 构建 Stream API URL
-const buildStreamApiUrl = (model: string): string => {
-  const config = getProxyConfig();
-  const url = config.baseUrl + config.streamUrlTemplate.replace('{model}', model);
-  return url;
 };
 
 // 获取 API Key
@@ -148,17 +73,16 @@ const getApiKey = (): string => {
   return config.getApiKey();
 };
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-// Fallback model to use when primary model fails (faster, more reliable)
-const FALLBACK_MODEL = 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'sophnet/DeepSeek-V3.2-Fast';
+// Fallback model (保持相同)
+const FALLBACK_MODEL = 'sophnet/DeepSeek-V3.2-Fast';
 
 // 导出当前代理和模型信息，方便调试
 export const getCurrentProxyInfo = () => {
   const config = getProxyConfig();
   return {
-    provider: config.provider,
+    provider: '302.ai',
     baseUrl: config.baseUrl,
-    urlTemplate: config.urlTemplate,
     hasApiKey: !!config.getApiKey(),
     model: getCurrentModel(),
     defaultModel: MODEL,
@@ -170,24 +94,21 @@ interface GeminiConfig {
   responseMimeType?: string;
   responseSchema?: any;
   /**
-   * 启用 Google 搜索检索工具（联网搜索）
-   * 当设置为 true 时，Gemini 可以调用 Google 搜索来获取实时信息
+   * 启用联网搜索（DeepSeek 不支持，保留兼容性）
    */
   enableGoogleSearch?: boolean;
   /**
    * 最大输出 token 数
-   * 默认使用模型支持的最大值 65536（Gemini 2.5 Flash 支持的最大值）
-   * 可以显式指定其他值来覆盖默认值
    */
   maxOutputTokens?: number;
   /**
-   * 推理模式（思考模式）
-   * - "none": 禁用思考模式，直接输出结果（最快）
-   * - "short": 短思考模式
-   * - "long": 长思考模式
-   * 默认值：对于性能敏感的场景（如关键词分析），使用 "none" 以加快速度
+   * 推理模式（DeepSeek 不支持，保留兼容性）
    */
   reasoningMode?: 'none' | 'short' | 'long';
+  /**
+   * 温度参数 (0-2)
+   */
+  temperature?: number;
   /**
    * 重试时的回调函数
    */
@@ -270,7 +191,7 @@ export async function callGeminiAPI(prompt: string, systemInstruction?: string, 
 }
 
 /**
- * Call Gemini API with streaming response (SSE)
+ * Call DeepSeek API with streaming response (OpenAI compatible SSE)
  */
 export async function callGeminiAPIStream(
   prompt: string,
@@ -282,63 +203,49 @@ export async function callGeminiAPIStream(
   const proxyInfo = getCurrentProxyInfo();
 
   if (!apiKey || apiKey.trim() === '') {
-    console.error(`API Key is not configured for proxy provider: ${proxyInfo.provider}`);
-    throw new Error(`API Key is not configured for ${proxyInfo.provider}. Please set GEMINI_API_KEY${proxyInfo.provider === 'tuzi' ? ' or GEMINI_TUZI_API_KEY' : ''} in environment variables.`);
+    console.error(`API Key is not configured`);
+    throw new Error(`API Key is not configured. Please set GEMINI_API_KEY in environment variables.`);
   }
 
   const modelName = config?.model || getCurrentModel();
-  const url = buildStreamApiUrl(modelName);
+  const url = `${proxyInfo.baseUrl}/v1/chat/completions`;
 
-  const contents: any[] = [];
+  const messages: any[] = [];
   if (systemInstruction) {
-    contents.push({
-      role: 'user',
-      parts: [{ text: systemInstruction }]
-    });
-    contents.push({
-      role: 'model',
-      parts: [{ text: 'Understood. I will follow these instructions.' }]
+    messages.push({
+      role: 'system',
+      content: systemInstruction
     });
   }
-  contents.push({
+  messages.push({
     role: 'user',
-    parts: [{ text: prompt }]
+    content: prompt
   });
 
   const requestBody: any = {
-    contents: contents,
-    generationConfig: {
-      maxOutputTokens: config?.maxOutputTokens ?? 65536,
-      reasoningMode: config?.reasoningMode ?? 'none'
-    }
+    model: modelName,
+    messages: messages,
+    stream: true,
+    temperature: config?.temperature ?? 1.0,
   };
 
-  if (config?.enableGoogleSearch) {
-    requestBody.tools = [
-      {
-        googleSearchRetrieval: {
-          disableAttribution: true
-        }
-      }
-    ];
+  if (config?.maxOutputTokens) {
+    requestBody.max_tokens = config.maxOutputTokens;
   }
 
   if (config?.responseMimeType === 'application/json') {
-    requestBody.generationConfig.responseMimeType = 'application/json';
-    if (config?.responseSchema) {
-      requestBody.generationConfig.responseSchema = config.responseSchema;
-    }
+    requestBody.response_format = { type: 'json_object' };
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes (300s) to match Vercel limit
+  const timeoutId = setTimeout(() => controller.abort(), 300000);
 
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal,
@@ -377,17 +284,16 @@ export async function callGeminiAPIStream(
 
         try {
           const json: any = JSON.parse(payload);
-          const candidate = json.candidates?.[0];
-          const delta = candidate?.content?.parts?.[0]?.text || '';
+          const delta = json.choices?.[0]?.delta?.content || '';
           if (delta) {
             fullText += delta;
             onDelta(delta, fullText);
           }
-          if (candidate?.finishReason || candidate?.finish_reason) {
-            finishReason = candidate.finishReason || candidate.finish_reason;
+          if (json.choices?.[0]?.finish_reason) {
+            finishReason = json.choices[0].finish_reason;
           }
         } catch (e) {
-          console.warn('[Gemini Stream] Failed to parse chunk:', e);
+          console.warn('[DeepSeek Stream] Failed to parse chunk:', e);
         }
       }
     }
@@ -408,81 +314,61 @@ export async function callGeminiAPIStream(
     if (error.name === 'AbortError') {
       throw new Error('API Stream Request Timeout (300s)');
     }
-    console.error('Call Gemini API Stream Failed:', error);
+    console.error('Call DeepSeek API Stream Failed:', error);
     throw error;
   }
 }
 
 /**
- * Internal function to handle the actual API request
+ * Internal function to handle the actual API request (OpenAI compatible format)
  */
 async function _callGeminiInternal(prompt: string, systemInstruction?: string, config?: GeminiConfig) {
   const apiKey = getApiKey();
   const proxyInfo = getCurrentProxyInfo();
 
   if (!apiKey || apiKey.trim() === '') {
-    console.error(`API Key is not configured for proxy provider: ${proxyInfo.provider}`);
-    throw new Error(`API Key is not configured for ${proxyInfo.provider}. Please set GEMINI_API_KEY${proxyInfo.provider === 'tuzi' ? ' or GEMINI_TUZI_API_KEY' : ''} in environment variables.`);
+    console.error(`API Key is not configured`);
+    throw new Error(`API Key is not configured. Please set GEMINI_API_KEY in environment variables.`);
   }
 
-  // 优先级：config.model > requestModelOverride > 环境变量 MODEL
   const modelName = config?.model || getCurrentModel();
-  const url = buildApiUrl(modelName);
+  const url = `${proxyInfo.baseUrl}/v1/chat/completions`;
 
-  const contents: any[] = [];
+  const messages: any[] = [];
   if (systemInstruction) {
-    contents.push({
-      role: 'user',
-      parts: [{ text: systemInstruction }]
-    });
-    contents.push({
-      role: 'model',
-      parts: [{ text: 'Understood. I will follow these instructions.' }]
+    messages.push({
+      role: 'system',
+      content: systemInstruction
     });
   }
-  contents.push({
+  messages.push({
     role: 'user',
-    parts: [{ text: prompt }]
+    content: prompt
   });
 
   const requestBody: any = {
-    contents: contents,
-    generationConfig: {
-      // Gemini 2.5 Flash/Pro 支持最大 65536 输出 tokens
-      // 设置足够大的默认值以避免截断长内容
-      maxOutputTokens: config?.maxOutputTokens ?? 65536,
-      reasoningMode: config?.reasoningMode ?? 'none'
-    }
+    model: modelName,
+    messages: messages,
+    temperature: config?.temperature ?? 1.0,
   };
 
-  // Configure tools: Google Search
-  if (config?.enableGoogleSearch) {
-    requestBody.tools = [
-      {
-        googleSearchRetrieval: {
-          disableAttribution: true
-        }
-      }
-    ];
+  if (config?.maxOutputTokens) {
+    requestBody.max_tokens = config.maxOutputTokens;
   }
 
   if (config?.responseMimeType === 'application/json') {
-    requestBody.generationConfig.responseMimeType = 'application/json';
-    if (config?.responseSchema) {
-      requestBody.generationConfig.responseSchema = config.responseSchema;
-    }
+    requestBody.response_format = { type: 'json_object' };
   }
 
-  // Add timeout for fetch (300 seconds per request - matching Vercel max limit)
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes (300s)
+  const timeoutId = setTimeout(() => controller.abort(), 300000);
 
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal,
@@ -500,62 +386,18 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
 
     if (data.error) {
       console.error('API Error Response:', data.error);
-      throw new Error(`API Error: ${data.error}`);
+      throw new Error(`API Error: ${data.error.message || JSON.stringify(data.error)}`);
     }
 
-    let searchResults: Array<{ title: string; url: string; snippet?: string }> = [];
+    if (data.choices && data.choices.length > 0) {
+      const choice = data.choices[0];
+      const finishReason = choice.finish_reason;
 
-    if (data.candidates && data.candidates.length > 0) {
-      const candidate = data.candidates[0];
-      const finishReason = candidate.finishReason || candidate.finish_reason;
-
-      if (finishReason === 'LENGTH' || finishReason === 'MAX_TOKENS') {
-        console.warn('⚠️ API response truncated (finishReason: ' + finishReason + ')');
+      if (finishReason === 'length') {
+        console.warn('⚠️ API response truncated (finish_reason: length)');
       }
 
-      if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
-        content = candidate.content.parts[0].text || '';
-
-        if (config?.enableGoogleSearch && config?.responseMimeType === 'application/json') {
-          content = cleanJSONFromSearchReferences(content);
-          if (content && typeof content === 'string') {
-            const trimmedContent = content.trim();
-            if (trimmedContent && typeof trimmedContent.startsWith === 'function' && (trimmedContent.startsWith('**') || trimmedContent.startsWith('*') || trimmedContent.startsWith('#'))) {
-              const firstBrace = content.indexOf('{');
-              if (firstBrace > 0) {
-                content = content.substring(firstBrace);
-              }
-              content = content.replace(/^\*\*[^*]+\*\*/gm, '');
-            }
-            content = content.replace(/^\*[^*]+/gm, '');
-            content = content.replace(/^#+\s+/gm, '');
-            content = content.replace(/^```[\s\S]*?```/gm, '');
-            content = content.trim();
-          }
-        }
-      }
-
-      if (candidate.groundingMetadata && candidate.groundingMetadata.groundingChunks) {
-        const chunks = candidate.groundingMetadata.groundingChunks;
-        searchResults = chunks
-          .filter((chunk: any) => chunk.web && chunk.web.uri)
-          .map((chunk: any) => ({
-            title: chunk.web?.title || chunk.web?.uri || 'Untitled',
-            url: chunk.web.uri,
-            snippet: chunk.web?.snippet || undefined,
-          }));
-
-        const seenUrls = new Set<string>();
-        searchResults = searchResults.filter((result) => {
-          if (seenUrls.has(result.url)) return false;
-          seenUrls.add(result.url);
-          return true;
-        });
-      }
-    }
-
-    if (!content && data.output) {
-      content = data.output;
+      content = choice.message?.content || '';
     }
 
     if (!content) {
@@ -563,12 +405,12 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
       throw new Error('No text content found in API response');
     }
 
-    const finishReason = data.candidates?.[0]?.finishReason || data.candidates?.[0]?.finish_reason;
+    const finishReason = data.choices?.[0]?.finish_reason;
 
     return {
       text: content,
       raw: data,
-      searchResults: searchResults.length > 0 ? searchResults : undefined,
+      searchResults: undefined,
       finishReason: finishReason,
     };
   } catch (error: any) {
@@ -576,35 +418,19 @@ async function _callGeminiInternal(prompt: string, systemInstruction?: string, c
     if (error.name === 'AbortError') {
       throw new Error('API Request Timeout (300s)');
     }
-    console.error('Call Gemini API Failed:', error);
+    console.error('Call DeepSeek API Failed:', error);
     throw error;
   }
 }
 
 /**
- * Clean Google Search reference markers from JSON response
+ * Clean JSON response (simplified for DeepSeek)
  */
 function cleanJSONFromSearchReferences(text: string): string {
   if (!text || typeof text !== 'string') return text || '';
-  text = text.replace(/\[\d+\]/g, '');
-  text = text.replace(/\[source\]/gi, '');
-  text = text.replace(/\[citation\]/gi, '');
-  text = text.replace(/\(source[^)]*\)/gi, '');
-  text = text.replace(/\(from[^)]*\)/gi, '');
-  text = text.replace(/\(citation[^)]*\)/gi, '');
-  text = text.replace(/(?<!["'])\bhttps?:\/\/[^\s)]+(?!["'])/g, '');
-  text = text.replace(/^(根据|基于|来自).{0,20}(搜索结果|搜索|资料)[:：]\s*/i, '');
-  text = text.replace(/^(According to|Based on|From).{0,30}(search results|search|sources)[:：]\s*/i, '');
-
-  const lines = text.split('\n');
-  const cleanedLines = lines.filter(line => {
-    const trimmed = line.trim();
-    if (/^(\[\d+\]|\(source|\(from|\(citation|来源|参考)/i.test(trimmed)) return false;
-    if (/^https?:\/\/.+$/.test(trimmed)) return false;
-    return true;
-  });
-
-  return cleanedLines.join('\n').trim();
+  // DeepSeek 通常不会添加搜索引用，保持简单清理
+  text = text.replace(/```json\s*/gi, '').replace(/```/g, '').trim();
+  return text;
 }
 
 /**

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npx vite",
-    "dev:vercel": "vercel dev --listen 3002",
+    "dev:vercel": "npx vercel dev --listen 3002",
     "build": "npx vite build",
     "preview": "npx vite preview"
   },

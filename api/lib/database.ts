@@ -2004,7 +2004,6 @@ export async function initPublishedArticlesTable() {
           END
           WHERE target_language IS NULL OR target_language = 'en'
         `;
-        console.log('[Database] ✅ Migrated existing articles target_language based on target_market');
       } catch (e) {
         console.error('[Database] Could not migrate target_language:', e);
       }

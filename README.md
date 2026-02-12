@@ -4,13 +4,13 @@
 
 # Google SEO Agent
 
-这是一个基于 React + Node.js + Gemini API 的 SEO 关键词挖掘和分析工具。
+这是一个基于 React + Node.js + AI API 的 SEO 关键词挖掘和分析工具。
 
 ## 📋 项目架构
 
 - **前端**: React + TypeScript + Vite
 - **后端**: Vercel Serverless Functions (Node.js + TypeScript)
-- **AI**: Google Gemini API
+- **AI**: 302.ai DeepSeek V3.2 Fast API (OpenAI 兼容格式)
 
 ## 🚀 快速开始
 
@@ -18,7 +18,7 @@
 
 - Node.js 18+
 - npm 或 yarn
-- Gemini API Key
+- 302.ai API Key (用于 DeepSeek V3.2 Fast 模型)
 
 ### 安装依赖
 
@@ -33,19 +33,16 @@ npm install
 在项目根目录创建 `.env` 文件：
 
 ```env
-# 代理商选择: "302" (302.ai, 默认) 或 "tuzi" (tu-zi.com)
-GEMINI_PROXY_PROVIDER=302
+# 302.ai API Key (用于 DeepSeek V3.2 Fast 模型)
+GEMINI_API_KEY=your_302ai_api_key_here
 
-# 302.ai 的 API Key
-GEMINI_API_KEY=your_gemini_api_key_here
+# 模型选择 (默认: sophnet/DeepSeek-V3.2-Fast)
+GEMINI_MODEL=sophnet/DeepSeek-V3.2-Fast
 
-# tu-zi.com 的 API Key（可选，如果不设置则使用 GEMINI_API_KEY）
-GEMINI_TUZI_API_KEY=your_tuzi_api_key_here
-
-# 自定义代理 URL（可选，会覆盖默认值）
-# GEMINI_PROXY_URL=https://api.302.ai
-
-
+# 其他 API Keys
+UNIFUNCS_API_KEY=your_unifuncs_api_key
+DATAFORSEO_LOGIN=your_dataforseo_login
+DATAFORSEO_PASSWORD=your_dataforseo_password
 ```
 
 **Vercel 部署**:
