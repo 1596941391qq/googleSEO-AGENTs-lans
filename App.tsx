@@ -3557,19 +3557,13 @@ export default function App() {
       isBatchRunning ||
       taskToDelete.articleGeneratorState?.isGenerating
     ) {
-      console.log("[DEBUG] User trying to delete running task, attempting to auto-stop first.");
-      // Auto-trigger stop if it's the active one
-      if (taskId === state.taskManager.activeTaskId) {
-        if (taskToDelete.miningState?.isMining) handleStopMining();
-        if (isBatchRunning) handleStopBatch();
-      }
-
+      console.log("[DEBUG] deleteTask BLOCKED: task is still running.");
       setState((prev) => ({
         ...prev,
         error:
           state.uiLanguage === "zh"
-            ? "检测到任务正在运行，已尝试为您停止。请稍等几秒后再尝试删除。"
-            : "Task is running. Attempting to stop it... Please wait a few seconds before deleting.",
+            ? "无法删除正在运行的任务，请先停止它。"
+            : "Cannot delete a running task. Please stop it first.",
       }));
       return;
     }
@@ -7927,6 +7921,13 @@ Please generate keywords based on the opportunities and keyword suggestions ment
         );
 
         try {
+          // Check stop before starting batch API
+          if (stopBatchRef.current) {
+            addLog("Batch analysis stopped by user before API call.", "warning", taskId);
+            setThinkingStatus(false, "", "idle");
+            return;
+          }
+
           const batchResult = await batchTranslateAndAnalyze(
             undefined, // keywords (不使用，因为使用 keywordsFromAudit)
             currentTargetLanguage,
@@ -7937,6 +7938,13 @@ Please generate keywords based on the opportunities and keyword suggestions ment
             batchWebsiteDR,
             keywordsFromAudit // 传递 keywordsFromAudit 参数
           );
+
+          // Check stop after API returns
+          if (stopBatchRef.current) {
+            addLog("Batch analysis stopped by user after API call.", "warning", taskId);
+            setThinkingStatus(false, "", "idle");
+            return;
+          }
 
           if (!batchResult.success) {
             throw new Error("Batch analysis failed");
@@ -8500,6 +8508,33 @@ Please generate keywords based on the opportunities and keyword suggestions ment
     // Clear thinking status when user stops batch analysis
     setThinkingStatus(false, "", "idle");
     addLog("Stopping batch analysis...", "warning");
+
+    // Immediately update UI to show results (don't keep user waiting)
+    setState((prev) => {
+      const currentTaskId = prev.taskManager.activeTaskId;
+      const updatedTasks = prev.taskManager.tasks.map((task) => {
+        if (task.id === currentTaskId && task.batchState) {
+          return {
+            ...task,
+            batchState: {
+              ...task.batchState,
+              batchCurrentIndex: task.batchState.batchTotalCount, // Mark as complete
+            },
+          };
+        }
+        return task;
+      });
+
+      return {
+        ...prev,
+        step: "batch-results" as const, // 🔧 关键：切换到结果页面
+        batchCurrentIndex: prev.batchTotalCount,
+        taskManager: {
+          ...prev.taskManager,
+          tasks: updatedTasks,
+        },
+      };
+    });
   };
 
   const downloadBatchCSV = () => {
@@ -8734,40 +8769,6 @@ Please generate keywords based on the opportunities and keyword suggestions ment
                   });
                 }}
                 onThemeToggle={handleThemeToggle}
-                onTaskStop={(taskId) => {
-                  const task = state.taskManager.tasks.find(t => t.id === taskId);
-                  if (!task) return;
-
-                  // If it's the active task, use normal handlers
-                  if (taskId === state.taskManager.activeTaskId) {
-                    if (task.type === 'mining') handleStopMining();
-                    if (task.type === 'batch') handleStopBatch();
-                    // Article generator doesn't have a clear stop ref yet, but we can set isGenerating to false
-                    if (task.type === 'article-generator') {
-                      setState(prev => ({
-                        ...prev,
-                        articleGeneratorState: { ...prev.articleGeneratorState, isGenerating: false }
-                      }));
-                    }
-                  } else {
-                    // For background tasks, we need to update their saved state
-                    setState(prev => ({
-                      ...prev,
-                      taskManager: {
-                        ...prev.taskManager,
-                        tasks: prev.taskManager.tasks.map(t => {
-                          if (t.id === taskId) {
-                            if (t.miningState) return { ...t, miningState: { ...t.miningState, isMining: false } };
-                            if (t.batchState) return { ...t, batchState: { ...t.batchState, batchCurrentIndex: t.batchState.batchTotalCount } };
-                            if (t.articleGeneratorState) return { ...t, articleGeneratorState: { ...t.articleGeneratorState, isGenerating: false } };
-                          }
-                          return t;
-                        })
-                      }
-                    }));
-                    addLog(`任务 ${task.name} 已强制停止。`, "warning");
-                  }
-                }}
                 uiLanguage={state.uiLanguage}
                 step={state.step}
                 isDarkTheme={isDarkTheme}

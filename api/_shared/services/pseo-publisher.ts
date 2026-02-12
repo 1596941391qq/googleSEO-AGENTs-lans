@@ -108,7 +108,7 @@ export async function publishArticle(
 
   try {
     const tokenPair = await getAvailableTokenPair();
-    
+
     if (!tokenPair) {
       return {
         success: false,
@@ -191,7 +191,7 @@ export async function publishArticle(
     }
 
     console.log(`[PSEO Publisher] Pushing article to GitHub...`);
-    
+
     const slug = generateSlug(article.keyword, article.urlSlug);
     const finalContent = generateArticleMarkdown(article);
 
@@ -257,6 +257,7 @@ export async function publishArticle(
       try {
         const siteInsertResult = await sql`
           INSERT INTO platform_sites (
+            token_id,
             github_token_id,
             platform_token_id,
             platform,
@@ -268,6 +269,7 @@ export async function publishArticle(
             usage_count
           )
           VALUES (
+            ${netlify_token.id},
             ${github_token.id},
             ${netlify_token.id},
             'netlify',
@@ -318,6 +320,7 @@ export async function publishArticle(
           // 记录不存在，插入
           const insertResult = await sql`
             INSERT INTO platform_sites (
+              token_id,
               github_token_id,
               platform_token_id,
               platform,
@@ -329,6 +332,7 @@ export async function publishArticle(
               usage_count
             )
             VALUES (
+              ${netlify_token.id},
               ${github_token.id},
               ${netlify_token.id},
               'netlify',
@@ -380,6 +384,7 @@ export async function publishArticle(
         try {
           const newSiteResult = await sql`
             INSERT INTO platform_sites (
+              token_id,
               github_token_id,
               platform_token_id,
               platform,
@@ -391,6 +396,7 @@ export async function publishArticle(
               usage_count
             )
             VALUES (
+              ${netlify_token.id},
               ${github_token.id},
               ${netlify_token.id},
               'netlify',
@@ -751,8 +757,8 @@ export async function updatePublishedArticle(
             // 检查 GitHub repo 是否已链接
             // 注意：build_settings 可能有多种结构
             const hasLinkedRepo = existingSite.build_settings?.repo ||
-                                  existingSite.build_settings?.repo_url ||
-                                  existingSite.repo_url;
+              existingSite.build_settings?.repo_url ||
+              existingSite.repo_url;
 
             console.log(`[PSEO Publisher] - DEBUG: build_settings =`, JSON.stringify(existingSite.build_settings, null, 2));
             console.log(`[PSEO Publisher] - DEBUG: hasLinkedRepo =`, hasLinkedRepo);

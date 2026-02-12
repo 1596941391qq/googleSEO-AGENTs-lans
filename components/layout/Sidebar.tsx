@@ -431,26 +431,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       >
                         <X size={12} />
                       </button>
-                      {(task.miningState?.isMining ||
-                        (task.batchState && task.batchState.batchCurrentIndex < task.batchState.batchTotalCount) ||
-                        task.articleGeneratorState?.isGenerating) && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onTaskStop) onTaskStop(task.id);
-                            }}
-                            className={`p-1.5 rounded-lg transition-all duration-300 flex-shrink-0 hover:scale-110 ${isDarkTheme
-                              ? "text-red-400 hover:bg-red-400/20"
-                              : "text-red-500 hover:bg-red-50"
-                              }`}
-                            title={uiLanguage === "zh" ? "停止任务" : "Stop task"}
-                          >
-                            <Loader2 size={12} className="animate-spin" />
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-                              <div className="w-2 h-2 bg-current rounded-sm" />
-                            </div>
-                          </button>
-                        )}
                     </div>
                   )}
                 </div>
